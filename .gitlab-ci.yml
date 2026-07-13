@@ -1,0 +1,169 @@
+image: docker:24.0.5
+services:
+  - docker:24.0.5-dind
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  FRONTEND_DIR: "frontend"
+  BACKEND_DIR: "backend"
+
+stages:
+  - lint-format
+  - test-unit
+  - test-integration
+  - test-e2e
+  - security-scan
+  - build
+  - deploy-staging
+  - deploy-production
+
+# =========================================================================
+# Stage 1: lint-format
+# =========================================================================
+lint-frontend:
+  stage: lint-format
+  image: node:20-alpine
+  script:
+    - cd $FRONTEND_DIR
+    - npm ci
+    - npm run lint
+    - npx prettier --check .
+
+lint-backend:
+  stage: lint-format
+  image: python:3.12-slim
+  script:
+    - cd $BACKEND_DIR
+    - pip install black ruff mypy
+    - black --check .
+    - ruff check .
+    - mypy .
+
+# =========================================================================
+# Stage 2: test-unit
+# =========================================================================
+test-unit-frontend:
+  stage: test-unit
+  image: node:20-alpine
+  script:
+    - cd $FRONTEND_DIR
+    - npm ci
+    - npx vitest run --coverage
+  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
+
+test-unit-backend:
+  stage: test-unit
+  image: python:3.12-slim
+  script:
+    - cd $BACKEND_DIR
+    - pip install -r requirements.txt pytest pytest-cov
+    - pytest --cov=. --cov-report=term-missing --cov-fail-under=80
+  coverage: '/TOTAL.*\s+(\d+)\%/'
+
+# =========================================================================
+# Stage 3: test-integration
+# =========================================================================
+test-integration-backend:
+  stage: test-integration
+  image: python:3.12-slim
+  services:
+    - postgres:16-alpine
+    - redis:7-alpine
+  variables:
+    DATABASE_URL: postgres://postgres:postgres@postgres:5432/test_db
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+    POSTGRES_DB: test_db
+    REDIS_URL: redis://redis:6379/0
+  script:
+    - cd $BACKEND_DIR
+    - pip install -r requirements.txt pytest pytest-django factory_boy
+    - pytest tests/integration/
+
+# =========================================================================
+# Stage 4: test-e2e
+# =========================================================================
+test-e2e:
+  stage: test-e2e
+  image: mcr.microsoft.com/playwright:v1.40.0-jammy
+  script:
+    - echo "Running Playwright on the full app via Docker-compose"
+    # Docker-compose is used here to spin up the entire application
+    - docker-compose -f docker-compose.yml up -d
+    - cd $FRONTEND_DIR
+    - npm ci
+    - npx playwright test
+  after_script:
+    - docker-compose down
+
+# =========================================================================
+# Stage 5: security-scan
+# =========================================================================
+security-npm-audit:
+  stage: security-scan
+  image: node:20-alpine
+  script:
+    - cd $FRONTEND_DIR
+    - npm audit
+
+security-pip-audit:
+  stage: security-scan
+  image: python:3.12-slim
+  script:
+    - cd $BACKEND_DIR
+    - pip install pip-audit
+    - pip-audit -r requirements.txt
+
+security-trivy:
+  stage: security-scan
+  image: aquasec/trivy:latest
+  script:
+    - docker build -t backend:latest $BACKEND_DIR
+    - trivy image backend:latest
+
+# =========================================================================
+# Stage 6: build
+# =========================================================================
+build-frontend:
+  stage: build
+  image: node:20-alpine
+  script:
+    - cd $FRONTEND_DIR
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - $FRONTEND_DIR/.next/
+
+build-backend-image:
+  stage: build
+  script:
+    - docker build -t registry.gitlab.com/sokens/backend:$CI_COMMIT_SHA $BACKEND_DIR
+    # Uncomment to actually push in a real GitLab registry
+    # - docker push registry.gitlab.com/sokens/backend:$CI_COMMIT_SHA
+
+# =========================================================================
+# Stage 7: deploy-staging
+# =========================================================================
+deploy-staging:
+  stage: deploy-staging
+  script:
+    - echo "Deploying to Staging Environment"
+    # Instructions to deploy staging here
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH =~ /^feature\/.*/'
+
+# =========================================================================
+# Stage 8: deploy-production
+# =========================================================================
+deploy-production:
+  stage: deploy-production
+  script:
+    - echo "Deploying to Production Environment"
+    # Instructions to deploy production here
+  environment:
+    name: production
+  when: manual
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'

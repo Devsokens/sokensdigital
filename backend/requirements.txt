@@ -1,0 +1,12 @@
+Django>=5.0,<6.0
+djangorestframework
+drf-spectacular
+psycopg2-binary
+celery
+redis
+firebase-admin
+python-dotenv
+django-cors-headers
+dj-database-url
+django-cryptography
+argon2-cffi
