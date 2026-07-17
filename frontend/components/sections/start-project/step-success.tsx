@@ -131,7 +131,7 @@ export function StepSuccess({
         />
         <Button
           render={
-            <a href="/#blog" className="inline-flex items-center justify-center gap-2">
+            <a href="/blog" className="inline-flex items-center justify-center gap-2">
               <Sparkles className="size-4" />
               Consulter nos Insights
             </a>

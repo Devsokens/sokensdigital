@@ -10,8 +10,8 @@ import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
   { label: "Expertise", href: "/expertise" },
-  { label: "Projects", href: "#projects" },
-  { label: "Blog", href: "#blog" },
+  { label: "Projects", href: "/projects" },
+  { label: "Blog", href: "/blog" },
   { label: "contact", href: "#contact" },
 ];
 
@@ -61,7 +61,9 @@ export function SiteHeader() {
 
         <nav className="hidden items-center gap-8 md:flex">
           {NAV_LINKS.map((link) => {
-            const isActive = link.href.startsWith("/") && pathname === link.href;
+            const isActive =
+              link.href.startsWith("/") &&
+              (pathname === link.href || pathname.startsWith(`${link.href}/`));
             return (
               <a
                 key={link.label}
@@ -104,7 +106,9 @@ export function SiteHeader() {
         <div className="mx-auto mt-2 max-w-4xl rounded-2xl border border-white/10 bg-background shadow-lg md:hidden">
           <nav className="flex flex-col gap-1 p-3">
             {NAV_LINKS.map((link) => {
-              const isActive = link.href.startsWith("/") && pathname === link.href;
+              const isActive =
+              link.href.startsWith("/") &&
+              (pathname === link.href || pathname.startsWith(`${link.href}/`));
               return (
                 <a
                   key={link.label}

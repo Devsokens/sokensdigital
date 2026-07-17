@@ -1,43 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { PROJECTS } from "@/lib/projects/projects";
+import { ProjectMedia } from "@/components/projects/project-media";
 
-type Project = {
-  tag: string;
-  title: string;
-  description: string;
-};
-
-const PROJECTS: Project[] = [
-  {
-    tag: "FINTECH · SAAS",
-    title: "Nova Finance Dashboard",
-    description:
-      "Refonte complète de l'interface de trading haute fréquence avec latence réduite de 40%.",
-  },
-  {
-    tag: "LOGISTIQUE · CLOUD",
-    title: "AeroLogistics Platform",
-    description:
-      "Plateforme robuste de gestion de flotte gérant plus d'un million de transactions quotidiennes.",
-  },
-  {
-    tag: "SANTÉ · SÉCURITÉ",
-    title: "MediSecure Portal",
-    description:
-      "Infrastructure conforme HDS pour la gestion sécurisée de dossiers médicaux sensibles.",
-  },
+const CAROUSEL_SLUGS = [
+  "nova-finance-dashboard",
+  "aerologistics-platform",
+  "medisecure-portal",
 ];
+
+const CAROUSEL_PROJECTS = CAROUSEL_SLUGS.map(
+  (slug) => PROJECTS.find((p) => p.slug === slug)!
+);
 
 export function RecentProjects() {
   const [index, setIndex] = useState(0);
-  const project = PROJECTS[index];
+  const project = CAROUSEL_PROJECTS[index];
 
   const goTo = (delta: number) => {
-    setIndex((prev) => (prev + delta + PROJECTS.length) % PROJECTS.length);
+    setIndex((prev) => (prev + delta + CAROUSEL_PROJECTS.length) % CAROUSEL_PROJECTS.length);
   };
 
   return (
@@ -55,13 +41,13 @@ export function RecentProjects() {
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:items-center">
-          <div
-            aria-hidden
-            className="relative aspect-video overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_30%_20%,color-mix(in_oklch,var(--primary),transparent_75%),transparent_60%),linear-gradient(135deg,oklch(0.16_0.02_235),oklch(0.08_0.01_240))]"
-          >
-            <div className="absolute inset-0 [background-image:linear-gradient(color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px),linear-gradient(90deg,color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px)] [background-size:28px_28px]" />
-            <Sparkles className="absolute right-6 bottom-6 size-8 text-primary/40" />
-          </div>
+          <ProjectMedia
+            key={project.slug}
+            title={project.title}
+            videoSrc={project.videoSrc}
+            images={project.images}
+            sceneVariants={project.sceneVariants}
+          />
 
           <div>
             <span className="text-xs font-semibold tracking-[0.1em] text-primary uppercase">
@@ -74,7 +60,7 @@ export function RecentProjects() {
               {project.description}
             </p>
             <Button
-              render={<a href="#contact">Découvrir l&apos;étude</a>}
+              render={<Link href={`/projects/${project.slug}`}>Découvrir l&apos;étude</Link>}
               nativeButton={false}
               variant="outline"
               className="mt-6 rounded-full border-white/15 bg-transparent px-6 text-sm font-medium text-foreground hover:bg-white/5"
@@ -83,9 +69,9 @@ export function RecentProjects() {
         </div>
 
         <div className="mt-8 flex items-center justify-end gap-2">
-          {PROJECTS.map((p, i) => (
+          {CAROUSEL_PROJECTS.map((p, i) => (
             <span
-              key={p.title}
+              key={p.slug}
               className={cn(
                 "h-1.5 w-1.5 rounded-full transition-colors",
                 i === index ? "bg-primary" : "bg-white/15"

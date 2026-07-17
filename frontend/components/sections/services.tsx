@@ -67,7 +67,7 @@ export function Services() {
           </p>
         </div>
         <a
-          href="#projects"
+          href="/expertise"
           className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
         >
           Explorer tous les services

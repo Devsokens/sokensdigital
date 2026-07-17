@@ -10,8 +10,8 @@ const SERVICES_LINKS = [
 
 const NAV_LINKS = [
   { label: "Expertise", href: "/expertise" },
-  { label: "Projects", href: "#projects" },
-  { label: "Blog", href: "#blog" },
+  { label: "Projects", href: "/projects" },
+  { label: "Blog", href: "/blog" },
   { label: "Contact", href: "#contact" },
 ];
 
