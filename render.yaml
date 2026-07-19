@@ -30,7 +30,7 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     plan: free
-    healthCheckPath: /api/health/
+    healthCheckPath: /api/v1/health/
     envVars:
       - key: SECRET_KEY
         generateValue: true

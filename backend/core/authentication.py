@@ -61,3 +61,9 @@ class FirebaseAuthentication(authentication.BaseAuthentication):
             raise exceptions.AuthenticationFailed('Could not retrieve user.')
 
         return (user, decoded_token)
+
+    def authenticate_header(self, request):
+        # Without this, DRF can't tell an "unauthenticated" 401 apart from
+        # a "you're authenticated but not allowed" 403, and defaults every
+        # anonymous request to 403 — wrong for a bearer-token API.
+        return 'Bearer'
