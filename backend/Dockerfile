@@ -33,6 +33,12 @@ COPY --from=builder /app/requirements.txt .
 RUN pip install --no-cache /wheels/*
 
 COPY . /app/
+RUN chmod +x /app/entrypoint.sh
+
+# SECRET_KEY only needs to be *set* (not secret) at build time for
+# collectstatic to import settings.py; the real value is injected at
+# runtime by the deployment platform.
+RUN SECRET_KEY=build-time-placeholder python manage.py collectstatic --noinput
 
 EXPOSE 8000
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+ENTRYPOINT ["/app/entrypoint.sh"]

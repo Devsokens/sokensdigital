@@ -1,13 +1,12 @@
-import firebase_admin
-from firebase_admin import auth, credentials
+from firebase_admin import auth
 from rest_framework import authentication
 from rest_framework import exceptions
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
-# Note: Firebase Admin must be initialized in apps.py or settings.py
-# with proper service account credentials.
+# Firebase Admin is initialized once at startup in core.apps.CoreConfig.ready().
+
 
 class FirebaseAuthentication(authentication.BaseAuthentication):
     def authenticate(self, request):
@@ -34,14 +33,31 @@ class FirebaseAuthentication(authentication.BaseAuthentication):
         except Exception as e:
             raise exceptions.AuthenticationFailed(f'Invalid Firebase ID token: {str(e)}')
 
-        try:
-            # Get or create the user based on Firebase UID
-            # Using UID as username for Django compatibility
-            user, created = User.objects.get_or_create(
-                username=uid,
-                defaults={'email': email, 'is_active': True}
+        if not email:
+            raise exceptions.AuthenticationFailed(
+                'Firebase token does not contain an email address.'
             )
-        except Exception as e:
-            raise exceptions.AuthenticationFailed('Could not create or retrieve user.')
+
+        try:
+            user = User.objects.get(firebase_uid=uid)
+        except User.DoesNotExist:
+            # No user linked to this Firebase UID yet. `email` is encrypted
+            # at rest (non-deterministic ciphertext) so it can't be used in
+            # a DB-level lookup — check in Python whether an account was
+            # pre-provisioned for this email (e.g. via `bootstrap_admin`,
+            # or created by an admin/RH endpoint ahead of first login) and
+            # link it, instead of creating a duplicate.
+            existing = next(
+                (u for u in User.objects.filter(firebase_uid__isnull=True) if u.email == email),
+                None,
+            )
+            if existing:
+                existing.firebase_uid = uid
+                existing.save(update_fields=['firebase_uid'])
+                user = existing
+            else:
+                user = User.objects.create(email=email, firebase_uid=uid, is_active=True)
+        except Exception:
+            raise exceptions.AuthenticationFailed('Could not retrieve user.')
 
         return (user, decoded_token)

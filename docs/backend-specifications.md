@@ -1,0 +1,591 @@
+# Spécifications Backend — Soken's Digital
+
+> Document de référence unique pour le développement du backend, feature par
+> feature. Toute nouvelle fonctionnalité codée doit être ajoutée/mise à jour
+> ici en même temps que le code (source de vérité partagée entre l'équipe et
+> le Swagger généré par `drf-spectacular`).
+
+---
+
+## 0. Base de données : PostgreSQL 16
+
+**Réponse à la question posée : PostgreSQL, pas de débat.** Ce n'est pas
+seulement la suite logique de l'existant (`docker-compose.yml` fait déjà
+tourner `postgres:16-alpine`, `settings.py` lit déjà `DATABASE_URL` via
+`dj_database_url`, `render.yaml` provisionne déjà une base Postgres managée) —
+c'est aussi une contrainte dure imposée par les specs elles-mêmes :
+
+- **Vues matérialisées** (§4.6 Comptabilité, §4.5 Marketing) : fonctionnalité
+  native PostgreSQL (`CREATE MATERIALIZED VIEW` / `REFRESH MATERIALIZED
+  VIEW`). MySQL ne les supporte pas ; SQLite non plus.
+- **JSONField avancé** (`permissions`, `tags`, `additional_images`,
+  `payload_details`) : PostgreSQL a l'implémentation JSONB la plus mature de
+  l'écosystème Django (indexable, requêtable).
+- **GenericForeignKey** massivement utilisé (`AuditLog`, `JournalEntry`,
+  `BankStatementLine`) : fonctionne partout, mais les index et la volumétrie
+  attendue (audit trail immuable, écritures comptables) veulent un moteur
+  robuste en écriture concurrente.
+- **Django full-text / agrégations lourdes** (pipeline pondéré, DSO,
+  rapports financiers) : `Sum`, `Count`, fenêtres analytiques — PostgreSQL est
+  le backend le plus performant et le mieux supporté par l'ORM pour ça.
+
+En local/dev : conteneur `postgres:16-alpine` (déjà en place). En prod :
+Postgres managé Render (`render.yaml`, plan free pour démarrer, à monter en
+gamme dès que le volume d'écritures comptables/audit le justifie).
+
+**Redis** reste le second pilier (déjà présent) : cache (`django-redis` à
+ajouter), file Celery (leads, notifications, génération PDF, publication
+réseaux sociaux, rappels programmés), et clé de cache des dashboards.
+
+---
+
+## 1. Stack technique (rappel, ne change pas)
+
+| Couche | Choix | Statut |
+|---|---|---|
+| Framework | Django 5.x + Django REST Framework | En place |
+| Base de données | PostgreSQL 16 | En place |
+| Cache / broker | Redis 7 | En place (service docker), pas encore branché en cache Django |
+| Tâches async | Celery + Celery Beat | Dépendances en place, `celery.py` à créer |
+| Auth | Firebase Admin (vérification de token) → `core.User` interne | Bug corrigé (uid stable via `firebase_uid`), SDK à initialiser avec de vraies credentials |
+| Docs API | `drf-spectacular` (Swagger UI + Redoc) | Branché sur `/api/schema/`, `/api/docs/`, `/api/redoc/` |
+| Fichiers (PDF, images, exports) | Google Drive (mentionné dans les specs métier) | À intégrer via un service dédié (`core/services/drive.py`), scope futur |
+| Déploiement | Render (Docker Web Service + Postgres + Key Value) | `render.yaml` prêt, déploiement réel à faire manuellement (compte Render requis) |
+| Chiffrement au repos | `django-cryptography` | **Incompatible avec Django 5.x** (`django.utils.baseconv` supprimé) — migration vers `django-cryptography-django5` en cours, voir §9 |
+
+---
+
+## 2. Architecture applicative : découpage en apps Django
+
+L'existant ne contient qu'une seule app (`core`). Vu le nombre de domaines
+métier décrits, on découpe en apps par département — plus lisible, plus
+testable, permissions plus faciles à isoler. `core` reste le socle partagé.
+
+```
+backend/
+├── core/          # User, Role, Department, AuditLog, Session, auth, permissions de base
+├── hr/             # EmployeeProfile, Contract              (Admin/RH)
+├── projects/       # Project, Timesheet, ProjectChannel      (Technique)
+├── finance/        # Account, JournalEntry, TransactionLine, Invoice, InvoiceLine,
+│                   # BankStatementLine, TaxDeclaration, DisbursementRequest
+├── marketing/       # Lead, Quote, QuoteLine, SocialPost, CMS (HeroSection, Service,
+│                   # ProjectPortfolio, BlogPost, Testimonial, Partner)
+└── dashboard/       # Endpoint agrégé /api/v1/dashboard/global/ uniquement (lecture
+                    # cross-département, pas de modèles propres)
+```
+
+**Décision de réconciliation** : les specs fournies définissent `Quote` /
+`QuoteLine` deux fois (une version simple sous Comptabilité §4.2, une version
+complète avec `tracking_token`, `opened_at`, `signed_at` sous Marketing §4.2).
+On retient **la version Marketing** (plus complète, cohérente avec le cycle
+Lead → Quote → conversion client) comme unique source de vérité. Comptabilité
+n'interagit avec `Quote` qu'en lecture (validation des prix/remises) et
+possède son propre `Invoice`/`InvoiceLine`, généré à la conversion d'un
+`Quote` accepté.
+
+**Note** : `ProjectPortfolio` (CMS, contenu public "études de cas" —
+correspond aux pages `/projects` déjà construites côté frontend) est distinct
+de `Project` (suivi opérationnel interne : timesheets, décaissements,
+messagerie). Un lien optionnel `ProjectPortfolio.linked_project` pourra être
+ajouté plus tard si on veut publier automatiquement un projet interne clos.
+
+---
+
+## 3. Authentification & Comptes (`core`)
+
+Fondation de tout le reste — **première brique à coder**.
+
+### 3.1 Flux d'authentification
+
+- Le frontend s'authentifie auprès de **Firebase** (déjà configuré côté
+  Next.js — variables `NEXT_PUBLIC_FIREBASE_*`), obtient un ID token.
+- Chaque requête API porte `Authorization: Bearer <id_token>`.
+- `core.authentication.FirebaseAuthentication` vérifie le token auprès de
+  Firebase Admin, résout/crée le `User` interne via `firebase_uid` (corrigé —
+  voir §9), retourne `(user, decoded_token)`.
+- **Pas d'auto-inscription publique** : les comptes sont créés par un
+  Super-Administrateur ou un Responsable RH (cohérent avec la matrice RBAC —
+  aucun rôle "public" ne peut créer un `User`). Le endpoint public de contact
+  ne crée que des `Lead`, jamais de `User`.
+
+### 3.2 Endpoints
+
+| Méthode | Route | Description | Permission |
+|---|---|---|---|
+| GET | `/api/v1/auth/me/` | Profil de l'utilisateur courant (infos `User` + `roles` + `department`) | `IsAuthenticated` |
+| PATCH | `/api/v1/auth/me/` | Mise à jour des champs auto-gérables (`first_name`, `last_name`, `avatar_url`) | `IsAuthenticated`, propriétaire uniquement |
+| POST | `/api/v1/auth/mfa/enable/` | Active `mfa_enabled` (le flux MFA lui-même reste géré côté Firebase) | `IsAuthenticated` |
+| GET | `/api/v1/auth/sessions/` | Liste des sessions actives de l'utilisateur (`Session`) | `IsAuthenticated`, propriétaire uniquement |
+| DELETE | `/api/v1/auth/sessions/{id}/` | Révoque une session | `IsAuthenticated`, propriétaire uniquement |
+
+### 3.3 Gestion des utilisateurs (Admin/RH)
+
+| Méthode | Route | Description | Permission |
+|---|---|---|---|
+| GET/POST | `/api/v1/hr/users/` | Liste / création de comptes | Super-Admin, Responsable RH |
+| GET/PATCH/DELETE | `/api/v1/hr/users/{id}/` | Détail / modification / désactivation | Super-Admin (tout), Responsable RH (hors rôles/permissions) |
+| GET/POST | `/api/v1/hr/roles/` | Gestion des rôles applicatifs (`Role.permissions` JSON) | Super-Admin uniquement |
+| GET/POST | `/api/v1/hr/departments/` | Gestion des départements | Super-Admin uniquement |
+
+**Règle transverse** : le Responsable RH peut modifier un `User` (profil,
+département, statut actif) mais **ne peut jamais toucher à `roles`** — champ
+réservé au Super-Admin, à appliquer via une permission DRF dédiée
+(`CanManageRoles`) plutôt qu'un simple `IsAdminUser`.
+
+---
+
+## 4. Département Administration & RH (`hr`)
+
+### 4.1 Modèles
+
+**`EmployeeProfile`**
+- `id` (UUID), `user` (OneToOne → `core.User`)
+- `hire_date` (Date), `position` (Chaîne), `gross_monthly_salary` (Decimal,
+  chiffré), `base_hourly_cost` (Decimal, **calculé automatiquement** à la
+  sauvegarde à partir du salaire brut — logique dans `clean()`/`save()`)
+- `birth_date` (Date, pour le widget "anniversaires de la semaine" du
+  Dashboard Global)
+
+**`Contract`**
+- `id` (UUID), `employee` (FK → `EmployeeProfile`)
+- `contract_type` (Enum : CDI, CDD, STAGE, PRESTATAIRE), `start_date`,
+  `end_date` (null=True)
+- `document_url` (Chaîne — lien Google Drive du PDF signé)
+
+### 4.2 Endpoints
+
+| Méthode | Route | Description | Permission |
+|---|---|---|---|
+| GET/POST | `/api/v1/hr/employees/` | Liste / création de profils employés | Super-Admin, Responsable RH |
+| GET/PATCH | `/api/v1/hr/employees/{id}/` | Détail / modification (dont salaire → coût horaire) | Super-Admin, Responsable RH |
+| GET | `/api/v1/hr/employees/me/` | Son propre profil (lecture seule) | `IsAuthenticated`, propriétaire |
+| GET/POST | `/api/v1/hr/contracts/` | Liste / création de contrats | Super-Admin, Responsable RH |
+| GET | `/api/v1/hr/contracts/me/` | Ses propres contrats (téléchargement) | `IsAuthenticated`, propriétaire |
+
+**Sécurité** : `gross_monthly_salary` chiffré au repos (même mécanisme que
+`User.email`/`User.phone`). Aucun endpoint ne l'expose à un rôle autre que
+Super-Admin/RH — sérialiseur dédié (`EmployeeProfileSelfSerializer`) qui
+masque le champ pour la route `/me/`.
+
+---
+
+## 5. Département Technique & Projets (`projects`)
+
+> Département dont la spec détaillée n'a pas été fournie in extenso — les
+> informations ci-dessous sont **déduites** des références croisées dans la
+> matrice RBAC (Timesheets, décaissements N1 liés à un projet, messagerie de
+> projet). À valider/compléter avant l'implémentation de ce module.
+
+### 5.1 Modèles (proposition à valider)
+
+**`Project`**
+- `id` (UUID), `name`, `client` (FK → `ClientAccount`), `status` (Enum :
+  EN_COURS, EN_PAUSE, TERMINE, ANNULE)
+- `lead_project_manager` (FK → `User`), `team_members` (M2M → `User`)
+- `start_date`, `end_date` (estimée), `budget` (Decimal, visible
+  Direction/CFO/Chef de projet concerné uniquement)
+
+**`Timesheet`**
+- `id` (UUID), `project` (FK), `user` (FK), `date`, `hours` (Decimal),
+  `description`, `status` (Enum : SOUMIS, VALIDE, REJETE)
+
+**`ProjectChannel` / `ProjectMessage`**
+- Canal de messagerie par projet (`ProjectChannel` 1-1 avec `Project`),
+  `ProjectMessage` (auteur, contenu, horodatage) — probablement à terme sur
+  websocket/Firebase Realtime plutôt que du polling REST pur ; le CRUD REST
+  sert de fallback/historique.
+
+### 5.2 Endpoints (proposition)
+
+| Méthode | Route | Description | Permission |
+|---|---|---|---|
+| GET/POST | `/api/v1/projects/` | Liste / création | Chef de Projet, Super-Admin (création) ; lecture élargie selon rôle |
+| GET/PATCH | `/api/v1/projects/{id}/` | Détail / modification | Chef de Projet assigné, Super-Admin |
+| GET/POST | `/api/v1/projects/{id}/timesheets/` | Feuilles de temps du projet | Équipe assignée (soumission), Chef de Projet (validation) |
+| POST | `/api/v1/projects/{id}/timesheets/{ts_id}/validate/` | Validation d'une feuille de temps | Chef de Projet du projet |
+| GET/POST | `/api/v1/projects/{id}/messages/` | Messagerie du projet | Équipe assignée + Chef de Projet |
+
+**Dépendance croisée** : `finance.DisbursementRequest` référence
+`projects.Project` (un Chef de Projet ne peut initier une demande que pour
+ses propres projets — filtre `project__lead_project_manager=request.user` ou
+`request.user in project.team_members`).
+
+---
+
+## 6. Département Comptabilité & Finance (`finance`)
+
+### 6.1 Plan Comptable & Écritures (partie double, OHADA)
+
+**`Account`** — `id` (UUID), `code` (max 10, unique, indexé), `name`,
+`account_type` (Enum ACTIF/PASSIF/CHARGE/PRODUIT), `parent` (FK récursive),
+`is_active`, `is_system` (bloque la suppression si `True`).
+
+**`JournalEntry`** — `id` (UUID), `entry_number` (unique, séquentiel
+`JO-{annee}-{seq:05d}`), `accounting_date`, `journal_code` (Enum
+VT/ACH/BQ/OD), `description`, `content_type`/`object_id` (`GenericForeignKey`
+vers `Invoice`, `ExpenseReport` ou `DisbursementRequest`).
+
+**`TransactionLine`** — `id` (UUID), `journal_entry` (FK,
+`related_name='lines'`, `CASCADE`), `account` (FK), `debit`/`credit`
+(Decimal 12,2, défaut 0.00), `description`, `reconciled` (bool).
+
+**Règle d'or (validateur serializer ou `clean()`)** : rejet si
+`sum(lines.debit) != sum(lines.credit)` pour une même `JournalEntry` —
+implémenté comme validation **transactionnelle** (toutes les lignes créées
+dans un seul appel API atomique, pas de PATCH partiel qui casserait
+l'équilibre).
+
+**Déclencheurs automatiques (signaux + Celery)** :
+- Facture émise (`Invoice.status → EMISE`) → écriture Client (411) / Produit
+  (701) / TVA collectée (443).
+- Note de frais validée → écriture Charge (61/62) / Tiers (467).
+- Décaissement exécuté (`DisbursementRequest.status → EXECUTE`) → écriture
+  Tiers/Charge / Banque (521).
+- Lettrage bancaire validé → écriture de virement/banque, ligne figée.
+
+**Verrouillage d'exercice** : validateur/middleware qui rejette tout
+POST/PUT/DELETE sur `TransactionLine` si `accounting_date` appartient à une
+période dont l'exercice (`FiscalYear`, à créer) est `status = CLOS`.
+
+### 6.2 Devis & Facturation
+
+`Quote`/`QuoteLine` : propriété du module **Marketing** (voir §7.2) —
+Comptabilité y accède en lecture pour validation des prix.
+
+**`Invoice`** — `id` (UUID), `quote` (FK, null=True — facture peut naître
+sans devis préalable), `client` (FK → `ClientAccount`), `invoice_number`
+(unique, séquentiel), `status` (Enum BROUILLON/EMISE/PAYEE/EN_RETARD),
+`total_ht`, `total_ttc`, `due_date`.
+
+**`InvoiceLine`** — mêmes principes que `QuoteLine` (copiées depuis le devis
+à la conversion).
+
+**Flux de conversion** : `POST /api/v1/finance/quotes/{id}/convert/` copie
+les lignes du `Quote` accepté vers un nouvel `Invoice` (BROUILLON). Le
+passage à `EMISE` : scelle la facture (lecture seule sauf statut), génère le
+PDF (Google Drive), déclenche l'écriture comptable via tâche Celery
+asynchrone.
+
+**Relances** : tâche Celery Beat quotidienne — factures `EMISE` avec
+`due_date` dépassée → email de relance + statut `EN_RETARD`.
+
+### 6.3 Décaissements
+
+**`DisbursementRequest`** — `id` (UUID), `project` (FK →
+`projects.Project`, nullable pour les décaissements non liés à un projet),
+`amount` (Decimal FCFA), `beneficiary`, `reason`, `status` (Enum
+ATTENTE_N1/ATTENTE_N2/APPROUVE/REJETE/EXECUTE).
+
+**Validation hiérarchique** (seuils à définir en config, ex. `Role.permissions`
+ou table `ApprovalThreshold` dédiée) :
+- **N1** (initiation) : Chef de Projet / Commercial concerné.
+- **N2/N3** (approbation stratégique) : Directeur Financier, Super-Admin.
+- **Exécution** : Comptable, Directeur Financier → déclenche l'écriture
+  comptable automatique.
+
+### 6.4 Rapprochement bancaire (sans API bancaire directe)
+
+**`BankStatementLine`** — `id` (UUID), `bank_account` (Chaîne), `operation_date`,
+`label`, `amount` (signé), `is_reconciled` (bool, défaut False),
+`content_type`/`object_id` (`matched_to`, vers `Invoice` ou dépense).
+
+| Méthode | Route | Description |
+|---|---|---|
+| POST | `/api/v1/finance/bank-statement/import/` | Import CSV (`date,libelle,montant`), validation stricte du format |
+| GET | `/api/v1/finance/bank-statement/suggestions/` | Moteur de suggestion (montant + libellé ≈ client) |
+| POST | `/api/v1/finance/bank-statement/{id}/reconcile/` | Valide le lettrage → écriture comptable → **verrouillage définitif** (PUT/DELETE bloqués ensuite, pour **tous** les rôles, y compris Super-Admin) |
+
+### 6.5 Déclarations fiscales & TVA
+
+**`TaxDeclaration`** — `id` (UUID), `period` (`MM-YYYY`), `collected_tva`,
+`deductible_tva`, `tax_to_pay`, `status` (Enum BROUILLON/VALIDE).
+
+Pré-remplissage par agrégation (`Sum` Django ORM) sur les comptes 443/445 de
+la période. Génération d'un état exportable imitant la liasse fiscale.
+
+| Méthode | Route | Permission |
+|---|---|---|
+| GET/POST | `/api/v1/finance/tax-declarations/` | Comptable (création BROUILLON) |
+| POST | `/api/v1/finance/tax-declarations/{id}/validate/` | Directeur Financier uniquement |
+
+### 6.6 Rapports & Tableau de bord Finance
+
+- **Vue matérialisée PostgreSQL** : chiffre d'affaires, trésorerie nette,
+  encours clients (`REFRESH MATERIALIZED VIEW` déclenché par signal ou tâche
+  Celery périodique).
+- **Cache Redis** sur `/api/v1/finance/dashboard/`, TTL 1–2h, invalidé sur
+  signal (facture de gros montant, lettrage validé).
+
+| Méthode | Route | Permission |
+|---|---|---|
+| GET | `/api/v1/finance/dashboard/` | Comptable (rapports opérationnels), CFO (accès complet stratégique) |
+| GET | `/api/v1/finance/reports/general-ledger/` | Grand livre | Comptable, CFO |
+| GET | `/api/v1/finance/reports/fec/` | Export FEC (texte plat, UTF-8, chronologique, non altérable) | Comptable, CFO |
+| GET | `/api/v1/finance/reports/export/{format}/` | Export SAGE/CIEL (CSV/JSON structuré) | Comptable, CFO |
+
+---
+
+## 7. Département Marketing & Communication (`marketing`)
+
+### 7.1 Leads
+
+**`Lead`** — `id` (UUID), `client` (FK → `ClientAccount`, null=True),
+`first_name`, `last_name`, `company_name`, `email` (indexé), `phone`,
+`source` (Enum FORMULAIRE_CONTACT/FORMULAIRE_DEVIS/APPEL_ENTRANT/SITE_WEB/
+EVENEMENT), `message`, `status` (Enum NOUVEAU/QUALIFIE/PROPOSITION_EN_COURS/
+PERDU/CONVERTI), `assigned_to` (FK → `User`, null=True), `qualification_score`
+(0–100).
+
+| Méthode | Route | Description | Permission |
+|---|---|---|---|
+| POST | `/api/v1/public/leads/` | Ingestion publique (formulaire site vitrine) | **Public** — reCAPTCHA v3 + rate limiting Redis (3/IP/min) |
+| GET/POST | `/api/v1/marketing/leads/` | Liste (filtrée par `assigned_to` pour les commerciaux) / création manuelle | Responsable Marketing, Commercial (ses leads), Super-Admin |
+| PATCH | `/api/v1/marketing/leads/{id}/` | Qualification, réassignation | Responsable Marketing, Super-Admin (tout) ; Commercial (ses leads assignés) |
+| POST | `/api/v1/marketing/leads/{id}/convert/` | Conversion en `ClientAccount` (transaction atomique) | Responsable Marketing, Commercial (ses leads), Super-Admin |
+
+Notification : signal `post_save` sur `status=NOUVEAU` → tâche Celery →
+notification in-app Firebase + email récapitulatif aux commerciaux.
+
+### 7.2 Devis (source de vérité — voir réconciliation §2)
+
+**`Quote`** — `id` (UUID), `lead` (FK, null=True), `client` (FK, null=True),
+`quote_number` (unique, `DEV-{annee}-{seq:05d}`), `issue_date`, `expiry_date`,
+`status` (Enum BROUILLON/ENVOYE/ACCEPTE/REFUSE), `discount_amount`,
+`total_ht`, `total_ttc`, `tracking_token` (UUID, généré crypto), `opened_at`,
+`signed_at`.
+
+**`QuoteLine`** — `id` (UUID), `quote` (FK, `related_name='lines'`,
+`CASCADE`), `service_title`, `quantity`, `unit_price`, `total_line`
+(recalculé côté serveur à chaque `save()`, jamais fait confiance côté
+client).
+
+**Verrouillage & versionnage** : `ENVOYE`/`ACCEPTE`/`REFUSE` → lecture seule ;
+toute modification passe par `POST /clone/` (nouvelle version incrémentée
+`-V2`).
+
+| Méthode | Route | Description | Permission |
+|---|---|---|---|
+| GET/POST | `/api/v1/marketing/quotes/` | Liste / création (BROUILLON) | Commercial (les siens), Chef de Projet (collaboration technique), Super-Admin |
+| PATCH | `/api/v1/marketing/quotes/{id}/` | Édition (BROUILLON uniquement) | Idem + validation prix par CFO |
+| POST | `/api/v1/marketing/quotes/{id}/send/` | Passage à `ENVOYE`, génération PDF, email avec lien de tracking | Commercial propriétaire, Super-Admin |
+| POST | `/api/v1/marketing/quotes/{id}/clone/` | Nouvelle version | Idem |
+| GET | `/api/v1/public/quotes/track/{tracking_token}/` | Consultation publique par le client, enregistre `opened_at` | **Public** (token = auth) |
+
+### 7.3 CMS (site vitrine public)
+
+Modèles : `HeroSection`, `Service`, `ProjectPortfolio`, `BlogPost`,
+`Testimonial`, `Partner` — correspondent terme à terme aux sections déjà
+codées en frontend statique (`Hero`, `Services`, `RecentProjects`,
+`BlogInsights`, `Testimonials`, `PartnerLogos`). **Ce module rendra ce
+contenu dynamique/administrable** — le frontend devra migrer ses données en
+dur (`lib/blog/posts.ts`, `lib/projects/projects.ts`, etc.) vers des appels à
+ces endpoints une fois livrés.
+
+**`BlogPost`** (détail donné) — `id`, `title`, `slug` (unique, auto-généré
+via `slugify`), `content_html`, `author` (FK → `User`), `status` (Enum
+BROUILLON/PUBLIE), `published_at`, `meta_description`, `tags` (JSON).
+
+Upload d'image → conversion **WebP** automatique avant dépôt Google Drive.
+
+| Méthode | Route | Permission |
+|---|---|---|
+| GET | `/api/v1/public/cms/blog/` , `/api/v1/public/cms/blog/{slug}/` | **Public**, lecture seule, `status=PUBLIE` uniquement |
+| GET | `/api/v1/public/cms/projects/`, `/api/v1/public/cms/testimonials/`, `/api/v1/public/cms/partners/`, `/api/v1/public/cms/hero/` | **Public**, lecture seule |
+| GET/POST/PATCH/DELETE | `/api/v1/marketing/cms/{resource}/` | Responsable Marketing, Super-Admin uniquement |
+
+### 7.4 Publications Réseaux Sociaux & Plan Éditorial
+
+**`SocialPost`** (modèle donné intégralement dans la spec source — repris
+tel quel) : `title`, `content`, `image_path`, `additional_images` (JSON),
+`platform` (Enum LINKEDIN/TWITTER/FACEBOOK/INSTAGRAM/YOUTUBE),
+`scheduled_at`, `status` (Enum DRAFT/SCHEDULED/PUBLISHED/FAILED/CANCELLED),
+`published_at`, `post_url`, `author` (FK), `notes`, `tags` (JSON).
+
+**Validation par plateforme** (serializer) : ex. `TWITTER` → `content` ≤ 280
+caractères ; `INSTAGRAM` → `image_path` obligatoire.
+
+**Moteur de publication** : Celery Beat, cron chaque minute —
+`SocialPost.objects.filter(status='SCHEDULED', scheduled_at__lte=now())` →
+appel API externe (LinkedIn/Facebook Graph/etc.) → `PUBLISHED` +
+`published_at` + `post_url`, ou `FAILED` si rejet.
+
+**Rappels J-3h/J-2h/J-1h** : au passage à `SCHEDULED`, 3 tâches Celery
+`countdown` sont planifiées. **Règle de sécurité critique** : au déclenchement,
+le worker **re-vérifie** `status == 'SCHEDULED'` en base avant d'notifier —
+sinon la tâche s'arrête silencieusement (annulation/report gérés
+naturellement, pas de nettoyage de tâches à faire).
+
+**Passerelle CMS → Réseaux sociaux** : `BlogPost.status → PUBLIE` peut
+générer un `SocialPost` en `DRAFT` pré-rempli (titre + extrait + lien).
+
+| Méthode | Route | Permission |
+|---|---|---|
+| GET/POST | `/api/v1/marketing/social-posts/` | Responsable Marketing, Super-Admin (tout statut) ; Commercial (création `DRAFT` uniquement — 400 s'il tente `SCHEDULED`) |
+| PATCH | `/api/v1/marketing/social-posts/{id}/` | Idem |
+| POST | `/api/v1/marketing/social-posts/{id}/schedule/` | Passage à `SCHEDULED`, déclenche les 3 rappels | Responsable Marketing, Super-Admin |
+| POST | `/api/v1/marketing/social-posts/{id}/cancel/` | Annulation | Responsable Marketing, Super-Admin |
+
+### 7.5 Dashboard Marketing
+
+- Pipeline commercial pondéré (`Sum(valeur_estimee * probabilite_conversion)`
+  par lead qualifié).
+- Statistiques réseaux sociaux (`PUBLISHED`, groupées par plateforme et
+  créneau horaire).
+- Vues matérialisées + cache Redis (TTL 1–2h), purge sur signature de devis.
+
+| Méthode | Route | Permission |
+|---|---|---|
+| GET | `/api/v1/marketing/dashboard/` | Responsable Marketing, Super-Admin (complet) ; Commercial/Chef de Projet (lecture limitée à leur périmètre) |
+
+---
+
+## 8. Dashboard Global (`dashboard`)
+
+Page d'atterrissage **de tous les employés** à la connexion — zéro donnée
+financière/RH sensible, agrégats anonymisés uniquement :
+
+- Projets `EN_COURS`/complétés, tâches validées du mois.
+- Nouveaux leads qualifiés de la semaine (**sans** noms/détails de contact).
+- Derniers articles publiés / prochaines publications programmées.
+- Anniversaires de la semaine, nouveaux arrivants, effectif actif par
+  département.
+- Annonces globales de la direction (canal de messagerie interne).
+
+**Interdiction stricte** (à faire respecter dans le serializer, pas
+seulement en frontend) : aucune jointure vers CA, marges, taux horaires,
+salaires, statut de devis, contenu des messages de leads.
+
+**Cache Redis 4h**, purge simple (pas d'invalidation fine — la fraîcheur
+n'est pas critique pour ces widgets).
+
+| Méthode | Route | Permission |
+|---|---|---|
+| GET | `/api/v1/dashboard/global/` | `IsAuthenticated` simple — **tout utilisateur actif rattaché à un département**, sans distinction de rôle |
+
+---
+
+## 9. Correctifs déjà appliqués (socle technique, avant toute feature)
+
+Réalisés dans cette session, avant le début du travail feature-par-feature :
+
+1. ✅ `settings.py` : `SECRET_KEY`/`DEBUG`/`ALLOWED_HOSTS`/`CORS_ALLOWED_ORIGINS`
+   lus depuis l'environnement (`.env` local, variables Render en prod).
+2. ✅ `firebase_uid` ajouté à `User` ; `FirebaseAuthentication` corrigé (ne
+   référence plus un champ `username` inexistant).
+3. ✅ Firebase Admin SDK initialisé dans `core/apps.py` (`ready()`), via
+   `FIREBASE_SERVICE_ACCOUNT_JSON` (Render) ou `GOOGLE_APPLICATION_CREDENTIALS`
+   (local/Docker).
+4. ✅ `drf-spectacular` branché : `/api/schema/`, `/api/docs/` (Swagger UI),
+   `/api/redoc/`.
+5. ✅ `whitenoise` + `STORAGES` pour servir les fichiers statiques (admin
+   Django) en production.
+6. ✅ `Dockerfile` : `gunicorn` + `collectstatic` au build + `entrypoint.sh`
+   (migration automatique au démarrage) au lieu du serveur de dev.
+7. ✅ `render.yaml` : Blueprint Web Service (Docker) + Postgres + Key Value
+   (Redis), prêt à connecter à un compte Render.
+8. ✅ Bug de syntaxe pré-existant corrigé dans `core/models.py` (apostrophes
+   mal échappées dans deux messages de validation — empêchait littéralement
+   le démarrage de l'app).
+9. 🔧 **En cours** : `django-cryptography` (1.1, dernière version publiée) est
+   incompatible avec Django 5.x (`django.utils.baseconv`, supprimé depuis
+   Django 5.0). Remplacement identifié : **`django-cryptography-django5`**
+   (fork maintenu, même API `django_cryptography.fields.encrypt` — a priori
+   compatible sans changement de code). Reste à finaliser : swap dans
+   `requirements.txt`, réinstallation, vérification que `makemigrations`
+   passe, génération de la migration initiale.
+
+---
+
+## 10. Conventions API (transverses à tout le backend)
+
+- **Préfixe** : `/api/v1/...`. Espace de nommage public non-authentifié :
+  `/api/v1/public/...` (leads, tracking de devis, lecture CMS).
+- **Pagination** : `PageNumberPagination` DRF par défaut (`page`,
+  `page_size`), sauf endpoints d'export (FEC, SAGE/CIEL — non paginés,
+  fichier complet).
+- **Filtrage** : `django-filter` (à ajouter aux dépendances) pour les listes
+  volumineuses (`Lead`, `TransactionLine`, `SocialPost`).
+- **Format d'erreur** : structure DRF standard
+  `{"detail": "...", "code": "..."}` ; pas de format custom sauf validation
+  multi-champs (`{"field": ["message"]}`, déjà le comportement DRF natif).
+- **Audit** : toute mutation sur les modules Comptabilité, RH et
+  Réseaux Sociaux écrit dans `AuditLog` (via `AuditLog.objects.log_action(...)`,
+  déjà existant). Pas de PUT/PATCH/DELETE sur `AuditLog` lui-même — jamais.
+- **Swagger** : chaque nouvelle vue DRF doit avoir une docstring claire et,
+  si besoin, `@extend_schema(...)` (`drf-spectacular`) pour documenter les
+  cas non triviaux (upload CSV, endpoints d'action `/convert/`, `/send/`,
+  etc.) — le Swagger généré est ce que l'équipe (et potentiellement des
+  intégrateurs externes SAGE/CIEL) consultera en premier.
+
+---
+
+## 11. Matrice RBAC consolidée
+
+| Rôle | Leads | Devis | CMS | Réseaux Sociaux | RH (profils/contrats) | Projets/Timesheets | Comptabilité | Dashboards |
+|---|---|---|---|---|---|---|---|---|
+| **Super-Administrateur** | CRUD complet | CRUD complet | CRUD complet | CRUD complet | CRUD complet + rôles/permissions | CRUD complet | CRUD complet + clôture exercice | Tous, complets |
+| **Responsable RH** | — | — | — | — | CRUD complet (hors rôles/permissions) | — | — | Global |
+| **Responsable Marketing** | CRUD complet | CRUD complet | CRUD complet | CRUD complet (planif + publication) | — | Lecture | — | Marketing complet, Global |
+| **Commercial** | Ses leads uniquement | Ses devis (création + envoi) | Lecture seule | Proposition (`DRAFT` uniquement) | Son profil (lecture) | — | — | Limité à son périmètre, Global |
+| **Chef de Projet** | Lecture seule | Collaboration technique | Lecture seule | Lecture seule | Son profil (lecture) | CRUD sur ses projets, validation timesheets équipe | Décaissements N1 (ses projets) | Projets propres, Global |
+| **Développeur/Ingénieur** | — | — | — | — | Son profil (lecture) | Timesheets (les siennes), messagerie projet | — | Global |
+| **Directeur Financier (CFO)** | Lecture seule | Validation prix/remises | Lecture seule | Lecture seule | Son profil (lecture) | Lecture | Complet + clôture exercice + validation N2/N3 + TVA | Finance complet, Global |
+| **Comptable** | — | Lecture (conversion facture) | Lecture seule | Lecture seule | Son profil (lecture) | Lecture | Écritures, factures, rapprochement, TVA (brouillon), exécution décaissements | Finance opérationnel, Global |
+| **Stagiaires / Invités / Autres** | — | — | — | — | Son profil (lecture) | — | — | Global uniquement |
+
+**Règles absolues (jamais d'exception, même Super-Admin)** :
+- `BankStatementLine.is_reconciled = True` → ligne définitivement figée
+  (aucun rôle ne peut la modifier/supprimer ensuite).
+- `AuditLog` → aucun endpoint PUT/PATCH/DELETE n'existe, point final.
+- Dashboard Global → zéro donnée financière/RH nominative, quel que soit le
+  rôle du lecteur (ce n'est pas une question de permission mais d'absence
+  totale de la donnée dans le serializer).
+
+---
+
+## 12. Ordre d'implémentation proposé (feature par feature)
+
+Séquence logique — chaque étape est testable/démontrable seule avant de
+passer à la suivante :
+
+1. **Finaliser le socle** — corriger `django-cryptography`, générer et
+   appliquer la première migration, vérifier `/api/docs/` en local.
+2. **Authentification & `/auth/me/`** — première route protégée réelle,
+   valide tout le pipeline Firebase → `User`.
+3. **Administration/RH** — `User`/`Role`/`Department` déjà là ;
+   ajouter `EmployeeProfile`/`Contract`. Nécessaire pour peupler des comptes
+   de test pour la suite.
+4. **CMS (lecture publique)** — bas risque, réutilise directement le contenu
+   déjà en dur côté frontend (`lib/blog/posts.ts`, `lib/projects/projects.ts`) ;
+   bonne validation de bout en bout frontend ↔ backend.
+5. **Leads** — formulaire public déjà existant côté frontend
+   (`/demarrer-un-projet`) à brancher sur `POST /api/v1/public/leads/`.
+6. **Devis & Facturation** — dépend de Leads + Comptabilité (comptes de base
+   à seed).
+7. **Comptabilité cœur** (plan comptable, écritures, verrouillage
+   d'exercice) — fondation pour décaissements, TVA, rapports.
+8. **Décaissements & Rapprochement bancaire**.
+9. **Réseaux sociaux & plan éditorial** — le plus dépendant de Celery Beat,
+   à faire quand l'infra async est déjà rodée sur les étapes précédentes.
+10. **Dashboards** (Finance, Marketing, Global) — en dernier, car ils
+    agrègent tout ce qui précède.
+
+---
+
+## 13. Ce qu'il reste à clarifier avec toi
+
+- **Département Technique/Projets** (§5) : je n'ai que des références
+  croisées, pas la spec complète comme pour Comptabilité/Marketing. À détailler
+  avant de le coder (surtout `Project`/`Timesheet`/messagerie).
+- **`ClientAccount`** est référencé partout (Lead, Quote, Invoice) mais
+  jamais spécifié en détail — je le déduis comme faisant partie du module
+  Admin/RH ou d'un module `clients` séparé. À confirmer.
+- **Seuils de validation hiérarchique** des décaissements (montants
+  déclenchant N1/N2/N3) : pas de valeur donnée, à définir.
+- **Intégrations réseaux sociaux réelles** (LinkedIn/Facebook/etc.) :
+  nécessitent des credentials API tierces par plateforme — à obtenir avant
+  l'étape 9.
+- **Compte Render** : je peux préparer tout le code de déploiement
+  (`render.yaml`, Dockerfile prod-ready), mais la connexion réelle du repo à
+  Render et la création du service doivent être faites depuis ton compte —
+  je n'ai pas d'accès Render depuis cet environnement.

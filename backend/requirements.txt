@@ -8,5 +8,12 @@ firebase-admin
 python-dotenv
 django-cors-headers
 dj-database-url
-django-cryptography
+# Fork of django-cryptography compatible with Django 5.x (the original
+# package still imports django.utils.baseconv, removed in Django 5.0).
+# Same import path (django_cryptography.fields.encrypt) — drop-in.
+django-cryptography-django5
 argon2-cffi
+gunicorn
+whitenoise
+django-filter
+django-redis

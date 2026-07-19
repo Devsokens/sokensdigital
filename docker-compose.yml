@@ -41,16 +41,19 @@ services:
 
   backend:
     <<: *backend-base
-    command: python manage.py runserver 0.0.0.0:8000
+    entrypoint: []
+    command: sh -c "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
     ports:
       - "8000:8000"
 
   celery:
     <<: *backend-base
+    entrypoint: []
     command: celery -A sokens_backend worker -l info
 
   celery-beat:
     <<: *backend-base
+    entrypoint: []
     command: celery -A sokens_backend beat -l info
 
   frontend:

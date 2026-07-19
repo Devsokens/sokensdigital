@@ -124,6 +124,7 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
     email = encrypt(models.EmailField(unique=True))
+    firebase_uid = models.CharField(max_length=128, unique=True, null=True, blank=True)
     first_name = models.CharField(max_length=255, blank=True)
     last_name = models.CharField(max_length=255, blank=True)
     phone = encrypt(models.CharField(max_length=50, blank=True, null=True))
@@ -158,7 +159,7 @@ class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
         # Zod-like strict email validation
         email_regex = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
         if self.email and not email_regex.match(self.email):
-            raise ValidationError({'email': 'Format d\\'email invalide.'})
+            raise ValidationError({'email': "Format d'email invalide."})
 
         # Zod-like E.164 phone validation
         phone_regex = re.compile(r'^\+[1-9]\d{1,14}$')
@@ -186,4 +187,4 @@ class Session(LoggedModel):
     def clean(self):
         super().clean()
         if self.expires_at and self.expires_at <= timezone.now():
-            raise ValidationError({'expires_at': 'La date d\\'expiration doit être dans le futur.'})
+            raise ValidationError({'expires_at': "La date d'expiration doit être dans le futur."})

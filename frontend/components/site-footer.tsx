@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Globe, AtSign } from "lucide-react";
 
 const SERVICES_LINKS = [
@@ -26,13 +27,15 @@ export function SiteFooter() {
       <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4">
           <div className="lg:col-span-1">
-            <Image
-              src="/assets/logo-sokens-digital-white.png"
-              alt="Soken's Digital"
-              width={319}
-              height={89}
-              className="h-7 w-auto"
-            />
+            <Link href="/connexion" className="inline-block">
+              <Image
+                src="/assets/logo-sokens-digital-white.png"
+                alt="Soken's Digital"
+                width={319}
+                height={89}
+                className="h-7 w-auto"
+              />
+            </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">
               Architectes de solutions numériques haute performance.
               Sécurité. Précision. Innovation.
