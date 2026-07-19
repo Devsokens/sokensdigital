@@ -1,11 +1,11 @@
-name: Mirror to GitLab
+name: Mirror to GitLab and GitHub
 
 on:
   push:
-    branches: [ "**" ]
+    branches: [ "main" ]
 
 jobs:
-  mirror:
+  mirror-gitlab:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,3 +16,14 @@ jobs:
         with:
           target_repo_url: ${{ secrets.GITLAB_REPO_URL }}
           ssh_private_key: ${{ secrets.GITLAB_SSH_PRIVATE_KEY }}
+
+  mirror-github:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Mirror to GitHub
+        run: |
+          git remote add mirror https://${{ secrets.GITHUB_MIRROR_USER }}:${{ secrets.GITHUB_MIRROR_TOKEN }}@github.com/${{ secrets.GITHUB_MIRROR_REPO }}.git
+          git push mirror main --force
