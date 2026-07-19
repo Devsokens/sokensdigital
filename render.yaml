@@ -1,20 +1,21 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
 #
-# Creates the Django backend as a Docker web service, plus its managed
-# Postgres database and Redis (Key Value) instance. Deploy by connecting
-# this repo in the Render dashboard: New > Blueprint.
+# Creates the Django backend as a Docker web service, plus its Redis
+# (Key Value) instance. Deploy by connecting this repo in the Render
+# dashboard: New > Blueprint.
+#
+# The database is NOT on Render — Render's free Postgres is hard-deleted
+# 30 days after creation (+14 day grace period), which isn't acceptable for
+# a database the whole team builds on. We use a Supabase Postgres project
+# instead (free tier pauses after 7 days of inactivity but never deletes
+# data — see docs/backend-specifications.md §0).
 #
 # A few values must be set by hand in the Render dashboard after the first
 # deploy (marked `sync: false` below) since they're secrets or depend on
-# infrastructure this file doesn't own (the frontend's deployed URL, the
-# Firebase service account):
-#   - CORS_ALLOWED_ORIGINS
+# infrastructure this file doesn't own:
+#   - DATABASE_URL              (Supabase connection string, "Connection pooling" mode)
+#   - CORS_ALLOWED_ORIGINS       (the frontend's deployed URL)
 #   - FIREBASE_SERVICE_ACCOUNT_JSON
-
-databases:
-  - name: sokens-db
-    plan: free
-    postgresMajorVersion: "16"
 
 services:
   - name: sokens-redis
@@ -39,9 +40,7 @@ services:
       - key: ALLOWED_HOSTS
         value: ""
       - key: DATABASE_URL
-        fromDatabase:
-          name: sokens-db
-          property: connectionString
+        sync: false
       - key: REDIS_URL
         fromService:
           name: sokens-redis

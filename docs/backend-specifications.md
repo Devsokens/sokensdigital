@@ -12,8 +12,8 @@
 **Réponse à la question posée : PostgreSQL, pas de débat.** Ce n'est pas
 seulement la suite logique de l'existant (`docker-compose.yml` fait déjà
 tourner `postgres:16-alpine`, `settings.py` lit déjà `DATABASE_URL` via
-`dj_database_url`, `render.yaml` provisionne déjà une base Postgres managée) —
-c'est aussi une contrainte dure imposée par les specs elles-mêmes :
+`dj_database_url`) — c'est aussi une contrainte dure imposée par les specs
+elles-mêmes :
 
 - **Vues matérialisées** (§4.6 Comptabilité, §4.5 Marketing) : fonctionnalité
   native PostgreSQL (`CREATE MATERIALIZED VIEW` / `REFRESH MATERIALIZED
@@ -29,13 +29,32 @@ c'est aussi une contrainte dure imposée par les specs elles-mêmes :
   rapports financiers) : `Sum`, `Count`, fenêtres analytiques — PostgreSQL est
   le backend le plus performant et le mieux supporté par l'ORM pour ça.
 
-En local/dev : conteneur `postgres:16-alpine` (déjà en place). En prod :
-Postgres managé Render (`render.yaml`, plan free pour démarrer, à monter en
-gamme dès que le volume d'écritures comptables/audit le justifie).
+En local/dev : conteneur `postgres:16-alpine` (déjà en place).
 
-**Redis** reste le second pilier (déjà présent) : cache (`django-redis` à
-ajouter), file Celery (leads, notifications, génération PDF, publication
-réseaux sociaux, rappels programmés), et clé de cache des dashboards.
+**En prod, la base est hébergée sur Supabase, pas sur Render.** Le Postgres
+managé gratuit de Render est supprimé **définitivement** 30 jours après sa
+création (+14 jours de grâce, 44 jours max) — inacceptable pour une base sur
+laquelle toute l'équipe construit. Supabase (plan free) a un comportement
+très différent : le projet se **met en pause** après 7 jours d'inactivité,
+mais les données ne sont **jamais supprimées** — juste besoin de cliquer
+"Restore" dans le dashboard Supabase pour réactiver (pas de réveil
+automatique à la requête suivante, contrairement à des alternatives comme
+Neon — à surveiller si l'API est inutilisée plus d'une semaine, ex. vacances).
+Limites du plan gratuit : 500 Mo de base, 5 Go d'egress/mois, 2 projets actifs
+max. `render.yaml` ne provisionne donc **pas** de base — `DATABASE_URL` est
+une variable à renseigner à la main dans le dashboard Render avec la chaîne
+de connexion Supabase (mode "Connection pooling", pas la connexion directe).
+
+**Redis** reste le second pilier, hébergé sur Render (Key Value, plan free) :
+cache (`django-redis`, déjà branché), file Celery (leads, notifications,
+génération PDF, publication réseaux sociaux, rappels programmés), et clé de
+cache des dashboards.
+
+**Stockage de fichiers (PDF, images, exports)** : Google Drive, comme prévu
+dans les specs métier d'origine (factures, contrats RH, médias CMS convertis
+en WebP). Nécessite un compte de service Google Drive (même mécanisme que
+Firebase Admin) — pas bloquant pour le déploiement initial, à mettre en place
+avant le module Devis/Facturation ou CMS.
 
 ---
 
@@ -44,14 +63,15 @@ réseaux sociaux, rappels programmés), et clé de cache des dashboards.
 | Couche | Choix | Statut |
 |---|---|---|
 | Framework | Django 5.x + Django REST Framework | En place |
-| Base de données | PostgreSQL 16 | En place |
-| Cache / broker | Redis 7 | En place (service docker), pas encore branché en cache Django |
-| Tâches async | Celery + Celery Beat | Dépendances en place, `celery.py` à créer |
-| Auth | Firebase Admin (vérification de token) → `core.User` interne | Bug corrigé (uid stable via `firebase_uid`), SDK à initialiser avec de vraies credentials |
-| Docs API | `drf-spectacular` (Swagger UI + Redoc) | Branché sur `/api/schema/`, `/api/docs/`, `/api/redoc/` |
-| Fichiers (PDF, images, exports) | Google Drive (mentionné dans les specs métier) | À intégrer via un service dédié (`core/services/drive.py`), scope futur |
-| Déploiement | Render (Docker Web Service + Postgres + Key Value) | `render.yaml` prêt, déploiement réel à faire manuellement (compte Render requis) |
-| Chiffrement au repos | `django-cryptography` | **Incompatible avec Django 5.x** (`django.utils.baseconv` supprimé) — migration vers `django-cryptography-django5` en cours, voir §9 |
+| Base de données | PostgreSQL 16, hébergée sur **Supabase** (pas Render, voir §0) | En place localement ; projet Supabase à créer par l'équipe |
+| Cache / broker | Redis 7, hébergé sur Render (Key Value) | Branché en cache Django (`django-redis`) et broker Celery |
+| Tâches async | Celery + Celery Beat | `sokens_backend/celery.py` créé, aucune tâche métier encore écrite |
+| Auth | Firebase Admin (vérification de token) → `core.User` interne | Fonctionnel (uid stable via `firebase_uid`, lien auto au premier login) ; SDK initialisé mais attend un vrai `FIREBASE_SERVICE_ACCOUNT_JSON` en prod |
+| Docs API | `drf-spectacular` (Swagger UI + Redoc) | Branché sur `/api/schema/`, `/api/docs/`, `/api/redoc/` — 1 endpoint réel documenté (`/api/v1/auth/me/`) |
+| Fichiers (PDF, images, exports) | Google Drive | Décidé, pas encore intégré (`core/services/drive.py` à créer), pas bloquant avant le module Devis/CMS |
+| Déploiement backend | Render (Docker Web Service + Key Value) | `render.yaml` prêt, service à créer par l'équipe (comptes Render/Firebase/Vercel obtenus) |
+| Déploiement frontend | Vercel | Pas encore déployé |
+| Chiffrement au repos | `django-cryptography-django5` (fork Django 5.x) | Fonctionnel, `email_hash` (SHA-256) ajouté pour l'unicité/recherche réelle (voir §9) |
 
 ---
 
@@ -466,12 +486,12 @@ n'est pas critique pour ces widgets).
 
 ## 9. Correctifs déjà appliqués (socle technique, avant toute feature)
 
-Réalisés dans cette session, avant le début du travail feature-par-feature :
-
 1. ✅ `settings.py` : `SECRET_KEY`/`DEBUG`/`ALLOWED_HOSTS`/`CORS_ALLOWED_ORIGINS`
    lus depuis l'environnement (`.env` local, variables Render en prod).
 2. ✅ `firebase_uid` ajouté à `User` ; `FirebaseAuthentication` corrigé (ne
-   référence plus un champ `username` inexistant).
+   référence plus un champ `username` inexistant), et lie automatiquement un
+   compte pré-provisionné (ex. via `bootstrap_admin`) au premier login réel
+   au lieu de créer un doublon.
 3. ✅ Firebase Admin SDK initialisé dans `core/apps.py` (`ready()`), via
    `FIREBASE_SERVICE_ACCOUNT_JSON` (Render) ou `GOOGLE_APPLICATION_CREDENTIALS`
    (local/Docker).
@@ -481,18 +501,34 @@ Réalisés dans cette session, avant le début du travail feature-par-feature :
    Django) en production.
 6. ✅ `Dockerfile` : `gunicorn` + `collectstatic` au build + `entrypoint.sh`
    (migration automatique au démarrage) au lieu du serveur de dev.
-7. ✅ `render.yaml` : Blueprint Web Service (Docker) + Postgres + Key Value
-   (Redis), prêt à connecter à un compte Render.
+7. ✅ `render.yaml` : Blueprint Web Service (Docker) + Key Value (Redis).
+   `DATABASE_URL` volontairement **hors** du Blueprint — pointe vers Supabase,
+   pas vers un Postgres Render (voir §0).
 8. ✅ Bug de syntaxe pré-existant corrigé dans `core/models.py` (apostrophes
    mal échappées dans deux messages de validation — empêchait littéralement
    le démarrage de l'app).
-9. 🔧 **En cours** : `django-cryptography` (1.1, dernière version publiée) est
-   incompatible avec Django 5.x (`django.utils.baseconv`, supprimé depuis
-   Django 5.0). Remplacement identifié : **`django-cryptography-django5`**
-   (fork maintenu, même API `django_cryptography.fields.encrypt` — a priori
-   compatible sans changement de code). Reste à finaliser : swap dans
-   `requirements.txt`, réinstallation, vérification que `makemigrations`
-   passe, génération de la migration initiale.
+9. ✅ `django-cryptography` (incompatible Django 5.x, `django.utils.baseconv`
+   supprimé) remplacé par le fork maintenu **`django-cryptography-django5`**
+   — même API, aucun changement de code ailleurs.
+10. ✅ `email_hash` (SHA-256 déterministe) ajouté à `User` : l'ancien
+    `unique=True` sur `email` (champ chiffré, donc chiffrement non
+    déterministe) ne bloquait pas réellement les doublons en base. Vérifié
+    par test : une tentative de doublon lève maintenant `IntegrityError`.
+11. ✅ `core/admin.py` : `UserAdmin` par défaut de Django cassait (attend un
+    champ `username` qui n'existe pas sur notre `User` basé sur `email`) —
+    remplacé par un `UserAdmin` adapté.
+12. ✅ `django-filter`, `django-redis` ajoutés et branchés (pagination,
+    filtrage, cache).
+13. ✅ `sokens_backend/celery.py` créé (broker/backend Redis), résout le
+    `celery -A sokens_backend` du `docker-compose.yml`.
+14. ✅ Commande `python manage.py bootstrap_admin --email ...` — crée ou
+    promeut le premier Super-Administrateur (pas d'auto-inscription publique
+    par design, voir §3.1).
+15. ✅ Première route réelle : `GET`/`PATCH /api/v1/auth/me/` (profil courant,
+    écriture limitée aux champs auto-éditables). Testée (`core/tests.py`,
+    3 tests, `force_authenticate` — pas de dépendance réseau Firebase).
+    A aussi révélé et corrigé un bug DRF : sans jeton, l'API renvoyait `403`
+    au lieu de `401` (`FirebaseAuthentication.authenticate_header()` manquant).
 
 ---
 
@@ -503,8 +539,8 @@ Réalisés dans cette session, avant le début du travail feature-par-feature :
 - **Pagination** : `PageNumberPagination` DRF par défaut (`page`,
   `page_size`), sauf endpoints d'export (FEC, SAGE/CIEL — non paginés,
   fichier complet).
-- **Filtrage** : `django-filter` (à ajouter aux dépendances) pour les listes
-  volumineuses (`Lead`, `TransactionLine`, `SocialPost`).
+- **Filtrage** : `django-filter` (déjà branché en `DEFAULT_FILTER_BACKENDS`)
+  pour les listes volumineuses (`Lead`, `TransactionLine`, `SocialPost`).
 - **Format d'erreur** : structure DRF standard
   `{"detail": "...", "code": "..."}` ; pas de format custom sauf validation
   multi-champs (`{"field": ["message"]}`, déjà le comportement DRF natif).
@@ -585,7 +621,8 @@ passer à la suivante :
 - **Intégrations réseaux sociaux réelles** (LinkedIn/Facebook/etc.) :
   nécessitent des credentials API tierces par plateforme — à obtenir avant
   l'étape 9.
-- **Compte Render** : je peux préparer tout le code de déploiement
-  (`render.yaml`, Dockerfile prod-ready), mais la connexion réelle du repo à
-  Render et la création du service doivent être faites depuis ton compte —
-  je n'ai pas d'accès Render depuis cet environnement.
+- **Déploiement réel** : comptes Render/Firebase/Vercel obtenus par
+  l'équipe — je n'ai pas d'accès direct à ces dashboards (pas de navigateur
+  authentifié dans cet environnement), donc la création du projet Supabase,
+  du service Render et du déploiement Vercel se fait main dans la main :
+  vous cliquez, je vérifie/teste chaque URL dès qu'elle existe.
