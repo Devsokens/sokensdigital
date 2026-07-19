@@ -27,5 +27,5 @@ jobs:
           
       - name: Mirror to GitHub
         run: |
-          git remote add mirror https://${{ secrets.GITHUB_MIRROR_USER }}:${{ secrets.GITHUB_MIRROR_TOKEN }}@github.com/${{ secrets.GITHUB_MIRROR_REPO }}.git
+          git remote add mirror https://${{ secrets.MIRROR_USER }}:${{ secrets.MIRROR_TOKEN }}@github.com/${{ secrets.MIRROR_REPO }}.git
           git push mirror main --force
