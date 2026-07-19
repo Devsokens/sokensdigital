@@ -1,3 +1,4 @@
+import hashlib
 import uuid
 import re
 import json
@@ -8,6 +9,19 @@ from django.utils import timezone
 from django.forms.models import model_to_dict
 from django.core.serializers.json import DjangoJSONEncoder
 from django_cryptography.fields import encrypt
+
+
+def hash_email(email: str) -> str:
+    """Deterministic digest of a normalized email.
+
+    `User.email` is encrypted at rest, and that encryption is
+    non-deterministic (two encryptions of the same plaintext produce
+    different ciphertext) — so it can't be used in a `WHERE email = ...`
+    lookup or to enforce uniqueness at the database level. This hash is
+    stored alongside the encrypted value specifically so both are possible.
+    """
+    return hashlib.sha256(email.strip().lower().encode()).hexdigest()
+
 
 class AuditLogManager(models.Manager):
     def log_action(self, user, action, entity_type, entity_id, details=None, ip_address=None):
@@ -123,7 +137,14 @@ class UserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
+    # `unique=True` here is declared only because Django's auth system
+    # requires USERNAME_FIELD to be unique (auth.E003) — it does NOT
+    # translate into a real database guarantee, since encryption is
+    # non-deterministic (two rows with the same plaintext email end up with
+    # different ciphertext, so a DB-level unique index can't catch the
+    # collision). `email_hash` below is the actual uniqueness/lookup key.
     email = encrypt(models.EmailField(unique=True))
+    email_hash = models.CharField(max_length=64, unique=True, editable=False)
     firebase_uid = models.CharField(max_length=128, unique=True, null=True, blank=True)
     first_name = models.CharField(max_length=255, blank=True)
     last_name = models.CharField(max_length=255, blank=True)
@@ -145,7 +166,7 @@ class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
 
     class Meta(LoggedModel.Meta):
         indexes = LoggedModel.Meta.indexes + [
-            models.Index(fields=['email']),
+            models.Index(fields=['email_hash']),
         ]
 
     def get_decrypted_email(self):
@@ -153,6 +174,11 @@ class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
 
     def get_decrypted_phone(self):
         return self.phone
+
+    def save(self, *args, **kwargs):
+        if self.email:
+            self.email_hash = hash_email(self.email)
+        super().save(*args, **kwargs)
 
     def clean(self):
         super().clean()

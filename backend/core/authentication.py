@@ -3,6 +3,8 @@ from rest_framework import authentication
 from rest_framework import exceptions
 from django.contrib.auth import get_user_model
 
+from core.models import hash_email
+
 User = get_user_model()
 
 # Firebase Admin is initialized once at startup in core.apps.CoreConfig.ready().
@@ -41,16 +43,14 @@ class FirebaseAuthentication(authentication.BaseAuthentication):
         try:
             user = User.objects.get(firebase_uid=uid)
         except User.DoesNotExist:
-            # No user linked to this Firebase UID yet. `email` is encrypted
-            # at rest (non-deterministic ciphertext) so it can't be used in
-            # a DB-level lookup — check in Python whether an account was
-            # pre-provisioned for this email (e.g. via `bootstrap_admin`,
-            # or created by an admin/RH endpoint ahead of first login) and
-            # link it, instead of creating a duplicate.
-            existing = next(
-                (u for u in User.objects.filter(firebase_uid__isnull=True) if u.email == email),
-                None,
-            )
+            # No user linked to this Firebase UID yet. Check whether an
+            # account was pre-provisioned for this email (e.g. via
+            # `bootstrap_admin`, or created by an admin/RH endpoint ahead of
+            # first login) via the deterministic email_hash, and link it
+            # instead of creating a duplicate.
+            existing = User.objects.filter(
+                firebase_uid__isnull=True, email_hash=hash_email(email)
+            ).first()
             if existing:
                 existing.firebase_uid = uid
                 existing.save(update_fields=['firebase_uid'])

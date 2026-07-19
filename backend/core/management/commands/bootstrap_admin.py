@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from core.models import Role, User
+from core.models import Role, User, hash_email
 
 SUPER_ADMIN_ROLE_NAME = 'Super-Administrateur'
 
@@ -34,10 +34,7 @@ class Command(BaseCommand):
             },
         )
 
-        # `email` is encrypted at rest (non-deterministic ciphertext), so it
-        # can't be used in a DB-level `WHERE email = ...` lookup — match in
-        # Python instead. Fine at this project's user-table scale.
-        user = next((u for u in User.objects.all() if u.email == email), None)
+        user = User.objects.filter(email_hash=hash_email(email)).first()
         created = user is None
         if created:
             user = User(email=email, is_active=True, is_staff=True, is_superuser=True)
