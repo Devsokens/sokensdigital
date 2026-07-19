@@ -11,6 +11,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Mirror to GitLab
         uses: pixta-dev/repository-mirroring-action@v1
         with:
@@ -23,6 +24,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          
       - name: Mirror to GitHub
         run: |
           git remote add mirror https://${{ secrets.GITHUB_MIRROR_USER }}:${{ secrets.GITHUB_MIRROR_TOKEN }}@github.com/${{ secrets.GITHUB_MIRROR_REPO }}.git
