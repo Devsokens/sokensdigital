@@ -1,30 +1,25 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
 #
-# Creates the Django backend as a Docker web service, plus its Redis
-# (Key Value) instance. Deploy by connecting this repo in the Render
-# dashboard: New > Blueprint.
-#
-# The database is NOT on Render — Render's free Postgres is hard-deleted
-# 30 days after creation (+14 day grace period), which isn't acceptable for
-# a database the whole team builds on. We use a Supabase Postgres project
-# instead (free tier pauses after 7 days of inactivity but never deletes
-# data — see docs/backend-specifications.md §0).
+# Creates the Django backend as a Docker web service. That's it — no
+# database, no Key Value — both live outside Render:
+#   - DATABASE_URL: Supabase Postgres (free tier pauses after 7 days of
+#     inactivity but never deletes data; Render's own free Postgres is
+#     hard-deleted 30+14 days after creation).
+#   - REDIS_URL: Upstash Redis (free tier: 256MB, 500K commands/month, no
+#     card required, no documented inactivity expiry — unlike Render's own
+#     free Key Value, which additionally has zero disk persistence and can
+#     be restarted/wiped for maintenance at any time).
+# See docs/backend-specifications.md §0 for the full reasoning.
 #
 # A few values must be set by hand in the Render dashboard after the first
 # deploy (marked `sync: false` below) since they're secrets or depend on
 # infrastructure this file doesn't own:
-#   - DATABASE_URL              (Supabase connection string, "Connection pooling" mode)
+#   - DATABASE_URL               (Supabase connection string, "Connection pooling" mode)
+#   - REDIS_URL                  (Upstash connection string, rediss:// with TLS)
 #   - CORS_ALLOWED_ORIGINS       (the frontend's deployed URL)
 #   - FIREBASE_SERVICE_ACCOUNT_JSON
 
 services:
-  - name: sokens-redis
-    type: keyvalue
-    plan: free
-    ipAllowList:
-      - source: 0.0.0.0/0
-        description: allow all (tighten once the backend's static egress IP is known)
-
   - name: sokens-backend
     type: web
     runtime: docker
@@ -42,9 +37,7 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
-        fromService:
-          name: sokens-redis
-          property: connectionString
+        sync: false
       - key: CORS_ALLOWED_ORIGINS
         sync: false
       - key: FIREBASE_SERVICE_ACCOUNT_JSON

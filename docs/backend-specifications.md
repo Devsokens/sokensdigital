@@ -45,10 +45,21 @@ max. `render.yaml` ne provisionne donc **pas** de base — `DATABASE_URL` est
 une variable à renseigner à la main dans le dashboard Render avec la chaîne
 de connexion Supabase (mode "Connection pooling", pas la connexion directe).
 
-**Redis** reste le second pilier, hébergé sur Render (Key Value, plan free) :
+**Redis** reste le second pilier, mais hébergé sur **Upstash** (pas Render) :
 cache (`django-redis`, déjà branché), file Celery (leads, notifications,
 génération PDF, publication réseaux sociaux, rappels programmés), et clé de
-cache des dashboards.
+cache des dashboards. Écarté du Key Value gratuit de Render pour deux
+raisons : aucune persistance disque (perte de données à chaque redémarrage,
+et Render peut redémarrer l'instance "à tout moment" pour maintenance), et
+ça évite de déclencher la demande de carte bancaire liée aux ressources de
+type base de données dans un Blueprint. Upstash (plan free) : 256 Mo, 500K
+commandes/mois, aucune carte requise, pas d'expiration par inactivité
+documentée. `REDIS_URL` est, comme `DATABASE_URL`, une variable à renseigner
+à la main dans Render (`rediss://...`, connexion TLS).
+
+Firebase (déjà utilisé pour l'auth) n'a **pas** de produit Redis/cache — le
+seul Redis dans l'écosystème Google est Memorystore, un service Google Cloud
+séparé et payant dès la création (pas de plan gratuit), donc écarté aussi.
 
 **Stockage de fichiers (PDF, images, exports)** : Google Drive, comme prévu
 dans les specs métier d'origine (factures, contrats RH, médias CMS convertis
@@ -64,12 +75,12 @@ avant le module Devis/Facturation ou CMS.
 |---|---|---|
 | Framework | Django 5.x + Django REST Framework | En place |
 | Base de données | PostgreSQL 16, hébergée sur **Supabase** (pas Render, voir §0) | En place localement ; projet Supabase à créer par l'équipe |
-| Cache / broker | Redis 7, hébergé sur Render (Key Value) | Branché en cache Django (`django-redis`) et broker Celery |
+| Cache / broker | Redis 7, hébergé sur **Upstash** | Branché en cache Django (`django-redis`) et broker Celery |
 | Tâches async | Celery + Celery Beat | `sokens_backend/celery.py` créé, aucune tâche métier encore écrite |
 | Auth | Firebase Admin (vérification de token) → `core.User` interne | Fonctionnel (uid stable via `firebase_uid`, lien auto au premier login) ; SDK initialisé mais attend un vrai `FIREBASE_SERVICE_ACCOUNT_JSON` en prod |
 | Docs API | `drf-spectacular` (Swagger UI + Redoc) | Branché sur `/api/schema/`, `/api/docs/`, `/api/redoc/` — 1 endpoint réel documenté (`/api/v1/auth/me/`) |
 | Fichiers (PDF, images, exports) | Google Drive | Décidé, pas encore intégré (`core/services/drive.py` à créer), pas bloquant avant le module Devis/CMS |
-| Déploiement backend | Render (Docker Web Service + Key Value) | `render.yaml` prêt, service à créer par l'équipe (comptes Render/Firebase/Vercel obtenus) |
+| Déploiement backend | Render (Docker Web Service uniquement) | `render.yaml` prêt, service à créer par l'équipe (comptes Render/Firebase/Vercel obtenus) |
 | Déploiement frontend | Vercel | Pas encore déployé |
 | Chiffrement au repos | `django-cryptography-django5` (fork Django 5.x) | Fonctionnel, `email_hash` (SHA-256) ajouté pour l'unicité/recherche réelle (voir §9) |
 
@@ -501,9 +512,9 @@ n'est pas critique pour ces widgets).
    Django) en production.
 6. ✅ `Dockerfile` : `gunicorn` + `collectstatic` au build + `entrypoint.sh`
    (migration automatique au démarrage) au lieu du serveur de dev.
-7. ✅ `render.yaml` : Blueprint Web Service (Docker) + Key Value (Redis).
-   `DATABASE_URL` volontairement **hors** du Blueprint — pointe vers Supabase,
-   pas vers un Postgres Render (voir §0).
+7. ✅ `render.yaml` : Blueprint Web Service (Docker) uniquement — ni Postgres
+   ni Key Value dedans. `DATABASE_URL` pointe vers Supabase, `REDIS_URL` vers
+   Upstash, tous deux en variables manuelles (voir §0).
 8. ✅ Bug de syntaxe pré-existant corrigé dans `core/models.py` (apostrophes
    mal échappées dans deux messages de validation — empêchait littéralement
    le démarrage de l'app).
