@@ -35,3 +35,19 @@ def get_profile_role(firebase_uid: str) -> str | None:
     if not snapshot.exists:
         return None
     return snapshot.to_dict().get('role')
+
+
+def create_profile(firebase_uid: str, data: dict) -> None:
+    """Writes profiles/{uid} via the Admin SDK — bypasses Firestore security
+    rules entirely (server-side trusted write), used by the account
+    provisioning flow (core.views.ProvisionUserView) so a Super-Admin/RH
+    creating a new employee's platform access doesn't need the client SDK
+    (which would hijack the admin's own session — createUserWithEmailAndPassword
+    signs the browser in as the newly created user)."""
+    from firebase_admin import firestore
+
+    _get_client().collection('profiles').document(firebase_uid).set({
+        **data,
+        'createdAt': firestore.SERVER_TIMESTAMP,
+        'updatedAt': firestore.SERVER_TIMESTAMP,
+    })

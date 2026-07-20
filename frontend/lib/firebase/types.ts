@@ -9,6 +9,18 @@ export type AppRole =
   | "DIRECTEUR_FINANCIER"
   | "AUTRE";
 
+export const ROLE_LABELS: Record<AppRole, string> = {
+  SUPER_ADMIN: "Super-Administrateur",
+  RESPONSABLE_MARKETING: "Responsable Marketing",
+  RESPONSABLE_RH: "Responsable RH",
+  COMMERCIAL: "Commercial",
+  CHEF_DE_PROJET: "Chef de Projet",
+  DEVELOPPEUR: "Développeur",
+  COMPTABLE: "Comptable",
+  DIRECTEUR_FINANCIER: "Directeur Financier",
+  AUTRE: "Autre",
+};
+
 export type ProjectStatus = "ACTIF" | "TERMINE" | "ARCHIVE";
 
 export type RoomType = "COMPANY" | "DEPARTMENT" | "PROJECT";

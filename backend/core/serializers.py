@@ -54,3 +54,24 @@ class MeUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['first_name', 'last_name', 'avatar_url']
+
+
+APP_ROLE_CHOICES = [
+    'SUPER_ADMIN', 'RESPONSABLE_MARKETING', 'RESPONSABLE_RH', 'COMMERCIAL',
+    'CHEF_DE_PROJET', 'DEVELOPPEUR', 'COMPTABLE', 'DIRECTEUR_FINANCIER', 'AUTRE',
+]
+
+
+class ProvisionUserSerializer(serializers.Serializer):
+    """Input for core.views.ProvisionUserView — creates a Firebase Auth
+    account + Firestore profile + Django User row in one call. Not a
+    ModelSerializer: no single model backs "platform access"."""
+
+    email = serializers.EmailField()
+    password = serializers.CharField(min_length=8, write_only=True)
+    first_name = serializers.CharField(max_length=255)
+    last_name = serializers.CharField(max_length=255)
+    role = serializers.ChoiceField(choices=APP_ROLE_CHOICES)
+    department_id = serializers.PrimaryKeyRelatedField(
+        source='department', queryset=Department.objects.all(), required=False, allow_null=True,
+    )

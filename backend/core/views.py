@@ -1,15 +1,17 @@
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
-from rest_framework import permissions, viewsets
+from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.models import Department, User
+from core.firestore_client import create_profile
+from core.models import Department, User, hash_email
 from core.permissions import has_role
 from core.serializers import (
     DepartmentSerializer,
     MeUpdateSerializer,
+    ProvisionUserSerializer,
     UserBriefSerializer,
     UserSerializer,
 )
@@ -100,3 +102,76 @@ class UserListView(viewsets.ReadOnlyModelViewSet):
     queryset = User.objects.all().order_by('first_name', 'last_name')
     serializer_class = UserBriefSerializer
     permission_classes = [IsSuperAdminOrRH]
+
+
+class ProvisionUserView(APIView):
+    """Creates a new employee's platform access in one call: Firebase Auth
+    account + Firestore profile (role/department) + Django User row.
+
+    Why this can't be done from the client SDK: `createUserWithEmailAndPassword`
+    signs the *browser* in as the newly created user, which would kick the
+    admin out of their own session. The Firebase Admin SDK (server-side,
+    already initialized in core/apps.py) has no such side effect.
+    """
+
+    permission_classes = [IsSuperAdminOrRH]
+
+    @extend_schema(
+        tags=['Administration & RH'],
+        summary="Provision a new employee's platform access",
+        description='Creates the Firebase Auth account, the Firestore profile '
+        '(role/department), and the Django-side User row together. Restricted '
+        'to Super-Admin/Responsable RH (docs/backend-specifications.md §1.1).',
+        request=ProvisionUserSerializer,
+        responses={201: UserSerializer},
+    )
+    def post(self, request):
+        serializer = ProvisionUserSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        department = data.get('department')
+
+        from firebase_admin import auth as firebase_auth
+
+        try:
+            firebase_user = firebase_auth.create_user(
+                email=data['email'],
+                password=data['password'],
+                display_name=f"{data['first_name']} {data['last_name']}",
+            )
+        except firebase_auth.EmailAlreadyExistsError:
+            return Response(
+                {'detail': 'Un compte existe déjà avec cet email.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            create_profile(firebase_user.uid, {
+                'email': data['email'],
+                'firstName': data['first_name'],
+                'lastName': data['last_name'],
+                'role': data['role'],
+                'departmentId': str(department.id) if department else None,
+            })
+
+            django_user = User.objects.filter(email_hash=hash_email(data['email'])).first()
+            if django_user:
+                django_user.firebase_uid = firebase_user.uid
+                django_user.department = department
+                django_user.save(update_fields=['firebase_uid', 'department'])
+            else:
+                django_user = User.objects.create_user(
+                    email=data['email'],
+                    first_name=data['first_name'],
+                    last_name=data['last_name'],
+                )
+                django_user.firebase_uid = firebase_user.uid
+                django_user.department = department
+                django_user.save(update_fields=['firebase_uid', 'department'])
+        except Exception:
+            # Roll back the Firebase account so a failed provisioning attempt
+            # doesn't leave an orphaned Auth user with no profile/Django row.
+            firebase_auth.delete_user(firebase_user.uid)
+            raise
+
+        return Response(UserSerializer(django_user).data, status=status.HTTP_201_CREATED)

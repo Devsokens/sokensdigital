@@ -5,19 +5,7 @@ import { Loader2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth/auth-context";
 import { updateOwnProfile } from "@/lib/firebase/profile";
-import type { AppRole } from "@/lib/firebase/types";
-
-const ROLE_LABELS: Record<AppRole, string> = {
-  SUPER_ADMIN: "Super-Administrateur",
-  RESPONSABLE_MARKETING: "Responsable Marketing",
-  RESPONSABLE_RH: "Responsable RH",
-  COMMERCIAL: "Commercial",
-  CHEF_DE_PROJET: "Chef de Projet",
-  DEVELOPPEUR: "Développeur",
-  COMPTABLE: "Comptable",
-  DIRECTEUR_FINANCIER: "Directeur Financier",
-  AUTRE: "Autre",
-};
+import { ROLE_LABELS } from "@/lib/firebase/types";
 
 const inputClass =
   "w-full rounded-lg border border-white/10 bg-white/[0.02] px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 transition-colors focus:border-primary/50 focus:outline-none";

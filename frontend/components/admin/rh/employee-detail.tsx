@@ -5,9 +5,7 @@ import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getEmployee, addContract, addPayslip, updateEmployee } from "@/lib/api/hr";
 import type { EmployeeProfile } from "@/lib/api/types";
-
-const inputClass =
-  "w-full rounded-lg border border-white/10 bg-white/[0.02] px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 transition-colors focus:border-primary/50 focus:outline-none";
+import { inputClass, labelClass, cardClass } from "@/components/admin/form-styles";
 
 export function EmployeeDetail({ id }: { id: string }) {
   const [employee, setEmployee] = useState<EmployeeProfile | null>(null);
@@ -29,7 +27,7 @@ export function EmployeeDetail({ id }: { id: string }) {
   if (!employee) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        <Loader2 className="size-6 animate-spin text-neutral-400" />
       </div>
     );
   }
@@ -37,10 +35,10 @@ export function EmployeeDetail({ id }: { id: string }) {
   return (
     <div className="max-w-3xl space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">
+        <h1 className="text-2xl font-semibold text-neutral-900">
           {employee.user.first_name} {employee.user.last_name}
         </h1>
-        <p className="text-sm text-muted-foreground">{employee.user.email}</p>
+        <p className="text-sm text-neutral-500">{employee.user.email}</p>
       </div>
 
       <SalaryForm employee={employee} onSaved={load} />
@@ -67,15 +65,15 @@ function SalaryForm({ employee, onSaved }: { employee: EmployeeProfile; onSaved:
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-white/10 bg-white/[0.02] p-5">
-      <h2 className="text-sm font-semibold text-foreground">Poste & rémunération</h2>
+    <form onSubmit={handleSubmit} className={`space-y-4 ${cardClass}`}>
+      <h2 className="text-sm font-semibold text-neutral-900">Poste & rémunération</h2>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <label className="block">
-          <span className="mb-1.5 block text-xs text-muted-foreground">Poste</span>
+          <span className={labelClass}>Poste</span>
           <input value={position} onChange={(e) => setPosition(e.target.value)} className={inputClass} />
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-xs text-muted-foreground">Salaire brut mensuel</span>
+          <span className={labelClass}>Salaire brut mensuel</span>
           <input
             type="number"
             value={salary}
@@ -84,7 +82,7 @@ function SalaryForm({ employee, onSaved }: { employee: EmployeeProfile; onSaved:
           />
         </label>
         <label className="block">
-          <span className="mb-1.5 block text-xs text-muted-foreground">Coût horaire (calculé)</span>
+          <span className={labelClass}>Coût horaire (calculé)</span>
           <input value={employee.base_hourly_cost ?? "—"} disabled className={`${inputClass} opacity-60`} />
         </label>
       </div>
@@ -124,7 +122,7 @@ function ContractsSection({ employee, onSaved }: { employee: EmployeeProfile; on
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-foreground">Contrats</h2>
+        <h2 className="text-sm font-semibold text-neutral-900">Contrats</h2>
         <button
           type="button"
           onClick={() => setShowForm((v) => !v)}
@@ -135,10 +133,10 @@ function ContractsSection({ employee, onSaved }: { employee: EmployeeProfile; on
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="mb-4 space-y-4 rounded-xl border border-white/10 bg-white/[0.02] p-5">
+        <form onSubmit={handleSubmit} className={`mb-4 space-y-4 ${cardClass}`}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted-foreground">Type</span>
+              <span className={labelClass}>Type</span>
               <select value={contractType} onChange={(e) => setContractType(e.target.value)} className={inputClass}>
                 <option value="CDI">CDI</option>
                 <option value="CDD">CDD</option>
@@ -147,11 +145,11 @@ function ContractsSection({ employee, onSaved }: { employee: EmployeeProfile; on
               </select>
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted-foreground">Date de début</span>
+              <span className={labelClass}>Date de début</span>
               <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputClass} required />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted-foreground">Lien Drive (PDF)</span>
+              <span className={labelClass}>Lien Drive (PDF)</span>
               <input value={fileUrl} onChange={(e) => setFileUrl(e.target.value)} className={inputClass} placeholder="https://drive.google.com/..." />
             </label>
           </div>
@@ -163,12 +161,12 @@ function ContractsSection({ employee, onSaved }: { employee: EmployeeProfile; on
 
       <div className="space-y-2">
         {employee.contracts.map((c) => (
-          <div key={c.id} className="flex items-center justify-between rounded-lg border border-white/10 px-4 py-3 text-sm">
+          <div key={c.id} className="flex items-center justify-between rounded-lg border border-neutral-200 px-4 py-3 text-sm text-neutral-900">
             <span>{c.contract_type} — depuis {c.start_date}</span>
-            <span className="text-xs text-muted-foreground">{c.status}</span>
+            <span className="text-xs text-neutral-500">{c.status}</span>
           </div>
         ))}
-        {employee.contracts.length === 0 && <p className="text-sm text-muted-foreground">Aucun contrat.</p>}
+        {employee.contracts.length === 0 && <p className="text-sm text-neutral-400">Aucun contrat.</p>}
       </div>
     </div>
   );
@@ -196,7 +194,7 @@ function PayslipsSection({ employee, onSaved }: { employee: EmployeeProfile; onS
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-foreground">Fiches de paie</h2>
+        <h2 className="text-sm font-semibold text-neutral-900">Fiches de paie</h2>
         <button
           type="button"
           onClick={() => setShowForm((v) => !v)}
@@ -207,18 +205,18 @@ function PayslipsSection({ employee, onSaved }: { employee: EmployeeProfile; onS
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="mb-4 space-y-4 rounded-xl border border-white/10 bg-white/[0.02] p-5">
+        <form onSubmit={handleSubmit} className={`mb-4 space-y-4 ${cardClass}`}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted-foreground">Mois</span>
+              <span className={labelClass}>Mois</span>
               <input type="number" min={1} max={12} value={month} onChange={(e) => setMonth(Number(e.target.value))} className={inputClass} />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted-foreground">Année</span>
+              <span className={labelClass}>Année</span>
               <input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} className={inputClass} />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted-foreground">Lien Drive (PDF)</span>
+              <span className={labelClass}>Lien Drive (PDF)</span>
               <input value={fileUrl} onChange={(e) => setFileUrl(e.target.value)} className={inputClass} required placeholder="https://drive.google.com/..." />
             </label>
           </div>
@@ -235,13 +233,13 @@ function PayslipsSection({ employee, onSaved }: { employee: EmployeeProfile; onS
             href={p.file_url}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center justify-between rounded-lg border border-white/10 px-4 py-3 text-sm hover:border-primary/40"
+            className="flex items-center justify-between rounded-lg border border-neutral-200 px-4 py-3 text-sm text-neutral-900 hover:border-primary/40"
           >
             <span>{p.period_month}/{p.period_year}</span>
             <span className="text-xs text-primary">Voir le PDF</span>
           </a>
         ))}
-        {employee.payslips.length === 0 && <p className="text-sm text-muted-foreground">Aucune fiche de paie.</p>}
+        {employee.payslips.length === 0 && <p className="text-sm text-neutral-400">Aucune fiche de paie.</p>}
       </div>
     </div>
   );

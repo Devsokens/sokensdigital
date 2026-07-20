@@ -16,8 +16,27 @@ export function getEmployee(id: string) {
   return apiFetch<EmployeeProfile>(`/api/v1/hr/employees/${id}/`);
 }
 
-export function createEmployee(data: { user_id: string; position: string; hire_date?: string }) {
+export function createEmployee(data: {
+  user_id: string;
+  position: string;
+  hire_date?: string;
+  gross_monthly_salary?: string;
+}) {
   return apiFetch<EmployeeProfile>("/api/v1/hr/employees/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function provisionUser(data: {
+  email: string;
+  password: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  department_id?: string;
+}) {
+  return apiFetch<UserBrief>("/api/v1/users/provision/", {
     method: "POST",
     body: JSON.stringify(data),
   });
