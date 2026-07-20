@@ -79,7 +79,7 @@ Actuellement le frontend (`/admin`) affiche tous les modules à n'importe quel c
 | Profil personnel | ✅ Firestore | ✅ `/profil` |
 | RH — Employés/Contrats/Fiches de paie | ✅ Django (`hr` app) | ✅ `/admin/rh` |
 | RH — Départements | ✅ Django (`core.Department`) | ✅ `/admin/rh/departements` |
-| Projets (CRUD, membres) | ✅ Django (`projects` app) | ⏳ pas encore d'écran |
+| Projets (CRUD, membres) | ✅ Django (`projects` app) | ✅ `/admin/technique/projets` |
 | Timesheets (saisie, validation) | ✅ | ✅ `/admin/technique/timesheets` |
 | Décaissements — initiation N1 | ✅ (N2/exécution ⏳ — voir §6.3) | ✅ `/admin/technique/decaissements` |
 | Finance/Comptabilité (plan comptable, factures, TVA, rapprochement) | ⏳ | ⏳ |
@@ -89,8 +89,9 @@ Actuellement le frontend (`/admin`) affiche tous les modules à n'importe quel c
 | Marketing/Commercial — Dashboard | ✅ (pipeline pondéré, version simplifiée) | ✅ `/admin/marketing/dashboard` |
 | Marketing/Commercial — Devis (Pipeline & Devis) | ✅ (PDF/email ⏳ — voir §7.2) | ✅ `/admin/marketing/devis` |
 | Marketing/Commercial — Portfolio/Témoignages/Hero (CMS) | ⏳ | ⏳ |
-| Dashboard Global | ⏳ bloqué sur Tâches/Chat — voir `docs/backend-specifications.md §8` | ⏳ |
-| Chat/Notifications | ⏳ (Firestore prévu) | ⏳ |
+| Dashboard Global | ⏳ bloqué sur Tâches — voir `docs/backend-specifications.md §8` | ⏳ |
+| Messagerie (salons Entreprise/Département/Projet, temps réel) | ✅ Firestore (Django pousse salons + membres via l'Admin SDK) | ✅ `/admin/messagerie` |
+| Notifications | ⏳ (Firestore prévu) | ⏳ |
 
 ## Documentation API
 

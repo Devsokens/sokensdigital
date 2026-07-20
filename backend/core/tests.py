@@ -196,6 +196,26 @@ class SetUserRoleViewTests(APITestCase):
         self.assertEqual(response.status_code, 400)
 
 
+class DepartmentViewSetTests(APITestCase):
+    def setUp(self):
+        self.super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
+        self.super_admin.firestore_role = 'SUPER_ADMIN'
+
+        self.client_super_admin = APIClient()
+        self.client_super_admin.force_authenticate(user=self.super_admin)
+
+    @patch('core.views.upsert_chat_room')
+    def test_create_pushes_firestore_chat_room(self, mock_upsert):
+        response = self.client_super_admin.post('/api/v1/departments/', {'name': 'Technique'}, format='json')
+        self.assertEqual(response.status_code, 201)
+        department_id = response.json()['id']
+        mock_upsert.assert_called_once_with(f'dept-{department_id}', {
+            'name': 'Salon Technique',
+            'roomType': 'DEPARTMENT',
+            'departmentId': department_id,
+        })
+
+
 class AuditLogViewSetTests(APITestCase):
     def setUp(self):
         self.super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')

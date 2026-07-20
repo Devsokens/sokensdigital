@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.firestore_client import create_profile, update_profile_fields
+from core.firestore_client import create_profile, update_profile_fields, upsert_chat_room
 from core.models import AuditLog, Department, User, hash_email
 from core.permissions import has_role
 from core.serializers import (
@@ -83,6 +83,17 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     queryset = Department.objects.all()
     serializer_class = DepartmentSerializer
     permission_classes = [IsSuperAdmin]
+
+    def perform_create(self, serializer):
+        department = serializer.save()
+        # Mirrors into Firestore's chat system — firestore.rules only lets
+        # SUPER_ADMIN write chatRooms directly, so every department needs
+        # its room pushed from here, not created client-side.
+        upsert_chat_room(f'dept-{department.id}', {
+            'name': f'Salon {department.name}',
+            'roomType': 'DEPARTMENT',
+            'departmentId': str(department.id),
+        })
 
 
 class IsSuperAdminOrRH(permissions.BasePermission):

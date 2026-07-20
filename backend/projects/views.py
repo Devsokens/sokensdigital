@@ -4,6 +4,7 @@ from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from core.firestore_client import set_chat_room_members, upsert_chat_room
 from core.permissions import has_role
 from projects.models import Project, ProjectMember, Timesheet
 from projects.serializers import ProjectMemberSerializer, ProjectSerializer, TimesheetSerializer
@@ -54,7 +55,28 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         lead = serializer.validated_data.get('lead_project_manager') or self.request.user
-        serializer.save(lead_project_manager=lead)
+        project = serializer.save(lead_project_manager=lead)
+        upsert_chat_room(f'project-{project.id}', {
+            'name': f'Salon {project.name}',
+            'roomType': 'PROJECT',
+            'projectId': str(project.id),
+        })
+        self._sync_chat_room_members(project)
+
+    def _sync_chat_room_members(self, project):
+        """Pushes the current lead + team member firebase_uids to the
+        project's chat room — firestore.rules' PROJECT-room read check is
+        `request.auth.uid in resource.data.memberUids`, and only the Admin
+        SDK (here) can write chatRooms directly. Members without a
+        firebase_uid yet (never logged in) are silently skipped — they'll
+        be added next time this runs after their first login links it."""
+        uids = set()
+        if project.lead_project_manager_id and project.lead_project_manager.firebase_uid:
+            uids.add(project.lead_project_manager.firebase_uid)
+        for member in project.memberships.select_related('user').all():
+            if member.user.firebase_uid:
+                uids.add(member.user.firebase_uid)
+        set_chat_room_members(f'project-{project.id}', list(uids))
 
     @extend_schema(
         tags=['Technique & Projets'],
@@ -70,6 +92,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         serializer = ProjectMemberSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save(project=project)
+        self._sync_chat_room_members(project)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @extend_schema(tags=['Technique & Projets'], summary='Remove a member from the project')
@@ -84,6 +107,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         # Instance .delete(), not queryset .delete() — LoggedModel writes an
         # AuditLog entry on the former, bulk deletes skip it entirely.
         membership.delete(user=request.user)
+        self._sync_chat_room_members(project)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def _is_lead_or_admin(self, request, project):

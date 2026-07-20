@@ -50,3 +50,27 @@ export interface Profile {
   createdAt: unknown;
   updatedAt: unknown;
 }
+
+/** Firestore doc at /chatRooms/{roomId} — mirrored from Django
+ * (Department/Project) via the Admin SDK, or created once for the single
+ * COMPANY room (`manage.py create_company_room`). See firestore.rules. */
+export interface ChatRoom {
+  id: string;
+  name: string;
+  roomType: RoomType;
+  departmentId?: string | null;
+  projectId?: string | null;
+  memberUids?: string[];
+  isActive: boolean;
+  createdAt: unknown;
+}
+
+/** Firestore doc at /chatRooms/{roomId}/messages/{messageId}. Immutable —
+ * firestore.rules disallows update/delete on this subcollection. */
+export interface ChatMessage {
+  id: string;
+  text: string;
+  authorUid: string;
+  authorName: string;
+  createdAt: unknown;
+}

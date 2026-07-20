@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from rest_framework.test import APIClient, APITestCase
 
 from core.models import User
@@ -76,6 +78,33 @@ class ProjectViewSetTests(APITestCase):
             format='json',
         )
         self.assertEqual(response.status_code, 400)
+
+    @patch('projects.views.set_chat_room_members')
+    @patch('projects.views.upsert_chat_room')
+    def test_create_pushes_firestore_chat_room(self, mock_upsert, mock_set_members):
+        response = self.client_chef.post('/api/v1/projects/', {'name': 'Nouveau projet'}, format='json')
+        project_id = response.json()['id']
+        mock_upsert.assert_called_once_with(f'project-{project_id}', {
+            'name': 'Salon Nouveau projet',
+            'roomType': 'PROJECT',
+            'projectId': project_id,
+        })
+        mock_set_members.assert_called_once()
+
+    @patch('projects.views.set_chat_room_members')
+    def test_add_member_resyncs_chat_room_uids(self, mock_set_members):
+        self.chef.firebase_uid = 'uid-chef'
+        self.chef.save(update_fields=['firebase_uid'])
+        self.outsider.firebase_uid = 'uid-outsider'
+        self.outsider.save(update_fields=['firebase_uid'])
+
+        self.client_chef.post(
+            f'/api/v1/projects/{self.project.id}/members/',
+            {'user_id': str(self.outsider.id)},
+            format='json',
+        )
+        last_call_uids = set(mock_set_members.call_args.args[1])
+        self.assertEqual(last_call_uids, {'uid-chef', 'uid-outsider'})
 
 
 class TimesheetTests(APITestCase):

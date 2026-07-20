@@ -17,6 +17,7 @@ import {
   Banknote,
   FolderKanban,
   UserRound,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth/auth-context";
@@ -37,6 +38,7 @@ const SECTIONS: NavSection[] = [
     title: "Général",
     items: [
       { label: "Tableau de bord", href: "/admin", icon: LayoutDashboard },
+      { label: "Messagerie", href: "/admin/messagerie", icon: MessageSquare },
       { label: "Mon profil", href: "/profil", icon: UserRound },
     ],
   },

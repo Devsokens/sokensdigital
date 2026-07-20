@@ -248,7 +248,20 @@ contrainte d'unicité, `created_at` pour audit.
 | DELETE | `/api/v1/projects/{id}/members/{membership_id}/` | Retirer un membre | Lead du projet, Super-Admin | ✅ |
 | GET/POST | `/api/v1/projects/{id}/timesheets/` | Feuilles de temps du projet | Équipe assignée (soumission de ses propres heures), Chef de Projet (voit tout) | ✅ |
 | POST | `/api/v1/projects/{id}/timesheets/{ts_id}/validate/` | Validation d'une feuille de temps | Chef de Projet du projet, Super-Admin | ✅ |
-| GET/POST | `/api/v1/projects/{id}/messages/` | Messagerie du projet | Équipe assignée + Chef de Projet | ⏳ |
+
+**Messagerie du projet** ✅ implémentée, mais **pas** comme un endpoint
+Django ci-dessus : le chat vit entièrement dans Firestore
+(`chatRooms/project-{id}` + sous-collection `messages`), conformément à la
+règle d'architecture "Firestore possède identité/rôle/chat". Django ne fait
+que pousser le salon (`upsert_chat_room`) et la liste des `memberUids`
+(`set_chat_room_members`) via l'Admin SDK, à chaque création de projet ou
+changement de membres (`ProjectViewSet.perform_create`/`add_member`/
+`remove_member`, `core/firestore_client.py`). Idem pour les salons de
+département (`chatRooms/dept-{id}`, `DepartmentViewSet.perform_create`). Le
+salon `chatRooms/company` (annonces d'entreprise) est unique et n'est
+rattaché à aucun modèle Django — il se crée une fois par environnement via
+`python manage.py create_company_room`. Front : `lib/firebase/chat.ts` +
+écran `/admin/messagerie`, lecture/écriture temps réel via `onSnapshot`.
 
 **Dépendance croisée** ✅ implémentée : `finance.DisbursementRequest`
 référence `projects.Project` — un Chef de Projet ne peut initier une

@@ -62,3 +62,41 @@ def update_profile_fields(firebase_uid: str, data: dict) -> None:
         **data,
         'updatedAt': firestore.SERVER_TIMESTAMP,
     })
+
+
+def upsert_chat_room(room_id: str, data: dict) -> None:
+    """Creates or fully overwrites a chatRooms/{room_id} doc — used to keep
+    Django-owned entities (Department, Project) mirrored into Firestore's
+    chat system, since firestore.rules only lets SUPER_ADMIN write chatRooms
+    directly (see firestore.rules TODO(chat) — this is that mirror). Doc id
+    is caller-chosen (e.g. `dept-{department.id}`, `project-{project.id}`)
+    so repeat calls are naturally idempotent.
+
+    Swallows errors (logged, not raised): this runs inside
+    Department/Project create/update requests, and a Firestore hiccup
+    (or, in local dev, no Firebase credentials configured at all)
+    shouldn't fail the Django-side operation that actually owns the data —
+    same reasoning as get_profile_role()'s try/except below.
+    """
+    from firebase_admin import firestore
+
+    try:
+        _get_client().collection('chatRooms').document(room_id).set({
+            **data,
+            'isActive': True,
+            'createdAt': firestore.SERVER_TIMESTAMP,
+        }, merge=True)
+    except Exception:
+        logger.exception('Could not upsert Firestore chat room %s', room_id)
+
+
+def set_chat_room_members(room_id: str, member_uids: list[str]) -> None:
+    """Overwrites the memberUids array on a PROJECT-type room — called
+    whenever ProjectMember or Project.lead_project_manager changes. Same
+    swallow-and-log reasoning as upsert_chat_room()."""
+    try:
+        _get_client().collection('chatRooms').document(room_id).update({
+            'memberUids': member_uids,
+        })
+    except Exception:
+        logger.exception('Could not update Firestore chat room members for %s', room_id)
