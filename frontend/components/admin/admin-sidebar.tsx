@@ -18,6 +18,12 @@ import {
   FolderKanban,
   UserRound,
   MessageSquare,
+  Lock,
+  BookOpen,
+  Receipt,
+  Landmark,
+  Percent,
+  PieChart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth/auth-context";
@@ -67,6 +73,17 @@ const SECTIONS: NavSection[] = [
       { label: "Gestion de projet", href: "/admin/technique/projets", icon: FolderKanban },
       { label: "Timesheets", href: "/admin/technique/timesheets", icon: Clock },
       { label: "Décaissements", href: "/admin/technique/decaissements", icon: Banknote },
+    ],
+  },
+  {
+    title: "Finance & Comptabilité",
+    items: [
+      { label: "Analytique", href: "/admin/finance/dashboard", icon: PieChart },
+      { label: "Clôture comptable", href: "/admin/finance/cloture", icon: Lock },
+      { label: "Grand Livre", href: "/admin/finance/grand-livre", icon: BookOpen },
+      { label: "Facturation", href: "/admin/finance/facturation", icon: Receipt },
+      { label: "Rapprochement bancaire", href: "/admin/finance/rapprochement", icon: Landmark },
+      { label: "Fiscalité (TVA)", href: "/admin/finance/tva", icon: Percent },
     ],
   },
 ];

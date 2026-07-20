@@ -197,7 +197,119 @@ export interface DisbursementRequest {
   beneficiary: string;
   reason: string;
   status: DisbursementStatus;
+  decided_by: UserBrief | null;
+  decided_at: string | null;
+  executed_by: UserBrief | null;
+  executed_at: string | null;
   created_at: string;
+}
+
+export type AccountingPeriodStatus = "OUVERTE" | "CLOTUREE";
+
+export interface AccountingPeriod {
+  id: string;
+  label: string;
+  start_date: string;
+  end_date: string;
+  status: AccountingPeriodStatus;
+  closed_by: UserBrief | null;
+  closed_at: string | null;
+  created_at: string;
+}
+
+export type AccountClass = "ACTIF" | "PASSIF" | "CHARGE" | "PRODUIT" | "TVA";
+
+export interface Account {
+  id: string;
+  code: string;
+  name: string;
+  account_class: AccountClass;
+}
+
+export interface TransactionLine {
+  id: string;
+  account: string;
+  account_code: string;
+  account_name: string;
+  label: string;
+  debit: string;
+  credit: string;
+  lettrage_code: string;
+}
+
+export type JournalCode = "VE" | "AC" | "BQ" | "OD";
+
+export interface JournalEntry {
+  id: string;
+  period: string;
+  journal_code: JournalCode;
+  date: string;
+  label: string;
+  created_by: UserBrief | null;
+  source_invoice: string | null;
+  is_locked: boolean;
+  lines: TransactionLine[];
+  created_at: string;
+}
+
+export type InvoiceStatus = "BROUILLON" | "VALIDEE";
+
+export interface Invoice {
+  id: string;
+  invoice_number: string;
+  client_name: string;
+  issue_date: string;
+  due_date: string | null;
+  amount_ht: string;
+  vat_rate: string;
+  amount_ttc: string;
+  status: InvoiceStatus;
+  created_by: UserBrief | null;
+  validated_by: UserBrief | null;
+  validated_at: string | null;
+  created_at: string;
+}
+
+export type BankTransactionStatus = "NON_LETTRE" | "LETTRE";
+
+export interface BankTransaction {
+  id: string;
+  date: string;
+  label: string;
+  amount: string;
+  matched_line: string | null;
+  status: BankTransactionStatus;
+}
+
+export interface BankStatementImport {
+  id: string;
+  filename: string;
+  imported_by: UserBrief | null;
+  transactions: BankTransaction[];
+  created_at: string;
+}
+
+export type TaxDeclarationStatus = "BROUILLON" | "VALIDEE";
+
+export interface TaxDeclaration {
+  id: string;
+  period: string;
+  period_label: string;
+  status: TaxDeclarationStatus;
+  collected_vat: string;
+  deductible_vat: string;
+  net_vat: string;
+  generated_by: UserBrief | null;
+  validated_by: UserBrief | null;
+  validated_at: string | null;
+  created_at: string;
+}
+
+export interface FinanceDashboard {
+  cash_balance: string;
+  gross_result: string;
+  dso_days: number | null;
+  executed_disbursements_by_project: Record<string, string>;
 }
 
 export interface AuditLogEntry {

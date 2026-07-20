@@ -1,16 +1,27 @@
+import uuid
+from decimal import Decimal
+
 from django.db import models
+from django.utils import timezone
 
 from core.models import LoggedModel, User
 from projects.models import Project
 
+# Placeholder — same unconfirmed-rate caveat as marketing.models.DEFAULT_VAT_RATE
+# (docs/backend-specifications.md): no real rate has been confirmed for
+# Soken's Digital's jurisdiction. Kept as a separate constant rather than a
+# shared import because Finance and Marketing/Commercial invoicing are two
+# independent concerns that happen to share a number today.
+DEFAULT_VAT_RATE = Decimal('0.18')
+
 
 class DisbursementRequest(LoggedModel):
-    """docs/backend-specifications.md §6.3. Only the N1 initiation step is
-    implemented — N2/N3 approval (Directeur Financier/Super-Admin) and
-    execution (Comptable) belong to the rest of the Finance department,
-    not built yet. `status` only ever reaches EN_ATTENTE_N1 through this
-    module; the later values exist on the enum so a future migration
-    isn't needed to add the approval workflow."""
+    """docs/backend-specifications.md §3.1/§4.1/§4.2/§6.3. Full workflow:
+    Chef de Projet initiates (N1) -> Directeur Financier/Super-Admin gives
+    final hierarchical approval (`approve` action, "validation N2/N3" in the
+    spec — modeled as a single final approval step since no separate N1
+    approver role exists) -> Comptable marks it EXECUTE once the money has
+    actually moved (`execute` action)."""
 
     class Status(models.TextChoices):
         EN_ATTENTE_N1 = 'EN_ATTENTE_N1', 'En attente (N1)'
@@ -25,6 +36,10 @@ class DisbursementRequest(LoggedModel):
     beneficiary = models.CharField(max_length=255)
     reason = models.TextField()
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.EN_ATTENTE_N1)
+    decided_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='decided_disbursements')
+    decided_at = models.DateTimeField(null=True, blank=True)
+    executed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='executed_disbursements')
+    executed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta(LoggedModel.Meta):
         ordering = ['-created_at']
@@ -41,3 +56,218 @@ class DisbursementRequest(LoggedModel):
         from django.core.exceptions import ValidationError
         if self.amount is not None and self.amount <= 0:
             raise ValidationError({'amount': 'Le montant doit être positif.'})
+
+
+class AccountingPeriod(LoggedModel):
+    """§4.1 "Clôture comptable": Directeur Financier + Super-Admin only.
+    Gates Grand Livre writes (§4.2 "à condition que la période financière
+    soit ouverte") — a locked period's JournalEntry rows become read-only."""
+
+    class Status(models.TextChoices):
+        OUVERTE = 'OUVERTE', 'Ouverte'
+        CLOTUREE = 'CLOTUREE', 'Clôturée'
+
+    label = models.CharField(max_length=20, unique=True, help_text='Ex: 2026-07')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.OUVERTE)
+    closed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='closed_periods')
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-start_date']
+        indexes = LoggedModel.Meta.indexes + [models.Index(fields=['status'])]
+
+    def __str__(self):
+        return self.label
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValidationError({'end_date': 'La date de fin doit être postérieure à la date de début.'})
+
+
+class Account(LoggedModel):
+    """Simplified chart of accounts (plan comptable) — just enough
+    structure (code + class) to post balanced journal entries and compute
+    TVA collectée/déductible. Not a full OHADA/PCG plan comptable."""
+
+    class AccountClass(models.TextChoices):
+        ACTIF = 'ACTIF', 'Actif'
+        PASSIF = 'PASSIF', 'Passif'
+        CHARGE = 'CHARGE', 'Charge'
+        PRODUIT = 'PRODUIT', 'Produit'
+        TVA = 'TVA', 'TVA'
+
+    code = models.CharField(max_length=20, unique=True)
+    name = models.CharField(max_length=255)
+    account_class = models.CharField(max_length=10, choices=AccountClass.choices)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['code']
+        indexes = LoggedModel.Meta.indexes + [models.Index(fields=['code'])]
+
+    def __str__(self):
+        return f'{self.code} — {self.name}'
+
+
+class JournalEntry(LoggedModel):
+    """Grand Livre (§4.2): a balanced group of TransactionLine rows. Balance
+    (sum(debit) == sum(credit)) is enforced in the serializer at creation
+    time, not per-line, since it's only meaningful across the whole entry."""
+
+    class JournalCode(models.TextChoices):
+        VENTES = 'VE', 'Ventes'
+        ACHATS = 'AC', 'Achats'
+        BANQUE = 'BQ', 'Banque'
+        OPERATIONS_DIVERSES = 'OD', 'Opérations diverses'
+
+    period = models.ForeignKey(AccountingPeriod, on_delete=models.PROTECT, related_name='entries')
+    journal_code = models.CharField(max_length=2, choices=JournalCode.choices)
+    date = models.DateField(default=timezone.now)
+    label = models.CharField(max_length=255)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='journal_entries')
+    # Set when this entry was auto-generated by Invoice validation rather
+    # than typed directly into the Grand Livre — informational only.
+    source_invoice = models.ForeignKey('finance.Invoice', on_delete=models.SET_NULL, null=True, blank=True, related_name='journal_entries')
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-date', '-created_at']
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['period']),
+            models.Index(fields=['journal_code']),
+        ]
+
+    def __str__(self):
+        return f'{self.journal_code} — {self.label}'
+
+    @property
+    def is_locked(self):
+        return self.period.status == AccountingPeriod.Status.CLOTUREE
+
+
+class TransactionLine(LoggedModel):
+    entry = models.ForeignKey(JournalEntry, on_delete=models.CASCADE, related_name='lines')
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name='lines')
+    label = models.CharField(max_length=255, blank=True)
+    debit = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
+    credit = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
+    # Set once matched to a BankTransaction during rapprochement bancaire —
+    # shared between the two matched rows, not a foreign key, since a bank
+    # transaction can in principle net multiple lines (simplified 1:1 here).
+    lettrage_code = models.CharField(max_length=40, blank=True)
+
+    class Meta(LoggedModel.Meta):
+        indexes = LoggedModel.Meta.indexes + [models.Index(fields=['account'])]
+
+    def __str__(self):
+        return f'{self.account.code} D{self.debit}/C{self.credit}'
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        if self.debit and self.credit:
+            raise ValidationError('Une ligne ne peut être à la fois débitrice et créditrice.')
+
+
+class Invoice(LoggedModel):
+    """§4.2 "Facturation": Comptable validates + triggers the regularization
+    entry automatically (`validate` action creates a balanced JournalEntry:
+    debit client (411) for total TTC, credit sales (706) for HT, credit VAT
+    collectée (4457) for the VAT amount)."""
+
+    class Status(models.TextChoices):
+        BROUILLON = 'BROUILLON', 'Brouillon'
+        VALIDEE = 'VALIDEE', 'Validée'
+
+    invoice_number = models.CharField(max_length=20, unique=True, editable=False)
+    client_name = models.CharField(max_length=255)
+    issue_date = models.DateField(default=timezone.now)
+    due_date = models.DateField(null=True, blank=True)
+    amount_ht = models.DecimalField(max_digits=12, decimal_places=2)
+    vat_rate = models.DecimalField(max_digits=4, decimal_places=2, default=DEFAULT_VAT_RATE)
+    amount_ttc = models.DecimalField(max_digits=12, decimal_places=2, editable=False)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.BROUILLON)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
+    validated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='validated_invoices')
+    validated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-issue_date', '-created_at']
+        indexes = LoggedModel.Meta.indexes + [models.Index(fields=['status'])]
+
+    def __str__(self):
+        return self.invoice_number
+
+    def save(self, *args, **kwargs):
+        if not self.invoice_number:
+            year = timezone.now().year
+            last = Invoice.objects.filter(invoice_number__startswith=f'FAC-{year}-').order_by('-invoice_number').first()
+            seq = int(last.invoice_number.split('-')[2]) + 1 if last else 1
+            self.invoice_number = f'FAC-{year}-{seq:05d}'
+        self.amount_ttc = (self.amount_ht * (1 + self.vat_rate)).quantize(Decimal('0.01'))
+        super().save(*args, **kwargs)
+
+
+class BankStatementImport(LoggedModel):
+    """§4.2 "Rapprochement Bancaire": metadata for one CSV import batch.
+    The CSV itself isn't stored (no file storage backend configured yet) —
+    only the parsed rows it produced (BankTransaction), same reasoning as
+    other simplifications flagged in docs/backend-specifications.md."""
+
+    filename = models.CharField(max_length=255)
+    imported_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='bank_imports')
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.filename} ({self.created_at:%Y-%m-%d})'
+
+
+class BankTransaction(LoggedModel):
+    class Status(models.TextChoices):
+        NON_LETTRE = 'NON_LETTRE', 'Non lettré'
+        LETTRE = 'LETTRE', 'Lettré'
+
+    statement_import = models.ForeignKey(BankStatementImport, on_delete=models.CASCADE, related_name='transactions')
+    date = models.DateField()
+    label = models.CharField(max_length=255)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    matched_line = models.OneToOneField(TransactionLine, on_delete=models.SET_NULL, null=True, blank=True, related_name='matched_bank_transaction')
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.NON_LETTRE)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-date']
+        indexes = LoggedModel.Meta.indexes + [models.Index(fields=['status'])]
+
+    def __str__(self):
+        return f'{self.label} — {self.amount}'
+
+
+class TaxDeclaration(LoggedModel):
+    """§4.1 "Gouvernance fiscale" (Directeur Financier signs/validates) +
+    §4.2 "Fiscalité" (Comptable generates the BROUILLON and exports the
+    FEC). `collected_vat`/`deductible_vat` are computed from TransactionLine
+    rows posted to the TVA-class accounts within the period, not typed by
+    hand."""
+
+    class Status(models.TextChoices):
+        BROUILLON = 'BROUILLON', 'Brouillon'
+        VALIDEE = 'VALIDEE', 'Validée'
+
+    period = models.OneToOneField(AccountingPeriod, on_delete=models.CASCADE, related_name='tax_declaration')
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.BROUILLON)
+    collected_vat = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
+    deductible_vat = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
+    net_vat = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
+    generated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='generated_tax_declarations')
+    validated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='validated_tax_declarations')
+    validated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'TVA {self.period.label} ({self.status})'

@@ -272,125 +272,147 @@ demande (N1) que pour un projet dont il est `lead_project_manager`
 
 ## 6. Département Comptabilité & Finance (`finance`)
 
-### 6.1 Plan Comptable & Écritures (partie double, OHADA)
+✅ implémenté (§4.1/§4.2 de la spec rôles), avec des simplifications
+délibérées documentées section par section — ce n'est **pas** le plan
+comptable OHADA complet ni un export FEC certifié DGFiP, juste assez de
+structure pour poser des écritures équilibrées et calculer la TVA.
 
-**`Account`** — `id` (UUID), `code` (max 10, unique, indexé), `name`,
-`account_type` (Enum ACTIF/PASSIF/CHARGE/PRODUIT), `parent` (FK récursive),
-`is_active`, `is_system` (bloque la suppression si `True`).
+### 6.1 Plan Comptable & Écritures (partie double)
 
-**`JournalEntry`** — `id` (UUID), `entry_number` (unique, séquentiel
-`JO-{annee}-{seq:05d}`), `accounting_date`, `journal_code` (Enum
-VT/ACH/BQ/OD), `description`, `content_type`/`object_id` (`GenericForeignKey`
-vers `Invoice`, `ExpenseReport` ou `DisbursementRequest`).
+**`Account`** ✅ — `code` (unique), `name`, `account_class` (Enum
+ACTIF/PASSIF/CHARGE/PRODUIT/TVA). Pas de hiérarchie parent/enfant — plan
+comptable simplifié, pas le PCG/OHADA complet.
 
-**`TransactionLine`** — `id` (UUID), `journal_entry` (FK,
-`related_name='lines'`, `CASCADE`), `account` (FK), `debit`/`credit`
-(Decimal 12,2, défaut 0.00), `description`, `reconciled` (bool).
+**`AccountingPeriod`** ✅ — `label` (ex. `2026-07`), `start_date`,
+`end_date`, `status` (Enum OUVERTE/CLOTUREE), `closed_by`/`closed_at`.
+Ouverture/clôture réservées à Directeur Financier + Super-Admin
+(`IsDirecteurFinancierOrSuperAdmin`, §4.1 "Seul rôle, avec le Super-Admin,
+habilité à ouvrir ou verrouiller définitivement des exercices").
 
-**Règle d'or (validateur serializer ou `clean()`)** : rejet si
-`sum(lines.debit) != sum(lines.credit)` pour une même `JournalEntry` —
-implémenté comme validation **transactionnelle** (toutes les lignes créées
-dans un seul appel API atomique, pas de PATCH partiel qui casserait
-l'équilibre).
+**`JournalEntry`** ✅ (Grand Livre) — `period` (FK, `PROTECT`),
+`journal_code` (Enum VE/AC/BQ/OD), `date`, `label`, `created_by`,
+`source_invoice` (FK nullable — renseigné quand l'écriture vient de la
+validation automatique d'une facture, pas d'une saisie manuelle).
+Immuable une fois postée (pas d'update/destroy, même logique que
+`AuditLog`) — une correction se fait par contre-écriture, pas par édition.
 
-**Déclencheurs automatiques (signaux + Celery)** :
-- Facture émise (`Invoice.status → EMISE`) → écriture Client (411) / Produit
-  (701) / TVA collectée (443).
-- Note de frais validée → écriture Charge (61/62) / Tiers (467).
-- Décaissement exécuté (`DisbursementRequest.status → EXECUTE`) → écriture
-  Tiers/Charge / Banque (521).
-- Lettrage bancaire validé → écriture de virement/banque, ligne figée.
+**`TransactionLine`** ✅ — `entry` (FK, `related_name='lines'`), `account`
+(FK, `PROTECT`), `label`, `debit`/`credit` (Decimal, l'un des deux doit être
+nul), `lettrage_code` (rempli lors du rapprochement bancaire, §6.4).
 
-**Verrouillage d'exercice** : validateur/middleware qui rejette tout
-POST/PUT/DELETE sur `TransactionLine` si `accounting_date` appartient à une
-période dont l'exercice (`FiscalYear`, à créer) est `status = CLOS`.
+**Règle d'équilibre** ✅ : `JournalEntrySerializer.validate()` rejette toute
+écriture où `sum(lines.debit) != sum(lines.credit)`, ou avec moins de deux
+lignes — validation atomique, toutes les lignes créées dans le même appel
+(`POST /api/v1/finance/journal-entries/`).
 
-### 6.2 Devis & Facturation
+**Verrouillage d'exercice** ✅ : `JournalEntrySerializer.validate()` rejette
+toute nouvelle écriture si la période visée est `CLOTUREE`.
 
-`Quote`/`QuoteLine` : propriété du module **Marketing** (voir §7.2) —
-Comptabilité y accède en lecture pour validation des prix.
+**Déclencheurs automatiques** : seule la validation de facture (§6.2) est
+câblée aujourd'hui. Note de frais et lettrage bancaire ne génèrent **pas**
+d'écriture automatique — `ExpenseReport` n'existe pas comme modèle
+(§13, question ouverte), et le lettrage (§6.4) associe une ligne existante
+à une transaction bancaire sans en créer une nouvelle.
 
-**`Invoice`** — `id` (UUID), `quote` (FK, null=True — facture peut naître
-sans devis préalable), `client` (FK → `ClientAccount`), `invoice_number`
-(unique, séquentiel), `status` (Enum BROUILLON/EMISE/PAYEE/EN_RETARD),
-`total_ht`, `total_ttc`, `due_date`.
+### 6.2 Facturation
 
-**`InvoiceLine`** — mêmes principes que `QuoteLine` (copiées depuis le devis
-à la conversion).
+`Quote`/`QuoteLine` restent la propriété du module **Marketing** (§7.2) —
+pas de lien direct `Quote → Invoice` implémenté (§13, question ouverte sur
+`ClientAccount`) : `Invoice` se crée indépendamment aujourd'hui, avec juste
+un `client_name` texte libre.
 
-**Flux de conversion** : `POST /api/v1/finance/quotes/{id}/convert/` copie
-les lignes du `Quote` accepté vers un nouvel `Invoice` (BROUILLON). Le
-passage à `EMISE` : scelle la facture (lecture seule sauf statut), génère le
-PDF (Google Drive), déclenche l'écriture comptable via tâche Celery
-asynchrone.
+**`Invoice`** ✅ — `invoice_number` (auto, `FAC-{année}-{seq:05d}`),
+`client_name`, `issue_date`, `due_date`, `amount_ht`, `vat_rate` (défaut
+`finance.models.DEFAULT_VAT_RATE` — même avertissement placeholder que
+`marketing.models.DEFAULT_VAT_RATE`, taux non confirmé), `amount_ttc`
+(calculé serveur), `status` (Enum BROUILLON/VALIDEE).
 
-**Relances** : tâche Celery Beat quotidienne — factures `EMISE` avec
-`due_date` dépassée → email de relance + statut `EN_RETARD`.
+**`POST /api/v1/finance/invoices/{id}/validate/`** ✅ (Comptable/Super-Admin)
+— exige une `AccountingPeriod` **ouverte** couvrant `issue_date` (400 sinon),
+puis poste automatiquement une `JournalEntry` équilibrée : débit Client
+(411) = TTC, crédit Prestations (706) = HT, crédit TVA collectée (4457) =
+TVA. Les comptes 411/706/4457 sont créés à la volée (`get_or_create`) s'ils
+n'existent pas encore.
 
-### 6.3 Décaissements — N1 (initiation) ✅ implémenté, N2/exécution ⏳
+**Non implémenté** : génération PDF, envoi email, relances automatiques sur
+échéance dépassée (même limitation que `Quote.send()`, §7.2 — aucune
+librairie PDF ni backend email configuré).
 
-**`DisbursementRequest`** ✅ — `id` (UUID), `project` (FK →
-`projects.Project`, nullable pour les décaissements non liés à un projet),
-`requested_by` (FK → `User` — pas dans la liste de champs d'origine,
-nécessaire pour l'audit/le filtrage), `amount` (Decimal), `beneficiary`,
-`reason`, `status` (Enum EN_ATTENTE_N1/EN_ATTENTE_N2/APPROUVE/REJETE/
-EXECUTE — tous les statuts existent sur l'enum dès maintenant pour éviter
-une migration plus tard, mais seul `EN_ATTENTE_N1` est atteignable via
-l'API actuelle).
+### 6.3 Décaissements ✅ implémenté (N1 → N2/N3 → exécution, complet)
 
-Vit dans l'app `finance` (nouvellement créée, seul ce modèle y existe pour
-l'instant — le reste du §6 n'est pas implémenté).
+**`DisbursementRequest`** ✅ — `project` (FK nullable), `requested_by`,
+`amount`, `beneficiary`, `reason`, `status` (Enum EN_ATTENTE_N1/
+EN_ATTENTE_N2/APPROUVE/REJETE/EXECUTE), `decided_by`/`decided_at`,
+`executed_by`/`executed_at`.
 
-**Validation hiérarchique** (seuils à définir en config, ex. `Role.permissions`
-ou table `ApprovalThreshold` dédiée) :
-- **N1** (initiation) ✅ : Chef de Projet, restreint à ses propres projets
+Workflow complet :
+- **N1 (initiation)** ✅ : Chef de Projet, restreint à ses propres projets
   (`project.lead_project_manager == request.user`, 403 sinon).
-  `POST /api/v1/finance/disbursement-requests/`. Lecture :
-  `GET /api/v1/finance/disbursement-requests/` (Chef de Projet voit ses
-  propres demandes ; Directeur Financier/Comptable/Super-Admin voient tout).
-- **N2/N3** (approbation stratégique) ⏳ : Directeur Financier, Super-Admin.
-- **Exécution** : Comptable, Directeur Financier → déclenche l'écriture
-  comptable automatique.
+  `POST /api/v1/finance/disbursement-requests/`.
+- **N2/N3 (validation hiérarchique finale)** ✅ : `POST
+  /api/v1/finance/disbursement-requests/{id}/approve/` `{decision: APPROUVE
+  | REJETE}` — Directeur Financier/Super-Admin uniquement. Modélisé comme
+  une **seule** étape d'approbation finale (le spec parle de "N2/N3" mais
+  aucun rôle d'approbateur N1 intermédiaire distinct n'existe) plutôt que
+  deux statuts EN_ATTENTE_N2 séquentiels.
+- **Exécution** ✅ : `POST
+  /api/v1/finance/disbursement-requests/{id}/execute/` — Comptable/
+  Super-Admin, uniquement depuis `APPROUVE` → `EXECUTE`. Ne génère **pas**
+  d'écriture comptable automatique (contrairement à la validation de
+  facture) — pas de compte "tiers"/charge dédié défini pour ça encore.
 
 ### 6.4 Rapprochement bancaire (sans API bancaire directe)
 
-**`BankStatementLine`** — `id` (UUID), `bank_account` (Chaîne), `operation_date`,
-`label`, `amount` (signé), `is_reconciled` (bool, défaut False),
-`content_type`/`object_id` (`matched_to`, vers `Invoice` ou dépense).
+**`BankStatementImport`** ✅ — métadonnées d'un lot d'import (`filename`,
+`imported_by`). Le fichier CSV lui-même n'est **pas** stocké (pas de backend
+de stockage de fichiers configuré) — seules les lignes déjà parsées sont
+envoyées (`POST /api/v1/finance/bank-imports/` avec `rows: [{date, label,
+amount}]`), pas d'upload de fichier brut ni de parsing CSV côté serveur.
+
+**`BankTransaction`** ✅ — `date`, `label`, `amount`, `matched_line` (FK
+`TransactionLine`, `OneToOne`), `status` (Enum NON_LETTRE/LETTRE).
 
 | Méthode | Route | Description |
 |---|---|---|
-| POST | `/api/v1/finance/bank-statement/import/` | Import CSV (`date,libelle,montant`), validation stricte du format |
-| GET | `/api/v1/finance/bank-statement/suggestions/` | Moteur de suggestion (montant + libellé ≈ client) |
-| POST | `/api/v1/finance/bank-statement/{id}/reconcile/` | Valide le lettrage → écriture comptable → **verrouillage définitif** (PUT/DELETE bloqués ensuite, pour **tous** les rôles, y compris Super-Admin) |
+| POST | `/api/v1/finance/bank-imports/` | Import de lignes déjà parsées (pas de CSV brut) |
+| GET | `/api/v1/finance/bank-imports/{id}/transactions/{tx_id}/suggestions/` | Suggestions = lignes non lettrées du compte `512` au même montant (pas de correspondance floue sur le libellé) |
+| POST | `/api/v1/finance/bank-imports/{id}/transactions/{tx_id}/match/` | Lettrage manuel — `{line_id}` → statut `LETTRE`, `lettrage_code` généré |
+
+Pas de verrouillage définitif après lettrage (contrairement au brouillon
+initial) — un lettrage peut en théorie être refait via un nouveau `match`.
 
 ### 6.5 Déclarations fiscales & TVA
 
-**`TaxDeclaration`** — `id` (UUID), `period` (`MM-YYYY`), `collected_tva`,
-`deductible_tva`, `tax_to_pay`, `status` (Enum BROUILLON/VALIDE).
-
-Pré-remplissage par agrégation (`Sum` Django ORM) sur les comptes 443/445 de
-la période. Génération d'un état exportable imitant la liasse fiscale.
+**`TaxDeclaration`** ✅ — `period` (OneToOne → `AccountingPeriod`),
+`status` (Enum BROUILLON/VALIDEE), `collected_vat`, `deductible_vat`,
+`net_vat`, `generated_by`, `validated_by`/`validated_at`.
 
 | Méthode | Route | Permission |
 |---|---|---|
-| GET/POST | `/api/v1/finance/tax-declarations/` | Comptable (création BROUILLON) |
-| POST | `/api/v1/finance/tax-declarations/{id}/validate/` | Directeur Financier uniquement |
+| POST | `/api/v1/finance/tax-declarations/generate/` `{period_id}` | Comptable/Super-Admin — recalcule `collected_vat`/`deductible_vat` depuis les `TransactionLine` postées sur les comptes `4457`/`4456` de la période (`update_or_create`, donc regénérable) |
+| POST | `/api/v1/finance/tax-declarations/{id}/validate/` | Directeur Financier/Super-Admin uniquement (§4.1 "Gouvernance fiscale" — validation/signature) |
+
+Pas de génération de "liasse fiscale" formatée — juste les trois montants.
 
 ### 6.6 Rapports & Tableau de bord Finance
 
-- **Vue matérialisée PostgreSQL** : chiffre d'affaires, trésorerie nette,
-  encours clients (`REFRESH MATERIALIZED VIEW` déclenché par signal ou tâche
-  Celery périodique).
-- **Cache Redis** sur `/api/v1/finance/dashboard/`, TTL 1–2h, invalidé sur
-  signal (facture de gros montant, lettrage validé).
-
 | Méthode | Route | Permission |
 |---|---|---|
-| GET | `/api/v1/finance/dashboard/` | Comptable (rapports opérationnels), CFO (accès complet stratégique) |
-| GET | `/api/v1/finance/reports/general-ledger/` | Grand livre | Comptable, CFO |
-| GET | `/api/v1/finance/reports/fec/` | Export FEC (texte plat, UTF-8, chronologique, non altérable) | Comptable, CFO |
-| GET | `/api/v1/finance/reports/export/{format}/` | Export SAGE/CIEL (CSV/JSON structuré) | Comptable, CFO |
+| GET | `/api/v1/finance/dashboard/` | Directeur Financier/Super-Admin uniquement (§4.1 "Analytique & Reporting") |
+| GET | `/api/v1/finance/accounting-periods/{id}/fec-export/` | Comptable/Directeur Financier/Super-Admin — export texte simplifié (8 colonnes essentielles), **pas** le format FEC DGFiP certifié à 18 colonnes obligatoires |
+
+Contenu du dashboard, calculé à la volée (pas de vue matérialisée ni de
+cache Redis) :
+- `cash_balance` : solde du compte `512` (débit − crédit, toutes périodes).
+- `gross_result` : produits − charges (classes `PRODUIT`/`CHARGE`), toutes
+  périodes confondues.
+- `dso_days` : délai moyen `due_date - issue_date` sur les factures
+  `VALIDEE` avec échéance — approximation du DSO réel (qui se calcule
+  normalement sur l'encaissement effectif, non suivi ici).
+- `executed_disbursements_by_project` : total des décaissements `EXECUTE`
+  groupés par projet. **Pas une vraie marge par projet** — le revenu par
+  projet n'est pas suivi côté Django (`Quote` ne référence pas `Project`,
+  §13) donc ce n'est que le coût, pas marge = revenu − coût.
 
 ---
 
@@ -653,6 +675,18 @@ n'est pas critique pour ces widgets).
     `core.views.CanListUsers` (nouvelle permission) élargit
     `GET /api/v1/users/` à Responsable Marketing (lecture seule,
     nécessaire pour réassigner un lead à un Commercial).
+23. ✅ Département Technique complété (Timesheets, Décaissements N1,
+    écran Gestion de projet), **Messagerie temps réel** ajoutée (hors §1-9
+    d'origine — chat vit entièrement dans Firestore `chatRooms/*`, Django
+    ne fait que pousser salons/membres via l'Admin SDK à la création d'un
+    Département/Projet, voir §5.2), puis **Département Comptabilité &
+    Finance complété** (§6, réécrit ci-dessus pour refléter le code réel
+    plutôt que le brouillon initial) : Clôture comptable, Grand Livre
+    (écritures équilibrées, période verrouillable), Facturation (validation
+    → écriture auto), Rapprochement bancaire (import + lettrage manuel),
+    TVA (génération + signature CFO), export FEC simplifié, Décaissements
+    étendu à l'approbation (N2/N3) et l'exécution. 112 tests au total dans
+    le repo, tous passants.
 
 ---
 

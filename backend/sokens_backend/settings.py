@@ -126,8 +126,12 @@ SPECTACULAR_SETTINGS = {
             'name': 'Administration & RH',
             'description': "Utilisateurs, départements, dossiers employés, contrats, fiches de paie.",
         },
-        {'name': 'Technique & Projets', 'description': 'Projets et membres.'},
+        {'name': 'Technique & Projets', 'description': 'Projets, membres, timesheets.'},
         {'name': 'Marketing & Commercial', 'description': 'Leads, devis, CMS, réseaux sociaux.'},
+        {
+            'name': 'Finance & Comptabilité',
+            'description': 'Décaissements, clôture comptable, Grand Livre, facturation, rapprochement bancaire, TVA.',
+        },
     ],
     'SORT_OPERATIONS': False,
 }

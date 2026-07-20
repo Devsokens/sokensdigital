@@ -81,8 +81,14 @@ Actuellement le frontend (`/admin`) affiche tous les modules à n'importe quel c
 | RH — Départements | ✅ Django (`core.Department`) | ✅ `/admin/rh/departements` |
 | Projets (CRUD, membres) | ✅ Django (`projects` app) | ✅ `/admin/technique/projets` |
 | Timesheets (saisie, validation) | ✅ | ✅ `/admin/technique/timesheets` |
-| Décaissements — initiation N1 | ✅ (N2/exécution ⏳ — voir §6.3) | ✅ `/admin/technique/decaissements` |
-| Finance/Comptabilité (plan comptable, factures, TVA, rapprochement) | ⏳ | ⏳ |
+| Décaissements — initiation N1, approbation N2/N3, exécution | ✅ | ✅ `/admin/technique/decaissements` |
+| Finance — Clôture comptable (exercices/périodes) | ✅ | ✅ `/admin/finance/cloture` |
+| Finance — Grand Livre (écritures équilibrées) | ✅ (plan comptable simplifié — voir §6.1) | ✅ `/admin/finance/grand-livre` |
+| Finance — Facturation (validation → écriture auto) | ✅ (PDF/email ⏳ — voir §6.2) | ✅ `/admin/finance/facturation` |
+| Finance — Rapprochement bancaire | ✅ (import de lignes déjà parsées, pas d'upload CSV brut — voir §6.4) | ✅ `/admin/finance/rapprochement` |
+| Finance — TVA (génération, signature CFO) | ✅ | ✅ `/admin/finance/tva` |
+| Finance — Export FEC | ✅ (simplifié, non certifié DGFiP — voir §6.6) | ✅ (bouton dans l'écran TVA) |
+| Finance — Dashboard (Analytique & Reporting) | ✅ (indicateurs simplifiés — voir §6.6) | ✅ `/admin/finance/dashboard` |
 | Marketing/Commercial — Leads (Tunnel commercial) | ✅ | ✅ `/admin/marketing/leads` |
 | Marketing/Commercial — Blog (Gestion de contenu) | ✅ | ✅ `/admin/marketing/blog` |
 | Marketing/Commercial — Réseaux sociaux (Plan Éditorial) | ✅ (sans moteur de publication réel — voir §7.4) | ✅ `/admin/marketing/plan-editorial` |

@@ -5,7 +5,13 @@ import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/sheet";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
-import { listDisbursementRequests, createDisbursementRequest } from "@/lib/api/finance";
+import { useAuth } from "@/lib/auth/auth-context";
+import {
+  approveDisbursementRequest,
+  createDisbursementRequest,
+  executeDisbursementRequest,
+  listDisbursementRequests,
+} from "@/lib/api/finance";
 import { listProjects } from "@/lib/api/projects";
 import type { DisbursementRequest, DisbursementStatus, Project } from "@/lib/api/types";
 
@@ -26,10 +32,35 @@ const STATUS_COLORS: Record<DisbursementStatus, string> = {
 };
 
 export function DisbursementList() {
+  const { profile } = useAuth();
   const [requests, setRequests] = useState<DisbursementRequest[] | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [actingId, setActingId] = useState<string | null>(null);
+
+  const canApprove = profile?.role === "DIRECTEUR_FINANCIER" || profile?.role === "SUPER_ADMIN";
+  const canExecute = profile?.role === "COMPTABLE" || profile?.role === "SUPER_ADMIN";
+
+  async function handleApprove(id: string, decision: "APPROUVE" | "REJETE") {
+    setActingId(id);
+    try {
+      await approveDisbursementRequest(id, decision);
+      await load();
+    } finally {
+      setActingId(null);
+    }
+  }
+
+  async function handleExecute(id: string) {
+    setActingId(id);
+    try {
+      await executeDisbursementRequest(id);
+      await load();
+    } finally {
+      setActingId(null);
+    }
+  }
 
   async function load() {
     try {
@@ -77,11 +108,6 @@ export function DisbursementList() {
         </Sheet>
       </div>
 
-      <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
-        Seule l&apos;initiation (N1) est disponible pour l&apos;instant — la validation hiérarchique (N2, Directeur
-        Financier) et l&apos;exécution (Comptable) arriveront avec le module Comptabilité/Finance.
-      </p>
-
       <div className="overflow-hidden rounded-xl border border-neutral-200 shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
@@ -90,6 +116,7 @@ export function DisbursementList() {
               <th className="px-4 py-3 font-medium">Montant</th>
               <th className="px-4 py-3 font-medium">Statut</th>
               <th className="px-4 py-3 font-medium">Demandé par</th>
+              {(canApprove || canExecute) && <th className="px-4 py-3 font-medium">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100">
@@ -108,11 +135,42 @@ export function DisbursementList() {
                 <td className="px-4 py-3 text-neutral-500">
                   {req.requested_by ? `${req.requested_by.first_name} ${req.requested_by.last_name}` : "—"}
                 </td>
+                {(canApprove || canExecute) && (
+                  <td className="px-4 py-3">
+                    {canApprove && (req.status === "EN_ATTENTE_N1" || req.status === "EN_ATTENTE_N2") && (
+                      <div className="flex gap-2">
+                        <button
+                          disabled={actingId === req.id}
+                          onClick={() => handleApprove(req.id, "APPROUVE")}
+                          className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-700 disabled:opacity-40"
+                        >
+                          Approuver
+                        </button>
+                        <button
+                          disabled={actingId === req.id}
+                          onClick={() => handleApprove(req.id, "REJETE")}
+                          className="rounded-full bg-destructive/10 px-3 py-1 text-xs text-destructive disabled:opacity-40"
+                        >
+                          Rejeter
+                        </button>
+                      </div>
+                    )}
+                    {canExecute && req.status === "APPROUVE" && (
+                      <button
+                        disabled={actingId === req.id}
+                        onClick={() => handleExecute(req.id)}
+                        className="rounded-full bg-primary/10 px-3 py-1 text-xs text-primary disabled:opacity-40"
+                      >
+                        Marquer exécuté
+                      </button>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
             {requests.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-neutral-400">
+                <td colSpan={5} className="px-4 py-8 text-center text-neutral-400">
                   Aucune demande pour l&apos;instant.
                 </td>
               </tr>
