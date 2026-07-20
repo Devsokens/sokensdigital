@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from core.models import User
-from projects.models import Project, ProjectMember
+from projects.models import Project, ProjectMember, Timesheet
 
 
 class ProjectUserBriefSerializer(serializers.ModelSerializer):
@@ -50,3 +50,17 @@ class ProjectSerializer(serializers.ModelSerializer):
                 {'end_date': 'La date de fin ne peut pas précéder la date de début.'}
             )
         return attrs
+
+
+class TimesheetSerializer(serializers.ModelSerializer):
+    user = ProjectUserBriefSerializer(read_only=True)
+
+    class Meta:
+        model = Timesheet
+        fields = ['id', 'project', 'user', 'date', 'hours', 'description', 'status', 'created_at']
+        read_only_fields = ['project', 'user', 'status']
+
+    def validate_hours(self, value):
+        if not (0 < value <= 24):
+            raise serializers.ValidationError("Le nombre d'heures doit être compris entre 0 et 24.")
+        return value

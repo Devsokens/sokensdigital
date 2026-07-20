@@ -225,9 +225,12 @@ masque le champ pour la route `/me/`.
 **`ProjectMember`** ✅ implémenté — table de jointure `project`/`user`,
 contrainte d'unicité, `created_at` pour audit.
 
-**`Timesheet`**
-- `id` (UUID), `project` (FK), `user` (FK), `date`, `hours` (Decimal),
-  `description`, `status` (Enum : SOUMIS, VALIDE, REJETE)
+**`Timesheet`** ✅ implémenté
+- `id` (UUID), `project` (FK), `user` (FK), `date`, `hours` (Decimal,
+  0 < heures ≤ 24), `description`, `status` (Enum : SOUMIS, VALIDE, REJETE)
+- Contrainte d'unicité `(project, user, date)` — une seule saisie par jour
+  et par projet (vérifiée côté vue pour renvoyer un 400 propre plutôt que
+  laisser remonter l'`IntegrityError` de la contrainte DB).
 
 **`ProjectChannel` / `ProjectMessage`**
 - Canal de messagerie par projet (`ProjectChannel` 1-1 avec `Project`),
@@ -243,14 +246,14 @@ contrainte d'unicité, `created_at` pour audit.
 | GET/PATCH/DELETE | `/api/v1/projects/{id}/` | Détail / modification | Lead du projet, Super-Admin (écriture) ; lead/membre/rôle élargi (lecture) | ✅ |
 | POST | `/api/v1/projects/{id}/members/` | Ajouter un membre | Lead du projet, Super-Admin | ✅ |
 | DELETE | `/api/v1/projects/{id}/members/{membership_id}/` | Retirer un membre | Lead du projet, Super-Admin | ✅ |
-| GET/POST | `/api/v1/projects/{id}/timesheets/` | Feuilles de temps du projet | Équipe assignée (soumission), Chef de Projet (validation) | ⏳ |
-| POST | `/api/v1/projects/{id}/timesheets/{ts_id}/validate/` | Validation d'une feuille de temps | Chef de Projet du projet | ⏳ |
+| GET/POST | `/api/v1/projects/{id}/timesheets/` | Feuilles de temps du projet | Équipe assignée (soumission de ses propres heures), Chef de Projet (voit tout) | ✅ |
+| POST | `/api/v1/projects/{id}/timesheets/{ts_id}/validate/` | Validation d'une feuille de temps | Chef de Projet du projet, Super-Admin | ✅ |
 | GET/POST | `/api/v1/projects/{id}/messages/` | Messagerie du projet | Équipe assignée + Chef de Projet | ⏳ |
 
-**Dépendance croisée** : `finance.DisbursementRequest` référence
-`projects.Project` (un Chef de Projet ne peut initier une demande que pour
-ses propres projets — filtre `project__lead_project_manager=request.user` ou
-`request.user in project.team_members`).
+**Dépendance croisée** ✅ implémentée : `finance.DisbursementRequest`
+référence `projects.Project` — un Chef de Projet ne peut initier une
+demande (N1) que pour un projet dont il est `lead_project_manager`
+(vérifié dans `DisbursementRequestViewSet.perform_create`, 403 sinon).
 
 ---
 
@@ -311,17 +314,28 @@ asynchrone.
 **Relances** : tâche Celery Beat quotidienne — factures `EMISE` avec
 `due_date` dépassée → email de relance + statut `EN_RETARD`.
 
-### 6.3 Décaissements
+### 6.3 Décaissements — N1 (initiation) ✅ implémenté, N2/exécution ⏳
 
-**`DisbursementRequest`** — `id` (UUID), `project` (FK →
+**`DisbursementRequest`** ✅ — `id` (UUID), `project` (FK →
 `projects.Project`, nullable pour les décaissements non liés à un projet),
-`amount` (Decimal FCFA), `beneficiary`, `reason`, `status` (Enum
-ATTENTE_N1/ATTENTE_N2/APPROUVE/REJETE/EXECUTE).
+`requested_by` (FK → `User` — pas dans la liste de champs d'origine,
+nécessaire pour l'audit/le filtrage), `amount` (Decimal), `beneficiary`,
+`reason`, `status` (Enum EN_ATTENTE_N1/EN_ATTENTE_N2/APPROUVE/REJETE/
+EXECUTE — tous les statuts existent sur l'enum dès maintenant pour éviter
+une migration plus tard, mais seul `EN_ATTENTE_N1` est atteignable via
+l'API actuelle).
+
+Vit dans l'app `finance` (nouvellement créée, seul ce modèle y existe pour
+l'instant — le reste du §6 n'est pas implémenté).
 
 **Validation hiérarchique** (seuils à définir en config, ex. `Role.permissions`
 ou table `ApprovalThreshold` dédiée) :
-- **N1** (initiation) : Chef de Projet / Commercial concerné.
-- **N2/N3** (approbation stratégique) : Directeur Financier, Super-Admin.
+- **N1** (initiation) ✅ : Chef de Projet, restreint à ses propres projets
+  (`project.lead_project_manager == request.user`, 403 sinon).
+  `POST /api/v1/finance/disbursement-requests/`. Lecture :
+  `GET /api/v1/finance/disbursement-requests/` (Chef de Projet voit ses
+  propres demandes ; Directeur Financier/Comptable/Super-Admin voient tout).
+- **N2/N3** (approbation stratégique) ⏳ : Directeur Financier, Super-Admin.
 - **Exécution** : Comptable, Directeur Financier → déclenche l'écriture
   comptable automatique.
 

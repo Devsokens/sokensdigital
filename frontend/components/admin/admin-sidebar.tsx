@@ -13,6 +13,8 @@ import {
   Newspaper,
   CalendarClock,
   FileText,
+  Clock,
+  Banknote,
   UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -54,6 +56,13 @@ const SECTIONS: NavSection[] = [
       { label: "Plan Éditorial", href: "/admin/marketing/plan-editorial", icon: CalendarClock },
       { label: "Tunnel commercial", href: "/admin/marketing/leads", icon: Target },
       { label: "Devis", href: "/admin/marketing/devis", icon: FileText },
+    ],
+  },
+  {
+    title: "Technique",
+    items: [
+      { label: "Timesheets", href: "/admin/technique/timesheets", icon: Clock },
+      { label: "Décaissements", href: "/admin/technique/decaissements", icon: Banknote },
     ],
   },
 ];

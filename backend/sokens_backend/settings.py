@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     'projects',
     'hr',
     'marketing',
+    'finance',
 ]
 
 AUTH_USER_MODEL = 'core.User'

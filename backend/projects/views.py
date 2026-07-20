@@ -5,8 +5,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from core.permissions import has_role
-from projects.models import Project, ProjectMember
-from projects.serializers import ProjectMemberSerializer, ProjectSerializer
+from projects.models import Project, ProjectMember, Timesheet
+from projects.serializers import ProjectMemberSerializer, ProjectSerializer, TimesheetSerializer
 
 MANAGER_ROLES = ('CHEF_DE_PROJET',)
 WIDE_READ_ROLES = ('DIRECTEUR_FINANCIER',)
@@ -85,3 +85,69 @@ class ProjectViewSet(viewsets.ModelViewSet):
         # AuditLog entry on the former, bulk deletes skip it entirely.
         membership.delete(user=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def _is_lead_or_admin(self, request, project):
+        return project.lead_project_manager_id == request.user.id or has_role(request.user, 'SUPER_ADMIN')
+
+    def _is_project_member(self, request, project):
+        return (
+            self._is_lead_or_admin(request, project)
+            or project.memberships.filter(user=request.user).exists()
+        )
+
+    @extend_schema(
+        tags=['Technique & Projets'],
+        summary='List / submit timesheets for this project',
+        description='Team members see and submit only their own entries; the project lead sees everyone\'s.',
+        request=TimesheetSerializer,
+        responses={200: TimesheetSerializer(many=True), 201: TimesheetSerializer},
+    )
+    @action(detail=True, methods=['get', 'post'], url_path='timesheets', permission_classes=[permissions.IsAuthenticated])
+    def timesheets(self, request, pk=None):
+        project = self.get_object()
+        if not self._is_project_member(request, project):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        if request.method == 'POST':
+            serializer = TimesheetSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            if Timesheet.objects.filter(
+                project=project, user=request.user, date=serializer.validated_data['date']
+            ).exists():
+                return Response(
+                    {'detail': 'Une feuille de temps existe déjà pour cette date sur ce projet.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            serializer.save(project=project, user=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        qs = Timesheet.objects.filter(project=project).select_related('user')
+        if not self._is_lead_or_admin(request, project):
+            qs = qs.filter(user=request.user)
+        return Response(TimesheetSerializer(qs, many=True).data)
+
+    @extend_schema(
+        tags=['Technique & Projets'],
+        summary='Validate or reject a timesheet entry',
+        request={'application/json': {'type': 'object', 'properties': {'status': {'type': 'string', 'enum': ['VALIDE', 'REJETE']}}}},
+        responses={200: TimesheetSerializer},
+    )
+    @action(
+        detail=True, methods=['post'], url_path=r'timesheets/(?P<timesheet_id>[^/.]+)/validate',
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def validate_timesheet(self, request, pk=None, timesheet_id=None):
+        project = self.get_object()
+        if not self._is_lead_or_admin(request, project):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        new_status = request.data.get('status')
+        if new_status not in (Timesheet.Status.VALIDE, Timesheet.Status.REJETE):
+            return Response(
+                {'detail': 'status doit être VALIDE ou REJETE.'}, status=status.HTTP_400_BAD_REQUEST,
+            )
+        timesheet = Timesheet.objects.filter(id=timesheet_id, project=project).first()
+        if not timesheet:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        timesheet.status = new_status
+        timesheet.save(update_fields=['status'])
+        return Response(TimesheetSerializer(timesheet).data)

@@ -154,6 +154,52 @@ export interface MarketingDashboard {
   published_social_posts_by_platform: Record<string, number>;
 }
 
+export type ProjectStatus = "EN_COURS" | "EN_PAUSE" | "TERMINE" | "ANNULE";
+
+export interface ProjectMember {
+  id: string;
+  user: UserBrief;
+  created_at: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  status: ProjectStatus;
+  lead_project_manager: UserBrief | null;
+  members: ProjectMember[];
+  start_date: string | null;
+  end_date: string | null;
+  budget: string | null;
+  created_at: string;
+}
+
+export type TimesheetStatus = "SOUMIS" | "VALIDE" | "REJETE";
+
+export interface Timesheet {
+  id: string;
+  project: string;
+  user: UserBrief;
+  date: string;
+  hours: string;
+  description: string;
+  status: TimesheetStatus;
+  created_at: string;
+}
+
+export type DisbursementStatus = "EN_ATTENTE_N1" | "EN_ATTENTE_N2" | "APPROUVE" | "REJETE" | "EXECUTE";
+
+export interface DisbursementRequest {
+  id: string;
+  project: string | null;
+  requested_by: UserBrief | null;
+  amount: string;
+  beneficiary: string;
+  reason: string;
+  status: DisbursementStatus;
+  created_at: string;
+}
+
 export interface AuditLogEntry {
   id: string;
   user: UserBrief | null;

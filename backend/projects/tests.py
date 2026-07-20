@@ -76,3 +76,106 @@ class ProjectViewSetTests(APITestCase):
             format='json',
         )
         self.assertEqual(response.status_code, 400)
+
+
+class TimesheetTests(APITestCase):
+    def setUp(self):
+        self.chef = User.objects.create(email='chef@sokensdigital.com', first_name='Chef')
+        self.chef.firestore_role = 'CHEF_DE_PROJET'
+
+        self.dev = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
+        self.dev.firestore_role = 'DEVELOPPEUR'
+
+        self.other_dev = User.objects.create(email='dev2@sokensdigital.com', first_name='Dev2')
+        self.other_dev.firestore_role = 'DEVELOPPEUR'
+
+        self.outsider = User.objects.create(email='outsider@sokensdigital.com', first_name='Outsider')
+        self.outsider.firestore_role = 'DEVELOPPEUR'
+
+        self.project = Project.objects.create(name='Refonte site vitrine', lead_project_manager=self.chef)
+        ProjectMember.objects.create(project=self.project, user=self.dev)
+        ProjectMember.objects.create(project=self.project, user=self.other_dev)
+
+        self.client_chef = APIClient()
+        self.client_chef.force_authenticate(user=self.chef)
+
+        self.client_dev = APIClient()
+        self.client_dev.force_authenticate(user=self.dev)
+
+        self.client_other_dev = APIClient()
+        self.client_other_dev.force_authenticate(user=self.other_dev)
+
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def test_member_can_submit_own_timesheet(self):
+        response = self.client_dev.post(
+            f'/api/v1/projects/{self.project.id}/timesheets/',
+            {'date': '2026-07-20', 'hours': '7.5', 'description': 'Intégration API'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['status'], 'SOUMIS')
+        self.assertEqual(response.json()['user']['id'], str(self.dev.id))
+
+    def test_non_member_cannot_submit_timesheet(self):
+        response = self.client_outsider.post(
+            f'/api/v1/projects/{self.project.id}/timesheets/',
+            {'date': '2026-07-20', 'hours': '7.5'},
+            format='json',
+        )
+        # 404, not 403 — ProjectViewSet.get_queryset() already filters this
+        # project out for non-members, same pattern as everywhere else.
+        self.assertEqual(response.status_code, 404)
+
+    def test_invalid_hours_rejected(self):
+        response = self.client_dev.post(
+            f'/api/v1/projects/{self.project.id}/timesheets/',
+            {'date': '2026-07-20', 'hours': '30'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_member_sees_only_own_entries_lead_sees_all(self):
+        from projects.models import Timesheet
+        Timesheet.objects.create(project=self.project, user=self.dev, date='2026-07-20', hours='4')
+        Timesheet.objects.create(project=self.project, user=self.other_dev, date='2026-07-20', hours='6')
+
+        dev_entries = self.client_dev.get(f'/api/v1/projects/{self.project.id}/timesheets/').json()
+        self.assertEqual(len(dev_entries), 1)
+
+        chef_entries = self.client_chef.get(f'/api/v1/projects/{self.project.id}/timesheets/').json()
+        self.assertEqual(len(chef_entries), 2)
+
+    def test_lead_can_validate_timesheet(self):
+        from projects.models import Timesheet
+        ts = Timesheet.objects.create(project=self.project, user=self.dev, date='2026-07-20', hours='4')
+
+        response = self.client_chef.post(
+            f'/api/v1/projects/{self.project.id}/timesheets/{ts.id}/validate/',
+            {'status': 'VALIDE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        ts.refresh_from_db()
+        self.assertEqual(ts.status, 'VALIDE')
+
+    def test_dev_cannot_validate_timesheet(self):
+        from projects.models import Timesheet
+        ts = Timesheet.objects.create(project=self.project, user=self.dev, date='2026-07-20', hours='4')
+
+        response = self.client_dev.post(
+            f'/api/v1/projects/{self.project.id}/timesheets/{ts.id}/validate/',
+            {'status': 'VALIDE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_duplicate_entry_same_day_rejected(self):
+        self.client_dev.post(
+            f'/api/v1/projects/{self.project.id}/timesheets/',
+            {'date': '2026-07-20', 'hours': '4'}, format='json',
+        )
+        response = self.client_dev.post(
+            f'/api/v1/projects/{self.project.id}/timesheets/',
+            {'date': '2026-07-20', 'hours': '3'}, format='json',
+        )
+        self.assertEqual(response.status_code, 400)

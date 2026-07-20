@@ -79,8 +79,10 @@ Actuellement le frontend (`/admin`) affiche tous les modules à n'importe quel c
 | Profil personnel | ✅ Firestore | ✅ `/profil` |
 | RH — Employés/Contrats/Fiches de paie | ✅ Django (`hr` app) | ✅ `/admin/rh` |
 | RH — Départements | ✅ Django (`core.Department`) | ✅ `/admin/rh/departements` |
-| Projets | ✅ Django (`projects` app) | ⏳ pas encore d'écran |
-| Finance/Comptabilité | ⏳ | ⏳ |
+| Projets (CRUD, membres) | ✅ Django (`projects` app) | ⏳ pas encore d'écran |
+| Timesheets (saisie, validation) | ✅ | ✅ `/admin/technique/timesheets` |
+| Décaissements — initiation N1 | ✅ (N2/exécution ⏳ — voir §6.3) | ✅ `/admin/technique/decaissements` |
+| Finance/Comptabilité (plan comptable, factures, TVA, rapprochement) | ⏳ | ⏳ |
 | Marketing/Commercial — Leads (Tunnel commercial) | ✅ | ✅ `/admin/marketing/leads` |
 | Marketing/Commercial — Blog (Gestion de contenu) | ✅ | ✅ `/admin/marketing/blog` |
 | Marketing/Commercial — Réseaux sociaux (Plan Éditorial) | ✅ (sans moteur de publication réel — voir §7.4) | ✅ `/admin/marketing/plan-editorial` |
