@@ -15,6 +15,7 @@ import {
   FileText,
   Clock,
   Banknote,
+  FolderKanban,
   UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -61,6 +62,7 @@ const SECTIONS: NavSection[] = [
   {
     title: "Technique",
     items: [
+      { label: "Gestion de projet", href: "/admin/technique/projets", icon: FolderKanban },
       { label: "Timesheets", href: "/admin/technique/timesheets", icon: Clock },
       { label: "Décaissements", href: "/admin/technique/decaissements", icon: Banknote },
     ],
