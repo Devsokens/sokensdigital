@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from core.models import Department, User
+from core.models import AuditLog, Department, User
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
@@ -75,3 +75,22 @@ class ProvisionUserSerializer(serializers.Serializer):
     department_id = serializers.PrimaryKeyRelatedField(
         source='department', queryset=Department.objects.all(), required=False, allow_null=True,
     )
+
+
+class SetUserRoleSerializer(serializers.Serializer):
+    """Input for core.views.SetUserRoleView — changes an *existing* user's
+    role/department. Super-Admin only (docs/backend-specifications.md §1.1)."""
+
+    role = serializers.ChoiceField(choices=APP_ROLE_CHOICES)
+    department_id = serializers.PrimaryKeyRelatedField(
+        source='department', queryset=Department.objects.all(), required=False, allow_null=True,
+    )
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    user = UserBriefSerializer(read_only=True)
+
+    class Meta:
+        model = AuditLog
+        fields = ['id', 'user', 'action', 'entity_type', 'entity_id', 'details', 'ip_address', 'created_at']
+        read_only_fields = fields

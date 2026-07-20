@@ -139,29 +139,30 @@ Fondation de tout le reste — **première brique à coder**.
   aucun rôle "public" ne peut créer un `User`). Le endpoint public de contact
   ne crée que des `Lead`, jamais de `User`.
 
-### 3.2 Endpoints
+### 3.2 Endpoints ✅ implémenté (hors items marqués ⏳)
 
-| Méthode | Route | Description | Permission |
-|---|---|---|---|
-| GET | `/api/v1/auth/me/` | Profil de l'utilisateur courant (infos `User` + `roles` + `department`) | `IsAuthenticated` |
-| PATCH | `/api/v1/auth/me/` | Mise à jour des champs auto-gérables (`first_name`, `last_name`, `avatar_url`) | `IsAuthenticated`, propriétaire uniquement |
-| POST | `/api/v1/auth/mfa/enable/` | Active `mfa_enabled` (le flux MFA lui-même reste géré côté Firebase) | `IsAuthenticated` |
-| GET | `/api/v1/auth/sessions/` | Liste des sessions actives de l'utilisateur (`Session`) | `IsAuthenticated`, propriétaire uniquement |
-| DELETE | `/api/v1/auth/sessions/{id}/` | Révoque une session | `IsAuthenticated`, propriétaire uniquement |
+| Méthode | Route | Description | Permission | Statut |
+|---|---|---|---|---|
+| GET | `/api/v1/auth/me/` | Profil de l'utilisateur courant (infos `User` + `department` — le rôle est lu depuis Firestore côté frontend, pas exposé ici) | `IsAuthenticated` | ✅ |
+| PATCH | `/api/v1/auth/me/` | Mise à jour des champs auto-gérables (`first_name`, `last_name`, `avatar_url`) | `IsAuthenticated`, propriétaire uniquement | ✅ |
+| POST | `/api/v1/auth/mfa/enable/` | Active `mfa_enabled` | `IsAuthenticated` | ⏳ |
+| GET/DELETE | `/api/v1/auth/sessions/` | Sessions actives (`Session`) | `IsAuthenticated`, propriétaire uniquement | ⏳ |
 
-### 3.3 Gestion des utilisateurs (Admin/RH)
+### 3.3 Gestion des utilisateurs (Admin/RH) ✅ implémenté
 
-| Méthode | Route | Description | Permission |
-|---|---|---|---|
-| GET/POST | `/api/v1/hr/users/` | Liste / création de comptes | Super-Admin, Responsable RH |
-| GET/PATCH/DELETE | `/api/v1/hr/users/{id}/` | Détail / modification / désactivation | Super-Admin (tout), Responsable RH (hors rôles/permissions) |
-| GET/POST | `/api/v1/hr/roles/` | Gestion des rôles applicatifs (`Role.permissions` JSON) | Super-Admin uniquement |
-| GET/POST | `/api/v1/hr/departments/` | Gestion des départements | Super-Admin uniquement |
+| Méthode | Route | Description | Permission | Statut |
+|---|---|---|---|---|
+| GET | `/api/v1/users/` | Liste des comptes Django (mirror row — pas la source de vérité, juste pour lier des enregistrements RH/Finance/Projets) | Super-Admin, Responsable RH | ✅ |
+| POST | `/api/v1/users/provision/` | Crée un compte (Firebase Auth + profil Firestore + `User` Django) en un seul appel | Super-Admin, Responsable RH — mais **RH ne peut jamais assigner `SUPER_ADMIN`** (403 sinon) | ✅ |
+| PATCH | `/api/v1/users/{id}/role/` | Change le rôle/département d'un utilisateur **existant** | Super-Admin uniquement | ✅ |
+| GET/POST | `/api/v1/departments/` | Gestion des départements | Super-Admin uniquement | ✅ |
+| GET | `/api/v1/audit-logs/` | Consultation de la table immuable `AuditLog` (alimentée automatiquement à la suppression de tout `LoggedModel`, aucun endpoint d'écriture) | Super-Admin uniquement | ✅ |
 
-**Règle transverse** : le Responsable RH peut modifier un `User` (profil,
-département, statut actif) mais **ne peut jamais toucher à `roles`** — champ
-réservé au Super-Admin, à appliquer via une permission DRF dédiée
-(`CanManageRoles`) plutôt qu'un simple `IsAdminUser`.
+**Pourquoi le provisioning passe par Django et pas le SDK client Firebase** :
+`createUserWithEmailAndPassword` côté navigateur connecte automatiquement le
+navigateur en tant que le nouvel utilisateur créé — ce qui déconnecterait
+l'admin de sa propre session. Le SDK Admin (serveur, déjà initialisé dans
+`core/apps.py`) n'a pas cet effet de bord.
 
 ---
 
@@ -577,6 +578,19 @@ n'est pas critique pour ces widgets).
     Authentification / Administration & RH / Technique & Projets /
     Marketing & Commercial) + `OpenApiAuthenticationExtension` pour le
     bouton "Authorize" (Bearer/Firebase ID token).
+21. ✅ Provisioning de compte complet (`POST /api/v1/users/provision/` —
+    Firebase Auth + profil Firestore + `User` Django en un appel, avec
+    rollback si une étape échoue après la création Firebase),
+    changement de rôle d'un utilisateur existant
+    (`PATCH /api/v1/users/{id}/role/`, Super-Admin uniquement), et lecture
+    de l'`AuditLog` (`GET /api/v1/audit-logs/`, Super-Admin uniquement).
+    Frontend : assistant de création d'employé en 3 étapes (Identité →
+    Accès plateforme → Infos RH) dans une modal "slide-in" depuis la
+    droite (`components/ui/sheet.tsx`, wrap de `@base-ui/react` Dialog).
+    Zone de contenu `/admin` passée en thème clair (fond blanc), sidebar
+    inchangée (tokens `--sidebar-*` déjà indépendants du thème principal).
+    Gestion documentaire (upload fiches de paie/contrats sur Google Drive)
+    toujours ⏳ — seul le collage manuel de lien `file_url` existe.
 
 ---
 

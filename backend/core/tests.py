@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 from rest_framework.test import APIClient, APITestCase
 
-from core.models import Department, User
+from core.models import AuditLog, Department, User
 
 
 class MeViewTests(APITestCase):
@@ -126,3 +126,98 @@ class ProvisionUserViewTests(APITestCase):
 
         mock_delete_user.assert_called_once_with('firebase-uid-456')
         self.assertFalse(User.objects.filter(firebase_uid='firebase-uid-456').exists())
+
+    @patch('firebase_admin.auth.create_user')
+    def test_rh_cannot_provision_super_admin(self, mock_create_user):
+        response = self.client_rh.post('/api/v1/users/provision/', self.payload(role='SUPER_ADMIN'), format='json')
+        self.assertEqual(response.status_code, 403)
+        mock_create_user.assert_not_called()
+
+    @patch('core.views.create_profile')
+    @patch('firebase_admin.auth.create_user')
+    def test_super_admin_can_provision_super_admin(self, mock_create_user, mock_create_profile):
+        mock_create_user.return_value = MagicMock(uid='firebase-uid-789')
+        super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
+        super_admin.firestore_role = 'SUPER_ADMIN'
+        client = APIClient()
+        client.force_authenticate(user=super_admin)
+
+        response = client.post('/api/v1/users/provision/', self.payload(role='SUPER_ADMIN'), format='json')
+        self.assertEqual(response.status_code, 201)
+
+
+class SetUserRoleViewTests(APITestCase):
+    def setUp(self):
+        self.department = Department.objects.create(name='Finance', color='#22d3ee')
+        self.super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
+        self.super_admin.firestore_role = 'SUPER_ADMIN'
+
+        self.rh_user = User.objects.create(email='rh@sokensdigital.com', first_name='RH')
+        self.rh_user.firestore_role = 'RESPONSABLE_RH'
+
+        self.employee = User.objects.create(
+            email='employee@sokensdigital.com', first_name='Employee', firebase_uid='firebase-uid-existing',
+        )
+
+        self.client_super_admin = APIClient()
+        self.client_super_admin.force_authenticate(user=self.super_admin)
+
+        self.client_rh = APIClient()
+        self.client_rh.force_authenticate(user=self.rh_user)
+
+    @patch('core.views.update_profile_fields')
+    def test_super_admin_can_change_role(self, mock_update):
+        response = self.client_super_admin.patch(
+            f'/api/v1/users/{self.employee.id}/role/',
+            {'role': 'COMPTABLE', 'department_id': str(self.department.id)},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        mock_update.assert_called_once_with('firebase-uid-existing', {
+            'role': 'COMPTABLE',
+            'departmentId': str(self.department.id),
+        })
+        self.employee.refresh_from_db()
+        self.assertEqual(self.employee.department_id, self.department.id)
+
+    @patch('core.views.update_profile_fields')
+    def test_rh_cannot_change_role(self, mock_update):
+        response = self.client_rh.patch(
+            f'/api/v1/users/{self.employee.id}/role/', {'role': 'COMPTABLE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+        mock_update.assert_not_called()
+
+    def test_user_without_firebase_account_rejected(self):
+        no_firebase_user = User.objects.create(email='no-firebase@sokensdigital.com', first_name='NoFirebase')
+        response = self.client_super_admin.patch(
+            f'/api/v1/users/{no_firebase_user.id}/role/', {'role': 'COMPTABLE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+
+class AuditLogViewSetTests(APITestCase):
+    def setUp(self):
+        self.super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
+        self.super_admin.firestore_role = 'SUPER_ADMIN'
+
+        self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
+        self.outsider.firestore_role = 'DEVELOPPEUR'
+
+        Department.objects.create(name='À supprimer').delete(user=self.super_admin)
+
+        self.client_super_admin = APIClient()
+        self.client_super_admin.force_authenticate(user=self.super_admin)
+
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def test_super_admin_can_list_audit_logs(self):
+        response = self.client_super_admin.get('/api/v1/audit-logs/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['count'], AuditLog.objects.count())
+        self.assertGreaterEqual(AuditLog.objects.count(), 1)
+
+    def test_outsider_forbidden(self):
+        response = self.client_outsider.get('/api/v1/audit-logs/')
+        self.assertEqual(response.status_code, 403)

@@ -5,13 +5,15 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.firestore_client import create_profile
-from core.models import Department, User, hash_email
+from core.firestore_client import create_profile, update_profile_fields
+from core.models import AuditLog, Department, User, hash_email
 from core.permissions import has_role
 from core.serializers import (
+    AuditLogSerializer,
     DepartmentSerializer,
     MeUpdateSerializer,
     ProvisionUserSerializer,
+    SetUserRoleSerializer,
     UserBriefSerializer,
     UserSerializer,
 )
@@ -131,6 +133,15 @@ class ProvisionUserView(APIView):
         data = serializer.validated_data
         department = data.get('department')
 
+        # RH does the day-to-day hiring, so it can assign any operational
+        # role — but only a Super-Admin can grant SUPER_ADMIN itself
+        # (docs/backend-specifications.md §1.1/§1.2).
+        if data['role'] == 'SUPER_ADMIN' and not has_role(request.user, 'SUPER_ADMIN'):
+            return Response(
+                {'detail': "Seul un Super-Admin peut attribuer le rôle Super-Admin."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         from firebase_admin import auth as firebase_auth
 
         try:
@@ -175,3 +186,59 @@ class ProvisionUserView(APIView):
             raise
 
         return Response(UserSerializer(django_user).data, status=status.HTTP_201_CREATED)
+
+
+class SetUserRoleView(APIView):
+    """Changes an *existing* user's role/department — Super-Admin only.
+    docs/backend-specifications.md §1.1: "Seul rôle autorisé à ... attribuer
+    ou révoquer des rôles applicatifs." Distinct from ProvisionUserView,
+    which sets the *initial* role for a brand-new account and is also
+    reachable by RH."""
+
+    permission_classes = [IsSuperAdmin]
+
+    @extend_schema(
+        tags=['Administration & RH'],
+        summary="Change an existing user's role/department",
+        request=SetUserRoleSerializer,
+        responses={200: UserSerializer},
+    )
+    def patch(self, request, pk):
+        django_user = User.objects.filter(pk=pk).first()
+        if not django_user:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if not django_user.firebase_uid:
+            return Response(
+                {'detail': "Cet utilisateur n'a pas encore de compte Firebase associé."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = SetUserRoleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        department = data.get('department')
+
+        update_profile_fields(django_user.firebase_uid, {
+            'role': data['role'],
+            'departmentId': str(department.id) if department else None,
+        })
+        django_user.department = department
+        django_user.save(update_fields=['department'])
+
+        return Response(UserSerializer(django_user).data)
+
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=['Administration & RH'],
+        summary='List audit log entries',
+        description='Read-only, immutable (docs/backend-specifications.md §1.1 — '
+        '"table immuable AuditLog"). Populated automatically on deletion of any '
+        'LoggedModel instance; there is no write endpoint by design.',
+    ),
+    retrieve=extend_schema(tags=['Administration & RH'], summary='Get an audit log entry'),
+)
+class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = AuditLog.objects.select_related('user').order_by('-created_at')
+    serializer_class = AuditLogSerializer
+    permission_classes = [IsSuperAdmin]

@@ -51,3 +51,14 @@ def create_profile(firebase_uid: str, data: dict) -> None:
         'createdAt': firestore.SERVER_TIMESTAMP,
         'updatedAt': firestore.SERVER_TIMESTAMP,
     })
+
+
+def update_profile_fields(firebase_uid: str, data: dict) -> None:
+    """Partial update of profiles/{uid} — e.g. changing role/department for
+    an existing user (core.views.SetUserRoleView, Super-Admin only)."""
+    from firebase_admin import firestore
+
+    _get_client().collection('profiles').document(firebase_uid).update({
+        **data,
+        'updatedAt': firestore.SERVER_TIMESTAMP,
+    })
