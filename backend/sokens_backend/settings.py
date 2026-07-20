@@ -113,6 +113,19 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': "API backend de Soken's Digital — gestion des utilisateurs, projets et suivi client.",
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    # Explicit order + descriptions for the Swagger UI sidebar grouping —
+    # every endpoint below is tagged via @extend_schema(tags=[...]) to match
+    # one of these, one section per département (docs/backend-specifications.md).
+    'TAGS': [
+        {'name': 'Système', 'description': 'Liveness check et autres endpoints transverses.'},
+        {'name': 'Authentification', 'description': 'Profil du compte connecté (/auth/me/).'},
+        {
+            'name': 'Administration & RH',
+            'description': "Utilisateurs, départements, dossiers employés, contrats, fiches de paie.",
+        },
+        {'name': 'Technique & Projets', 'description': 'Projets et membres.'},
+    ],
+    'SORT_OPERATIONS': False,
 }
 
 ROOT_URLCONF = 'sokens_backend.urls'

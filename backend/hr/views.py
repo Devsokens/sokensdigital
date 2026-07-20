@@ -32,17 +32,19 @@ class IsHRManagerOrOwnReadOnly(permissions.BasePermission):
 
 
 @extend_schema_view(
-    list=extend_schema(summary='List employee profiles', description='HR sees everyone; other roles see only their own record.'),
-    create=extend_schema(summary='Create an employee profile', description='Restricted to Super-Admin/Responsable RH.'),
-    retrieve=extend_schema(summary='Get an employee profile'),
-    update=extend_schema(summary='Update an employee profile'),
-    partial_update=extend_schema(summary='Partially update an employee profile'),
-    destroy=extend_schema(summary='Delete an employee profile'),
+    list=extend_schema(tags=['Administration & RH'], summary='List employee profiles', description='HR sees everyone; other roles see only their own record.'),
+    create=extend_schema(tags=['Administration & RH'], summary='Create an employee profile', description='Restricted to Super-Admin/Responsable RH.'),
+    retrieve=extend_schema(tags=['Administration & RH'], summary='Get an employee profile'),
+    update=extend_schema(tags=['Administration & RH'], summary='Update an employee profile'),
+    partial_update=extend_schema(tags=['Administration & RH'], summary='Partially update an employee profile'),
+    destroy=extend_schema(tags=['Administration & RH'], summary='Delete an employee profile'),
 )
 class EmployeeProfileViewSet(viewsets.ModelViewSet):
     permission_classes = [IsHRManagerOrOwnReadOnly]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return EmployeeProfile.objects.none()
         qs = EmployeeProfile.objects.select_related('user').prefetch_related('contracts', 'payslips')
         if has_role(self.request.user, *HR_MANAGER_ROLES):
             return qs
@@ -53,7 +55,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
             return EmployeeProfileSerializer
         return EmployeeProfileSelfSerializer
 
-    @extend_schema(summary='Add a contract for this employee', request=ContractSerializer, responses={201: ContractSerializer})
+    @extend_schema(tags=['Administration & RH'], summary='Add a contract for this employee', request=ContractSerializer, responses={201: ContractSerializer})
     @action(detail=True, methods=['post'], url_path='contracts', permission_classes=[permissions.IsAuthenticated])
     def add_contract(self, request, pk=None):
         if not has_role(request.user, *HR_MANAGER_ROLES):
@@ -64,7 +66,7 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         serializer.save(employee=employee)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    @extend_schema(summary='Add a payslip for this employee', request=PayslipSerializer, responses={201: PayslipSerializer})
+    @extend_schema(tags=['Administration & RH'], summary='Add a payslip for this employee', request=PayslipSerializer, responses={201: PayslipSerializer})
     @action(detail=True, methods=['post'], url_path='payslips', permission_classes=[permissions.IsAuthenticated])
     def add_payslip(self, request, pk=None):
         if not has_role(request.user, *HR_MANAGER_ROLES):

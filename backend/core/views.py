@@ -16,6 +16,7 @@ from core.serializers import (
 
 
 @extend_schema(
+    tags=['Système'],
     summary='Liveness check',
     description='Unauthenticated endpoint used by Render (and uptime monitors) to check readiness.',
     responses={200: {'type': 'object', 'properties': {'status': {'type': 'string'}}}},
@@ -33,6 +34,7 @@ class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=['Authentification'],
         summary='Get my profile',
         responses=UserSerializer,
     )
@@ -40,6 +42,7 @@ class MeView(APIView):
         return Response(UserSerializer(request.user).data)
 
     @extend_schema(
+        tags=['Authentification'],
         summary='Update my profile',
         description='Only self-editable fields (first_name, last_name, avatar_url). '
         'Everything else — email, department, is_staff, etc. — is managed '
@@ -65,12 +68,12 @@ class IsSuperAdmin(permissions.BasePermission):
 
 
 @extend_schema_view(
-    list=extend_schema(summary='List departments'),
-    create=extend_schema(summary='Create a department'),
-    retrieve=extend_schema(summary='Get a department'),
-    update=extend_schema(summary='Update a department'),
-    partial_update=extend_schema(summary='Partially update a department'),
-    destroy=extend_schema(summary='Delete a department'),
+    list=extend_schema(tags=['Administration & RH'], summary='List departments'),
+    create=extend_schema(tags=['Administration & RH'], summary='Create a department'),
+    retrieve=extend_schema(tags=['Administration & RH'], summary='Get a department'),
+    update=extend_schema(tags=['Administration & RH'], summary='Update a department'),
+    partial_update=extend_schema(tags=['Administration & RH'], summary='Partially update a department'),
+    destroy=extend_schema(tags=['Administration & RH'], summary='Delete a department'),
 )
 class DepartmentViewSet(viewsets.ModelViewSet):
     queryset = Department.objects.all()
@@ -85,11 +88,13 @@ class IsSuperAdminOrRH(permissions.BasePermission):
 
 @extend_schema_view(
     list=extend_schema(
+        tags=['Administration & RH'],
         summary='List Django-side user rows',
         description='Read-only. Used to pick a user when linking HR/Finance/Projects '
         'records — the actual account + role live in Firebase/Firestore, this is '
         'just the mirror row Django authenticates against.',
     ),
+    retrieve=extend_schema(tags=['Administration & RH'], summary='Get a Django-side user row'),
 )
 class UserListView(viewsets.ReadOnlyModelViewSet):
     queryset = User.objects.all().order_by('first_name', 'last_name')

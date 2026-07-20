@@ -2,13 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MockupScene, type SceneVariant } from "@/components/projects/mockup-scenes";
 
 type Props = {
   title: string;
-  icon: LucideIcon;
   videoSrc?: string;
   images?: string[];
   sceneVariants?: SceneVariant[];

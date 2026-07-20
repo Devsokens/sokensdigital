@@ -4,9 +4,11 @@ from core.models import User
 from projects.models import Project, ProjectMember
 
 
-class UserBriefSerializer(serializers.ModelSerializer):
-    """Minimal user shape for nesting inside other resources — avoids
-    leaking encrypted/sensitive fields that core.UserSerializer exposes."""
+class ProjectUserBriefSerializer(serializers.ModelSerializer):
+    """Minimal user shape for nesting inside project resources — avoids
+    leaking encrypted/sensitive fields that core.UserSerializer exposes.
+    Named distinctly from core/hr's UserBriefSerializer (different field
+    set) so drf-spectacular doesn't collide them into one schema component."""
 
     class Meta:
         model = User
@@ -14,7 +16,7 @@ class UserBriefSerializer(serializers.ModelSerializer):
 
 
 class ProjectMemberSerializer(serializers.ModelSerializer):
-    user = UserBriefSerializer(read_only=True)
+    user = ProjectUserBriefSerializer(read_only=True)
     user_id = serializers.PrimaryKeyRelatedField(
         source='user', queryset=User.objects.all(), write_only=True
     )
@@ -25,7 +27,7 @@ class ProjectMemberSerializer(serializers.ModelSerializer):
 
 
 class ProjectSerializer(serializers.ModelSerializer):
-    lead_project_manager = UserBriefSerializer(read_only=True)
+    lead_project_manager = ProjectUserBriefSerializer(read_only=True)
     lead_project_manager_id = serializers.PrimaryKeyRelatedField(
         source='lead_project_manager', queryset=User.objects.all(),
         write_only=True, required=False, allow_null=True,

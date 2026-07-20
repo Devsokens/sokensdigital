@@ -1,13 +1,8 @@
 from rest_framework import serializers
 
 from core.models import User
+from core.serializers import UserBriefSerializer
 from hr.models import Contract, EmployeeProfile, Payslip
-
-
-class UserBriefSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ['id', 'first_name', 'last_name', 'email']
 
 
 class ContractSerializer(serializers.ModelSerializer):

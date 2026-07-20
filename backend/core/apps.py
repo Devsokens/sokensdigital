@@ -13,6 +13,7 @@ class CoreConfig(AppConfig):
 
     def ready(self):
         self._init_firebase()
+        import core.schema  # noqa: F401 — registers the drf-spectacular auth extension
 
     def _init_firebase(self):
         import firebase_admin
