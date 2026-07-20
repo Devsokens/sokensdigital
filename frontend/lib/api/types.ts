@@ -75,6 +75,25 @@ export interface Lead {
   created_at: string;
 }
 
+export type BlogPostStatus = "BROUILLON" | "PUBLIE";
+
+export interface BlogPost {
+  id: string;
+  title: string;
+  slug: string;
+  author: UserBrief | null;
+  excerpt: string;
+  content: Record<string, unknown>[];
+  visual_icon: string;
+  visual_label: string;
+  visual_sublabel: string;
+  tags: string[];
+  status: BlogPostStatus;
+  published_at: string | null;
+  meta_description: string;
+  created_at: string;
+}
+
 export interface AuditLogEntry {
   id: string;
   user: UserBrief | null;

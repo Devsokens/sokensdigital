@@ -10,6 +10,7 @@ import {
   UserCog,
   ScrollText,
   Target,
+  Newspaper,
   UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -45,7 +46,10 @@ const SECTIONS: NavSection[] = [
   },
   {
     title: "Marketing & Commercial",
-    items: [{ label: "Leads", href: "/admin/marketing/leads", icon: Target }],
+    items: [
+      { label: "Leads", href: "/admin/marketing/leads", icon: Target },
+      { label: "Blog", href: "/admin/marketing/blog", icon: Newspaper },
+    ],
   },
 ];
 
