@@ -7,10 +7,9 @@ import {
   LayoutDashboard,
   Users,
   Building2,
-  FolderKanban,
-  Wallet,
-  Megaphone,
-  MessageSquare,
+  UserCog,
+  ScrollText,
+  Target,
   UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -20,7 +19,6 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  comingSoon?: boolean;
 }
 
 interface NavSection {
@@ -41,23 +39,13 @@ const SECTIONS: NavSection[] = [
     items: [
       { label: "Employés", href: "/admin/rh", icon: Users },
       { label: "Départements", href: "/admin/rh/departements", icon: Building2 },
+      { label: "Utilisateurs & Rôles", href: "/admin/rh/utilisateurs", icon: UserCog },
+      { label: "Audit Log", href: "/admin/rh/audit-log", icon: ScrollText },
     ],
   },
   {
-    title: "Technique",
-    items: [{ label: "Projets", href: "/admin/projets", icon: FolderKanban, comingSoon: true }],
-  },
-  {
-    title: "Comptabilité & Finance",
-    items: [{ label: "Finance", href: "/admin/finance", icon: Wallet, comingSoon: true }],
-  },
-  {
     title: "Marketing & Commercial",
-    items: [{ label: "Marketing", href: "/admin/marketing", icon: Megaphone, comingSoon: true }],
-  },
-  {
-    title: "Collaboration",
-    items: [{ label: "Messagerie", href: "/admin/chat", icon: MessageSquare, comingSoon: true }],
+    items: [{ label: "Leads", href: "/admin/marketing/leads", icon: Target }],
   },
 ];
 
@@ -87,22 +75,6 @@ export function AdminSidebar() {
               {section.items.map((item) => {
                 const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
                 const Icon = item.icon;
-                if (item.comingSoon) {
-                  return (
-                    <div
-                      key={item.href}
-                      className="flex cursor-not-allowed items-center justify-between rounded-lg px-2.5 py-2 text-sm text-muted-foreground/40"
-                    >
-                      <span className="flex items-center gap-2.5">
-                        <Icon className="size-4" />
-                        {item.label}
-                      </span>
-                      <span className="rounded-full bg-white/5 px-1.5 py-0.5 text-[0.6rem]">
-                        Bientôt
-                      </span>
-                    </div>
-                  );
-                }
                 return (
                   <Link
                     key={item.href}

@@ -90,6 +90,15 @@ class IsSuperAdminOrRH(permissions.BasePermission):
         return has_role(request.user, 'RESPONSABLE_RH')
 
 
+class CanListUsers(permissions.BasePermission):
+    """Broader than IsSuperAdminOrRH: read-only (name/email only, no salary
+    or other sensitive data), so it's also safe for Responsable Marketing —
+    who needs it to reassign leads to a Commercial (docs/backend-specifications.md §2.1)."""
+
+    def has_permission(self, request, view):
+        return has_role(request.user, 'RESPONSABLE_RH', 'RESPONSABLE_MARKETING')
+
+
 @extend_schema_view(
     list=extend_schema(
         tags=['Administration & RH'],
@@ -103,7 +112,7 @@ class IsSuperAdminOrRH(permissions.BasePermission):
 class UserListView(viewsets.ReadOnlyModelViewSet):
     queryset = User.objects.all().order_by('first_name', 'last_name')
     serializer_class = UserBriefSerializer
-    permission_classes = [IsSuperAdminOrRH]
+    permission_classes = [CanListUsers]
 
 
 class ProvisionUserView(APIView):

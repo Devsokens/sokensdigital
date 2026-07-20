@@ -1,5 +1,6 @@
 import { apiFetch } from "@/lib/api/client";
 import type {
+  AuditLogEntry,
   Contract,
   Department,
   EmployeeProfile,
@@ -81,4 +82,15 @@ export function createDepartment(data: { name: string; color?: string }) {
 
 export function listUsers() {
   return apiFetch<Paginated<UserBrief>>("/api/v1/users/");
+}
+
+export function setUserRole(userId: string, data: { role: string; department_id?: string | null }) {
+  return apiFetch<UserBrief>(`/api/v1/users/${userId}/role/`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function listAuditLogs() {
+  return apiFetch<Paginated<AuditLogEntry>>("/api/v1/audit-logs/");
 }

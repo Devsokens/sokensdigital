@@ -56,3 +56,32 @@ export interface EmployeeProfile {
   payslips: Payslip[];
   created_at: string;
 }
+
+export type LeadSource = "FORMULAIRE_CONTACT" | "FORMULAIRE_DEVIS" | "APPEL_ENTRANT" | "SITE_WEB" | "EVENEMENT";
+export type LeadStatus = "NOUVEAU" | "QUALIFIE" | "PROPOSITION_EN_COURS" | "PERDU" | "CONVERTI";
+
+export interface Lead {
+  id: string;
+  first_name: string;
+  last_name: string;
+  company_name: string;
+  email: string;
+  phone: string;
+  source: LeadSource;
+  message: string;
+  status: LeadStatus;
+  assigned_to: UserBrief | null;
+  qualification_score: number;
+  created_at: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  user: UserBrief | null;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  details: Record<string, unknown>;
+  ip_address: string | null;
+  created_at: string;
+}

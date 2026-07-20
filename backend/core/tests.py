@@ -221,3 +221,26 @@ class AuditLogViewSetTests(APITestCase):
     def test_outsider_forbidden(self):
         response = self.client_outsider.get('/api/v1/audit-logs/')
         self.assertEqual(response.status_code, 403)
+
+
+class UserListViewTests(APITestCase):
+    def setUp(self):
+        User.objects.create(email='someone@sokensdigital.com', first_name='Someone')
+
+        self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
+        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+
+        self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
+        self.outsider.firestore_role = 'DEVELOPPEUR'
+
+    def test_marketing_can_list_users(self):
+        client = APIClient()
+        client.force_authenticate(user=self.marketing_user)
+        response = client.get('/api/v1/users/')
+        self.assertEqual(response.status_code, 200)
+
+    def test_outsider_forbidden(self):
+        client = APIClient()
+        client.force_authenticate(user=self.outsider)
+        response = client.get('/api/v1/users/')
+        self.assertEqual(response.status_code, 403)

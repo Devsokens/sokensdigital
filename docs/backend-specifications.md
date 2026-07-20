@@ -591,6 +591,18 @@ n'est pas critique pour ces widgets).
     inchangée (tokens `--sidebar-*` déjà indépendants du thème principal).
     Gestion documentaire (upload fiches de paie/contrats sur Google Drive)
     toujours ⏳ — seul le collage manuel de lien `file_url` existe.
+22. ✅ Sidebar admin restructurée par département — n'affiche que des
+    écrans réellement fonctionnels (retrait des placeholders Projets/
+    Finance/Messagerie, sans backend ni écran). 3 nouveaux écrans :
+    **Utilisateurs & Rôles** (`/admin/rh/utilisateurs`, Super-Admin —
+    fusionne `GET /api/v1/users/` (Django) et la collection Firestore
+    `profiles` par email pour afficher/éditer rôle + département de
+    chaque compte), **Audit Log** (`/admin/rh/audit-log`, Super-Admin,
+    lecture seule), **Leads** (`/admin/marketing/leads/`, Responsable
+    Marketing/Commercial — qualification, score, réassignation).
+    `core.views.CanListUsers` (nouvelle permission) élargit
+    `GET /api/v1/users/` à Responsable Marketing (lecture seule,
+    nécessaire pour réassigner un lead à un Commercial).
 
 ---
 
