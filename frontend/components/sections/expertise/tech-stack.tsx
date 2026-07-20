@@ -19,7 +19,7 @@ export function TechStack() {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.5 }}
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] as const }}
         >
           <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
             Stack Technologique
@@ -45,7 +45,7 @@ export function TechStack() {
             initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.5 }}
-            transition={{ duration: 0.5, delay: i * 0.06, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.5, delay: i * 0.06, ease: [0.16, 1, 0.3, 1] as const }}
             className="flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-card/60 px-4 py-6 text-center transition-colors hover:border-primary/30"
           >
             <span className="text-sm font-semibold text-foreground">{tech.name}</span>

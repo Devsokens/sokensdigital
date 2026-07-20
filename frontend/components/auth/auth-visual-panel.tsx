@@ -31,7 +31,7 @@ export function AuthVisualPanel() {
             strokeDasharray="1.5 1.5"
             initial={{ pathLength: 0, opacity: 0 }}
             animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 1.8, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 1.8, delay: 0.4, ease: [0.16, 1, 0.3, 1] as const }}
           />
         </svg>
       </div>

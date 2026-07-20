@@ -10,7 +10,7 @@ export function FeaturedCaseStudy() {
         initial={{ opacity: 0, y: 24 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.4 }}
-        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] as const }}
         className="grid grid-cols-1 overflow-hidden rounded-2xl border border-white/10 bg-card/60 md:grid-cols-2"
       >
         <div

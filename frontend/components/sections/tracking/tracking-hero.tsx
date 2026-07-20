@@ -16,7 +16,7 @@ export function TrackingHero() {
         <motion.h1
           initial={{ opacity: 0, y: 22 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] as const }}
           className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl"
         >
           Suivi de Projet
@@ -25,7 +25,7 @@ export function TrackingHero() {
         <motion.p
           initial={{ opacity: 0, y: 22 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.7, delay: 0.1, ease: [0.16, 1, 0.3, 1] as const }}
           className="mx-auto mt-4 max-w-lg text-base leading-relaxed text-muted-foreground"
         >
           Accédez en temps réel à l&apos;état d&apos;avancement de votre
@@ -36,7 +36,7 @@ export function TrackingHero() {
         <motion.form
           initial={{ opacity: 0, y: 22 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.7, delay: 0.2, ease: [0.16, 1, 0.3, 1] as const }}
           onSubmit={(e) => e.preventDefault()}
           className="mx-auto mt-8 flex max-w-xl flex-col gap-3 rounded-2xl border border-white/10 bg-card/60 p-2 sm:flex-row"
         >

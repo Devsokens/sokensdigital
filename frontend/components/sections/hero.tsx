@@ -27,7 +27,7 @@ const item = {
   show: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] },
+    transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] as const },
   },
 };
 
@@ -116,7 +116,7 @@ export function Hero() {
           initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.5 }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] as const }}
           className="mx-auto grid max-w-5xl grid-cols-3 px-4 py-10 sm:px-6 lg:px-8"
         >
           {STATS.map((stat, i) => (
@@ -125,7 +125,7 @@ export function Hero() {
               initial={{ opacity: 0, y: 16 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.5 }}
-              transition={{ duration: 0.5, delay: i * 0.1, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 0.5, delay: i * 0.1, ease: [0.16, 1, 0.3, 1] as const }}
               className="flex flex-col items-center gap-1.5 px-2 text-center"
             >
               <span className="text-3xl font-bold text-primary sm:text-4xl">

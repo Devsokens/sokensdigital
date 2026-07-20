@@ -23,4 +23,5 @@ urlpatterns = [
     # Feature endpoints live in core.urls (and future app urls), added one
     # at a time. Versioned per docs/backend-specifications.md §10.
     path('api/v1/', include('core.urls')),
+    path('api/v1/projects/', include('projects.urls')),
 ]

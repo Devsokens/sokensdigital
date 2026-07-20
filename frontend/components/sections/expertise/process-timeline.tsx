@@ -37,7 +37,7 @@ export function ProcessTimeline() {
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.5 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] as const }}
         className="flex flex-col items-center text-center"
       >
         <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
@@ -61,7 +61,7 @@ export function ProcessTimeline() {
                   initial={{ opacity: 0, y: 24 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true, amount: 0.5 }}
-                  transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+                  transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] as const }}
                   className={cn("relative", isLeft ? "md:col-start-1" : "md:col-start-2")}
                 >
                   <div

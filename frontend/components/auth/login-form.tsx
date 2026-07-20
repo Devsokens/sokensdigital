@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "motion/react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { signIn, friendlyAuthError } from "@/lib/firebase/auth";
 
 const inputClass =
   "w-full rounded-lg border border-white/10 bg-white/[0.02] px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 transition-colors focus:border-primary/50 focus:outline-none";
@@ -17,11 +19,30 @@ const container = {
 
 const item = {
   hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] as const } },
 };
 
 export function LoginForm() {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await signIn(email, password);
+      router.push("/profil");
+    } catch (err) {
+      setError(friendlyAuthError(err));
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div className="relative flex flex-col justify-center px-6 py-16 sm:px-10 lg:px-16">
@@ -58,12 +79,25 @@ export function LoginForm() {
 
         <motion.form
           variants={item}
-          onSubmit={(e) => e.preventDefault()}
+          onSubmit={handleSubmit}
           className="mt-9 space-y-4"
         >
+          {error && (
+            <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
+              {error}
+            </p>
+          )}
+
           <label className="block">
             <span className="mb-1.5 block text-xs text-muted-foreground">Email</span>
-            <input type="email" placeholder="vous@entreprise.com" className={inputClass} />
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="vous@entreprise.com"
+              className={inputClass}
+            />
           </label>
 
           <label className="block">
@@ -76,6 +110,9 @@ export function LoginForm() {
             <span className="relative block">
               <input
                 type={showPassword ? "text" : "password"}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 className={`${inputClass} pr-10`}
               />
@@ -92,9 +129,14 @@ export function LoginForm() {
 
           <Button
             type="submit"
-            className="h-11 w-full rounded-full bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+            disabled={submitting}
+            className="h-11 w-full rounded-full bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
           >
-            Se connecter
+            {submitting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              "Se connecter"
+            )}
           </Button>
 
           <p className="text-center text-xs leading-relaxed text-muted-foreground/70">

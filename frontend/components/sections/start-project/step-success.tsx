@@ -42,7 +42,7 @@ export function StepSuccess({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] as const }}
       className="mx-auto max-w-2xl text-center"
     >
       <div className="mx-auto flex size-20 items-center justify-center rounded-2xl border border-primary/40 bg-primary/10 text-primary shadow-[0_0_40px_-8px_color-mix(in_oklch,var(--primary),transparent_40%)]">

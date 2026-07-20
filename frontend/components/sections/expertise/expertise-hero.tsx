@@ -12,7 +12,7 @@ const container = {
 
 const item = {
   hidden: { opacity: 0, y: 22 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] as const } },
 };
 
 export function ExpertiseHero() {
@@ -69,7 +69,7 @@ export function ExpertiseHero() {
           <motion.div
             initial={{ opacity: 0, y: 24, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] as const }}
           >
             <div className="overflow-hidden rounded-2xl border border-white/10 bg-card/60">
               <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">

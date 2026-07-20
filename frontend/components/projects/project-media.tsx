@@ -71,7 +71,7 @@ function ImageCycle({ title, images }: { title: string; images: string[] }) {
           initial={{ opacity: 0, scale: 1.04 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] as const }}
           className="absolute inset-0 h-full w-full object-cover"
         />
       </AnimatePresence>
@@ -105,7 +105,7 @@ function AnimatedPlaceholder({ variants }: { variants: SceneVariant[] }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] as const }}
           className="absolute inset-0"
         >
           <MockupScene variant={variants[index]} />

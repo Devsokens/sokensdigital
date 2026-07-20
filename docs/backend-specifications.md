@@ -205,16 +205,24 @@ masque le champ pour la route `/me/`.
 > Département dont la spec détaillée n'a pas été fournie in extenso — les
 > informations ci-dessous sont **déduites** des références croisées dans la
 > matrice RBAC (Timesheets, décaissements N1 liés à un projet, messagerie de
-> projet). À valider/compléter avant l'implémentation de ce module.
+> projet). `Project`/`ProjectMember` sont implémentés (✅ voir §9 item 16) ;
+> `Timesheet` et `ProjectChannel`/`ProjectMessage` restent à faire. `client`
+> (FK → `ClientAccount`) a été omis du modèle implémenté — `ClientAccount`
+> n'est toujours pas défini (§13), à ajouter une fois clarifié.
 
-### 5.1 Modèles (proposition à valider)
+### 5.1 Modèles
 
-**`Project`**
-- `id` (UUID), `name`, `client` (FK → `ClientAccount`), `status` (Enum :
-  EN_COURS, EN_PAUSE, TERMINE, ANNULE)
-- `lead_project_manager` (FK → `User`), `team_members` (M2M → `User`)
-- `start_date`, `end_date` (estimée), `budget` (Decimal, visible
-  Direction/CFO/Chef de projet concerné uniquement)
+**`Project`** ✅ implémenté
+- `id` (UUID), `name`, `status` (Enum : EN_COURS, EN_PAUSE, TERMINE, ANNULE)
+- `lead_project_manager` (FK → `User`, nullable), `team_members` (M2M →
+  `User`, via `ProjectMember`)
+- `start_date`, `end_date` (validé : `end_date >= start_date`), `budget`
+  (Decimal, nullable — la restriction de visibilité par rôle sur ce champ
+  n'est pas encore appliquée au niveau serializer, à faire avec la RBAC
+  complète)
+
+**`ProjectMember`** ✅ implémenté — table de jointure `project`/`user`,
+contrainte d'unicité, `created_at` pour audit.
 
 **`Timesheet`**
 - `id` (UUID), `project` (FK), `user` (FK), `date`, `hours` (Decimal),
@@ -226,15 +234,17 @@ masque le champ pour la route `/me/`.
   websocket/Firebase Realtime plutôt que du polling REST pur ; le CRUD REST
   sert de fallback/historique.
 
-### 5.2 Endpoints (proposition)
+### 5.2 Endpoints
 
-| Méthode | Route | Description | Permission |
-|---|---|---|---|
-| GET/POST | `/api/v1/projects/` | Liste / création | Chef de Projet, Super-Admin (création) ; lecture élargie selon rôle |
-| GET/PATCH | `/api/v1/projects/{id}/` | Détail / modification | Chef de Projet assigné, Super-Admin |
-| GET/POST | `/api/v1/projects/{id}/timesheets/` | Feuilles de temps du projet | Équipe assignée (soumission), Chef de Projet (validation) |
-| POST | `/api/v1/projects/{id}/timesheets/{ts_id}/validate/` | Validation d'une feuille de temps | Chef de Projet du projet |
-| GET/POST | `/api/v1/projects/{id}/messages/` | Messagerie du projet | Équipe assignée + Chef de Projet |
+| Méthode | Route | Description | Permission | Statut |
+|---|---|---|---|---|
+| GET/POST | `/api/v1/projects/` | Liste / création | Chef de Projet, Super-Admin (création) ; lecture élargie (lead, membre, ou rôle Directeur Financier/Super-Admin) | ✅ |
+| GET/PATCH/DELETE | `/api/v1/projects/{id}/` | Détail / modification | Lead du projet, Super-Admin (écriture) ; lead/membre/rôle élargi (lecture) | ✅ |
+| POST | `/api/v1/projects/{id}/members/` | Ajouter un membre | Lead du projet, Super-Admin | ✅ |
+| DELETE | `/api/v1/projects/{id}/members/{membership_id}/` | Retirer un membre | Lead du projet, Super-Admin | ✅ |
+| GET/POST | `/api/v1/projects/{id}/timesheets/` | Feuilles de temps du projet | Équipe assignée (soumission), Chef de Projet (validation) | ⏳ |
+| POST | `/api/v1/projects/{id}/timesheets/{ts_id}/validate/` | Validation d'une feuille de temps | Chef de Projet du projet | ⏳ |
+| GET/POST | `/api/v1/projects/{id}/messages/` | Messagerie du projet | Équipe assignée + Chef de Projet | ⏳ |
 
 **Dépendance croisée** : `finance.DisbursementRequest` référence
 `projects.Project` (un Chef de Projet ne peut initier une demande que pour
@@ -540,6 +550,13 @@ n'est pas critique pour ces widgets).
     3 tests, `force_authenticate` — pas de dépendance réseau Firebase).
     A aussi révélé et corrigé un bug DRF : sans jeton, l'API renvoyait `403`
     au lieu de `401` (`FirebaseAuthentication.authenticate_header()` manquant).
+16. ✅ App `projects` créée : modèles `Project`/`ProjectMember`, endpoints
+    `GET/POST /api/v1/projects/`, `GET/PATCH/DELETE /api/v1/projects/{id}/`,
+    `POST /api/v1/projects/{id}/members/`,
+    `DELETE /api/v1/projects/{id}/members/{membership_id}/`. Permissions via
+    `core.permissions.has_role()` (nouveau helper partagé, DB-driven via
+    `Role.name`, pas encore la RBAC complète §11). 10 tests
+    (`projects/tests.py`), tous passants.
 
 ---
 

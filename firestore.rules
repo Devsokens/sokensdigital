@@ -1,0 +1,95 @@
+// Firestore owns: profiles (identity/role for rule checks), chatRooms +
+// messages, notifications, internalDocuments.
+// Django + Supabase own: departments, projects, disbursementRequests,
+// auditLogs — real relational data with business logic (partie double,
+// workflow N1/N2/N3, budgets tied to Finance). Those collections do NOT
+// exist here by design; querying them from the client would be a mistake,
+// not a missing feature. See docs/backend-specifications.md.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Helper Functions
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data;
+    }
+
+    // TODO(chat): project membership lives in Django/Supabase, not
+    // Firestore, so this can't `get()` a /projects/{id} doc here. Once
+    // PROJECT-type chat rooms are built, Django needs to push a minimal
+    // read-only mirror (e.g. chatRooms/{roomId}.memberUids) via the
+    // Firebase Admin SDK it already has — client-side rules can only ever
+    // read Firestore, never Postgres.
+
+    // Profiles Rules
+    match /profiles/{userUid} {
+      allow read: if isAuth() && (request.auth.uid == userUid || getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_MARKETING', 'RESPONSABLE_RH']);
+      // No client-side self-provisioning by design — accounts (Auth user +
+      // this profile doc) are created by a Super-Admin/RH, either via the
+      // Firebase Console directly or a future admin UI. See
+      // docs/backend-specifications.md §3.1.
+      allow create: if isAuth() && getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_RH'];
+      allow delete: if isAuth() && getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_RH'];
+      // Update: Super-Admin/RH can change anything (role, department...).
+      // Anyone else may only touch their own doc, and only its
+      // self-editable fields — role/departmentId/email/createdAt must be
+      // left byte-for-byte identical, so a regular user can never
+      // self-promote.
+      allow update: if isAuth() && (
+        getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_RH'] ||
+        (
+          request.auth.uid == userUid &&
+          request.resource.data.role == resource.data.role &&
+          request.resource.data.departmentId == resource.data.departmentId &&
+          request.resource.data.email == resource.data.email &&
+          request.resource.data.createdAt == resource.data.createdAt
+        )
+      );
+    }
+
+    // ChatRooms & Nested Sub-Collections Rules
+    match /chatRooms/{roomId} {
+      allow read: if isAuth() && (
+        resource.data.roomType == 'COMPANY' ||
+        (resource.data.roomType == 'DEPARTMENT' && resource.data.departmentId == getUserData().departmentId) ||
+        (resource.data.roomType == 'PROJECT' && request.auth.uid in resource.data.memberUids)
+      );
+      allow write: if isAuth() && getUserData().role == 'SUPER_ADMIN';
+
+      match /messages/{messageId} {
+        allow read: if isAuth(); // Validé automatiquement par l'évaluation du parent
+        allow create: if isAuth() && (
+          get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType != 'COMPANY' ||
+          getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_MARKETING']
+        );
+        allow update, delete: if false; // Les messages d'entreprise sont immuables en base
+      }
+    }
+
+    // Internal Documents Rules
+    match /internalDocuments/{documentId} {
+      allow read: if isAuth() && (
+        resource.data.visibilityLevel == 'COMPANY' ||
+        resource.data.authorId == request.auth.uid ||
+        (resource.data.visibilityLevel == 'DEPARTMENT' && resource.data.authorDepartmentId == getUserData().departmentId)
+      );
+      allow create, update: if isAuth() && request.resource.data.authorId == request.auth.uid;
+      allow delete: if isAuth() && resource.data.authorId == request.auth.uid;
+    }
+
+    // Notifications Rules (Strictement Isolation Client)
+    match /notifications/{notificationId} {
+      allow read, update: if isAuth() && resource.data.recipientId == request.auth.uid;
+      allow create, delete: if false; // Création déléguée aux scripts applicatifs (aucune Cloud Function en free tier — voir §0)
+    }
+
+    // Audit trail for Django-managed entities lives in Postgres
+    // (core.AuditLog, immutable by construction — see LoggedModel). Only
+    // Firestore-native writes (chat, notifications...) would ever need an
+    // equivalent here, and none do yet.
+  }
+}
