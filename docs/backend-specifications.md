@@ -416,25 +416,38 @@ toute modification passe par `POST /clone/` (nouvelle version incrémentée
 
 ### 7.3 CMS (site vitrine public)
 
-Modèles : `HeroSection`, `Service`, `ProjectPortfolio`, `BlogPost`,
+Modèles prévus : `HeroSection`, `Service`, `ProjectPortfolio`, `BlogPost`,
 `Testimonial`, `Partner` — correspondent terme à terme aux sections déjà
 codées en frontend statique (`Hero`, `Services`, `RecentProjects`,
-`BlogInsights`, `Testimonials`, `PartnerLogos`). **Ce module rendra ce
-contenu dynamique/administrable** — le frontend devra migrer ses données en
-dur (`lib/blog/posts.ts`, `lib/projects/projects.ts`, etc.) vers des appels à
-ces endpoints une fois livrés.
+`BlogInsights`, `Testimonials`, `PartnerLogos`). Seul `BlogPost` est
+implémenté pour l'instant ; les autres suivront sur le même principe.
 
-**`BlogPost`** (détail donné) — `id`, `title`, `slug` (unique, auto-généré
-via `slugify`), `content_html`, `author` (FK → `User`), `status` (Enum
-BROUILLON/PUBLIE), `published_at`, `meta_description`, `tags` (JSON).
+**`BlogPost`** ✅ implémenté — `id`, `title`, `slug` (unique, auto-généré
+via `slugify`), `author` (FK → `User`), `excerpt`, **`content` (JSON, pas
+`content_html`)**, `visual_icon`/`visual_label`/`visual_sublabel`, `tags`
+(JSON), `status` (Enum BROUILLON/PUBLIE — passage à `PUBLIE` fixe
+`published_at` automatiquement si vide), `meta_description`.
 
-Upload d'image → conversion **WebP** automatique avant dépôt Google Drive.
+> **Écart assumé avec la version initiale de cette spec** : `content_html`
+> aurait exigé un rendu HTML brut, alors que le frontend existant
+> (`lib/blog/posts.ts`, `lib/blog/types.ts`) affiche un contenu **structuré**
+> (paragraphes, titres, blocs de code, tableaux, comparatifs, callouts) via
+> un composant de rendu dédié. `content` est donc un tableau JSON qui
+> reprend exactement la forme `Block[]` du frontend — migrer vers du HTML
+> brut aurait cassé ce rendu. Les champs `icon` (type `LucideIcon` côté
+> frontend, dans `visual_icon` et les blocs `callout`) sont stockés comme
+> **noms d'icônes** (string, ex. `"ShieldCheck"`) — un composant React ne se
+> sérialise pas ; le frontend devra faire la correspondance nom → composant
+> à la migration.
 
-| Méthode | Route | Permission |
-|---|---|---|
-| GET | `/api/v1/public/cms/blog/` , `/api/v1/public/cms/blog/{slug}/` | **Public**, lecture seule, `status=PUBLIE` uniquement |
-| GET | `/api/v1/public/cms/projects/`, `/api/v1/public/cms/testimonials/`, `/api/v1/public/cms/partners/`, `/api/v1/public/cms/hero/` | **Public**, lecture seule |
-| GET/POST/PATCH/DELETE | `/api/v1/marketing/cms/{resource}/` | Responsable Marketing, Super-Admin uniquement |
+Upload d'image → conversion WebP + Google Drive : ⏳ pas implémenté (même
+limitation que les autres départements, voir §0/§13).
+
+| Méthode | Route | Permission | Statut |
+|---|---|---|---|
+| GET | `/api/v1/public/cms/blog/` , `/api/v1/public/cms/blog/{slug}/` | **Public**, lecture seule, `status=PUBLIE` uniquement | ✅ |
+| GET/POST/PATCH/DELETE | `/api/v1/marketing/cms/blog/` | Responsable Marketing, Super-Admin uniquement | ✅ |
+| — | `/api/v1/public/cms/projects/`, `/testimonials/`, `/partners/`, `/hero/` + équivalents `/marketing/cms/...` | idem | ⏳ (modèles pas encore créés) |
 
 ### 7.4 Publications Réseaux Sociaux & Plan Éditorial
 

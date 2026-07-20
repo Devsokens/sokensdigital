@@ -1,12 +1,18 @@
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from rest_framework import permissions, status, viewsets
+from rest_framework import generics, permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.permissions import has_role
-from marketing.models import Lead
+from marketing.models import BlogPost, Lead
 from marketing.ratelimit import get_client_ip, is_rate_limited
-from marketing.serializers import LeadPublicCreateSerializer, LeadSerializer
+from marketing.serializers import (
+    BlogPostPublicSerializer,
+    BlogPostSerializer,
+    LeadPublicCreateSerializer,
+    LeadSerializer,
+)
 
 MARKETING_ROLES = ('RESPONSABLE_MARKETING',)
 COMMERCIAL_ROLES = ('COMMERCIAL',)
@@ -76,3 +82,57 @@ class LeadViewSet(viewsets.ModelViewSet):
         if has_role(self.request.user, *MARKETING_ROLES):
             return qs
         return qs.filter(assigned_to=self.request.user)
+
+
+class IsMarketing(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return has_role(request.user, *MARKETING_ROLES)
+
+
+@extend_schema_view(
+    list=extend_schema(tags=['Marketing & Commercial'], summary='List blog posts (all statuses)'),
+    create=extend_schema(tags=['Marketing & Commercial'], summary='Create a blog post'),
+    retrieve=extend_schema(tags=['Marketing & Commercial'], summary='Get a blog post'),
+    update=extend_schema(tags=['Marketing & Commercial'], summary='Update a blog post'),
+    partial_update=extend_schema(tags=['Marketing & Commercial'], summary='Partially update a blog post'),
+    destroy=extend_schema(tags=['Marketing & Commercial'], summary='Delete a blog post'),
+)
+class BlogPostViewSet(viewsets.ModelViewSet):
+    """Internal CMS management — Responsable Marketing/Super-Admin only.
+    Public read access is served separately by PublicBlogList/DetailView,
+    filtered to status=PUBLIE."""
+
+    queryset = BlogPost.objects.select_related('author')
+    serializer_class = BlogPostSerializer
+    permission_classes = [IsMarketing]
+
+    def perform_create(self, serializer):
+        instance = serializer.save(author=self.request.user)
+        self._sync_published_at(instance)
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        self._sync_published_at(instance)
+
+    @staticmethod
+    def _sync_published_at(instance):
+        if instance.status == BlogPost.Status.PUBLIE and not instance.published_at:
+            instance.published_at = timezone.now()
+            instance.save(update_fields=['published_at'])
+
+
+@extend_schema(tags=['Marketing & Commercial'], summary='List published blog posts (public)')
+class PublicBlogListView(generics.ListAPIView):
+    queryset = BlogPost.objects.filter(status=BlogPost.Status.PUBLIE).select_related('author')
+    serializer_class = BlogPostPublicSerializer
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+
+@extend_schema(tags=['Marketing & Commercial'], summary='Get a published blog post by slug (public)')
+class PublicBlogDetailView(generics.RetrieveAPIView):
+    queryset = BlogPost.objects.filter(status=BlogPost.Status.PUBLIE).select_related('author')
+    serializer_class = BlogPostPublicSerializer
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    lookup_field = 'slug'

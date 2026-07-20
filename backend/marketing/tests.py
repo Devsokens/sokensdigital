@@ -2,7 +2,7 @@ from django.core.cache import cache
 from rest_framework.test import APIClient, APITestCase
 
 from core.models import User
-from marketing.models import Lead
+from marketing.models import BlogPost, Lead
 
 
 class PublicLeadCreateTests(APITestCase):
@@ -125,3 +125,76 @@ class LeadViewSetTests(APITestCase):
             format='json',
         )
         self.assertEqual(response.status_code, 400)
+
+
+class BlogPostViewSetTests(APITestCase):
+    def setUp(self):
+        self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
+        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+
+        self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
+        self.outsider.firestore_role = 'DEVELOPPEUR'
+
+        self.client_marketing = APIClient()
+        self.client_marketing.force_authenticate(user=self.marketing_user)
+
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+        self.draft_payload = {
+            'title': "L'avenir de la Cyber-Sécurité",
+            'excerpt': 'Un aperçu.',
+            'content': [{'type': 'p', 'text': 'Bonjour le monde.'}],
+            'visual_icon': 'ShieldCheck',
+            'visual_label': 'Global Digital Security Network',
+            'visual_sublabel': 'Advanced Cybersecurity Visualization',
+            'tags': ['AI Defense', 'Cloud Security'],
+        }
+
+    def test_marketing_can_create_draft(self):
+        response = self.client_marketing.post('/api/v1/marketing/cms/blog/', self.draft_payload, format='json')
+        self.assertEqual(response.status_code, 201)
+        post = BlogPost.objects.get()
+        self.assertEqual(post.slug, 'lavenir-de-la-cyber-securite')
+        self.assertEqual(post.author, self.marketing_user)
+        self.assertEqual(post.status, 'BROUILLON')
+        self.assertIsNone(post.published_at)
+
+    def test_publishing_sets_published_at(self):
+        post = BlogPost.objects.create(title='Test', content=[])
+        response = self.client_marketing.patch(
+            f'/api/v1/marketing/cms/blog/{post.id}/', {'status': 'PUBLIE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        post.refresh_from_db()
+        self.assertEqual(post.status, 'PUBLIE')
+        self.assertIsNotNone(post.published_at)
+
+    def test_outsider_cannot_manage_cms(self):
+        response = self.client_outsider.post('/api/v1/marketing/cms/blog/', self.draft_payload, format='json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_public_list_only_shows_published(self):
+        BlogPost.objects.create(title='Brouillon', status='BROUILLON', content=[])
+        published = BlogPost.objects.create(title='Publié', status='PUBLIE', content=[])
+
+        anon = APIClient()
+        response = anon.get('/api/v1/public/cms/blog/')
+        self.assertEqual(response.status_code, 200)
+        slugs = [p['slug'] for p in response.json()['results']]
+        self.assertEqual(slugs, [published.slug])
+
+    def test_public_detail_404s_on_draft(self):
+        draft = BlogPost.objects.create(title='Brouillon', status='BROUILLON', content=[])
+        anon = APIClient()
+        response = anon.get(f'/api/v1/public/cms/blog/{draft.slug}/')
+        self.assertEqual(response.status_code, 404)
+
+    def test_public_detail_returns_published_post_content(self):
+        post = BlogPost.objects.create(
+            title='Publié', status='PUBLIE', content=[{'type': 'p', 'text': 'Salut'}],
+        )
+        anon = APIClient()
+        response = anon.get(f'/api/v1/public/cms/blog/{post.slug}/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['content'], [{'type': 'p', 'text': 'Salut'}])

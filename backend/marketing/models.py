@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils.text import slugify
 
 from core.models import LoggedModel, User
 
@@ -48,3 +49,45 @@ class Lead(LoggedModel):
         if not (0 <= self.qualification_score <= 100):
             from django.core.exceptions import ValidationError
             raise ValidationError({'qualification_score': 'Le score doit être compris entre 0 et 100.'})
+
+
+class BlogPost(LoggedModel):
+    class Status(models.TextChoices):
+        BROUILLON = 'BROUILLON', 'Brouillon'
+        PUBLIE = 'PUBLIE', 'Publié'
+
+    title = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=255, unique=True, blank=True)
+    author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='blog_posts')
+    excerpt = models.TextField(blank=True)
+    # Rich content as structured JSON blocks — mirrors frontend's
+    # lib/blog/types.ts `Block[]` shape exactly (p/h2/h3/code/table/compare/
+    # callout), NOT a single HTML string. The original spec's
+    # `content_html` was written before checking what the frontend already
+    # renders; a flat HTML string would have meant rebuilding the blog
+    # article renderer from scratch. `callout` blocks and `visual_icon`
+    # store an icon *name* (e.g. "ShieldCheck"), not a component — the
+    # frontend maps name -> lucide-react component itself.
+    content = models.JSONField(default=list)
+    visual_icon = models.CharField(max_length=100, blank=True)
+    visual_label = models.CharField(max_length=255, blank=True)
+    visual_sublabel = models.CharField(max_length=255, blank=True)
+    tags = models.JSONField(default=list)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.BROUILLON)
+    published_at = models.DateTimeField(null=True, blank=True)
+    meta_description = models.CharField(max_length=300, blank=True)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-published_at', '-created_at']
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['status']),
+            models.Index(fields=['slug']),
+        ]
+
+    def __str__(self):
+        return self.title
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.title)
+        super().save(*args, **kwargs)
