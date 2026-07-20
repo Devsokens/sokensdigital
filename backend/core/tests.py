@@ -1,6 +1,6 @@
 from rest_framework.test import APIClient, APITestCase
 
-from core.models import Department, Role, User
+from core.models import Department, User
 
 
 class MeViewTests(APITestCase):
@@ -14,26 +14,23 @@ class MeViewTests(APITestCase):
 
     def setUp(self):
         self.department = Department.objects.create(name='Ingénierie', color='#22d3ee')
-        self.role = Role.objects.create(name='Développeur', permissions={})
         self.user = User.objects.create(
             email='dev@sokensdigital.com',
             first_name='Ada',
             last_name='Lovelace',
             department=self.department,
         )
-        self.user.roles.add(self.role)
 
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
-    def test_get_me_returns_profile_with_roles_and_department(self):
+    def test_get_me_returns_profile_with_department(self):
         response = self.client.get('/api/v1/auth/me/')
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data['email'], 'dev@sokensdigital.com')
         self.assertEqual(data['first_name'], 'Ada')
         self.assertEqual(data['department']['name'], 'Ingénierie')
-        self.assertEqual([r['name'] for r in data['roles']], ['Développeur'])
 
     def test_unauthenticated_request_is_rejected(self):
         anon_client = APIClient()

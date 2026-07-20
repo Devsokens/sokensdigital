@@ -1,12 +1,6 @@
 from rest_framework import serializers
 
-from core.models import Department, Role, User
-
-
-class RoleSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Role
-        fields = ['id', 'name', 'description']
+from core.models import Department, User
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
@@ -15,10 +9,23 @@ class DepartmentSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'color']
 
 
-class UserSerializer(serializers.ModelSerializer):
-    """Full profile of the authenticated user — read side of /auth/me/."""
+class UserBriefSerializer(serializers.ModelSerializer):
+    """Minimal shape for picking a user elsewhere (HR/Finance/Projects) —
+    no encrypted fields beyond email, no department/timestamps."""
 
-    roles = RoleSerializer(many=True, read_only=True)
+    class Meta:
+        model = User
+        fields = ['id', 'first_name', 'last_name', 'email']
+
+
+class UserSerializer(serializers.ModelSerializer):
+    """Full profile of the authenticated user — read side of /auth/me/.
+
+    Note: application role isn't included here — it lives in the Firestore
+    profile doc (profiles/{uid}.role), not on this Django model. The
+    frontend reads it from Firestore directly (see lib/auth/auth-context.tsx).
+    """
+
     department = DepartmentSerializer(read_only=True)
 
     class Meta:
@@ -33,7 +40,6 @@ class UserSerializer(serializers.ModelSerializer):
             'is_active',
             'is_staff',
             'mfa_enabled',
-            'roles',
             'department',
             'created_at',
             'updated_at',

@@ -1,22 +1,23 @@
 from rest_framework.test import APIClient, APITestCase
 
-from core.models import Role, User
+from core.models import User
 from projects.models import Project, ProjectMember
 
 
 class ProjectViewSetTests(APITestCase):
     def setUp(self):
-        self.chef_role = Role.objects.create(name='Chef de Projet', permissions={})
-        self.dev_role = Role.objects.create(name='Développeur', permissions={})
-
+        # firestore_role is never persisted (see core.permissions.has_role)
+        # — force_authenticate hands the ViewSet this exact instance, so
+        # setting the attribute here is equivalent to what
+        # FirebaseAuthentication would stash from a real Firestore read.
         self.chef = User.objects.create(email='chef@sokensdigital.com', first_name='Chef')
-        self.chef.roles.add(self.chef_role)
+        self.chef.firestore_role = 'CHEF_DE_PROJET'
 
         self.dev = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.dev.roles.add(self.dev_role)
+        self.dev.firestore_role = 'DEVELOPPEUR'
 
         self.outsider = User.objects.create(email='outsider@sokensdigital.com', first_name='Outsider')
-        self.outsider.roles.add(self.dev_role)
+        self.outsider.firestore_role = 'DEVELOPPEUR'
 
         self.client_chef = APIClient()
         self.client_chef.force_authenticate(user=self.chef)

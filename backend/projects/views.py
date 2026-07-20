@@ -8,8 +8,8 @@ from core.permissions import has_role
 from projects.models import Project, ProjectMember
 from projects.serializers import ProjectMemberSerializer, ProjectSerializer
 
-MANAGER_ROLES = ('Super-Administrateur', 'Chef de Projet')
-WIDE_READ_ROLES = ('Super-Administrateur', 'Directeur Financier')
+MANAGER_ROLES = ('CHEF_DE_PROJET',)
+WIDE_READ_ROLES = ('DIRECTEUR_FINANCIER',)
 
 
 class IsProjectManagerOrReadOnly(permissions.BasePermission):

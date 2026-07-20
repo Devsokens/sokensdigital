@@ -98,24 +98,6 @@ class Department(LoggedModel):
     def __str__(self):
         return self.name
 
-class Role(LoggedModel):
-    name = models.CharField(max_length=255, unique=True)
-    description = models.TextField(blank=True, null=True)
-    permissions = models.JSONField(default=dict)
-
-    class Meta(LoggedModel.Meta):
-        indexes = LoggedModel.Meta.indexes + [
-            models.Index(fields=['name']),
-        ]
-
-    def __str__(self):
-        return self.name
-
-    def clean(self):
-        if not isinstance(self.permissions, dict):
-            raise ValidationError({'permissions': 'Permissions must be a valid JSON object.'})
-        super().clean()
-
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
@@ -156,7 +138,9 @@ class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
     last_login = models.DateTimeField(blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    roles = models.ManyToManyField(Role, blank=True)
+    # No `roles` field — application role lives in Firestore
+    # (profiles/{uid}.role), fetched per-request by FirebaseAuthentication
+    # and read via core.permissions.has_role(). See core/firestore_client.py.
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
 
     objects = UserManager()

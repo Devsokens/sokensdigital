@@ -36,7 +36,7 @@ export function LoginForm() {
     setSubmitting(true);
     try {
       await signIn(email, password);
-      router.push("/profil");
+      router.push("/admin");
     } catch (err) {
       setError(friendlyAuthError(err));
     } finally {

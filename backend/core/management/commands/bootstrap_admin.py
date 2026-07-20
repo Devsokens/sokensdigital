@@ -1,18 +1,18 @@
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from core.models import Role, User, hash_email
-
-SUPER_ADMIN_ROLE_NAME = 'Super-Administrateur'
+from core.models import User, hash_email
 
 
 class Command(BaseCommand):
     help = (
-        "Creates (or promotes) the very first Super-Administrateur account. "
-        "There is no public sign-up by design (see docs/backend-specifications.md "
-        "§3.1), so this is the only way to bootstrap the system on a fresh "
-        "database. The user still authenticates via Firebase — this command "
-        "just grants the business-level Role, it does not set a local password."
+        "Creates (or promotes) a pre-provisioned Django-side user row, "
+        "granting Django admin access (is_staff/is_superuser). This does "
+        "NOT set the application role — that lives in Firestore "
+        "(profiles/{uid}.role, see docs/backend-specifications.md §3.1) and "
+        "must be set separately, currently by hand in the Firebase Console. "
+        "The user still authenticates via Firebase — this command sets no "
+        "local password."
     )
 
     def add_arguments(self, parser):
@@ -25,14 +25,6 @@ class Command(BaseCommand):
         email = options['email'].strip().lower()
         if not email:
             raise CommandError('--email is required.')
-
-        role, _ = Role.objects.get_or_create(
-            name=SUPER_ADMIN_ROLE_NAME,
-            defaults={
-                'description': 'Accès complet à toutes les ressources de la plateforme.',
-                'permissions': {'*': True},
-            },
-        )
 
         user = User.objects.filter(email_hash=hash_email(email)).first()
         created = user is None
@@ -47,11 +39,12 @@ class Command(BaseCommand):
             user.is_superuser = True
             user.save(update_fields=['is_active', 'is_staff', 'is_superuser'])
 
-        user.roles.add(role)
-
         verb = 'Created' if created else 'Promoted existing'
+        self.stdout.write(self.style.SUCCESS(f'{verb} Django user "{email}" (is_staff/is_superuser).'))
         self.stdout.write(
-            self.style.SUCCESS(f'{verb} user "{email}" as {SUPER_ADMIN_ROLE_NAME}.')
+            'Remember: this only grants Django admin access. The '
+            'application-level role (SUPER_ADMIN, etc.) must be set on '
+            'this person\'s Firestore profiles/{uid} document separately.'
         )
         if created:
             self.stdout.write(

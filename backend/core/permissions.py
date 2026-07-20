@@ -1,13 +1,16 @@
 def has_role(user, *role_names):
-    """True if `user` is a superuser or holds any of the named business Roles.
+    """True if `user` holds any of the named Firestore AppRole values
+    (SUPER_ADMIN, RESPONSABLE_RH, CHEF_DE_PROJET, ...).
 
-    Business roles (`core.Role`) are DB-driven, not Django's built-in
-    permission system — this is the shared check every department's DRF
-    permission classes build on until the full RBAC matrix
-    (docs/backend-specifications.md §11) is implemented.
+    Firestore's `profiles/{uid}.role` is the single source of truth for
+    identity/role — `core.authentication.FirebaseAuthentication` fetches it
+    fresh on every request and stashes it as `user.firestore_role` (not a
+    DB column, never persisted). SUPER_ADMIN always passes, matching the
+    "Gouvernance globale" grant in docs/backend-specifications.md §1.1.
     """
     if not user or not user.is_authenticated:
         return False
-    if user.is_superuser:
+    role = getattr(user, 'firestore_role', None)
+    if role == 'SUPER_ADMIN':
         return True
-    return user.roles.filter(name__in=role_names).exists()
+    return role in role_names

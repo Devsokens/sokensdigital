@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'core',
     'projects',
+    'hr',
 ]
 
 AUTH_USER_MODEL = 'core.User'

@@ -1,12 +1,14 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from .models import User, Department, Role, AuditLog
+from .models import User, Department, AuditLog
 
 
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
-    """Adapted for our email-based custom User (no `username` field)."""
+    """Adapted for our email-based custom User (no `username` field).
+    Application role isn't here — it's set on the Firestore profile doc,
+    not this Django model (see core/permissions.py)."""
 
     ordering = ('email',)
     list_display = ('email', 'first_name', 'last_name', 'is_staff', 'is_active')
@@ -16,7 +18,7 @@ class UserAdmin(DjangoUserAdmin):
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Identité', {'fields': ('first_name', 'last_name', 'phone', 'avatar_url')}),
-        ('Organisation', {'fields': ('department', 'roles')}),
+        ('Organisation', {'fields': ('department',)}),
         (
             'Permissions',
             {
@@ -42,9 +44,8 @@ class UserAdmin(DjangoUserAdmin):
             },
         ),
     )
-    filter_horizontal = ('roles', 'groups', 'user_permissions')
+    filter_horizontal = ('groups', 'user_permissions')
 
 
 admin.site.register(Department)
-admin.site.register(Role)
 admin.site.register(AuditLog)

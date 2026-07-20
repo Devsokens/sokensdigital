@@ -24,4 +24,5 @@ urlpatterns = [
     # at a time. Versioned per docs/backend-specifications.md §10.
     path('api/v1/', include('core.urls')),
     path('api/v1/projects/', include('projects.urls')),
+    path('api/v1/hr/', include('hr.urls')),
 ]
