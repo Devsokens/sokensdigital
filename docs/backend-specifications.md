@@ -368,24 +368,25 @@ la période. Génération d'un état exportable imitant la liasse fiscale.
 
 ## 7. Département Marketing & Communication (`marketing`)
 
-### 7.1 Leads
+### 7.1 Leads ✅ implémenté (hors items marqués ⏳)
 
-**`Lead`** — `id` (UUID), `client` (FK → `ClientAccount`, null=True),
-`first_name`, `last_name`, `company_name`, `email` (indexé), `phone`,
-`source` (Enum FORMULAIRE_CONTACT/FORMULAIRE_DEVIS/APPEL_ENTRANT/SITE_WEB/
-EVENEMENT), `message`, `status` (Enum NOUVEAU/QUALIFIE/PROPOSITION_EN_COURS/
-PERDU/CONVERTI), `assigned_to` (FK → `User`, null=True), `qualification_score`
-(0–100).
+**`Lead`** — `id` (UUID), `first_name`, `last_name`, `company_name`,
+`email` (indexé), `phone`, `source` (Enum FORMULAIRE_CONTACT/
+FORMULAIRE_DEVIS/APPEL_ENTRANT/SITE_WEB/EVENEMENT), `message`, `status`
+(Enum NOUVEAU/QUALIFIE/PROPOSITION_EN_COURS/PERDU/CONVERTI), `assigned_to`
+(FK → `User`, null=True), `qualification_score` (0–100). `client` (FK →
+`ClientAccount`) omis — `ClientAccount` toujours pas défini (§13).
 
-| Méthode | Route | Description | Permission |
-|---|---|---|---|
-| POST | `/api/v1/public/leads/` | Ingestion publique (formulaire site vitrine) | **Public** — reCAPTCHA v3 + rate limiting Redis (3/IP/min) |
-| GET/POST | `/api/v1/marketing/leads/` | Liste (filtrée par `assigned_to` pour les commerciaux) / création manuelle | Responsable Marketing, Commercial (ses leads), Super-Admin |
-| PATCH | `/api/v1/marketing/leads/{id}/` | Qualification, réassignation | Responsable Marketing, Super-Admin (tout) ; Commercial (ses leads assignés) |
-| POST | `/api/v1/marketing/leads/{id}/convert/` | Conversion en `ClientAccount` (transaction atomique) | Responsable Marketing, Commercial (ses leads), Super-Admin |
+| Méthode | Route | Description | Permission | Statut |
+|---|---|---|---|---|
+| POST | `/api/v1/public/leads/` | Ingestion publique (formulaire site vitrine) | **Public** — rate limiting Redis (3/IP/min) | ✅ (reCAPTCHA ⏳ — pas de clé configurée) |
+| GET/POST | `/api/v1/marketing/leads/` | Liste (filtrée par `assigned_to` pour les commerciaux) / création manuelle | Responsable Marketing, Commercial (ses leads), Super-Admin | ✅ |
+| PATCH | `/api/v1/marketing/leads/{id}/` | Qualification, réassignation | Responsable Marketing, Super-Admin (tout) ; Commercial (ses leads assignés) | ✅ |
+| POST | `/api/v1/marketing/leads/{id}/convert/` | Conversion en `ClientAccount` (transaction atomique) | Responsable Marketing, Commercial (ses leads), Super-Admin | ⏳ (bloqué sur `ClientAccount` indéfini) |
 
-Notification : signal `post_save` sur `status=NOUVEAU` → tâche Celery →
-notification in-app Firebase + email récapitulatif aux commerciaux.
+Notification (signal `post_save` → Celery → Firebase + email) : ⏳ pas
+implémentée (pas de backend email configuré, pas de collection Firestore
+`notifications` câblée côté serveur).
 
 ### 7.2 Devis (source de vérité — voir réconciliation §2)
 
@@ -554,9 +555,28 @@ n'est pas critique pour ces widgets).
     `GET/POST /api/v1/projects/`, `GET/PATCH/DELETE /api/v1/projects/{id}/`,
     `POST /api/v1/projects/{id}/members/`,
     `DELETE /api/v1/projects/{id}/members/{membership_id}/`. Permissions via
-    `core.permissions.has_role()` (nouveau helper partagé, DB-driven via
-    `Role.name`, pas encore la RBAC complète §11). 10 tests
-    (`projects/tests.py`), tous passants.
+    `core.permissions.has_role()`.
+17. ✅ **Pivot identité** : Firestore (`profiles/{uid}.role`) devient la
+    source de vérité du rôle applicatif — `core.Role`/`User.roles` (M2M)
+    supprimés. `FirebaseAuthentication` récupère le rôle Firestore à chaque
+    requête (`core/firestore_client.py`) et l'attache à `request.user`
+    (transitoire, jamais persisté) ; `has_role()` le lit directement.
+    Répartition finale : Firestore = identité/rôle/chat/notifications ;
+    Django/Supabase = RH/Finance/Projets (voir `README.md`).
+18. ✅ App `hr` créée : `EmployeeProfile` (calcul auto de
+    `base_hourly_cost`), `Contract`, `Payslip`. `Responsable RH` = CRUD
+    complet, collaborateur standard = lecture seule de son propre dossier
+    (salaire masqué). Endpoints `core` ajoutés : `DepartmentViewSet`
+    (Super-Admin), `UserListView` (lecture seule, Super-Admin/RH).
+19. ✅ App `marketing` créée (premier module) : `Lead`, ingestion publique
+    `POST /api/v1/public/leads/` (rate limiting Redis 3/IP/min — reCAPTCHA
+    ⏳ pas de clé), `GET/POST/PATCH /api/v1/marketing/leads/` (Responsable
+    Marketing = tout, Commercial = ses leads assignés uniquement).
+    30 tests au total dans le repo, tous passants.
+20. ✅ Swagger réorganisé par tags de département (Système /
+    Authentification / Administration & RH / Technique & Projets /
+    Marketing & Commercial) + `OpenApiAuthenticationExtension` pour le
+    bouton "Authorize" (Bearer/Firebase ID token).
 
 ---
 

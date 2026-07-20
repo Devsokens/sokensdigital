@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
 import os
+import sys
 import dj_database_url
 from pathlib import Path
 from dotenv import load_dotenv
@@ -69,6 +70,7 @@ INSTALLED_APPS = [
     'core',
     'projects',
     'hr',
+    'marketing',
 ]
 
 AUTH_USER_MODEL = 'core.User'
@@ -124,6 +126,7 @@ SPECTACULAR_SETTINGS = {
             'description': "Utilisateurs, départements, dossiers employés, contrats, fiches de paie.",
         },
         {'name': 'Technique & Projets', 'description': 'Projets et membres.'},
+        {'name': 'Marketing & Commercial', 'description': 'Leads, devis, CMS, réseaux sociaux.'},
     ],
     'SORT_OPERATIONS': False,
 }
@@ -211,18 +214,26 @@ STORAGES = {
     },
 }
 
-# Cache (also used to memoize dashboard aggregations behind a TTL).
+# Cache (also used to memoize dashboard aggregations behind a TTL, and for
+# rate limiting — see marketing/ratelimit.py).
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 
-CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': REDIS_URL,
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        },
+# `manage.py test` shouldn't depend on a live Redis (not always running
+# locally, e.g. outside docker-compose) — fall back to an in-memory cache
+# so cache-dependent code (rate limiting, dashboard TTLs) is still
+# exercised by tests without requiring external infra.
+if 'test' in sys.argv:
+    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            },
+        }
     }
-}
 
 # Celery — broker and result backend share the same Redis instance as the
 # cache (different logical DBs would be overkill at this project's scale).

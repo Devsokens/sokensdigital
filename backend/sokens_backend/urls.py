@@ -12,6 +12,8 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
+from marketing.urls import public_urlpatterns as marketing_public_urlpatterns
+
 urlpatterns = [
     path('admin/', admin.site.urls),
 
@@ -25,4 +27,6 @@ urlpatterns = [
     path('api/v1/', include('core.urls')),
     path('api/v1/projects/', include('projects.urls')),
     path('api/v1/hr/', include('hr.urls')),
+    path('api/v1/marketing/', include('marketing.urls')),
+    path('api/v1/public/', include(marketing_public_urlpatterns)),
 ]

@@ -81,7 +81,9 @@ Actuellement le frontend (`/admin`) affiche tous les modules à n'importe quel c
 | RH — Départements | ✅ Django (`core.Department`) | ✅ `/admin/rh/departements` |
 | Projets | ✅ Django (`projects` app) | ⏳ pas encore d'écran |
 | Finance/Comptabilité | ⏳ | ⏳ |
-| Marketing/Commercial | ⏳ | ⏳ |
+| Marketing/Commercial — Leads | ✅ Django (`marketing` app) | ⏳ pas encore d'écran |
+| Marketing/Commercial — Devis, CMS, réseaux sociaux | ⏳ | ⏳ |
+| Dashboard Global | ⏳ bloqué sur Leads(✅)/CMS/Tâches/Chat — voir `docs/backend-specifications.md §8` | ⏳ |
 | Chat/Notifications | ⏳ (Firestore prévu) | ⏳ |
 
 ## Documentation API
