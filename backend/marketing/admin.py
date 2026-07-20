@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from marketing.models import BlogPost, Lead, SocialPost
+from marketing.models import BlogPost, Lead, Quote, QuoteLine, SocialPost
 
 
 @admin.register(Lead)
@@ -23,3 +23,16 @@ class SocialPostAdmin(admin.ModelAdmin):
     list_display = ('title', 'platform', 'status', 'scheduled_at', 'author', 'created_at')
     list_filter = ('status', 'platform')
     search_fields = ('title', 'content')
+
+
+class QuoteLineInline(admin.TabularInline):
+    model = QuoteLine
+    extra = 0
+
+
+@admin.register(Quote)
+class QuoteAdmin(admin.ModelAdmin):
+    list_display = ('quote_number', 'status', 'created_by', 'total_ttc', 'created_at')
+    list_filter = ('status',)
+    search_fields = ('quote_number',)
+    inlines = [QuoteLineInline]

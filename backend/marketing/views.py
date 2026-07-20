@@ -9,18 +9,21 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.permissions import has_role
-from marketing.models import BlogPost, Lead, SocialPost
+from marketing.models import BlogPost, Lead, Quote, QuoteLine, SocialPost
 from marketing.ratelimit import get_client_ip, is_rate_limited
 from marketing.serializers import (
     BlogPostPublicSerializer,
     BlogPostSerializer,
     LeadPublicCreateSerializer,
     LeadSerializer,
+    QuoteSerializer,
+    QuoteTrackSerializer,
     SocialPostSerializer,
 )
 
 MARKETING_ROLES = ('RESPONSABLE_MARKETING',)
 COMMERCIAL_ROLES = ('COMMERCIAL',)
+CHEF_DE_PROJET_ROLES = ('CHEF_DE_PROJET',)
 
 PUBLIC_LEAD_RATE_LIMIT = 3  # per IP
 PUBLIC_LEAD_RATE_WINDOW = 60  # seconds
@@ -227,6 +230,127 @@ class SocialPostViewSet(viewsets.ModelViewSet):
         post.status = SocialPost.Status.CANCELLED
         post.save(update_fields=['status'])
         return Response(SocialPostSerializer(post).data)
+
+
+class IsCommercialOwnerOrReadCollaborator(permissions.BasePermission):
+    """Super-Admin: full access. Commercial: full access, but only on
+    quotes they created. Chef de Projet: read-only on everything (technical
+    feasibility collaboration, docs/backend-specifications.md §3.1)."""
+
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return has_role(request.user, *COMMERCIAL_ROLES, *CHEF_DE_PROJET_ROLES)
+        return has_role(request.user, *COMMERCIAL_ROLES)
+
+    def has_object_permission(self, request, view, obj):
+        if getattr(request.user, 'firestore_role', None) == 'SUPER_ADMIN':
+            return True
+        if has_role(request.user, *CHEF_DE_PROJET_ROLES) and not has_role(request.user, *COMMERCIAL_ROLES):
+            return request.method in permissions.SAFE_METHODS
+        return obj.created_by_id == request.user.id
+
+
+@extend_schema_view(
+    list=extend_schema(tags=['Marketing & Commercial'], summary='List quotes', description='Commercial sees their own; Chef de Projet sees everything read-only; Super-Admin sees everything.'),
+    create=extend_schema(tags=['Marketing & Commercial'], summary='Create a draft quote'),
+    retrieve=extend_schema(tags=['Marketing & Commercial'], summary='Get a quote'),
+    update=extend_schema(tags=['Marketing & Commercial'], summary='Update a quote', description='BROUILLON only — locked once ENVOYE/ACCEPTE/REFUSE, use /clone/ instead.'),
+    partial_update=extend_schema(tags=['Marketing & Commercial'], summary='Partially update a quote'),
+    destroy=extend_schema(tags=['Marketing & Commercial'], summary='Delete a quote'),
+)
+class QuoteViewSet(viewsets.ModelViewSet):
+    serializer_class = QuoteSerializer
+    permission_classes = [IsCommercialOwnerOrReadCollaborator]
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Quote.objects.none()
+        qs = Quote.objects.select_related('created_by', 'lead').prefetch_related('lines')
+        if has_role(self.request.user, *COMMERCIAL_ROLES) and not has_role(self.request.user, 'SUPER_ADMIN'):
+            return qs.filter(created_by=self.request.user)
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    def update(self, request, *args, **kwargs):
+        quote = self.get_object()
+        if quote.is_locked:
+            return Response(
+                {'detail': "Ce devis a déjà été envoyé — utilise /clone/ pour créer une nouvelle version."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().update(request, *args, **kwargs)
+
+    @extend_schema(
+        tags=['Marketing & Commercial'],
+        summary='Send a quote',
+        description='BROUILLON -> ENVOYE. NOTE: no PDF generation, no email — no PDF '
+        'library or email backend configured. The client is expected to open the '
+        'public tracking link (its URL is built from tracking_token) themselves.',
+        responses={200: QuoteSerializer},
+    )
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def send(self, request, pk=None):
+        quote = self.get_object()
+        if not has_role(request.user, *COMMERCIAL_ROLES) or quote.created_by_id != request.user.id:
+            if not has_role(request.user, 'SUPER_ADMIN'):
+                return Response(status=status.HTTP_403_FORBIDDEN)
+        if quote.status != Quote.Status.BROUILLON:
+            return Response({'detail': 'Seul un devis en brouillon peut être envoyé.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not quote.lines.exists():
+            return Response({'detail': 'Impossible d\'envoyer un devis sans ligne de prestation.'}, status=status.HTTP_400_BAD_REQUEST)
+        quote.status = Quote.Status.ENVOYE
+        quote.save(update_fields=['status'])
+        return Response(QuoteSerializer(quote).data)
+
+    @extend_schema(
+        tags=['Marketing & Commercial'],
+        summary='Clone a quote into a new editable version',
+        responses={201: QuoteSerializer},
+    )
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def clone(self, request, pk=None):
+        original = self.get_object()
+        if not has_role(request.user, *COMMERCIAL_ROLES) or original.created_by_id != request.user.id:
+            if not has_role(request.user, 'SUPER_ADMIN'):
+                return Response(status=status.HTTP_403_FORBIDDEN)
+        new_quote = Quote.objects.create(
+            lead=original.lead,
+            created_by=original.created_by,
+            expiry_date=original.expiry_date,
+            discount_amount=original.discount_amount,
+            parent_quote=original,
+            version=original.version + 1,
+        )
+        for line in original.lines.all():
+            QuoteLine.objects.create(
+                quote=new_quote, service_title=line.service_title,
+                quantity=line.quantity, unit_price=line.unit_price,
+            )
+        new_quote.refresh_from_db()
+        return Response(QuoteSerializer(new_quote).data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(
+    tags=['Marketing & Commercial'],
+    summary='Track a quote by its token (public)',
+    description='No auth — the tracking_token itself is the credential. Records opened_at on first view.',
+)
+class PublicQuoteTrackView(generics.RetrieveAPIView):
+    queryset = Quote.objects.prefetch_related('lines')
+    serializer_class = QuoteTrackSerializer
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    lookup_field = 'tracking_token'
+    lookup_url_kwarg = 'tracking_token'
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if not instance.opened_at:
+            instance.opened_at = timezone.now()
+            instance.save(update_fields=['opened_at'])
+        return Response(self.get_serializer(instance).data)
 
 
 @extend_schema(

@@ -389,30 +389,40 @@ Notification (signal `post_save` → Celery → Firebase + email) : ⏳ pas
 implémentée (pas de backend email configuré, pas de collection Firestore
 `notifications` câblée côté serveur).
 
-### 7.2 Devis (source de vérité — voir réconciliation §2)
+### 7.2 Devis ✅ implémenté (hors PDF/email, ⏳)
 
-**`Quote`** — `id` (UUID), `lead` (FK, null=True), `client` (FK, null=True),
-`quote_number` (unique, `DEV-{annee}-{seq:05d}`), `issue_date`, `expiry_date`,
-`status` (Enum BROUILLON/ENVOYE/ACCEPTE/REFUSE), `discount_amount`,
-`total_ht`, `total_ttc`, `tracking_token` (UUID, généré crypto), `opened_at`,
-`signed_at`.
+**`Quote`** — `id` (UUID), `lead` (FK, null=True), `created_by` (FK →
+`User` — pas dans la liste de champs d'origine, nécessaire pour filtrer
+"les siens" côté Commercial), `quote_number` (unique,
+`DEV-{annee}-{seq:05d}`, généré en séquence par année), `issue_date`,
+`expiry_date`, `status` (Enum BROUILLON/ENVOYE/ACCEPTE/REFUSE),
+`discount_amount`, `total_ht`, `total_ttc` (les deux recalculés côté
+serveur à chaque écriture d'une ligne — jamais fait confiance côté
+client), `tracking_token` (UUID v4, généré crypto), `opened_at`,
+`signed_at`, `parent_quote`/`version` (mécanisme de versionnage). `client`
+(FK → `ClientAccount`) omis — même question ouverte que sur `Lead` (§13).
 
-**`QuoteLine`** — `id` (UUID), `quote` (FK, `related_name='lines'`,
+> ⚠️ **TVA** : `total_ttc = total_ht × (1 + 18%)` — 18% est un taux
+> **placeholder** (référence OHADA/CEMAC courante), aucun taux confirmé
+> pour la juridiction réelle de Soken's Digital n'a été communiqué. À
+> corriger dès que la Comptabilité confirme le taux applicable
+> (`marketing.models.DEFAULT_VAT_RATE`).
+
+**`QuoteLine`** ✅ — `id` (UUID), `quote` (FK, `related_name='lines'`,
 `CASCADE`), `service_title`, `quantity`, `unit_price`, `total_line`
-(recalculé côté serveur à chaque `save()`, jamais fait confiance côté
-client).
+(recalculé côté serveur à chaque `save()`).
 
-**Verrouillage & versionnage** : `ENVOYE`/`ACCEPTE`/`REFUSE` → lecture seule ;
-toute modification passe par `POST /clone/` (nouvelle version incrémentée
-`-V2`).
+**Verrouillage & versionnage** ✅ : `ENVOYE`/`ACCEPTE`/`REFUSE` → lecture
+seule (rejet 400 sur PATCH) ; `POST /clone/` crée une nouvelle `Quote`
+BROUILLON (`parent_quote` + `version` incrémentée) avec les mêmes lignes.
 
-| Méthode | Route | Description | Permission |
-|---|---|---|---|
-| GET/POST | `/api/v1/marketing/quotes/` | Liste / création (BROUILLON) | Commercial (les siens), Chef de Projet (collaboration technique), Super-Admin |
-| PATCH | `/api/v1/marketing/quotes/{id}/` | Édition (BROUILLON uniquement) | Idem + validation prix par CFO |
-| POST | `/api/v1/marketing/quotes/{id}/send/` | Passage à `ENVOYE`, génération PDF, email avec lien de tracking | Commercial propriétaire, Super-Admin |
-| POST | `/api/v1/marketing/quotes/{id}/clone/` | Nouvelle version | Idem |
-| GET | `/api/v1/public/quotes/track/{tracking_token}/` | Consultation publique par le client, enregistre `opened_at` | **Public** (token = auth) |
+| Méthode | Route | Description | Permission | Statut |
+|---|---|---|---|---|
+| GET/POST | `/api/v1/marketing/quotes/` | Liste / création (BROUILLON) | Commercial (les siens), Chef de Projet (lecture seule, collaboration technique), Super-Admin | ✅ |
+| PATCH/DELETE | `/api/v1/marketing/quotes/{id}/` | Édition (BROUILLON uniquement — 400 sinon) | Commercial propriétaire, Super-Admin | ✅ |
+| POST | `/api/v1/marketing/quotes/{id}/send/` | Passage à `ENVOYE` (requiert ≥1 ligne) | Commercial propriétaire, Super-Admin | ✅ (génération PDF + email ⏳ — pas de lib PDF ni backend email configurés) |
+| POST | `/api/v1/marketing/quotes/{id}/clone/` | Nouvelle version | Commercial propriétaire, Super-Admin | ✅ |
+| GET | `/api/v1/public/quotes/track/{tracking_token}/` | Consultation publique par le client, enregistre `opened_at` (une seule fois) | **Public** (token = auth) | ✅ (API seulement — pas de page frontend publique dédiée, ⏳) |
 
 ### 7.3 CMS (site vitrine public)
 

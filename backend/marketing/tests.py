@@ -4,7 +4,7 @@ from rest_framework.test import APIClient, APITestCase
 from decimal import Decimal
 
 from core.models import User
-from marketing.models import BlogPost, Lead, SocialPost
+from marketing.models import BlogPost, Lead, Quote, SocialPost
 
 
 class PublicLeadCreateTests(APITestCase):
@@ -343,3 +343,141 @@ class MarketingDashboardTests(APITestCase):
     def test_outsider_forbidden(self):
         response = self.client_outsider.get('/api/v1/marketing/dashboard/')
         self.assertEqual(response.status_code, 403)
+
+
+class QuoteViewSetTests(APITestCase):
+    def setUp(self):
+        self.commercial_a = User.objects.create(email='commercial-a@sokensdigital.com', first_name='CommercialA')
+        self.commercial_a.firestore_role = 'COMMERCIAL'
+
+        self.commercial_b = User.objects.create(email='commercial-b@sokensdigital.com', first_name='CommercialB')
+        self.commercial_b.firestore_role = 'COMMERCIAL'
+
+        self.chef_projet = User.objects.create(email='chef@sokensdigital.com', first_name='Chef')
+        self.chef_projet.firestore_role = 'CHEF_DE_PROJET'
+
+        self.super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
+        self.super_admin.firestore_role = 'SUPER_ADMIN'
+
+        self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
+        self.outsider.firestore_role = 'DEVELOPPEUR'
+
+        self.client_a = APIClient()
+        self.client_a.force_authenticate(user=self.commercial_a)
+
+        self.client_b = APIClient()
+        self.client_b.force_authenticate(user=self.commercial_b)
+
+        self.client_chef = APIClient()
+        self.client_chef.force_authenticate(user=self.chef_projet)
+
+        self.client_super = APIClient()
+        self.client_super.force_authenticate(user=self.super_admin)
+
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def payload(self, **overrides):
+        data = {
+            'lines': [
+                {'service_title': 'Développement app', 'quantity': '10', 'unit_price': '500.00'},
+                {'service_title': 'Design UI', 'quantity': '5', 'unit_price': '200.00'},
+            ],
+        }
+        data.update(overrides)
+        return data
+
+    def test_commercial_can_create_quote_with_computed_totals(self):
+        response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertEqual(body['status'], 'BROUILLON')
+        # 10*500 + 5*200 = 6000 HT, TTC = 6000 * 1.18 = 7080.00
+        self.assertEqual(body['total_ht'], '6000.00')
+        self.assertEqual(body['total_ttc'], '7080.00')
+        self.assertTrue(body['quote_number'].startswith('DEV-'))
+
+    def test_outsider_forbidden(self):
+        response = self.client_outsider.post('/api/v1/marketing/quotes/', self.payload(), format='json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_chef_de_projet_can_read_but_not_create(self):
+        quote = Quote.objects.create(created_by=self.commercial_a)
+        response = self.client_chef.get(f'/api/v1/marketing/quotes/{quote.id}/')
+        self.assertEqual(response.status_code, 200)
+        response = self.client_chef.post('/api/v1/marketing/quotes/', self.payload(), format='json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_commercial_sees_only_own_quotes(self):
+        own = Quote.objects.create(created_by=self.commercial_a)
+        Quote.objects.create(created_by=self.commercial_b)
+        ids = [q['id'] for q in self.client_a.get('/api/v1/marketing/quotes/').json()['results']]
+        self.assertEqual(ids, [str(own.id)])
+
+    def test_commercial_cannot_access_other_commercials_quote(self):
+        other = Quote.objects.create(created_by=self.commercial_b)
+        response = self.client_a.get(f'/api/v1/marketing/quotes/{other.id}/')
+        self.assertEqual(response.status_code, 404)  # filtered out of queryset — doesn't leak existence
+
+    def test_super_admin_sees_all_quotes(self):
+        Quote.objects.create(created_by=self.commercial_a)
+        Quote.objects.create(created_by=self.commercial_b)
+        response = self.client_super.get('/api/v1/marketing/quotes/')
+        self.assertEqual(response.json()['count'], 2)
+
+    def test_send_requires_at_least_one_line(self):
+        response = self.client_a.post('/api/v1/marketing/quotes/', {'lines': []}, format='json')
+        quote_id = response.json()['id']
+        send_response = self.client_a.post(f'/api/v1/marketing/quotes/{quote_id}/send/')
+        self.assertEqual(send_response.status_code, 400)
+
+    def test_send_locks_the_quote(self):
+        create_response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
+        quote_id = create_response.json()['id']
+
+        send_response = self.client_a.post(f'/api/v1/marketing/quotes/{quote_id}/send/')
+        self.assertEqual(send_response.status_code, 200)
+        self.assertEqual(send_response.json()['status'], 'ENVOYE')
+
+        edit_response = self.client_a.patch(
+            f'/api/v1/marketing/quotes/{quote_id}/', {'discount_amount': '100'}, format='json',
+        )
+        self.assertEqual(edit_response.status_code, 400)
+
+    def test_clone_creates_new_editable_version(self):
+        create_response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
+        quote_id = create_response.json()['id']
+        self.client_a.post(f'/api/v1/marketing/quotes/{quote_id}/send/')
+
+        clone_response = self.client_a.post(f'/api/v1/marketing/quotes/{quote_id}/clone/')
+        self.assertEqual(clone_response.status_code, 201)
+        cloned = clone_response.json()
+        self.assertEqual(cloned['status'], 'BROUILLON')
+        self.assertEqual(cloned['version'], 2)
+        self.assertEqual(cloned['total_ht'], '6000.00')
+        self.assertEqual(len(cloned['lines']), 2)
+
+    def test_public_tracking_records_opened_at_once(self):
+        create_response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
+        quote_id = create_response.json()['id']
+        quote = Quote.objects.get(id=quote_id)
+        self.assertIsNone(quote.opened_at)
+
+        anon = APIClient()
+        response = anon.get(f'/api/v1/public/quotes/track/{quote.tracking_token}/')
+        self.assertEqual(response.status_code, 200)
+        quote.refresh_from_db()
+        first_open = quote.opened_at
+        self.assertIsNotNone(first_open)
+
+        anon.get(f'/api/v1/public/quotes/track/{quote.tracking_token}/')
+        quote.refresh_from_db()
+        self.assertEqual(quote.opened_at, first_open)  # unchanged on second view
+
+    def test_public_tracking_hides_internal_fields(self):
+        create_response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
+        quote = Quote.objects.get(id=create_response.json()['id'])
+        anon = APIClient()
+        body = anon.get(f'/api/v1/public/quotes/track/{quote.tracking_token}/').json()
+        self.assertNotIn('created_by', body)
+        self.assertNotIn('tracking_token', body)

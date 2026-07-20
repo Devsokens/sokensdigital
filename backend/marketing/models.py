@@ -1,7 +1,17 @@
+import uuid
+from decimal import Decimal
+
 from django.db import models
+from django.utils import timezone
 from django.utils.text import slugify
 
 from core.models import LoggedModel, User
+
+# Placeholder — no confirmed VAT rate for Soken's Digital's jurisdiction
+# anywhere in the specs gathered so far. 18% is the common OHADA/CEMAC
+# baseline; replace with a real configured rate (or a per-Quote override)
+# once Finance/Comptabilité confirms it.
+DEFAULT_VAT_RATE = Decimal('0.18')
 
 
 class Lead(LoggedModel):
@@ -145,3 +155,83 @@ class SocialPost(LoggedModel):
             raise ValidationError({'content': 'Twitter/X est limité à 280 caractères.'})
         if self.platform == self.Platform.INSTAGRAM and not self.image_path:
             raise ValidationError({'image_path': 'Instagram nécessite une image.'})
+
+
+class Quote(LoggedModel):
+    class Status(models.TextChoices):
+        BROUILLON = 'BROUILLON', 'Brouillon'
+        ENVOYE = 'ENVOYE', 'Envoyé'
+        ACCEPTE = 'ACCEPTE', 'Accepté'
+        REFUSE = 'REFUSE', 'Refusé'
+
+    # `client` (FK -> ClientAccount) omitted — same open question as Lead
+    # (docs/backend-specifications.md §13).
+    lead = models.ForeignKey(Lead, on_delete=models.SET_NULL, null=True, blank=True, related_name='quotes')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='quotes')
+    quote_number = models.CharField(max_length=20, unique=True, editable=False)
+    issue_date = models.DateField(default=timezone.now)
+    expiry_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.BROUILLON)
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
+    total_ht = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'), editable=False)
+    total_ttc = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'), editable=False)
+    # Crypto-random, not a sequential/guessable ID — this token IS the
+    # public tracking link's authentication (docs/backend-specifications.md
+    # §7.2 `/api/v1/public/quotes/track/{tracking_token}/`).
+    tracking_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    opened_at = models.DateTimeField(null=True, blank=True)
+    signed_at = models.DateTimeField(null=True, blank=True)
+    # Versioning for the /clone/ endpoint — a sent quote is read-only, a
+    # new edit becomes a new Quote row (parent_quote -> original, version
+    # incremented), never an in-place edit of something already sent.
+    parent_quote = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='versions')
+    version = models.PositiveSmallIntegerField(default=1)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-created_at']
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['status']),
+            models.Index(fields=['created_by']),
+        ]
+
+    def __str__(self):
+        return self.quote_number
+
+    @property
+    def is_locked(self):
+        return self.status != self.Status.BROUILLON
+
+    def recalculate_totals(self):
+        subtotal = sum((line.total_line for line in self.lines.all()), Decimal('0'))
+        self.total_ht = subtotal - self.discount_amount
+        self.total_ttc = (self.total_ht * (1 + DEFAULT_VAT_RATE)).quantize(Decimal('0.01'))
+        self.save(update_fields=['total_ht', 'total_ttc'])
+
+    def save(self, *args, **kwargs):
+        if not self.quote_number:
+            year = timezone.now().year
+            last = Quote.objects.filter(quote_number__startswith=f'DEV-{year}-').order_by('-quote_number').first()
+            seq = int(last.quote_number.split('-')[2]) + 1 if last else 1
+            self.quote_number = f'DEV-{year}-{seq:05d}'
+        super().save(*args, **kwargs)
+
+
+class QuoteLine(LoggedModel):
+    quote = models.ForeignKey(Quote, on_delete=models.CASCADE, related_name='lines')
+    service_title = models.CharField(max_length=255)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('1'))
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    # Recalculated server-side on every save — never trust a client-supplied
+    # total_line (docs/backend-specifications.md §7.2).
+    total_line = models.DecimalField(max_digits=12, decimal_places=2, editable=False)
+
+    class Meta(LoggedModel.Meta):
+        indexes = LoggedModel.Meta.indexes
+
+    def __str__(self):
+        return f'{self.service_title} x{self.quantity}'
+
+    def save(self, *args, **kwargs):
+        self.total_line = (self.quantity * self.unit_price).quantize(Decimal('0.01'))
+        super().save(*args, **kwargs)
+        self.quote.recalculate_totals()

@@ -115,6 +115,36 @@ export interface SocialPost {
   created_at: string;
 }
 
+export type QuoteStatus = "BROUILLON" | "ENVOYE" | "ACCEPTE" | "REFUSE";
+
+export interface QuoteLine {
+  id: string;
+  service_title: string;
+  quantity: string;
+  unit_price: string;
+  total_line: string;
+}
+
+export interface Quote {
+  id: string;
+  quote_number: string;
+  lead: string | null;
+  created_by: UserBrief | null;
+  issue_date: string;
+  expiry_date: string | null;
+  status: QuoteStatus;
+  discount_amount: string;
+  total_ht: string;
+  total_ttc: string;
+  tracking_token: string;
+  opened_at: string | null;
+  signed_at: string | null;
+  parent_quote: string | null;
+  version: number;
+  lines: QuoteLine[];
+  created_at: string;
+}
+
 export interface MarketingDashboard {
   weighted_pipeline: string;
   total_leads: number;

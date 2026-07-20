@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from core.models import User
 from core.serializers import UserBriefSerializer
-from marketing.models import BlogPost, Lead, SocialPost
+from marketing.models import BlogPost, Lead, Quote, QuoteLine, SocialPost
 
 
 class LeadPublicCreateSerializer(serializers.ModelSerializer):
@@ -89,3 +89,66 @@ class SocialPostSerializer(serializers.ModelSerializer):
         if platform == SocialPost.Platform.INSTAGRAM and not image_path:
             raise serializers.ValidationError({'image_path': 'Instagram nécessite une image.'})
         return attrs
+
+
+class QuoteLineSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuoteLine
+        fields = ['id', 'service_title', 'quantity', 'unit_price', 'total_line']
+        read_only_fields = ['total_line']
+
+
+class QuoteSerializer(serializers.ModelSerializer):
+    """Lines are nested and fully replaced on update (delete-then-recreate)
+    — quotes are small documents, not worth a diffing PATCH. Only reachable
+    at all while status=BROUILLON; the view enforces that lock, not this
+    serializer (docs/backend-specifications.md §7.2)."""
+
+    created_by = UserBriefSerializer(read_only=True)
+    lines = QuoteLineSerializer(many=True, required=False)
+
+    class Meta:
+        model = Quote
+        fields = [
+            'id', 'quote_number', 'lead', 'created_by', 'issue_date', 'expiry_date',
+            'status', 'discount_amount', 'total_ht', 'total_ttc', 'tracking_token',
+            'opened_at', 'signed_at', 'parent_quote', 'version', 'lines', 'created_at',
+        ]
+        read_only_fields = [
+            'quote_number', 'status', 'total_ht', 'total_ttc', 'tracking_token',
+            'opened_at', 'signed_at', 'parent_quote', 'version',
+        ]
+
+    def create(self, validated_data):
+        lines_data = validated_data.pop('lines', [])
+        quote = Quote.objects.create(**validated_data)
+        for line_data in lines_data:
+            QuoteLine.objects.create(quote=quote, **line_data)
+        quote.refresh_from_db()
+        return quote
+
+    def update(self, instance, validated_data):
+        lines_data = validated_data.pop('lines', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if lines_data is not None:
+            instance.lines.all().delete()
+            for line_data in lines_data:
+                QuoteLine.objects.create(quote=instance, **line_data)
+        instance.refresh_from_db()
+        return instance
+
+
+class QuoteTrackSerializer(serializers.ModelSerializer):
+    """Public, token-authenticated view — no internal identifiers
+    (created_by, tracking_token itself) leak into the response."""
+
+    lines = QuoteLineSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Quote
+        fields = [
+            'quote_number', 'issue_date', 'expiry_date', 'status',
+            'discount_amount', 'total_ht', 'total_ttc', 'lines',
+        ]

@@ -85,7 +85,8 @@ Actuellement le frontend (`/admin`) affiche tous les modules à n'importe quel c
 | Marketing/Commercial — Blog (Gestion de contenu) | ✅ | ✅ `/admin/marketing/blog` |
 | Marketing/Commercial — Réseaux sociaux (Plan Éditorial) | ✅ (sans moteur de publication réel — voir §7.4) | ✅ `/admin/marketing/plan-editorial` |
 | Marketing/Commercial — Dashboard | ✅ (pipeline pondéré, version simplifiée) | ✅ `/admin/marketing/dashboard` |
-| Marketing/Commercial — Devis, Portfolio/Témoignages/Hero | ⏳ | ⏳ |
+| Marketing/Commercial — Devis (Pipeline & Devis) | ✅ (PDF/email ⏳ — voir §7.2) | ✅ `/admin/marketing/devis` |
+| Marketing/Commercial — Portfolio/Témoignages/Hero (CMS) | ⏳ | ⏳ |
 | Dashboard Global | ⏳ bloqué sur Tâches/Chat — voir `docs/backend-specifications.md §8` | ⏳ |
 | Chat/Notifications | ⏳ (Firestore prévu) | ⏳ |
 

@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api/client";
-import type { BlogPost, Lead, MarketingDashboard, Paginated, SocialPost } from "@/lib/api/types";
+import type { BlogPost, Lead, MarketingDashboard, Paginated, Quote, SocialPost } from "@/lib/api/types";
 
 export function listLeads() {
   return apiFetch<Paginated<Lead>>("/api/v1/marketing/leads/");
@@ -93,4 +93,47 @@ export function cancelSocialPost(id: string) {
 
 export function getMarketingDashboard() {
   return apiFetch<MarketingDashboard>("/api/v1/marketing/dashboard/");
+}
+
+export interface QuoteLineInput {
+  service_title: string;
+  quantity: string;
+  unit_price: string;
+}
+
+export interface QuoteInput {
+  lead?: string | null;
+  expiry_date?: string | null;
+  discount_amount?: string;
+  lines: QuoteLineInput[];
+}
+
+export function listQuotes() {
+  return apiFetch<Paginated<Quote>>("/api/v1/marketing/quotes/");
+}
+
+export function createQuote(data: QuoteInput) {
+  return apiFetch<Quote>("/api/v1/marketing/quotes/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateQuote(id: string, data: Partial<QuoteInput>) {
+  return apiFetch<Quote>(`/api/v1/marketing/quotes/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteQuote(id: string) {
+  return apiFetch<void>(`/api/v1/marketing/quotes/${id}/`, { method: "DELETE" });
+}
+
+export function sendQuote(id: string) {
+  return apiFetch<Quote>(`/api/v1/marketing/quotes/${id}/send/`, { method: "POST" });
+}
+
+export function cloneQuote(id: string) {
+  return apiFetch<Quote>(`/api/v1/marketing/quotes/${id}/clone/`, { method: "POST" });
 }
