@@ -1,6 +1,6 @@
-import { getApps, initializeApp, type FirebaseOptions } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getApps, initializeApp, type FirebaseApp, type FirebaseOptions } from "firebase/app";
+import { getAuth, type Auth } from "firebase/auth";
+import { getFirestore, type Firestore } from "firebase/firestore";
 
 const firebaseConfig: FirebaseOptions = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -11,9 +11,22 @@ const firebaseConfig: FirebaseOptions = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Next.js hot-reloads client modules in dev — guard against re-initializing
-// the app (and Firebase throwing "already exists") on every edit.
-export const firebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+// This module is imported by "use client" components (auth-context.tsx),
+// but Next.js still evaluates the client module graph on the SERVER during
+// static generation (e.g. the auto-generated /_not-found page) — so this
+// top-level code runs there too. If NEXT_PUBLIC_FIREBASE_* isn't resolvable
+// in that pass, `getAuth()` throws `auth/invalid-api-key` immediately and
+// takes the entire build down with it, including pages that never touch
+// auth. Guard so a misconfigured/absent env var degrades to "no Firebase"
+// instead of a hard build failure — real browser usage (where the vars are
+// always present via next build's NEXT_PUBLIC_ inlining) is unaffected.
+const hasConfig = Boolean(firebaseConfig.apiKey);
 
-export const auth = getAuth(firebaseApp);
-export const db = getFirestore(firebaseApp);
+export const firebaseApp: FirebaseApp | undefined = hasConfig
+  ? getApps().length
+    ? getApps()[0]
+    : initializeApp(firebaseConfig)
+  : undefined;
+
+export const auth = (firebaseApp ? getAuth(firebaseApp) : undefined) as Auth;
+export const db = (firebaseApp ? getFirestore(firebaseApp) : undefined) as Firestore;
