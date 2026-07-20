@@ -11,6 +11,7 @@ import {
   ScrollText,
   Target,
   Newspaper,
+  CalendarClock,
   UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -47,8 +48,10 @@ const SECTIONS: NavSection[] = [
   {
     title: "Marketing & Commercial",
     items: [
-      { label: "Leads", href: "/admin/marketing/leads", icon: Target },
-      { label: "Blog", href: "/admin/marketing/blog", icon: Newspaper },
+      { label: "Dashboard", href: "/admin/marketing/dashboard", icon: LayoutDashboard },
+      { label: "Gestion de contenu", href: "/admin/marketing/blog", icon: Newspaper },
+      { label: "Plan Éditorial", href: "/admin/marketing/plan-editorial", icon: CalendarClock },
+      { label: "Tunnel commercial", href: "/admin/marketing/leads", icon: Target },
     ],
   },
 ];

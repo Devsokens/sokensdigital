@@ -7,12 +7,18 @@ from marketing.views import (
     PublicBlogDetailView,
     PublicBlogListView,
     PublicLeadCreateView,
+    SocialPostViewSet,
+    marketing_dashboard,
 )
 
 router = DefaultRouter()
 router.register('leads', LeadViewSet, basename='lead')
 router.register('cms/blog', BlogPostViewSet, basename='blog-post')
-urlpatterns = router.urls
+router.register('social-posts', SocialPostViewSet, basename='social-post')
+
+urlpatterns = [
+    path('dashboard/', marketing_dashboard, name='marketing-dashboard'),
+] + router.urls
 
 public_urlpatterns = [
     path('leads/', PublicLeadCreateView.as_view(), name='public-lead-create'),

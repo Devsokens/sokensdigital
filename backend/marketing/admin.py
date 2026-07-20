@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from marketing.models import BlogPost, Lead
+from marketing.models import BlogPost, Lead, SocialPost
 
 
 @admin.register(Lead)
@@ -16,3 +16,10 @@ class BlogPostAdmin(admin.ModelAdmin):
     list_filter = ('status',)
     search_fields = ('title', 'slug')
     prepopulated_fields = {'slug': ('title',)}
+
+
+@admin.register(SocialPost)
+class SocialPostAdmin(admin.ModelAdmin):
+    list_display = ('title', 'platform', 'status', 'scheduled_at', 'author', 'created_at')
+    list_filter = ('status', 'platform')
+    search_fields = ('title', 'content')

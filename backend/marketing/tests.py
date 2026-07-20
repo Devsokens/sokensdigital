@@ -1,8 +1,10 @@
 from django.core.cache import cache
 from rest_framework.test import APIClient, APITestCase
 
+from decimal import Decimal
+
 from core.models import User
-from marketing.models import BlogPost, Lead
+from marketing.models import BlogPost, Lead, SocialPost
 
 
 class PublicLeadCreateTests(APITestCase):
@@ -198,3 +200,146 @@ class BlogPostViewSetTests(APITestCase):
         response = anon.get(f'/api/v1/public/cms/blog/{post.slug}/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['content'], [{'type': 'p', 'text': 'Salut'}])
+
+
+class SocialPostViewSetTests(APITestCase):
+    def setUp(self):
+        self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
+        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+
+        self.commercial = User.objects.create(email='commercial@sokensdigital.com', first_name='Commercial')
+        self.commercial.firestore_role = 'COMMERCIAL'
+
+        self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
+        self.outsider.firestore_role = 'DEVELOPPEUR'
+
+        self.client_marketing = APIClient()
+        self.client_marketing.force_authenticate(user=self.marketing_user)
+
+        self.client_commercial = APIClient()
+        self.client_commercial.force_authenticate(user=self.commercial)
+
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def payload(self, **overrides):
+        data = {'title': 'Annonce', 'content': 'Contenu du post.', 'platform': 'LINKEDIN'}
+        data.update(overrides)
+        return data
+
+    def test_marketing_can_create_and_it_starts_as_draft(self):
+        response = self.client_marketing.post('/api/v1/marketing/social-posts/', self.payload(), format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['status'], 'DRAFT')
+
+    def test_commercial_can_create_draft(self):
+        response = self.client_commercial.post('/api/v1/marketing/social-posts/', self.payload(), format='json')
+        self.assertEqual(response.status_code, 201)
+
+    def test_commercial_cannot_force_scheduled_status(self):
+        response = self.client_commercial.post(
+            '/api/v1/marketing/social-posts/', self.payload(status='SCHEDULED'), format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_outsider_forbidden(self):
+        response = self.client_outsider.post('/api/v1/marketing/social-posts/', self.payload(), format='json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_twitter_content_over_280_chars_rejected(self):
+        response = self.client_marketing.post(
+            '/api/v1/marketing/social-posts/',
+            self.payload(platform='TWITTER', content='x' * 281),
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_instagram_requires_image(self):
+        response = self.client_marketing.post(
+            '/api/v1/marketing/social-posts/', self.payload(platform='INSTAGRAM'), format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_marketing_can_schedule_post_with_date(self):
+        post = SocialPost.objects.create(title='T', content='C', platform='LINKEDIN', author=self.marketing_user)
+        response = self.client_marketing.patch(
+            f'/api/v1/marketing/social-posts/{post.id}/', {'scheduled_at': '2026-08-01T10:00:00Z'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        response = self.client_marketing.post(f'/api/v1/marketing/social-posts/{post.id}/schedule/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'SCHEDULED')
+
+    def test_cannot_schedule_without_date(self):
+        post = SocialPost.objects.create(title='T', content='C', platform='LINKEDIN', author=self.marketing_user)
+        response = self.client_marketing.post(f'/api/v1/marketing/social-posts/{post.id}/schedule/')
+        self.assertEqual(response.status_code, 400)
+
+    def test_commercial_cannot_schedule(self):
+        post = SocialPost.objects.create(
+            title='T', content='C', platform='LINKEDIN', author=self.commercial,
+            scheduled_at='2026-08-01T10:00:00Z',
+        )
+        response = self.client_commercial.post(f'/api/v1/marketing/social-posts/{post.id}/schedule/')
+        self.assertEqual(response.status_code, 403)
+
+    def test_marketing_can_cancel_scheduled_post(self):
+        post = SocialPost.objects.create(
+            title='T', content='C', platform='LINKEDIN', author=self.marketing_user,
+            status='SCHEDULED', scheduled_at='2026-08-01T10:00:00Z',
+        )
+        response = self.client_marketing.post(f'/api/v1/marketing/social-posts/{post.id}/cancel/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'CANCELLED')
+
+    def test_commercial_sees_only_own_posts(self):
+        own = SocialPost.objects.create(title='Mine', content='C', platform='LINKEDIN', author=self.commercial)
+        SocialPost.objects.create(title='Other', content='C', platform='LINKEDIN', author=self.marketing_user)
+        ids = [p['id'] for p in self.client_commercial.get('/api/v1/marketing/social-posts/').json()['results']]
+        self.assertEqual(ids, [str(own.id)])
+
+
+class MarketingDashboardTests(APITestCase):
+    def setUp(self):
+        self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
+        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+
+        self.commercial = User.objects.create(email='commercial@sokensdigital.com', first_name='Commercial')
+        self.commercial.firestore_role = 'COMMERCIAL'
+
+        self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
+        self.outsider.firestore_role = 'DEVELOPPEUR'
+
+        Lead.objects.create(
+            first_name='Ada', last_name='Lovelace', email='ada@example.com', source='SITE_WEB',
+            status='QUALIFIE', qualification_score=50, estimated_value=Decimal('10000'),
+            assigned_to=self.commercial,
+        )
+        Lead.objects.create(
+            first_name='Grace', last_name='Hopper', email='grace@example.com', source='SITE_WEB',
+            status='PERDU', qualification_score=90, estimated_value=Decimal('99999'),
+        )
+
+        self.client_marketing = APIClient()
+        self.client_marketing.force_authenticate(user=self.marketing_user)
+
+        self.client_commercial = APIClient()
+        self.client_commercial.force_authenticate(user=self.commercial)
+
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def test_weighted_pipeline_excludes_closed_leads(self):
+        response = self.client_marketing.get('/api/v1/marketing/dashboard/')
+        self.assertEqual(response.status_code, 200)
+        # 10000 * 50/100 = 5000.00 — the PERDU lead is excluded entirely.
+        self.assertEqual(response.json()['weighted_pipeline'], '5000.00')
+
+    def test_commercial_scoped_to_own_leads(self):
+        response = self.client_commercial.get('/api/v1/marketing/dashboard/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['total_leads'], 1)
+
+    def test_outsider_forbidden(self):
+        response = self.client_outsider.get('/api/v1/marketing/dashboard/')
+        self.assertEqual(response.status_code, 403)

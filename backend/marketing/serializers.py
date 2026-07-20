@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from core.models import User
 from core.serializers import UserBriefSerializer
-from marketing.models import BlogPost, Lead
+from marketing.models import BlogPost, Lead, SocialPost
 
 
 class LeadPublicCreateSerializer(serializers.ModelSerializer):
@@ -25,7 +25,7 @@ class LeadSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'first_name', 'last_name', 'company_name', 'email', 'phone',
             'source', 'message', 'status', 'assigned_to', 'assigned_to_id',
-            'qualification_score', 'created_at',
+            'qualification_score', 'estimated_value', 'created_at',
         ]
 
     def validate_qualification_score(self, value):
@@ -66,3 +66,26 @@ class BlogPostPublicSerializer(serializers.ModelSerializer):
         if not obj.author:
             return None
         return f'{obj.author.first_name} {obj.author.last_name}'.strip()
+
+
+class SocialPostSerializer(serializers.ModelSerializer):
+    author = UserBriefSerializer(read_only=True)
+
+    class Meta:
+        model = SocialPost
+        fields = [
+            'id', 'title', 'content', 'image_path', 'additional_images',
+            'platform', 'scheduled_at', 'status', 'published_at', 'post_url',
+            'author', 'notes', 'tags', 'created_at',
+        ]
+        read_only_fields = ['status', 'published_at', 'post_url', 'author']
+
+    def validate(self, attrs):
+        platform = attrs.get('platform', getattr(self.instance, 'platform', None))
+        content = attrs.get('content', getattr(self.instance, 'content', ''))
+        image_path = attrs.get('image_path', getattr(self.instance, 'image_path', ''))
+        if platform == SocialPost.Platform.TWITTER and len(content) > 280:
+            raise serializers.ValidationError({'content': 'Twitter/X est limité à 280 caractères.'})
+        if platform == SocialPost.Platform.INSTAGRAM and not image_path:
+            raise serializers.ValidationError({'image_path': 'Instagram nécessite une image.'})
+        return attrs

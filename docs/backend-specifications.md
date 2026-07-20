@@ -449,49 +449,49 @@ limitation que les autres départements, voir §0/§13).
 | GET/POST/PATCH/DELETE | `/api/v1/marketing/cms/blog/` | Responsable Marketing, Super-Admin uniquement | ✅ |
 | — | `/api/v1/public/cms/projects/`, `/testimonials/`, `/partners/`, `/hero/` + équivalents `/marketing/cms/...` | idem | ⏳ (modèles pas encore créés) |
 
-### 7.4 Publications Réseaux Sociaux & Plan Éditorial
+### 7.4 Publications Réseaux Sociaux & Plan Éditorial ✅ implémenté (hors moteur de publication, ⏳)
 
-**`SocialPost`** (modèle donné intégralement dans la spec source — repris
-tel quel) : `title`, `content`, `image_path`, `additional_images` (JSON),
-`platform` (Enum LINKEDIN/TWITTER/FACEBOOK/INSTAGRAM/YOUTUBE),
+**`SocialPost`** ✅ — `title`, `content`, `image_path`, `additional_images`
+(JSON), `platform` (Enum LINKEDIN/TWITTER/FACEBOOK/INSTAGRAM/YOUTUBE),
 `scheduled_at`, `status` (Enum DRAFT/SCHEDULED/PUBLISHED/FAILED/CANCELLED),
 `published_at`, `post_url`, `author` (FK), `notes`, `tags` (JSON).
 
-**Validation par plateforme** (serializer) : ex. `TWITTER` → `content` ≤ 280
-caractères ; `INSTAGRAM` → `image_path` obligatoire.
+**Validation par plateforme** ✅ (serializer + `clean()`) : `TWITTER` →
+`content` ≤ 280 caractères ; `INSTAGRAM` → `image_path` obligatoire.
 
-**Moteur de publication** : Celery Beat, cron chaque minute —
-`SocialPost.objects.filter(status='SCHEDULED', scheduled_at__lte=now())` →
-appel API externe (LinkedIn/Facebook Graph/etc.) → `PUBLISHED` +
-`published_at` + `post_url`, ou `FAILED` si rejet.
+> ⏳ **Moteur de publication non implémenté** : pas de cron Celery Beat
+> interrogeant les posts `SCHEDULED`, pas d'appel aux API externes
+> (LinkedIn/Facebook Graph/etc.), pas de rappels J-3h/J-2h/J-1h — aucune
+> credential de plateforme n'est configurée. `schedule`/`cancel` ne
+> changent que le statut en base ; rien ne se publie réellement nulle
+> part pour l'instant. Passerelle CMS → Réseaux sociaux (auto-génération
+> d'un `SocialPost` DRAFT à la publication d'un `BlogPost`) : ⏳ pas fait.
 
-**Rappels J-3h/J-2h/J-1h** : au passage à `SCHEDULED`, 3 tâches Celery
-`countdown` sont planifiées. **Règle de sécurité critique** : au déclenchement,
-le worker **re-vérifie** `status == 'SCHEDULED'` en base avant d'notifier —
-sinon la tâche s'arrête silencieusement (annulation/report gérés
-naturellement, pas de nettoyage de tâches à faire).
+| Méthode | Route | Permission | Statut |
+|---|---|---|---|
+| GET/POST | `/api/v1/marketing/social-posts/` | Responsable Marketing, Super-Admin (tout statut) ; Commercial (création `DRAFT` uniquement — 400 s'il tente un autre statut) | ✅ |
+| PATCH/DELETE | `/api/v1/marketing/social-posts/{id}/` | Responsable Marketing, Super-Admin (tout) ; Commercial (lecture de ses propres posts uniquement) | ✅ |
+| POST | `/api/v1/marketing/social-posts/{id}/schedule/` | Responsable Marketing, Super-Admin — requiert `scheduled_at` déjà renseigné | ✅ (statut seulement, voir note ci-dessus) |
+| POST | `/api/v1/marketing/social-posts/{id}/cancel/` | Responsable Marketing, Super-Admin — uniquement depuis DRAFT/SCHEDULED | ✅ |
 
-**Passerelle CMS → Réseaux sociaux** : `BlogPost.status → PUBLIE` peut
-générer un `SocialPost` en `DRAFT` pré-rempli (titre + extrait + lien).
+### 7.5 Dashboard Marketing ✅ implémenté (version simplifiée)
 
-| Méthode | Route | Permission |
-|---|---|---|
-| GET/POST | `/api/v1/marketing/social-posts/` | Responsable Marketing, Super-Admin (tout statut) ; Commercial (création `DRAFT` uniquement — 400 s'il tente `SCHEDULED`) |
-| PATCH | `/api/v1/marketing/social-posts/{id}/` | Idem |
-| POST | `/api/v1/marketing/social-posts/{id}/schedule/` | Passage à `SCHEDULED`, déclenche les 3 rappels | Responsable Marketing, Super-Admin |
-| POST | `/api/v1/marketing/social-posts/{id}/cancel/` | Annulation | Responsable Marketing, Super-Admin |
+- **Pipeline commercial pondéré** ✅ — `Sum(estimated_value *
+  qualification_score / 100)` sur les leads actifs (NOUVEAU/QUALIFIE/
+  PROPOSITION_EN_COURS ; PERDU/CONVERTI exclus). `estimated_value` a été
+  **ajouté à `Lead`** (absent du modèle original) — sans valeur monétaire
+  il n'y a rien à pondérer ; `Quote.total_ht` serait la source plus
+  précise une fois `Quote` construit (§7.2, ⏳).
+- **Statistiques réseaux sociaux** ✅ (partiel) — répartition par statut
+  et par plateforme (posts `PUBLISHED`) ; pas de répartition par créneau
+  horaire (nécessiterait un historique réel de publications, qu'on n'a
+  pas tant que le moteur de publication n'existe pas).
+- **Cache Redis (TTL 1-2h)** : ⏳ pas encore branché — calcul à la volée
+  pour l'instant (le volume actuel ne le justifie pas encore).
 
-### 7.5 Dashboard Marketing
-
-- Pipeline commercial pondéré (`Sum(valeur_estimee * probabilite_conversion)`
-  par lead qualifié).
-- Statistiques réseaux sociaux (`PUBLISHED`, groupées par plateforme et
-  créneau horaire).
-- Vues matérialisées + cache Redis (TTL 1–2h), purge sur signature de devis.
-
-| Méthode | Route | Permission |
-|---|---|---|
-| GET | `/api/v1/marketing/dashboard/` | Responsable Marketing, Super-Admin (complet) ; Commercial/Chef de Projet (lecture limitée à leur périmètre) |
+| Méthode | Route | Permission | Statut |
+|---|---|---|---|
+| GET | `/api/v1/marketing/dashboard/` | Responsable Marketing, Super-Admin (complet) ; Commercial/Chef de Projet (lecture limitée à leur périmètre) | ✅ |
 
 ---
 

@@ -33,6 +33,13 @@ class Lead(LoggedModel):
     status = models.CharField(max_length=25, choices=Status.choices, default=Status.NOUVEAU)
     assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_leads')
     qualification_score = models.PositiveSmallIntegerField(default=0)
+    # Not in the original spec's Lead field list — added to make the
+    # "pipeline commercial pondéré" dashboard calc
+    # (docs/backend-specifications.md §7.5) possible at all. Without an
+    # estimated deal value there is nothing to weight; `Quote.total_ht`
+    # would be the more precise source once Quote exists, but Quote isn't
+    # built yet (§7.2, ⏳).
+    estimated_value = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     class Meta(LoggedModel.Meta):
         ordering = ['-created_at']
@@ -91,3 +98,50 @@ class BlogPost(LoggedModel):
         if not self.slug:
             self.slug = slugify(self.title)
         super().save(*args, **kwargs)
+
+
+class SocialPost(LoggedModel):
+    class Platform(models.TextChoices):
+        LINKEDIN = 'LINKEDIN', 'LinkedIn'
+        TWITTER = 'TWITTER', 'Twitter/X'
+        FACEBOOK = 'FACEBOOK', 'Facebook'
+        INSTAGRAM = 'INSTAGRAM', 'Instagram'
+        YOUTUBE = 'YOUTUBE', 'YouTube'
+
+    class Status(models.TextChoices):
+        DRAFT = 'DRAFT', 'Brouillon'
+        SCHEDULED = 'SCHEDULED', 'Programmé'
+        PUBLISHED = 'PUBLISHED', 'Publié'
+        FAILED = 'FAILED', 'Échec'
+        CANCELLED = 'CANCELLED', 'Annulé'
+
+    title = models.CharField(max_length=255)
+    content = models.TextField()
+    image_path = models.URLField(blank=True)
+    additional_images = models.JSONField(default=list)
+    platform = models.CharField(max_length=20, choices=Platform.choices)
+    scheduled_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
+    published_at = models.DateTimeField(null=True, blank=True)
+    post_url = models.URLField(blank=True)
+    author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='social_posts')
+    notes = models.TextField(blank=True)
+    tags = models.JSONField(default=list)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-created_at']
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['status']),
+            models.Index(fields=['platform']),
+        ]
+
+    def __str__(self):
+        return f'{self.title} ({self.platform})'
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        if self.platform == self.Platform.TWITTER and len(self.content) > 280:
+            raise ValidationError({'content': 'Twitter/X est limité à 280 caractères.'})
+        if self.platform == self.Platform.INSTAGRAM and not self.image_path:
+            raise ValidationError({'image_path': 'Instagram nécessite une image.'})

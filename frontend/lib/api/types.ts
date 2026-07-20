@@ -72,6 +72,7 @@ export interface Lead {
   status: LeadStatus;
   assigned_to: UserBrief | null;
   qualification_score: number;
+  estimated_value: string | null;
   created_at: string;
 }
 
@@ -92,6 +93,35 @@ export interface BlogPost {
   published_at: string | null;
   meta_description: string;
   created_at: string;
+}
+
+export type SocialPlatform = "LINKEDIN" | "TWITTER" | "FACEBOOK" | "INSTAGRAM" | "YOUTUBE";
+export type SocialPostStatus = "DRAFT" | "SCHEDULED" | "PUBLISHED" | "FAILED" | "CANCELLED";
+
+export interface SocialPost {
+  id: string;
+  title: string;
+  content: string;
+  image_path: string;
+  additional_images: string[];
+  platform: SocialPlatform;
+  scheduled_at: string | null;
+  status: SocialPostStatus;
+  published_at: string | null;
+  post_url: string;
+  author: UserBrief | null;
+  notes: string;
+  tags: string[];
+  created_at: string;
+}
+
+export interface MarketingDashboard {
+  weighted_pipeline: string;
+  total_leads: number;
+  leads_by_status: Record<string, number>;
+  leads_by_source: Record<string, number>;
+  social_posts_by_status: Record<string, number>;
+  published_social_posts_by_platform: Record<string, number>;
 }
 
 export interface AuditLogEntry {
