@@ -1,0 +1,55 @@
+version: "3.9"
+
+# Compose dédié à l'intégration continue (Jenkins).
+# Distinct du docker-compose.yml de dev local pour ne pas polluer les
+# volumes/ports utilisés en développement.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: sokens_test
+      POSTGRES_USER: sokens
+      POSTGRES_PASSWORD: sokens
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sokens -d sokens_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    tmpfs:
+      - /var/lib/postgresql/data   # DB éphémère en RAM : tests plus rapides, aucune persistance nécessaire
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  test:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    environment:
+      DJANGO_SETTINGS_MODULE: sokens_backend.settings
+      DEBUG: "False"
+      SECRET_KEY: "ci-only-not-for-production"
+      DATABASE_URL: postgres://sokens:sokens@db:5432/sokens_test
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_TASK_ALWAYS_EAGER: "true"   # les tâches Celery s'exécutent en synchrone pendant les tests
+      FIREBASE_DISABLED: "true"          # désactive les appels réseau vers Firebase pendant les tests
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    entrypoint: []
+    # la commande par défaut est surchargée à chaque étape par le Jenkinsfile
+    # (flake8, makemigrations --check, pytest par app) ; ce "sleep" ne sert
+    # qu'à garder l'image utilisable en exécution ad-hoc (docker compose run test bash)
+    command: ["sleep", "infinity"]
