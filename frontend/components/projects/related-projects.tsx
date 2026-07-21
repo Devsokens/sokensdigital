@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Diamond } from "lucide-react";
-import { SectionIcon } from "@/components/dynamic-icon";
+import { ProjectCardMedia } from "@/components/projects/card-media";
 import type { Project } from "@/lib/projects/types";
 
 export function RelatedProjects({ projects }: { projects: Project[] }) {
@@ -34,11 +34,8 @@ export function RelatedProjects({ projects }: { projects: Project[] }) {
             href={`/projects/${project.slug}`}
             className="group overflow-hidden rounded-2xl border border-white/10 bg-card/60 transition-colors hover:border-primary/30"
           >
-            <div
-              aria-hidden
-              className="relative flex aspect-video items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_70%_30%,color-mix(in_oklch,var(--primary),transparent_78%),transparent_65%),linear-gradient(160deg,oklch(0.17_0.02_235),oklch(0.08_0.01_240))]"
-            >
-              <SectionIcon name={project.visualIcon} className="size-9 text-primary/50 transition-transform duration-300 group-hover:scale-110" />
+            <div aria-hidden className="relative aspect-video overflow-hidden">
+              <ProjectCardMedia images={project.images} videoSrc={project.videoSrc} icon={project.visualIcon} />
             </div>
             <div className="p-4">
               <h3 className="text-sm font-semibold text-foreground">{project.title}</h3>

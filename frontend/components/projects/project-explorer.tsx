@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SectionIcon } from "@/components/dynamic-icon";
+import { ProjectCardMedia } from "@/components/projects/card-media";
 import type { Project } from "@/lib/projects/types";
 
 const ALL = "All";
@@ -163,17 +163,13 @@ function ProjectCard({ project, tall }: { project: Project; tall: boolean }) {
         tall && "lg:row-span-2"
       )}
     >
-      <div
-        aria-hidden
-        className="relative flex min-h-[10rem] flex-1 items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_65%_25%,color-mix(in_oklch,var(--primary),transparent_78%),transparent_60%),linear-gradient(150deg,oklch(0.17_0.02_235),oklch(0.08_0.01_240))]"
-      >
-        <div className="absolute inset-0 [background-image:linear-gradient(color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px),linear-gradient(90deg,color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px)] [background-size:28px_28px]" />
+      <div aria-hidden className="relative min-h-[10rem] flex-1 overflow-hidden">
+        <ProjectCardMedia images={project.images} videoSrc={project.videoSrc} icon={project.visualIcon} />
         {project.featured && (
-          <span className="absolute top-3 right-3 rounded-full bg-primary px-3 py-1 text-[10px] font-semibold tracking-[0.1em] text-primary-foreground uppercase">
+          <span className="absolute top-3 right-3 z-10 rounded-full bg-primary px-3 py-1 text-[10px] font-semibold tracking-[0.1em] text-primary-foreground uppercase">
             Featured
           </span>
         )}
-        <SectionIcon name={project.visualIcon} className="relative size-10 text-primary/50 transition-transform duration-300 group-hover:scale-110" />
       </div>
       <div className="p-4">
         <span className="text-xs text-muted-foreground">{project.client}</span>

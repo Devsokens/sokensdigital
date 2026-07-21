@@ -8,6 +8,7 @@ import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/s
 import { cn } from "@/lib/utils";
 import { SectionIcon } from "@/components/dynamic-icon";
 import { IconPicker } from "@/components/admin/marketing/icon-picker";
+import { ProjectCardMedia } from "@/components/projects/card-media";
 import {
   ImageUploadField,
   EditableInput,
@@ -220,20 +221,19 @@ export function ShowcaseProjectList() {
               <button
                 type="button"
                 onClick={() => edit(project)}
-                className="relative flex aspect-video w-full items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_65%_25%,color-mix(in_oklch,var(--primary),transparent_78%),transparent_60%),linear-gradient(150deg,oklch(0.17_0.02_235),oklch(0.08_0.01_240))]"
+                className="relative flex aspect-video w-full items-center justify-center overflow-hidden"
               >
-                <div className="absolute inset-0 [background-image:linear-gradient(color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px),linear-gradient(90deg,color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px)] [background-size:28px_28px]" />
+                <ProjectCardMedia images={project.images} videoSrc={project.video_src} icon={project.visual_icon} />
                 {project.featured && (
-                  <span className="absolute top-3 right-3 rounded-full bg-primary px-3 py-1 text-[10px] font-semibold tracking-[0.1em] text-primary-foreground uppercase">
+                  <span className="absolute top-3 right-3 z-10 rounded-full bg-primary px-3 py-1 text-[10px] font-semibold tracking-[0.1em] text-primary-foreground uppercase">
                     Featured
                   </span>
                 )}
                 {!project.is_active && (
-                  <span className="absolute top-3 left-3 rounded-full bg-black/60 px-3 py-1 text-[10px] font-semibold tracking-[0.1em] text-white/70 uppercase">
+                  <span className="absolute top-3 left-3 z-10 rounded-full bg-black/60 px-3 py-1 text-[10px] font-semibold tracking-[0.1em] text-white/70 uppercase">
                     Inactif
                   </span>
                 )}
-                <SectionIcon name={project.visual_icon} className="relative size-10 text-primary/50 transition-transform duration-300 group-hover:scale-110" />
               </button>
               <div className="p-4">
                 <span className="text-xs text-muted-foreground">{project.client}</span>
