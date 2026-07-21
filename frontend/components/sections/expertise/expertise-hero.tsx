@@ -3,7 +3,7 @@
 import { motion } from "motion/react";
 import { Diamond } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BlueprintDiagram } from "@/components/sections/expertise/blueprint-diagram";
+import { TabletMockup } from "@/components/projects/tablet-mockup";
 import type { PageSection } from "@/lib/api/types";
 
 const container = {
@@ -92,34 +92,23 @@ export function ExpertiseHero({ section }: { section?: PageSection | null }) {
             initial={{ opacity: 0, y: 24, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] as const }}
+            className="text-center"
           >
-            <div className="overflow-hidden rounded-2xl border border-white/10 bg-card/60">
-              <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
-                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
-                  {panel.header}
-                </span>
-                <div className="flex gap-1.5">
-                  <span className="size-1.5 rounded-full bg-white/20" />
-                  <span className="size-1.5 rounded-full bg-white/20" />
-                  <span className="size-1.5 rounded-full bg-primary/60" />
-                </div>
-              </div>
-              <div className="aspect-[16/10] p-4">
-                {panel.image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={panel.image_url} alt="" className="size-full rounded object-cover" />
-                ) : (
-                  <BlueprintDiagram />
-                )}
-              </div>
-              <div className="border-t border-white/10 px-5 py-4">
-                <span className="text-[11px] font-semibold tracking-[0.1em] text-primary uppercase">
-                  {panel.label}
-                </span>
-                <p className="mt-1 text-sm font-semibold text-foreground">
-                  {panel.sublabel}
-                </p>
-              </div>
+            <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
+              {panel.header}
+            </span>
+
+            <div className="mt-4">
+              <TabletMockup imageUrl={panel.image_url || undefined} />
+            </div>
+
+            <div className="mt-5">
+              <span className="text-[11px] font-semibold tracking-[0.1em] text-primary uppercase">
+                {panel.label}
+              </span>
+              <p className="mt-1 text-sm font-semibold text-foreground">
+                {panel.sublabel}
+              </p>
             </div>
           </motion.div>
         </div>

@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { PROJECTS } from "@/lib/projects/projects";
-import { ProjectMedia } from "@/components/projects/project-media";
+import { LaptopMockup } from "@/components/projects/laptop-mockup";
 import type { PageSection } from "@/lib/api/types";
 
 const CAROUSEL_SLUGS = [
@@ -44,7 +44,7 @@ export function RecentProjects({ section }: { section?: PageSection | null }) {
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:items-center">
-          <ProjectMedia
+          <LaptopMockup
             key={project.slug}
             title={project.title}
             videoSrc={project.videoSrc}
