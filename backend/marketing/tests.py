@@ -363,6 +363,59 @@ class MarketingDashboardTests(APITestCase):
         # on the last day of the series.
         self.assertEqual(series[-1]['count'], 2)
 
+    def test_active_pipeline_total_estimated_excludes_closed_leads(self):
+        response = self.client_marketing.get('/api/v1/marketing/dashboard/')
+        # Only the QUALIFIE lead (10000) is active — PERDU is excluded.
+        self.assertEqual(response.json()['active_pipeline_total_estimated'], '10000.00')
+
+    def test_next_scheduled_post_returns_earliest(self):
+        SocialPost.objects.create(
+            title='Plus tard', content='...', platform='LINKEDIN', status='SCHEDULED',
+            scheduled_at=timezone.now() + timezone.timedelta(days=10), author=self.marketing_user,
+        )
+        SocialPost.objects.create(
+            title='Bientôt', content='...', platform='TWITTER', status='SCHEDULED',
+            scheduled_at=timezone.now() + timezone.timedelta(days=1), author=self.marketing_user,
+        )
+        response = self.client_marketing.get('/api/v1/marketing/dashboard/')
+        self.assertEqual(response.json()['next_scheduled_post']['title'], 'Bientôt')
+
+    def test_next_scheduled_post_null_when_none_scheduled(self):
+        response = self.client_marketing.get('/api/v1/marketing/dashboard/')
+        self.assertIsNone(response.json()['next_scheduled_post'])
+
+    def test_quote_acceptance_rate_and_next_expiring(self):
+        lead = Lead.objects.filter(status='QUALIFIE').first()
+        Quote.objects.create(lead=lead, created_by=self.commercial, status='ACCEPTE')
+        Quote.objects.create(lead=lead, created_by=self.commercial, status='REFUSE')
+        Quote.objects.create(
+            lead=lead, created_by=self.commercial, status='ENVOYE',
+            expiry_date=(timezone.now().date() + timezone.timedelta(days=5)),
+        )
+        response = self.client_marketing.get('/api/v1/marketing/dashboard/')
+        body = response.json()
+        # 1 accepted out of 2 decided (ACCEPTE + REFUSE) = 50%
+        self.assertEqual(body['quote_acceptance_rate'], '50.0')
+        self.assertIsNotNone(body['next_expiring_quote'])
+
+    def test_commercial_sees_only_own_quotes_in_dashboard(self):
+        other_commercial = User.objects.create(email='other@sokensdigital.com', first_name='Other')
+        other_commercial.firestore_role = 'COMMERCIAL'
+        lead = Lead.objects.filter(status='QUALIFIE').first()
+        Quote.objects.create(
+            lead=lead, created_by=other_commercial, status='ENVOYE',
+            expiry_date=(timezone.now().date() + timezone.timedelta(days=5)),
+        )
+        response = self.client_commercial.get('/api/v1/marketing/dashboard/')
+        self.assertIsNone(response.json()['next_expiring_quote'])
+
+    def test_active_team_includes_lead_owners_and_post_authors(self):
+        SocialPost.objects.create(title='X', content='...', platform='LINKEDIN', author=self.marketing_user)
+        response = self.client_marketing.get('/api/v1/marketing/dashboard/')
+        team_ids = {member['id'] for member in response.json()['active_team']}
+        self.assertIn(str(self.commercial.id), team_ids)
+        self.assertIn(str(self.marketing_user.id), team_ids)
+
 
 class QuoteViewSetTests(APITestCase):
     def setUp(self):

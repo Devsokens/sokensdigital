@@ -150,8 +150,27 @@ export interface LeadsOverTimePoint {
   count: number;
 }
 
+export interface NextScheduledPost {
+  title: string;
+  platform: string;
+  scheduled_at: string;
+}
+
+export interface NextExpiringQuote {
+  quote_number: string;
+  client_name: string;
+  expiry_date: string;
+  created_by: UserBrief | null;
+}
+
+export interface QuotesSentThisWeek {
+  amount: string;
+  trend_percent: number | null;
+}
+
 export interface MarketingDashboard {
   weighted_pipeline: string;
+  active_pipeline_total_estimated: string;
   total_leads: number;
   conversion_rate: string;
   leads_by_status: Record<string, number>;
@@ -159,6 +178,11 @@ export interface MarketingDashboard {
   leads_over_time: LeadsOverTimePoint[];
   social_posts_by_status: Record<string, number>;
   published_social_posts_by_platform: Record<string, number>;
+  next_scheduled_post: NextScheduledPost | null;
+  next_expiring_quote: NextExpiringQuote | null;
+  quote_acceptance_rate: string;
+  quotes_sent_this_week: QuotesSentThisWeek;
+  active_team: UserBrief[];
 }
 
 export type ProjectStatus = "EN_COURS" | "EN_PAUSE" | "TERMINE" | "ANNULE";
