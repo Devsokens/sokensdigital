@@ -95,6 +95,35 @@ export interface BlogPost {
   created_at: string;
 }
 
+export type SitePage = "ACCUEIL";
+
+export type SectionKey =
+  | "hero"
+  | "services"
+  | "recent_projects"
+  | "testimonials"
+  | "team"
+  | "partner_logos"
+  | "blog_insights"
+  | "cta";
+
+export interface PageSection {
+  id: string;
+  page: SitePage;
+  section_key: SectionKey;
+  order: number;
+  is_active: boolean;
+  kicker: string;
+  title: string;
+  subtitle: string;
+  cta_label: string;
+  cta_link: string;
+  cta_secondary_label: string;
+  cta_secondary_link: string;
+  items: Record<string, unknown>[];
+  created_at: string;
+}
+
 export type SocialPlatform = "LINKEDIN" | "TWITTER" | "FACEBOOK" | "INSTAGRAM" | "YOUTUBE";
 export type SocialPostStatus = "DRAFT" | "SCHEDULED" | "PUBLISHED" | "FAILED" | "CANCELLED";
 

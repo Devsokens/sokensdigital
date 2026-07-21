@@ -235,3 +235,63 @@ class QuoteLine(LoggedModel):
         self.total_line = (self.quantity * self.unit_price).quantize(Decimal('0.01'))
         super().save(*args, **kwargs)
         self.quote.recalculate_totals()
+
+
+class PageSection(LoggedModel):
+    """A single editable "slot" of the public marketing site — one row per
+    section of one public page (docs/backend-specifications.md §7.3). The
+    set of sections per page is fixed (mirrors the real page template, e.g.
+    `app/page.tsx`'s hero/services/testimonials/... order) — this model
+    lets Marketing edit the copy of each slot, not add/remove slots, so
+    there's no create/destroy endpoint, only list + partial_update.
+
+    `items` is a flexible JSON list whose shape depends on `section_key`
+    (documented per-key in SectionKey below) — same "structured blocks, not
+    freeform HTML" reasoning as BlogPost.content."""
+
+    class Page(models.TextChoices):
+        ACCUEIL = 'ACCUEIL', 'Accueil'
+
+    class SectionKey(models.TextChoices):
+        # items: [{value, label}] — the 3 stat callouts under the hero.
+        HERO = 'hero', 'Hero'
+        # items: [{icon, title, description}]
+        SERVICES = 'services', 'Services'
+        # items unused — the carousel content itself is still driven by
+        # lib/projects/projects.ts on the frontend until the public
+        # "Projets vitrine" module exists; only title/subtitle are editable.
+        RECENT_PROJECTS = 'recent_projects', 'Projets récents'
+        # items: [{quote, name, role}]
+        TESTIMONIALS = 'testimonials', 'Témoignages'
+        # items: [{name, role, bio}]
+        TEAM = 'team', 'Équipe'
+        # items: [{name}] — logo images not supported yet, text wordmarks only.
+        PARTNER_LOGOS = 'partner_logos', 'Logos partenaires'
+        # items unused — posts themselves still come from lib/blog/posts.ts
+        # until the public blog is wired to BlogPost; only title/cta editable.
+        BLOG_INSIGHTS = 'blog_insights', 'Aperçu blog'
+        # items unused — title/subtitle/cta only.
+        CTA = 'cta', 'CTA final'
+
+    page = models.CharField(max_length=20, choices=Page.choices)
+    section_key = models.CharField(max_length=30, choices=SectionKey.choices)
+    order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    kicker = models.CharField(max_length=255, blank=True)
+    title = models.CharField(max_length=255, blank=True)
+    subtitle = models.TextField(blank=True)
+    cta_label = models.CharField(max_length=100, blank=True)
+    cta_link = models.CharField(max_length=255, blank=True)
+    cta_secondary_label = models.CharField(max_length=100, blank=True)
+    cta_secondary_link = models.CharField(max_length=255, blank=True)
+    items = models.JSONField(default=list, blank=True)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['page', 'order']
+        constraints = [
+            models.UniqueConstraint(fields=['page', 'section_key'], name='unique_page_section'),
+        ]
+        indexes = LoggedModel.Meta.indexes + [models.Index(fields=['page'])]
+
+    def __str__(self):
+        return f'{self.get_page_display()} — {self.get_section_key_display()}'

@@ -2,6 +2,7 @@
 
 import { motion } from "motion/react";
 import { Mail } from "lucide-react";
+import type { PageSection } from "@/lib/api/types";
 
 type Member = {
   name: string;
@@ -9,32 +10,14 @@ type Member = {
   bio: string;
 };
 
-const TEAM: Member[] = [
-  {
-    name: "Dr. Elias Vance",
-    role: "Architecte Sécurité",
-    bio: "Pilote la stratégie de cybersécurité et l'architecture Zero Trust.",
-  },
-  {
-    name: "Sofia Ramirez",
-    role: "Lead Frontend Engineer",
-    bio: "Conçoit des interfaces temps réel pour les environnements haute fréquence.",
-  },
-  {
-    name: "Marc Dubois",
-    role: "Architecte Cloud",
-    bio: "Orchestre les infrastructures multi-cloud à grande échelle.",
-  },
-  {
-    name: "Léa Fontaine",
-    role: "Ingénieure Sécurité",
-    bio: "Sécurise les données sensibles et les architectures réglementées.",
-  },
-  {
-    name: "Taiger Dev",
-    role: "Développeur Full Stack",
-    bio: "Construit les briques techniques de nos solutions sur-mesure.",
-  },
+const DEFAULT_TITLE = "Notre Équipe";
+const DEFAULT_SUBTITLE = "Les architectes, ingénieurs et experts sécurité qui conçoivent et livrent chacun de vos projets.";
+const DEFAULT_TEAM: Member[] = [
+  { name: "Dr. Elias Vance", role: "Architecte Sécurité", bio: "Pilote la stratégie de cybersécurité et l'architecture Zero Trust." },
+  { name: "Sofia Ramirez", role: "Lead Frontend Engineer", bio: "Conçoit des interfaces temps réel pour les environnements haute fréquence." },
+  { name: "Marc Dubois", role: "Architecte Cloud", bio: "Orchestre les infrastructures multi-cloud à grande échelle." },
+  { name: "Léa Fontaine", role: "Ingénieure Sécurité", bio: "Sécurise les données sensibles et les architectures réglementées." },
+  { name: "Taiger Dev", role: "Développeur Full Stack", bio: "Construit les briques techniques de nos solutions sur-mesure." },
 ];
 
 function initials(name: string) {
@@ -46,7 +29,11 @@ function initials(name: string) {
     .slice(0, 2);
 }
 
-export function Team() {
+export function Team({ section }: { section?: PageSection | null }) {
+  const title = section?.title || DEFAULT_TITLE;
+  const subtitle = section?.subtitle || DEFAULT_SUBTITLE;
+  const team: Member[] = section?.items?.length ? (section.items as Member[]) : DEFAULT_TEAM;
+
   return (
     <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
       <motion.div
@@ -56,16 +43,15 @@ export function Team() {
         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] as const }}
       >
         <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-          Notre Équipe
+          {title}
         </h2>
         <p className="mt-2 max-w-lg text-sm text-muted-foreground sm:text-base">
-          Les architectes, ingénieurs et experts sécurité qui conçoivent et
-          livrent chacun de vos projets.
+          {subtitle}
         </p>
       </motion.div>
 
       <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {TEAM.map((member, i) => (
+        {team.map((member, i) => (
           <motion.div
             key={member.name}
             initial={{ opacity: 0, y: 20 }}

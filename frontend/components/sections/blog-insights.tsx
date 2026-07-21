@@ -1,20 +1,24 @@
 import Link from "next/link";
 import { POSTS } from "@/lib/blog/posts";
+import type { PageSection } from "@/lib/api/types";
 
-export function BlogInsights() {
+export function BlogInsights({ section }: { section?: PageSection | null }) {
   const featured = POSTS.slice(0, 3);
+  const title = section?.title || "Insights Techniques";
+  const ctaLabel = section?.cta_label || "Lire le blog";
+  const ctaLink = section?.cta_link || "/blog";
 
   return (
     <section id="blog" className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
       <div className="flex items-end justify-between gap-4">
         <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-          Insights Techniques
+          {title}
         </h2>
         <Link
-          href="/blog"
+          href={ctaLink}
           className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
         >
-          Lire le blog
+          {ctaLabel}
           <span aria-hidden>→</span>
         </Link>
       </div>

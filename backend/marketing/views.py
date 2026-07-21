@@ -4,19 +4,21 @@ from django.db.models import Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from rest_framework import generics, permissions, status, viewsets
+from rest_framework import generics, mixins, permissions, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.permissions import has_role
-from marketing.models import BlogPost, Lead, Quote, QuoteLine, SocialPost
+from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, SocialPost
 from marketing.ratelimit import get_client_ip, is_rate_limited
 from marketing.serializers import (
     BlogPostPublicSerializer,
     BlogPostSerializer,
     LeadPublicCreateSerializer,
     LeadSerializer,
+    PageSectionPublicSerializer,
+    PageSectionSerializer,
     QuoteSerializer,
     QuoteTrackSerializer,
     SocialPostSerializer,
@@ -96,6 +98,58 @@ class LeadViewSet(viewsets.ModelViewSet):
 class IsMarketing(permissions.BasePermission):
     def has_permission(self, request, view):
         return has_role(request.user, *MARKETING_ROLES)
+
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=['Marketing & Commercial'],
+        summary='List page sections (site vitrine CMS)',
+        description="Filter with ?page=ACCUEIL. The set of sections per page is fixed "
+        "(mirrors the real page template) — this only lists/edits their content.",
+    ),
+    retrieve=extend_schema(tags=['Marketing & Commercial'], summary='Get a page section'),
+    partial_update=extend_schema(tags=['Marketing & Commercial'], summary='Edit a page section'),
+)
+class PageSectionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    """No create/destroy — see PageSection docstring. `update()` (full PUT)
+    is disabled too: `page`/`section_key`/`order` are read-only on the
+    serializer, so PATCH is the only meaningful write.
+
+    Pagination disabled: a page's section count is small and fixed (mirrors
+    its real template), and a paginated response would collide with the
+    `?page=ACCUEIL` filter query param anyway (DRF's default pagination
+    also uses `page` for the page *number*)."""
+
+    queryset = PageSection.objects.all()
+    serializer_class = PageSectionSerializer
+    permission_classes = [IsMarketing]
+    pagination_class = None
+    http_method_names = ['get', 'patch', 'head', 'options']
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return PageSection.objects.none()
+        qs = super().get_queryset()
+        page = self.request.query_params.get('page')
+        return qs.filter(page=page) if page else qs
+
+
+@extend_schema(
+    tags=['Marketing & Commercial'],
+    summary='List active page sections for a public page (site vitrine)',
+    description='?page=ACCUEIL (required). Only is_active=True sections, in template order.',
+)
+class PublicPageSectionListView(generics.ListAPIView):
+    serializer_class = PageSectionPublicSerializer
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    pagination_class = None  # same `?page=` collision reasoning as PageSectionViewSet
+
+    def get_queryset(self):
+        page = self.request.query_params.get('page')
+        if not page:
+            return PageSection.objects.none()
+        return PageSection.objects.filter(page=page, is_active=True)
 
 
 @extend_schema_view(

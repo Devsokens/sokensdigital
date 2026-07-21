@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from marketing.models import BlogPost, Lead, Quote, QuoteLine, SocialPost
+from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, SocialPost
 
 
 @admin.register(Lead)
@@ -23,6 +23,13 @@ class SocialPostAdmin(admin.ModelAdmin):
     list_display = ('title', 'platform', 'status', 'scheduled_at', 'author', 'created_at')
     list_filter = ('status', 'platform')
     search_fields = ('title', 'content')
+
+
+@admin.register(PageSection)
+class PageSectionAdmin(admin.ModelAdmin):
+    list_display = ('page', 'section_key', 'order', 'is_active', 'title')
+    list_filter = ('page', 'is_active')
+    ordering = ('page', 'order')
 
 
 class QuoteLineInline(admin.TabularInline):

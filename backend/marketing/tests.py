@@ -5,7 +5,7 @@ from rest_framework.test import APIClient, APITestCase
 from decimal import Decimal
 
 from core.models import User
-from marketing.models import BlogPost, Lead, Quote, SocialPost
+from marketing.models import BlogPost, Lead, PageSection, Quote, SocialPost
 
 
 class PublicLeadCreateTests(APITestCase):
@@ -500,3 +500,85 @@ class QuoteViewSetTests(APITestCase):
         body = anon.get(f'/api/v1/public/quotes/track/{quote.tracking_token}/').json()
         self.assertNotIn('created_by', body)
         self.assertNotIn('tracking_token', body)
+
+
+class PageSectionViewSetTests(APITestCase):
+    def setUp(self):
+        self.marketing_user = User.objects.create(email='marketing2@sokensdigital.com', first_name='Marketing')
+        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+
+        self.outsider = User.objects.create(email='dev4@sokensdigital.com', first_name='Dev')
+        self.outsider.firestore_role = 'DEVELOPPEUR'
+
+        self.client_marketing = APIClient()
+        self.client_marketing.force_authenticate(user=self.marketing_user)
+
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+        # The data migration (0006_seed_page_sections) already seeds one row
+        # per (page, section_key) — update it rather than creating a
+        # duplicate, since that pair is unique-constrained.
+        self.hero = PageSection.objects.get(page='ACCUEIL', section_key='hero')
+        self.hero.title = 'Titre initial'
+        self.hero.items = [{'value': '150+', 'label': 'Projets livrés'}]
+        self.hero.save(update_fields=['title', 'items'])
+
+    def test_marketing_can_list_sections_for_a_page(self):
+        response = self.client_marketing.get('/api/v1/marketing/cms/page-sections/?page=ACCUEIL')
+        self.assertEqual(response.status_code, 200)
+        # 8 sections seeded by the data migration (0006_seed_page_sections),
+        # unpaginated (see PageSectionViewSet docstring).
+        self.assertEqual(len(response.json()), 8)
+
+    def test_outsider_forbidden(self):
+        response = self.client_outsider.get('/api/v1/marketing/cms/page-sections/?page=ACCUEIL')
+        self.assertEqual(response.status_code, 403)
+
+    def test_marketing_can_edit_section_content(self):
+        response = self.client_marketing.patch(
+            f'/api/v1/marketing/cms/page-sections/{self.hero.id}/',
+            {'title': 'Nouveau titre', 'items': [{'value': '200+', 'label': 'Projets livrés'}]},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.hero.refresh_from_db()
+        self.assertEqual(self.hero.title, 'Nouveau titre')
+        self.assertEqual(self.hero.items[0]['value'], '200+')
+
+    def test_page_and_section_key_are_read_only(self):
+        response = self.client_marketing.patch(
+            f'/api/v1/marketing/cms/page-sections/{self.hero.id}/',
+            {'page': 'EXPERTISE', 'section_key': 'cta'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.hero.refresh_from_db()
+        self.assertEqual(self.hero.page, 'ACCUEIL')
+        self.assertEqual(self.hero.section_key, 'hero')
+
+    def test_put_not_allowed(self):
+        response = self.client_marketing.put(
+            f'/api/v1/marketing/cms/page-sections/{self.hero.id}/', {'title': 'X'}, format='json',
+        )
+        self.assertEqual(response.status_code, 405)
+
+    def test_public_endpoint_returns_only_active_sections_for_requested_page(self):
+        PageSection.objects.filter(page='ACCUEIL', section_key='cta').update(is_active=False)
+        anon = APIClient()
+        response = anon.get('/api/v1/public/cms/page-sections/?page=ACCUEIL')
+        self.assertEqual(response.status_code, 200)
+        keys = [row['section_key'] for row in response.json()]
+        self.assertIn('hero', keys)
+        self.assertNotIn('cta', keys)
+
+    def test_public_endpoint_requires_page_param(self):
+        anon = APIClient()
+        response = anon.get('/api/v1/public/cms/page-sections/')
+        self.assertEqual(response.json(), [])
+
+    def test_public_endpoint_hides_id_and_is_active(self):
+        anon = APIClient()
+        body = anon.get('/api/v1/public/cms/page-sections/?page=ACCUEIL').json()
+        self.assertNotIn('id', body[0])
+        self.assertNotIn('is_active', body[0])

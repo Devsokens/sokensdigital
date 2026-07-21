@@ -8,20 +8,23 @@ import { Team } from "@/components/sections/team";
 import { PartnerLogos } from "@/components/sections/partner-logos";
 import { BlogInsights } from "@/components/sections/blog-insights";
 import { Cta } from "@/components/sections/cta";
+import { getPageSections, findSection } from "@/lib/api/public";
 
-export default function Home() {
+export default async function Home() {
+  const sections = await getPageSections("ACCUEIL");
+
   return (
     <>
       <SiteHeader />
       <main className="flex-1">
-        <Hero />
-        <Services />
-        <RecentProjects />
-        <Testimonials />
-        <Team />
-        <PartnerLogos />
-        <BlogInsights />
-        <Cta />
+        <Hero section={findSection(sections, "hero")} />
+        <Services section={findSection(sections, "services")} />
+        <RecentProjects section={findSection(sections, "recent_projects")} />
+        <Testimonials section={findSection(sections, "testimonials")} />
+        <Team section={findSection(sections, "team")} />
+        <PartnerLogos section={findSection(sections, "partner_logos")} />
+        <BlogInsights section={findSection(sections, "blog_insights")} />
+        <Cta section={findSection(sections, "cta")} />
       </main>
       <SiteFooter />
     </>

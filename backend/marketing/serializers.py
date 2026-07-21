@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from core.models import User
 from core.serializers import UserBriefSerializer
-from marketing.models import BlogPost, Lead, Quote, QuoteLine, SocialPost
+from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, SocialPost
 
 
 class LeadPublicCreateSerializer(serializers.ModelSerializer):
@@ -138,6 +138,33 @@ class QuoteSerializer(serializers.ModelSerializer):
                 QuoteLine.objects.create(quote=instance, **line_data)
         instance.refresh_from_db()
         return instance
+
+
+class PageSectionSerializer(serializers.ModelSerializer):
+    """Admin shape — Responsable Marketing/Super-Admin. `page`/`section_key`
+    are read-only: the set of sections is fixed by the real page template,
+    only their content is editable (see PageSection docstring)."""
+
+    class Meta:
+        model = PageSection
+        fields = [
+            'id', 'page', 'section_key', 'order', 'is_active', 'kicker', 'title',
+            'subtitle', 'cta_label', 'cta_link', 'cta_secondary_label',
+            'cta_secondary_link', 'items', 'created_at',
+        ]
+        read_only_fields = ['page', 'section_key', 'order']
+
+
+class PageSectionPublicSerializer(serializers.ModelSerializer):
+    """What the public site vitrine reads — no id/is_active, and the view's
+    queryset already filters to is_active=True only."""
+
+    class Meta:
+        model = PageSection
+        fields = [
+            'section_key', 'kicker', 'title', 'subtitle', 'cta_label', 'cta_link',
+            'cta_secondary_label', 'cta_secondary_link', 'items',
+        ]
 
 
 class QuoteTrackSerializer(serializers.ModelSerializer):

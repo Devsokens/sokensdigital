@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { PROJECTS } from "@/lib/projects/projects";
 import { ProjectMedia } from "@/components/projects/project-media";
+import type { PageSection } from "@/lib/api/types";
 
 const CAROUSEL_SLUGS = [
   "nova-finance-dashboard",
@@ -18,9 +19,11 @@ const CAROUSEL_PROJECTS = CAROUSEL_SLUGS.map(
   (slug) => PROJECTS.find((p) => p.slug === slug)!
 );
 
-export function RecentProjects() {
+export function RecentProjects({ section }: { section?: PageSection | null }) {
   const [index, setIndex] = useState(0);
   const project = CAROUSEL_PROJECTS[index];
+  const kicker = section?.kicker || "Réalisations";
+  const title = section?.title || "Projects récents";
 
   const goTo = (delta: number) => {
     setIndex((prev) => (prev + delta + CAROUSEL_PROJECTS.length) % CAROUSEL_PROJECTS.length);
@@ -32,10 +35,10 @@ export function RecentProjects() {
         <div className="mb-6 flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold tracking-[0.15em] text-primary uppercase">
-              Réalisations
+              {kicker}
             </span>
             <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-              Projects récents
+              {title}
             </h2>
           </div>
         </div>

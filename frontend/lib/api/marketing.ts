@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api/client";
-import type { BlogPost, Lead, MarketingDashboard, Paginated, Quote, SocialPost } from "@/lib/api/types";
+import type { BlogPost, Lead, MarketingDashboard, PageSection, Paginated, Quote, SitePage, SocialPost } from "@/lib/api/types";
 
 export function listLeads() {
   return apiFetch<Paginated<Lead>>("/api/v1/marketing/leads/");
@@ -136,4 +136,27 @@ export function sendQuote(id: string) {
 
 export function cloneQuote(id: string) {
   return apiFetch<Quote>(`/api/v1/marketing/quotes/${id}/clone/`, { method: "POST" });
+}
+
+export function listPageSections(page: SitePage) {
+  return apiFetch<PageSection[]>(`/api/v1/marketing/cms/page-sections/?page=${page}`);
+}
+
+export interface PageSectionInput {
+  is_active?: boolean;
+  kicker?: string;
+  title?: string;
+  subtitle?: string;
+  cta_label?: string;
+  cta_link?: string;
+  cta_secondary_label?: string;
+  cta_secondary_link?: string;
+  items?: Record<string, unknown>[];
+}
+
+export function updatePageSection(id: string, data: PageSectionInput) {
+  return apiFetch<PageSection>(`/api/v1/marketing/cms/page-sections/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
 }

@@ -4,9 +4,11 @@ from rest_framework.routers import DefaultRouter
 from marketing.views import (
     BlogPostViewSet,
     LeadViewSet,
+    PageSectionViewSet,
     PublicBlogDetailView,
     PublicBlogListView,
     PublicLeadCreateView,
+    PublicPageSectionListView,
     PublicQuoteTrackView,
     QuoteViewSet,
     SocialPostViewSet,
@@ -16,6 +18,7 @@ from marketing.views import (
 router = DefaultRouter()
 router.register('leads', LeadViewSet, basename='lead')
 router.register('cms/blog', BlogPostViewSet, basename='blog-post')
+router.register('cms/page-sections', PageSectionViewSet, basename='page-section')
 router.register('social-posts', SocialPostViewSet, basename='social-post')
 router.register('quotes', QuoteViewSet, basename='quote')
 
@@ -27,5 +30,6 @@ public_urlpatterns = [
     path('leads/', PublicLeadCreateView.as_view(), name='public-lead-create'),
     path('cms/blog/', PublicBlogListView.as_view(), name='public-blog-list'),
     path('cms/blog/<slug:slug>/', PublicBlogDetailView.as_view(), name='public-blog-detail'),
+    path('cms/page-sections/', PublicPageSectionListView.as_view(), name='public-page-sections'),
     path('quotes/track/<uuid:tracking_token>/', PublicQuoteTrackView.as_view(), name='public-quote-track'),
 ]

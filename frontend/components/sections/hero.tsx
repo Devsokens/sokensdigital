@@ -5,8 +5,13 @@ import { ChevronDown, Diamond } from "lucide-react";
 import { motion, useScroll, useTransform } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { HeroBackground } from "@/components/sections/hero-background";
+import type { PageSection } from "@/lib/api/types";
 
-const STATS = [
+const DEFAULT_KICKER = "L'innovation de demain, aujourd'hui";
+const DEFAULT_TITLE = "Excellence Digitale sur Mesure";
+const DEFAULT_DESCRIPTION =
+  "Nous transformons vos visions en solutions technologiques haute performance. Logiciels critiques, applications cloud et infrastructures sécurisées.";
+const DEFAULT_STATS = [
   { value: "150+", label: "Projets livrés" },
   { value: "50+", label: "Clients satisfaits" },
   { value: "10 ans", label: "D'expertise" },
@@ -31,7 +36,7 @@ const item = {
   },
 };
 
-export function Hero() {
+export function Hero({ section }: { section?: PageSection | null }) {
   const sectionRef = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -40,6 +45,17 @@ export function Hero() {
   const glowY = useTransform(scrollYProgress, [0, 1], ["0%", "35%"]);
   const contentOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
   const contentY = useTransform(scrollYProgress, [0, 1], ["0%", "12%"]);
+
+  const kicker = section?.kicker || DEFAULT_KICKER;
+  const title = section?.title || DEFAULT_TITLE;
+  const description = section?.subtitle || DEFAULT_DESCRIPTION;
+  const ctaLabel = section?.cta_label || "Démarrer un Projet";
+  const ctaLink = section?.cta_link || "/demarrer-un-projet";
+  const ctaSecondaryLabel = section?.cta_secondary_label || "Voir nos expertises";
+  const ctaSecondaryLink = section?.cta_secondary_link || "#expertise";
+  const stats = section?.items?.length
+    ? (section.items as { value: string; label: string }[])
+    : DEFAULT_STATS;
 
   return (
     <section ref={sectionRef} className="relative overflow-hidden">
@@ -63,23 +79,21 @@ export function Hero() {
           className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-1.5 text-[11px] font-medium tracking-[0.15em] text-primary uppercase sm:text-xs"
         >
           <Diamond className="size-2.5 fill-primary" />
-          L&apos;innovation de demain, aujourd&apos;hui
+          {kicker}
         </motion.div>
 
         <motion.h1
           variants={item}
           className="mx-auto max-w-2xl text-4xl leading-[1.1] font-semibold tracking-tight text-foreground sm:max-w-none sm:text-5xl md:text-6xl"
         >
-          Excellence Digitale sur Mesure
+          {title}
         </motion.h1>
 
         <motion.p
           variants={item}
           className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg"
         >
-          Nous transformons vos visions en solutions technologiques haute
-          performance. Logiciels critiques, applications cloud et
-          infrastructures sécurisées.
+          {description}
         </motion.p>
 
         <motion.div
@@ -87,15 +101,15 @@ export function Hero() {
           className="pointer-events-auto mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row"
         >
           <Button
-            render={<a href="/demarrer-un-projet">Démarrer un Projet</a>}
+            render={<a href={ctaLink}>{ctaLabel}</a>}
             nativeButton={false}
             size="lg"
             className="h-12 w-full rounded-full bg-primary px-7 text-sm font-semibold text-primary-foreground hover:bg-primary/90 sm:w-auto"
           />
           <Button
             render={
-              <a href="#expertise">
-                Voir nos expertises
+              <a href={ctaSecondaryLink}>
+                {ctaSecondaryLabel}
                 <span aria-hidden>→</span>
               </a>
             }
@@ -119,7 +133,7 @@ export function Hero() {
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] as const }}
           className="mx-auto grid max-w-5xl grid-cols-3 px-4 py-10 sm:px-6 lg:px-8"
         >
-          {STATS.map((stat, i) => (
+          {stats.map((stat, i) => (
             <motion.div
               key={stat.label}
               initial={{ opacity: 0, y: 16 }}
