@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.permissions import has_role
-from core.storage import upload_image
+from core.storage import upload_image, upload_video
 from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, ShowcaseProject, SocialPost
 from marketing.ratelimit import get_client_ip, is_rate_limited
 from marketing.serializers import (
@@ -176,6 +176,32 @@ class ImageUploadView(APIView):
             return Response({'detail': 'Aucun fichier fourni.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             url = upload_image(file, folder='page-sections')
+        except ValidationError as exc:
+            return Response({'detail': exc.message}, status=status.HTTP_400_BAD_REQUEST)
+        except RuntimeError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({'url': url}, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(
+    tags=['Marketing & Commercial'],
+    summary='Upload a video (showcase project demo clip) for the site CMS',
+    description='Responsable Marketing/Super-Admin only. Uploads to Supabase Storage '
+    '(core.storage) and returns its public URL — meant to be pasted into a '
+    "ShowcaseProject's video_src, not a standalone model. 25 Mo max.",
+    request={'multipart/form-data': {'type': 'object', 'properties': {'file': {'type': 'string', 'format': 'binary'}}}},
+    responses={201: {'type': 'object', 'properties': {'url': {'type': 'string'}}}},
+)
+class VideoUploadView(APIView):
+    permission_classes = [IsMarketing]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'detail': 'Aucun fichier fourni.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            url = upload_video(file, folder='showcase-projects')
         except ValidationError as exc:
             return Response({'detail': exc.message}, status=status.HTTP_400_BAD_REQUEST)
         except RuntimeError as exc:

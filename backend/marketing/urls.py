@@ -16,6 +16,7 @@ from marketing.views import (
     QuoteViewSet,
     ShowcaseProjectViewSet,
     SocialPostViewSet,
+    VideoUploadView,
     marketing_dashboard,
 )
 
@@ -30,6 +31,7 @@ router.register('quotes', QuoteViewSet, basename='quote')
 urlpatterns = [
     path('dashboard/', marketing_dashboard, name='marketing-dashboard'),
     path('cms/upload-image/', ImageUploadView.as_view(), name='upload-image'),
+    path('cms/upload-video/', VideoUploadView.as_view(), name='upload-video'),
 ] + router.urls
 
 public_urlpatterns = [

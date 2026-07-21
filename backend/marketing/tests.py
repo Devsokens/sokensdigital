@@ -734,3 +734,55 @@ class ImageUploadViewTests(APITestCase):
             '/api/v1/marketing/cms/upload-image/', {'file': self.image_file()}, format='multipart',
         )
         self.assertEqual(response.status_code, 502)
+
+
+class VideoUploadViewTests(APITestCase):
+    def setUp(self):
+        self.marketing_user = User.objects.create(email='uploadvidmkt@sokensdigital.com', first_name='Marketing')
+        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        self.outsider = User.objects.create(email='uploadviddev@sokensdigital.com', first_name='Dev')
+        self.outsider.firestore_role = 'DEVELOPPEUR'
+
+        self.client_marketing = APIClient()
+        self.client_marketing.force_authenticate(user=self.marketing_user)
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def video_file(self, content_type='video/mp4', name='demo.mp4', size=100):
+        return SimpleUploadedFile(name, b'\x00' * size, content_type=content_type)
+
+    @patch('core.storage._bucket_ensured', False)
+    @patch.dict('os.environ', {'SUPABASE_URL': 'https://test-project.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'test-key'})
+    @patch('core.storage.requests.post')
+    def test_marketing_can_upload_video(self, mock_post):
+        mock_post.side_effect = [
+            Mock(status_code=200, text='{}'),
+            Mock(status_code=200, text='{}'),
+        ]
+        response = self.client_marketing.post(
+            '/api/v1/marketing/cms/upload-video/', {'file': self.video_file()}, format='multipart',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.json()['url'].startswith('https://test-project.supabase.co/storage/v1/object/public/site-content/showcase-projects/'))
+
+    def test_outsider_forbidden(self):
+        response = self.client_outsider.post(
+            '/api/v1/marketing/cms/upload-video/', {'file': self.video_file()}, format='multipart',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_image_content_type_rejected(self):
+        response = self.client_marketing.post(
+            '/api/v1/marketing/cms/upload-video/',
+            {'file': self.video_file(content_type='image/png', name='logo.png')},
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_oversized_file_rejected(self):
+        response = self.client_marketing.post(
+            '/api/v1/marketing/cms/upload-video/',
+            {'file': self.video_file(size=26 * 1024 * 1024)},
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 400)

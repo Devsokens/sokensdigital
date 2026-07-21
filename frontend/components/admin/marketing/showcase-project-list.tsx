@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Diamond, ExternalLink, LayoutGrid, List, Loader2, Plus, Trash2, X } from "lucide-react";
+import { Diamond, ExternalLink, LayoutGrid, List, Loader2, Plus, Trash2, Video, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,8 @@ import {
   RemoveItemButton,
   AddItemButton,
 } from "@/components/admin/marketing/page-section-editor";
+import { ApiError } from "@/lib/api/client";
+import { uploadVideo } from "@/lib/api/upload";
 import {
   listShowcaseProjects,
   createShowcaseProject,
@@ -55,6 +57,47 @@ const EMPTY: ShowcaseProjectInput = {
 
 function initials(name: string) {
   return name.trim().split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2) || "?";
+}
+
+function VideoUploadField({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      onChange(await uploadVideo(file));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Échec de l'upload.");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.06] px-2.5 py-1.5 text-xs text-muted-foreground ring-1 ring-white/10 transition-colors hover:bg-white/10"
+      >
+        {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Video className="size-3.5" />}
+        {value ? "Remplacer la vidéo" : "Ajouter une vidéo"}
+      </button>
+      {value && (
+        <button type="button" onClick={() => onChange("")} aria-label="Retirer la vidéo" className="text-muted-foreground transition-colors hover:text-destructive">
+          <X className="size-3.5" />
+        </button>
+      )}
+      <input ref={inputRef} type="file" accept="video/mp4,video/webm,video/quicktime" onChange={handleFile} className="hidden" />
+      {error && <p className="text-[0.6rem] text-destructive">{error}</p>}
+    </div>
+  );
 }
 
 export function ShowcaseProjectList() {
@@ -383,10 +426,21 @@ function ShowcaseProjectForm({ project, onSaved }: { project?: ShowcaseProject; 
 
   const technologies = technologiesText.split(",").map((t) => t.trim()).filter(Boolean);
   const solutionPoints = solutionPointsText.split("\n").map((p) => p.trim()).filter(Boolean);
+  const hasCoverMedia = Boolean(form.video_src) || (form.images ?? []).length > 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    const missing: string[] = [];
+    if (!form.title.trim()) missing.push("Titre");
+    if (!form.category.trim()) missing.push("Catégorie");
+    if (!form.sector.trim()) missing.push("Secteur");
+    if (!form.type.trim()) missing.push("Type");
+    if (missing.length > 0) {
+      setError(`Champs requis manquants : ${missing.join(", ")}.`);
+      return;
+    }
 
     const payload: ShowcaseProjectInput = {
       ...form,
@@ -402,8 +456,15 @@ function ShowcaseProjectForm({ project, onSaved }: { project?: ShowcaseProject; 
         await createShowcaseProject(payload);
       }
       onSaved();
-    } catch {
-      setError("Impossible d'enregistrer le projet.");
+    } catch (err) {
+      if (err instanceof ApiError && err.body && typeof err.body === "object") {
+        const fieldErrors = Object.entries(err.body as Record<string, unknown>)
+          .map(([field, msgs]) => `${field} : ${Array.isArray(msgs) ? msgs.join(" ") : String(msgs)}`)
+          .join(" — ");
+        setError(fieldErrors || "Impossible d'enregistrer le projet.");
+      } else {
+        setError("Impossible d'enregistrer le projet.");
+      }
     } finally {
       setSaving(false);
     }
@@ -419,6 +480,24 @@ function ShowcaseProjectForm({ project, onSaved }: { project?: ShowcaseProject; 
 
       {/* Admin-only meta — no public equivalent to reproduce */}
       <div className="flex flex-wrap items-center gap-4 rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 py-2.5">
+        <label className="flex items-center gap-1.5 text-sm text-neutral-700">
+          Secteur
+          <input
+            value={form.sector}
+            onChange={(e) => set("sector", e.target.value)}
+            placeholder="Fintech"
+            className="w-28 rounded-md border border-neutral-200 px-2 py-1 text-sm"
+          />
+        </label>
+        <label className="flex items-center gap-1.5 text-sm text-neutral-700">
+          Type
+          <input
+            value={form.type}
+            onChange={(e) => set("type", e.target.value)}
+            placeholder="Web App"
+            className="w-28 rounded-md border border-neutral-200 px-2 py-1 text-sm"
+          />
+        </label>
         <label className="flex items-center gap-1.5 text-sm text-neutral-700">
           <input type="checkbox" checked={form.featured ?? false} onChange={(e) => set("featured", e.target.checked)} />
           Featured
@@ -453,10 +532,24 @@ function ShowcaseProjectForm({ project, onSaved }: { project?: ShowcaseProject; 
 
       {/* Faithful reproduction of /projects/[slug], directly editable */}
       <div className="rounded-2xl bg-[#0a0e13] p-5 sm:p-8">
-        {/* Hero banner */}
+        {/* Hero banner — mirrors what's uploaded below: video first, else the first image, else the plain icon */}
         <div className="relative flex aspect-[21/9] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_25%_30%,color-mix(in_oklch,var(--primary),transparent_75%),transparent_60%),linear-gradient(135deg,oklch(0.16_0.02_235),oklch(0.06_0.01_240))]">
-          <div className="absolute inset-0 [background-image:linear-gradient(color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px),linear-gradient(90deg,color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px)] [background-size:32px_32px]" />
-          <SectionIcon name={form.visual_icon || "shield-check"} className="relative size-16 text-primary/30 sm:size-24" />
+          {!hasCoverMedia && (
+            <div className="absolute inset-0 [background-image:linear-gradient(color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px),linear-gradient(90deg,color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px)] [background-size:32px_32px]" />
+          )}
+          {form.video_src ? (
+            <video src={form.video_src} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" />
+          ) : (form.images ?? []).length > 0 ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={(form.images ?? [])[0]} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          ) : null}
+          {hasCoverMedia ? (
+            <span className="absolute top-3 left-3 flex size-9 items-center justify-center rounded-lg bg-black/50 text-primary">
+              <SectionIcon name={form.visual_icon || "shield-check"} className="size-4.5" />
+            </span>
+          ) : (
+            <SectionIcon name={form.visual_icon || "shield-check"} className="relative size-16 text-primary/30 sm:size-24" />
+          )}
           <div className="absolute right-3 bottom-3">
             <IconPicker value={form.visual_icon ?? ""} onChange={(v) => set("visual_icon", v)} />
           </div>
@@ -522,10 +615,12 @@ function ShowcaseProjectForm({ project, onSaved }: { project?: ShowcaseProject; 
             <p className="mt-1 text-[0.65rem] text-muted-foreground/60">
               Scènes animées utilisées tant qu&apos;aucune image/vidéo réelle n&apos;est ajoutée.
             </p>
-            <EditableInput
-              value={form.video_src ?? ""} onChange={(v) => set("video_src", v)}
-              className="mt-2 block w-full text-xs text-muted-foreground" placeholder="URL vidéo (prioritaire sur les images)"
-            />
+            <div className="mt-3">
+              <VideoUploadField value={form.video_src ?? ""} onChange={(url) => set("video_src", url)} />
+              <p className="mt-1 text-[0.65rem] text-muted-foreground/60">
+                La vidéo est prioritaire sur les images, dans la couverture ci-dessus comme sur le carrousel public.
+              </p>
+            </div>
           </div>
 
           <aside className="h-fit rounded-2xl border border-white/10 bg-card/60 p-5">
