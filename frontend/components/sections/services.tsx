@@ -1,34 +1,22 @@
-import {
-  LayoutGrid,
-  Globe,
-  Smartphone,
-  MonitorCog,
-  Workflow,
-  TrendingUp,
-  type LucideIcon,
-} from "lucide-react";
 import type { PageSection } from "@/lib/api/types";
+import { SectionIcon } from "@/components/dynamic-icon";
 
 type Service = {
-  icon: LucideIcon;
+  icon: string;
   title: string;
   description: string;
-};
-
-const ICONS: Record<string, LucideIcon> = {
-  LayoutGrid, Globe, Smartphone, MonitorCog, Workflow, TrendingUp,
 };
 
 const DEFAULT_TITLE = "Ingénierie de Précision";
 const DEFAULT_SUBTITLE =
   "Notre arsenal technologique est conçu pour répondre aux défis les plus complexes de l'industrie numérique.";
 const DEFAULT_SERVICES: Service[] = [
-  { icon: LayoutGrid, title: "Solutions sur Mesure", description: "Architecture logicielle robuste conçue spécifiquement pour vos processus métier uniques." },
-  { icon: Globe, title: "App Web", description: "Expériences web immersives et évolutives avec React, Next.js et architectures Cloud." },
-  { icon: Smartphone, title: "App Mobile", description: "Développement iOS & Android natif et cross-platform axé sur la performance et l'UX." },
-  { icon: MonitorCog, title: "Logiciels", description: "Applications bureau et systèmes embarqués pour des performances sans compromis." },
-  { icon: Workflow, title: "Digitalisation", description: "Optimisation de vos flux de travail et automatisation intelligente de vos services." },
-  { icon: TrendingUp, title: "Amélioration", description: "Audit, refactorisation et accélération de vos infrastructures technologiques existantes." },
+  { icon: "layout-grid", title: "Solutions sur Mesure", description: "Architecture logicielle robuste conçue spécifiquement pour vos processus métier uniques." },
+  { icon: "globe", title: "App Web", description: "Expériences web immersives et évolutives avec React, Next.js et architectures Cloud." },
+  { icon: "smartphone", title: "App Mobile", description: "Développement iOS & Android natif et cross-platform axé sur la performance et l'UX." },
+  { icon: "monitor-cog", title: "Logiciels", description: "Applications bureau et systèmes embarqués pour des performances sans compromis." },
+  { icon: "workflow", title: "Digitalisation", description: "Optimisation de vos flux de travail et automatisation intelligente de vos services." },
+  { icon: "trending-up", title: "Amélioration", description: "Audit, refactorisation et accélération de vos infrastructures technologiques existantes." },
 ];
 
 export function Services({ section }: { section?: PageSection | null }) {
@@ -37,11 +25,7 @@ export function Services({ section }: { section?: PageSection | null }) {
   const ctaLabel = section?.cta_label || "Explorer tous les services";
   const ctaLink = section?.cta_link || "/expertise";
   const services: Service[] = section?.items?.length
-    ? (section.items as { icon: string; title: string; description: string }[]).map((item) => ({
-        icon: ICONS[item.icon] ?? LayoutGrid,
-        title: item.title,
-        description: item.description,
-      }))
+    ? (section.items as { icon: string; title: string; description: string }[])
     : DEFAULT_SERVICES;
 
   return (
@@ -65,13 +49,13 @@ export function Services({ section }: { section?: PageSection | null }) {
       </div>
 
       <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {services.map((service) => (
+        {services.map((service, index) => (
           <div
-            key={service.title}
+            key={index}
             className="group rounded-2xl border border-white/10 bg-card/60 p-6 transition-colors hover:border-primary/30 hover:bg-card"
           >
             <div className="mb-4 inline-flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <service.icon className="size-5" />
+              <SectionIcon name={service.icon} className="size-5" />
             </div>
             <h3 className="text-base font-semibold text-foreground">
               {service.title}

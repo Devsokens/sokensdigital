@@ -4,25 +4,17 @@ import { useEffect, useState } from "react";
 import {
   Check,
   Diamond,
-  Globe,
-  LayoutGrid,
   Loader2,
   Mail,
-  MonitorCog,
   Plus,
-  Smartphone,
   Sparkles,
   Trash2,
-  TrendingUp,
-  Workflow,
   X,
-  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listPageSections, updatePageSection, type PageSectionInput } from "@/lib/api/marketing";
 import type { PageSection, SectionKey, SitePage } from "@/lib/api/types";
-
-const ICONS: Record<string, LucideIcon> = { LayoutGrid, Globe, Smartphone, MonitorCog, Workflow, TrendingUp };
+import { IconPicker, SectionIcon } from "@/components/admin/marketing/icon-picker";
 
 function initials(name: string) {
   return name.replace("Dr. ", "").split(" ").map((p) => p[0]).join("").slice(0, 2);
@@ -315,7 +307,7 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-1.5 text-[11px] font-medium tracking-[0.15em] text-primary uppercase">
             <Diamond className="size-2.5 fill-primary" />
             {editing ? (
-              <EditableInput value={field(data, "kicker")} onChange={(v) => setForm((p) => ({ ...p, kicker: v }))} className="w-56 text-center" placeholder="Kicker" />
+              <EditableInput value={field(data, "kicker")} onChange={(v) => setForm((p) => ({ ...p, kicker: v }))} className="w-80 text-center" placeholder="Kicker" />
             ) : data.kicker}
           </div>
           {editing ? (
@@ -332,21 +324,21 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
             <div className="flex flex-col items-center gap-1">
               <span className="rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground">
                 {editing ? (
-                  <EditableInput value={field(data, "cta_label")} onChange={(v) => setForm((p) => ({ ...p, cta_label: v }))} className="w-32 bg-white/10 text-center text-primary-foreground ring-primary-foreground/30" placeholder="Bouton" />
+                  <EditableInput value={field(data, "cta_label")} onChange={(v) => setForm((p) => ({ ...p, cta_label: v }))} className="w-52 bg-white/10 text-center text-primary-foreground ring-primary-foreground/30" placeholder="Bouton" />
                 ) : data.cta_label}
               </span>
               {editing && (
-                <EditableInput value={field(data, "cta_link")} onChange={(v) => setForm((p) => ({ ...p, cta_link: v }))} className="w-40 text-center text-[0.65rem] text-muted-foreground" placeholder="/lien" />
+                <EditableInput value={field(data, "cta_link")} onChange={(v) => setForm((p) => ({ ...p, cta_link: v }))} className="w-52 text-center text-[0.65rem] text-muted-foreground" placeholder="/lien" />
               )}
             </div>
             <div className="flex flex-col items-center gap-1">
               <span className="rounded-full border border-white/15 px-6 py-2.5 text-sm font-semibold text-foreground">
                 {editing ? (
-                  <EditableInput value={field(data, "cta_secondary_label")} onChange={(v) => setForm((p) => ({ ...p, cta_secondary_label: v }))} className="w-32 text-center" placeholder="Bouton secondaire" />
+                  <EditableInput value={field(data, "cta_secondary_label")} onChange={(v) => setForm((p) => ({ ...p, cta_secondary_label: v }))} className="w-52 text-center" placeholder="Bouton secondaire" />
                 ) : `${data.cta_secondary_label} →`}
               </span>
               {editing && (
-                <EditableInput value={field(data, "cta_secondary_link")} onChange={(v) => setForm((p) => ({ ...p, cta_secondary_link: v }))} className="w-40 text-center text-[0.65rem] text-muted-foreground" placeholder="#lien" />
+                <EditableInput value={field(data, "cta_secondary_link")} onChange={(v) => setForm((p) => ({ ...p, cta_secondary_link: v }))} className="w-52 text-center text-[0.65rem] text-muted-foreground" placeholder="#lien" />
               )}
             </div>
           </div>
@@ -397,26 +389,27 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1">
               {editing ? (
-                <EditableInput value={field(data, "cta_label")} onChange={(v) => setForm((p) => ({ ...p, cta_label: v }))} className="w-44 text-right text-sm font-medium text-primary" placeholder="Lien CTA" />
+                <EditableInput value={field(data, "cta_label")} onChange={(v) => setForm((p) => ({ ...p, cta_label: v }))} className="w-64 text-right text-sm font-medium text-primary" placeholder="Lien CTA" />
               ) : (
                 <span className="text-sm font-medium text-primary">{data.cta_label} →</span>
               )}
               {editing && (
-                <EditableInput value={field(data, "cta_link")} onChange={(v) => setForm((p) => ({ ...p, cta_link: v }))} className="w-44 text-right text-[0.65rem] text-muted-foreground" placeholder="/lien" />
+                <EditableInput value={field(data, "cta_link")} onChange={(v) => setForm((p) => ({ ...p, cta_link: v }))} className="w-64 text-right text-[0.65rem] text-muted-foreground" placeholder="/lien" />
               )}
             </div>
           </div>
           <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {services.map((s, index) => {
-              const Icon = ICONS[s.icon] ?? LayoutGrid;
               return (
                 <div key={index} className="group relative rounded-2xl border border-white/10 bg-card/60 p-5">
                   {editing && <RemoveItemButton onClick={() => removeItem(index)} />}
                   <div className="mb-3 inline-flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <Icon className="size-4.5" />
+                    <SectionIcon name={s.icon} className="size-4.5" />
                   </div>
                   {editing && (
-                    <EditableInput value={s.icon} onChange={(v) => updateItem(index, "icon", v)} className="mb-2 block w-full text-[0.65rem] text-muted-foreground" placeholder="Nom icône (Globe...)" />
+                    <div className="mb-2">
+                      <IconPicker value={s.icon} onChange={(v) => updateItem(index, "icon", v)} />
+                    </div>
                   )}
                   {editing ? (
                     <EditableInput value={s.title} onChange={(v) => updateItem(index, "title", v)} className="w-full text-sm font-semibold text-foreground" placeholder="Titre" />
@@ -431,7 +424,7 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
                 </div>
               );
             })}
-            {editing && <AddItemButton label="Ajouter un service" onClick={() => addItem({ icon: "LayoutGrid", title: "", description: "" })} />}
+            {editing && <AddItemButton label="Ajouter un service" onClick={() => addItem({ icon: "layout-grid", title: "", description: "" })} />}
           </div>
         </div>
       );
@@ -576,12 +569,12 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
           )}
           <div className="flex shrink-0 flex-col items-end gap-1">
             {editing ? (
-              <EditableInput value={field(data, "cta_label")} onChange={(v) => setForm((p) => ({ ...p, cta_label: v }))} className="w-36 text-right text-sm font-medium text-primary" placeholder="Lien CTA" />
+              <EditableInput value={field(data, "cta_label")} onChange={(v) => setForm((p) => ({ ...p, cta_label: v }))} className="w-56 text-right text-sm font-medium text-primary" placeholder="Lien CTA" />
             ) : (
               <span className="text-sm font-medium text-primary">{data.cta_label} →</span>
             )}
             {editing && (
-              <EditableInput value={field(data, "cta_link")} onChange={(v) => setForm((p) => ({ ...p, cta_link: v }))} className="w-36 text-right text-[0.65rem] text-muted-foreground" placeholder="/lien" />
+              <EditableInput value={field(data, "cta_link")} onChange={(v) => setForm((p) => ({ ...p, cta_link: v }))} className="w-56 text-right text-[0.65rem] text-muted-foreground" placeholder="/lien" />
             )}
           </div>
         </div>
@@ -603,11 +596,11 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
           <div className="mt-6 flex flex-col items-center gap-1">
             <span className="inline-block rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground">
               {editing ? (
-                <EditableInput value={field(data, "cta_label")} onChange={(v) => setForm((p) => ({ ...p, cta_label: v }))} className="w-32 bg-white/10 text-center text-primary-foreground ring-primary-foreground/30" placeholder="Bouton" />
+                <EditableInput value={field(data, "cta_label")} onChange={(v) => setForm((p) => ({ ...p, cta_label: v }))} className="w-52 bg-white/10 text-center text-primary-foreground ring-primary-foreground/30" placeholder="Bouton" />
               ) : `${data.cta_label} →`}
             </span>
             {editing && (
-              <EditableInput value={field(data, "cta_link")} onChange={(v) => setForm((p) => ({ ...p, cta_link: v }))} className="w-40 text-center text-[0.65rem] text-muted-foreground" placeholder="/lien" />
+              <EditableInput value={field(data, "cta_link")} onChange={(v) => setForm((p) => ({ ...p, cta_link: v }))} className="w-52 text-center text-[0.65rem] text-muted-foreground" placeholder="/lien" />
             )}
           </div>
         </div>
