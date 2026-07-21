@@ -24,11 +24,9 @@ import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
-  CalendarClock,
   Clock,
   Loader2,
   Sparkles,
-  Users,
 } from "lucide-react";
 import { getMarketingDashboard } from "@/lib/api/marketing";
 import type { MarketingDashboard, UserBrief } from "@/lib/api/types";
@@ -123,20 +121,6 @@ function BentoCard({
   );
 }
 
-function TrendPill({ percent, positive }: { percent: number | null; positive: boolean }) {
-  const Icon = positive ? ArrowUpRight : ArrowDownRight;
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={`flex size-5 items-center justify-center rounded-full ${positive ? "bg-emerald-500" : "bg-rose-500"} text-white`}>
-        <Icon className="size-3" />
-      </span>
-      <span className="text-xs text-neutral-500">
-        {percent === null ? "Nouveau" : `${percent > 0 ? "+" : ""}${percent}%`} cette semaine
-      </span>
-    </span>
-  );
-}
-
 function DualRing({ outer, inner }: { outer: number; inner: number }) {
   const data = [
     { name: "outer", value: Math.min(100, Math.max(0, outer)), fill: "#06b6d4" },
@@ -191,23 +175,48 @@ function MiniBarChart({ data }: { data: { label: string; value: number }[] }) {
   );
 }
 
-function AvatarStack({ users }: { users: UserBrief[] }) {
+function AvatarStack({ users, size = "size-9" }: { users: UserBrief[]; size?: string }) {
   return (
     <div className="flex -space-x-2.5">
       {users.slice(0, 4).map((user) => (
         <span
           key={user.id}
-          className="flex size-9 items-center justify-center rounded-full border-2 border-white bg-primary/10 text-xs font-semibold text-primary"
+          className={`flex ${size} items-center justify-center rounded-full border-2 border-white bg-primary/10 text-xs font-semibold text-primary`}
         >
           {initials(user)}
         </span>
       ))}
       {users.length > 4 && (
-        <span className="flex size-9 items-center justify-center rounded-full border-2 border-white bg-neutral-100 text-xs font-medium text-neutral-500">
+        <span className={`flex ${size} items-center justify-center rounded-full border-2 border-white bg-neutral-100 text-xs font-medium text-neutral-500`}>
           +{users.length - 4}
         </span>
       )}
     </div>
+  );
+}
+
+function SideBlock({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col divide-y divide-neutral-100 overflow-hidden rounded-3xl border border-neutral-100 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      {children}
+    </div>
+  );
+}
+
+function SideRow({
+  href, label, sublabel, children,
+}: { href: string; label: string; sublabel?: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} className="group flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-neutral-50">
+      <div className="min-w-0">
+        <p className="text-xs text-neutral-500">{label}</p>
+        {sublabel && <p className="truncate text-[0.7rem] text-neutral-400">{sublabel}</p>}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {children}
+        <ArrowRight className="size-3.5 -translate-x-1 text-neutral-300 opacity-0 transition-all group-hover:translate-x-0 group-hover:text-neutral-400 group-hover:opacity-100" />
+      </div>
+    </Link>
   );
 }
 
@@ -328,182 +337,145 @@ export function MarketingDashboardView() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 items-start">
-        {/* 1. Leads au total */}
-        <BentoCard href="/admin/marketing/leads">
-          <p className="mb-4 text-sm text-neutral-500">Leads au total<br /><span className="text-xs text-neutral-400">Toutes sources confondues</span></p>
-          <p className="text-5xl font-semibold tracking-tight text-neutral-900">{data.total_leads}</p>
-          <p className="mt-3 text-xs text-neutral-400">
-            <span className="font-medium text-neutral-600">{totalActiveLeads}</span> actifs dans le pipeline ·{" "}
-            <span className="font-medium text-neutral-600">{data.leads_by_status["CONVERTI"] ?? 0}</span> convertis
-          </p>
-        </BentoCard>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3 items-start">
+        {/* Grandes cartes visuelles */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:col-span-2 items-start">
+          {/* Conversion & Devis acceptés — dual ring */}
+          <BentoCard href="/admin/marketing/devis">
+            <div className="mb-4 flex gap-6">
+              <div>
+                <p className="text-2xl font-semibold text-neutral-900">{data.conversion_rate}%</p>
+                <p className="text-xs text-neutral-500">Conversion leads</p>
+              </div>
+              <div>
+                <p className="text-2xl font-semibold text-neutral-900">{data.quote_acceptance_rate}%</p>
+                <p className="text-xs text-neutral-500">Devis acceptés</p>
+              </div>
+            </div>
+            <div className="relative mx-auto size-28">
+              <DualRing outer={Number(data.conversion_rate)} inner={Number(data.quote_acceptance_rate)} />
+            </div>
+            <div className="mt-3 flex justify-center gap-4 text-[0.7rem] text-neutral-500">
+              <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-[#06b6d4]" /> Conversion</span>
+              <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-[#8b5cf6]" /> Devis acceptés</span>
+            </div>
+          </BentoCard>
 
-        {/* 2. Nouveaux leads cette semaine */}
-        <BentoCard href="/admin/marketing/leads">
-          <p className="mb-4 text-sm text-neutral-500">Nouveaux leads<br />7 derniers jours</p>
-          <p className="text-5xl font-semibold tracking-tight text-neutral-900">{leadsThisWeek}</p>
-          <div className="mt-3">
-            {weeklyTrend ? (
-              <TrendPill percent={weeklyTrend.percent} positive={weeklyTrend.positive} />
+          {/* Publications par plateforme */}
+          <BentoCard href="/admin/marketing/plan-editorial">
+            <p className="text-sm text-neutral-500">Publications publiées</p>
+            <p className="mb-1 text-4xl font-semibold tracking-tight text-neutral-900">
+              {platformBars.reduce((a, b) => a + b.value, 0)}
+            </p>
+            <p className="mb-2 text-xs text-neutral-400">Toutes plateformes confondues</p>
+            {platformBars.length > 0 ? (
+              <MiniBarChart data={platformBars} />
             ) : (
-              <span className="text-xs text-neutral-400">Historique insuffisant</span>
+              <p className="flex h-[72px] items-center gap-1.5 text-xs text-neutral-400">
+                <Sparkles className="size-3.5" /> Rien de publié pour l&apos;instant
+              </p>
             )}
-          </div>
-        </BentoCard>
+          </BentoCard>
 
-        {/* 3. Prochaine publication programmée */}
-        <BentoCard href="/admin/marketing/plan-editorial">
-          {data.next_scheduled_post ? (
-            <>
+          {/* Répartition des leads par statut */}
+          <BentoCard href="/admin/marketing/leads">
+            <p className="mb-4 text-sm text-neutral-500">Leads par statut<br /><span className="text-xs text-neutral-400">{totalActiveLeads} actifs sur {data.total_leads}</span></p>
+            {statusRows.length > 0 ? (
+              <ProgressRows segments={statusRows} />
+            ) : (
+              <EmptyState label="Leads" text="Aucun lead pour l'instant" />
+            )}
+          </BentoCard>
+
+          {/* Pipeline pondéré */}
+          <BentoCard href="/admin/marketing/leads">
+            <p className="mb-4 text-sm text-neutral-500">Pipeline pondéré</p>
+            <div className="relative mx-auto size-28">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadialBarChart
+                  data={[{ value: pipelinePercent }]} startAngle={90} endAngle={-270}
+                  innerRadius="72%" outerRadius="100%" barSize={10}
+                >
+                  <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
+                  <RadialBar dataKey="value" cornerRadius={10} fill="#f59e0b" background={{ fill: "#fffbeb" }} />
+                </RadialBarChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-lg font-semibold text-neutral-900">{formatCurrency(data.weighted_pipeline)} €</span>
+              </div>
+            </div>
+            <div className="mt-3 flex justify-center gap-4 text-[0.7rem] text-neutral-500">
+              <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-amber-500" /> Pondéré: {formatCurrency(data.weighted_pipeline)} €</span>
+              <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-amber-100" /> Estimé: {formatCurrency(data.active_pipeline_total_estimated)} €</span>
+            </div>
+          </BentoCard>
+        </div>
+
+        {/* Bloc regroupant les petites cartes, sur le côté */}
+        <SideBlock>
+          <SideRow href="/admin/marketing/leads" label="Leads au total" sublabel={`${totalActiveLeads} actifs · ${data.leads_by_status["CONVERTI"] ?? 0} convertis`}>
+            <span className="text-2xl font-semibold text-neutral-900">{data.total_leads}</span>
+          </SideRow>
+
+          <SideRow href="/admin/marketing/leads" label="Nouveaux leads" sublabel="7 derniers jours">
+            <span className="text-2xl font-semibold text-neutral-900">{leadsThisWeek}</span>
+            {weeklyTrend && (
+              <span className={`flex size-5 items-center justify-center rounded-full ${weeklyTrend.positive ? "bg-emerald-500" : "bg-rose-500"} text-white`}>
+                {weeklyTrend.positive ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+              </span>
+            )}
+          </SideRow>
+
+          <SideRow
+            href="/admin/marketing/plan-editorial"
+            label={data.next_scheduled_post ? "Prochaine publication" : "Plan éditorial"}
+            sublabel={data.next_scheduled_post ? formatLongDate(data.next_scheduled_post.scheduled_at) : "Aucune publication programmée"}
+          >
+            {data.next_scheduled_post ? (
               <span
-                className="mb-4 inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-medium text-white"
+                className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium text-white"
                 style={{ background: PLATFORM_BADGE_COLORS[data.next_scheduled_post.platform] ?? "#525252" }}
               >
                 {PLATFORM_LABELS[data.next_scheduled_post.platform] ?? data.next_scheduled_post.platform}
               </span>
-              <p className="text-xs text-neutral-400">Prochaine publication</p>
-              <p className="mt-1 mb-4 text-lg leading-snug font-semibold text-neutral-900">
-                {data.next_scheduled_post.title}
-              </p>
-              <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-                <CalendarClock className="size-3.5" /> {formatLongDate(data.next_scheduled_post.scheduled_at)}
-              </span>
-            </>
-          ) : (
-            <EmptyState label="Plan éditorial" text="Aucune publication programmée" />
-          )}
-        </BentoCard>
-
-        {/* 4. Conversion & Devis acceptés — dual ring */}
-        <BentoCard href="/admin/marketing/devis">
-          <div className="mb-4 flex gap-6">
-            <div>
-              <p className="text-2xl font-semibold text-neutral-900">{data.conversion_rate}%</p>
-              <p className="text-xs text-neutral-500">Conversion leads</p>
-            </div>
-            <div>
-              <p className="text-2xl font-semibold text-neutral-900">{data.quote_acceptance_rate}%</p>
-              <p className="text-xs text-neutral-500">Devis acceptés</p>
-            </div>
-          </div>
-          <div className="relative mx-auto size-28">
-            <DualRing outer={Number(data.conversion_rate)} inner={Number(data.quote_acceptance_rate)} />
-          </div>
-          <div className="mt-3 flex justify-center gap-4 text-[0.7rem] text-neutral-500">
-            <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-[#06b6d4]" /> Conversion</span>
-            <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-[#8b5cf6]" /> Devis acceptés</span>
-          </div>
-        </BentoCard>
-
-        {/* 5. Devis proche de l'expiration */}
-        <BentoCard href="/admin/marketing/devis">
-          {data.next_expiring_quote ? (
-            <>
-              <span className="mb-4 inline-flex w-fit items-center rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-600">
-                Devis {data.next_expiring_quote.quote_number}
-              </span>
-              <p className="mb-4 text-lg leading-snug font-semibold text-neutral-900">
-                {data.next_expiring_quote.client_name}
-              </p>
-              <div className="mt-auto flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-xs text-neutral-400">
-                  <Clock className="size-3.5" /> Expire le {formatLongDate(data.next_expiring_quote.expiry_date)}
-                </span>
-                {data.next_expiring_quote.created_by && (
-                  <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                    {initials(data.next_expiring_quote.created_by)}
-                  </span>
-                )}
-              </div>
-            </>
-          ) : (
-            <EmptyState label="Devis" text="Aucun devis envoyé en attente d'expiration" />
-          )}
-        </BentoCard>
-
-        {/* 6. Publications par plateforme */}
-        <BentoCard href="/admin/marketing/plan-editorial">
-          <p className="text-sm text-neutral-500">Publications publiées</p>
-          <p className="mb-1 text-4xl font-semibold tracking-tight text-neutral-900">
-            {platformBars.reduce((a, b) => a + b.value, 0)}
-          </p>
-          <p className="mb-2 text-xs text-neutral-400">Toutes plateformes confondues</p>
-          {platformBars.length > 0 ? (
-            <MiniBarChart data={platformBars} />
-          ) : (
-            <p className="flex h-[72px] items-center gap-1.5 text-xs text-neutral-400">
-              <Sparkles className="size-3.5" /> Rien de publié pour l&apos;instant
-            </p>
-          )}
-        </BentoCard>
-
-        {/* 7. Équipe active */}
-        <BentoCard href="/admin/rh/utilisateurs">
-          <p className="mb-4 text-sm text-neutral-500">Équipe active</p>
-          {data.active_team.length > 0 ? (
-            <>
-              <AvatarStack users={data.active_team} />
-              <p className="mt-4 text-xs text-neutral-400">
-                <Users className="mr-1 inline size-3.5" />
-                {data.active_team.length} membre{data.active_team.length > 1 ? "s" : ""} sur des leads/publications
-              </p>
-            </>
-          ) : (
-            <EmptyState label="Équipe" text="Personne n'est encore assigné" />
-          )}
-        </BentoCard>
-
-        {/* 8. Répartition des leads par statut */}
-        <BentoCard href="/admin/marketing/leads">
-          <p className="mb-4 text-sm text-neutral-500">Leads par statut<br /><span className="text-xs text-neutral-400">{totalActiveLeads} actifs sur {data.total_leads}</span></p>
-          {statusRows.length > 0 ? (
-            <ProgressRows segments={statusRows} />
-          ) : (
-            <EmptyState label="Leads" text="Aucun lead pour l'instant" />
-          )}
-        </BentoCard>
-
-        {/* 9. Devis envoyés cette semaine */}
-        <BentoCard href="/admin/marketing/devis">
-          <p className="mb-1 text-sm text-neutral-500">Devis envoyés<br /><span className="text-xs text-neutral-400">Cette semaine</span></p>
-          <p className="mt-3 text-4xl font-semibold tracking-tight text-neutral-900">
-            {formatCurrency(data.quotes_sent_this_week.amount)} <span className="text-lg text-neutral-400">€</span>
-          </p>
-          <div className="mt-3">
-            {data.quotes_sent_this_week.trend_percent !== null ? (
-              <TrendPill
-                percent={data.quotes_sent_this_week.trend_percent}
-                positive={data.quotes_sent_this_week.trend_percent >= 0}
-              />
             ) : (
-              <span className="text-xs text-neutral-400">Aucun devis la semaine précédente</span>
+              <Sparkles className="size-4 text-neutral-300" />
             )}
-          </div>
-        </BentoCard>
+          </SideRow>
 
-        {/* 10. Pipeline utilisé */}
-        <BentoCard href="/admin/marketing/leads">
-          <p className="mb-4 text-sm text-neutral-500">Pipeline pondéré</p>
-          <div className="relative mx-auto size-28">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadialBarChart
-                data={[{ value: pipelinePercent }]} startAngle={90} endAngle={-270}
-                innerRadius="72%" outerRadius="100%" barSize={10}
-              >
-                <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-                <RadialBar dataKey="value" cornerRadius={10} fill="#f59e0b" background={{ fill: "#fffbeb" }} />
-              </RadialBarChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-lg font-semibold text-neutral-900">{formatCurrency(data.weighted_pipeline)} €</span>
-            </div>
-          </div>
-          <div className="mt-3 flex justify-center gap-4 text-[0.7rem] text-neutral-500">
-            <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-amber-500" /> Pondéré: {formatCurrency(data.weighted_pipeline)} €</span>
-            <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-amber-100" /> Estimé: {formatCurrency(data.active_pipeline_total_estimated)} €</span>
-          </div>
-        </BentoCard>
+          <SideRow
+            href="/admin/marketing/devis"
+            label={data.next_expiring_quote ? `Devis ${data.next_expiring_quote.quote_number}` : "Devis"}
+            sublabel={data.next_expiring_quote ? data.next_expiring_quote.client_name : "Aucun devis en attente d'expiration"}
+          >
+            {data.next_expiring_quote ? (
+              <span className="flex items-center gap-1.5 text-xs text-neutral-500">
+                <Clock className="size-3.5" /> {formatLongDate(data.next_expiring_quote.expiry_date)}
+              </span>
+            ) : (
+              <Sparkles className="size-4 text-neutral-300" />
+            )}
+          </SideRow>
+
+          <SideRow
+            href="/admin/rh/utilisateurs"
+            label="Équipe active"
+            sublabel={data.active_team.length > 0 ? `${data.active_team.length} membre${data.active_team.length > 1 ? "s" : ""} sur des leads/publications` : "Personne n'est encore assigné"}
+          >
+            {data.active_team.length > 0 && <AvatarStack users={data.active_team} size="size-7" />}
+          </SideRow>
+
+          <SideRow href="/admin/marketing/devis" label="Devis envoyés" sublabel="Cette semaine">
+            <span className="text-lg font-semibold text-neutral-900">
+              {formatCurrency(data.quotes_sent_this_week.amount)} €
+            </span>
+            {data.quotes_sent_this_week.trend_percent !== null && (
+              <span className={`flex size-5 items-center justify-center rounded-full ${data.quotes_sent_this_week.trend_percent >= 0 ? "bg-emerald-500" : "bg-rose-500"} text-white`}>
+                {data.quotes_sent_this_week.trend_percent >= 0 ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+              </span>
+            )}
+          </SideRow>
+        </SideBlock>
       </div>
 
       <ChartCard title="Nouveaux leads" subtitle="30 derniers jours">
