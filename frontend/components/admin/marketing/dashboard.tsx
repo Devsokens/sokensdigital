@@ -329,7 +329,17 @@ export function MarketingDashboardView() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 items-start">
-        {/* 1. Nouveaux leads cette semaine */}
+        {/* 1. Leads au total */}
+        <BentoCard href="/admin/marketing/leads">
+          <p className="mb-4 text-sm text-neutral-500">Leads au total<br /><span className="text-xs text-neutral-400">Toutes sources confondues</span></p>
+          <p className="text-5xl font-semibold tracking-tight text-neutral-900">{data.total_leads}</p>
+          <p className="mt-3 text-xs text-neutral-400">
+            <span className="font-medium text-neutral-600">{totalActiveLeads}</span> actifs dans le pipeline ·{" "}
+            <span className="font-medium text-neutral-600">{data.leads_by_status["CONVERTI"] ?? 0}</span> convertis
+          </p>
+        </BentoCard>
+
+        {/* 2. Nouveaux leads cette semaine */}
         <BentoCard href="/admin/marketing/leads">
           <p className="mb-4 text-sm text-neutral-500">Nouveaux leads<br />7 derniers jours</p>
           <p className="text-5xl font-semibold tracking-tight text-neutral-900">{leadsThisWeek}</p>
@@ -342,7 +352,7 @@ export function MarketingDashboardView() {
           </div>
         </BentoCard>
 
-        {/* 2. Prochaine publication programmée */}
+        {/* 3. Prochaine publication programmée */}
         <BentoCard href="/admin/marketing/plan-editorial">
           {data.next_scheduled_post ? (
             <>
@@ -365,7 +375,7 @@ export function MarketingDashboardView() {
           )}
         </BentoCard>
 
-        {/* 3. Conversion & Devis acceptés — dual ring */}
+        {/* 4. Conversion & Devis acceptés — dual ring */}
         <BentoCard href="/admin/marketing/devis">
           <div className="mb-4 flex gap-6">
             <div>
@@ -386,7 +396,7 @@ export function MarketingDashboardView() {
           </div>
         </BentoCard>
 
-        {/* 4. Devis proche de l'expiration */}
+        {/* 5. Devis proche de l'expiration */}
         <BentoCard href="/admin/marketing/devis">
           {data.next_expiring_quote ? (
             <>
@@ -412,7 +422,7 @@ export function MarketingDashboardView() {
           )}
         </BentoCard>
 
-        {/* 5. Publications par plateforme */}
+        {/* 6. Publications par plateforme */}
         <BentoCard href="/admin/marketing/plan-editorial">
           <p className="text-sm text-neutral-500">Publications publiées</p>
           <p className="mb-1 text-4xl font-semibold tracking-tight text-neutral-900">
@@ -428,7 +438,7 @@ export function MarketingDashboardView() {
           )}
         </BentoCard>
 
-        {/* 6. Équipe active */}
+        {/* 7. Équipe active */}
         <BentoCard href="/admin/rh/utilisateurs">
           <p className="mb-4 text-sm text-neutral-500">Équipe active</p>
           {data.active_team.length > 0 ? (
@@ -444,7 +454,7 @@ export function MarketingDashboardView() {
           )}
         </BentoCard>
 
-        {/* 7. Répartition des leads par statut */}
+        {/* 8. Répartition des leads par statut */}
         <BentoCard href="/admin/marketing/leads">
           <p className="mb-4 text-sm text-neutral-500">Leads par statut<br /><span className="text-xs text-neutral-400">{totalActiveLeads} actifs sur {data.total_leads}</span></p>
           {statusRows.length > 0 ? (
@@ -454,7 +464,7 @@ export function MarketingDashboardView() {
           )}
         </BentoCard>
 
-        {/* 8. Devis envoyés cette semaine */}
+        {/* 9. Devis envoyés cette semaine */}
         <BentoCard href="/admin/marketing/devis">
           <p className="mb-1 text-sm text-neutral-500">Devis envoyés<br /><span className="text-xs text-neutral-400">Cette semaine</span></p>
           <p className="mt-3 text-4xl font-semibold tracking-tight text-neutral-900">
@@ -472,7 +482,7 @@ export function MarketingDashboardView() {
           </div>
         </BentoCard>
 
-        {/* 9. Pipeline utilisé */}
+        {/* 10. Pipeline utilisé */}
         <BentoCard href="/admin/marketing/leads">
           <p className="mb-4 text-sm text-neutral-500">Pipeline pondéré</p>
           <div className="relative mx-auto size-28">
