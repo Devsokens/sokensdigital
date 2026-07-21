@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.db.models import Count
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import generics, permissions, status, viewsets
@@ -364,8 +365,10 @@ class PublicQuoteTrackView(generics.RetrieveAPIView):
         'properties': {
             'weighted_pipeline': {'type': 'string'},
             'total_leads': {'type': 'integer'},
+            'conversion_rate': {'type': 'string'},
             'leads_by_status': {'type': 'object'},
             'leads_by_source': {'type': 'object'},
+            'leads_over_time': {'type': 'array', 'items': {'type': 'object'}},
             'social_posts_by_status': {'type': 'object'},
             'published_social_posts_by_platform': {'type': 'object'},
         },
@@ -391,12 +394,31 @@ def marketing_dashboard(request):
         Decimal('0'),
     )
 
+    total_leads = leads.count()
+    converted_leads = leads.filter(status=Lead.Status.CONVERTI).count()
+    conversion_rate = (Decimal(converted_leads) / Decimal(total_leads) * 100) if total_leads else Decimal('0')
+
     leads_by_status = {
         row['status']: row['count'] for row in leads.values('status').annotate(count=Count('id')).order_by()
     }
     leads_by_source = {
         row['source']: row['count'] for row in leads.values('source').annotate(count=Count('id')).order_by()
     }
+
+    # Real data, not fabricated — daily count of leads actually created in
+    # the last 30 days, zero-filled so the frontend gets a continuous series
+    # for its line chart rather than sparse dates.
+    today = timezone.now().date()
+    window_start = today - timezone.timedelta(days=29)
+    counts_by_date = {
+        row['day']: row['count']
+        for row in leads.filter(created_at__date__gte=window_start)
+        .annotate(day=TruncDate('created_at')).values('day').annotate(count=Count('id')).order_by()
+    }
+    leads_over_time = [
+        {'date': (window_start + timezone.timedelta(days=offset)).isoformat(), 'count': counts_by_date.get(window_start + timezone.timedelta(days=offset), 0)}
+        for offset in range(30)
+    ]
 
     social_posts = SocialPost.objects.all()
     if not has_role(request.user, 'RESPONSABLE_MARKETING'):
@@ -412,9 +434,11 @@ def marketing_dashboard(request):
 
     return Response({
         'weighted_pipeline': str(weighted_pipeline),
-        'total_leads': leads.count(),
+        'total_leads': total_leads,
+        'conversion_rate': str(conversion_rate.quantize(Decimal('0.1'))),
         'leads_by_status': leads_by_status,
         'leads_by_source': leads_by_source,
+        'leads_over_time': leads_over_time,
         'social_posts_by_status': social_by_status,
         'published_social_posts_by_platform': social_by_platform,
     })

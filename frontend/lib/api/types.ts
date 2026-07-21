@@ -145,11 +145,18 @@ export interface Quote {
   created_at: string;
 }
 
+export interface LeadsOverTimePoint {
+  date: string;
+  count: number;
+}
+
 export interface MarketingDashboard {
   weighted_pipeline: string;
   total_leads: number;
+  conversion_rate: string;
   leads_by_status: Record<string, number>;
   leads_by_source: Record<string, number>;
+  leads_over_time: LeadsOverTimePoint[];
   social_posts_by_status: Record<string, number>;
   published_social_posts_by_platform: Record<string, number>;
 }

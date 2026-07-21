@@ -1,4 +1,5 @@
 from django.core.cache import cache
+from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
 from decimal import Decimal
@@ -343,6 +344,24 @@ class MarketingDashboardTests(APITestCase):
     def test_outsider_forbidden(self):
         response = self.client_outsider.get('/api/v1/marketing/dashboard/')
         self.assertEqual(response.status_code, 403)
+
+    def test_conversion_rate_computed(self):
+        Lead.objects.create(
+            first_name='Alan', last_name='Turing', email='alan@example.com', source='SITE_WEB',
+            status='CONVERTI', qualification_score=100, estimated_value=Decimal('5000'),
+        )
+        response = self.client_marketing.get('/api/v1/marketing/dashboard/')
+        # 1 converted out of 3 leads total = 33.3%
+        self.assertEqual(response.json()['conversion_rate'], '33.3')
+
+    def test_leads_over_time_is_30_day_zero_filled_series(self):
+        response = self.client_marketing.get('/api/v1/marketing/dashboard/')
+        series = response.json()['leads_over_time']
+        self.assertEqual(len(series), 30)
+        self.assertEqual(series[-1]['date'], timezone.now().date().isoformat())
+        # Both seed leads were created "today" by create() — should show up
+        # on the last day of the series.
+        self.assertEqual(series[-1]['count'], 2)
 
 
 class QuoteViewSetTests(APITestCase):
