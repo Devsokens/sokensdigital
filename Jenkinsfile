@@ -88,23 +88,27 @@ pipeline {
             junit allowEmptyResults: true, testResults: 'backend/reports/junit-*.xml'
 
             script {
-                if (fileExists('backend/htmlcov-technique/index.html')) {
-                    publishHTML(target: [
-                        reportDir: 'backend/htmlcov-technique',
-                        reportFiles: 'index.html',
-                        reportName: 'Couverture — Techniques',
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true
-                    ])
-                }
-                if (fileExists('backend/htmlcov-administration/index.html')) {
-                    publishHTML(target: [
-                        reportDir: 'backend/htmlcov-administration',
-                        reportFiles: 'index.html',
-                        reportName: 'Couverture — Administration',
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true
-                    ])
+                try {
+                    if (fileExists('backend/htmlcov-technique/index.html')) {
+                        publishHTML(target: [
+                            reportDir: 'backend/htmlcov-technique',
+                            reportFiles: 'index.html',
+                            reportName: 'Couverture — Techniques',
+                            keepAll: true,
+                            alwaysLinkToLastBuild: true
+                        ])
+                    }
+                    if (fileExists('backend/htmlcov-administration/index.html')) {
+                        publishHTML(target: [
+                            reportDir: 'backend/htmlcov-administration',
+                            reportFiles: 'index.html',
+                            reportName: 'Couverture — Administration',
+                            keepAll: true,
+                            alwaysLinkToLastBuild: true
+                        ])
+                    }
+                } catch (e) {
+                    echo "Note: publishHTML non disponible sur ce serveur Jenkins (plugin HTML Publisher non installé)."
                 }
             }
         }
