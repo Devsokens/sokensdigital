@@ -20,18 +20,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import {
-  ArrowDownRight,
-  ArrowRight,
-  ArrowUpRight,
-  CalendarClock,
-  Clock,
-  Loader2,
-  Sparkles,
-  Users,
-} from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, ArrowRight, Loader2, Sparkles } from "lucide-react";
 import { getMarketingDashboard } from "@/lib/api/marketing";
-import type { MarketingDashboard, UserBrief } from "@/lib/api/types";
+import type { MarketingDashboard } from "@/lib/api/types";
 
 const LEAD_STATUS_LABELS: Record<string, string> = {
   NOUVEAU: "Nouveau",
@@ -39,14 +30,6 @@ const LEAD_STATUS_LABELS: Record<string, string> = {
   PROPOSITION_EN_COURS: "Proposition en cours",
   PERDU: "Perdu",
   CONVERTI: "Converti",
-};
-
-const LEAD_STATUS_COLORS: Record<string, string> = {
-  NOUVEAU: "#6366f1",
-  QUALIFIE: "#06b6d4",
-  PROPOSITION_EN_COURS: "#f59e0b",
-  PERDU: "#e5e5e5",
-  CONVERTI: "#10b981",
 };
 
 const LEAD_SOURCE_LABELS: Record<string, string> = {
@@ -65,7 +48,7 @@ const SOCIAL_STATUS_LABELS: Record<string, string> = {
   CANCELLED: "Annulé",
 };
 
-const PLATFORM_LABELS: Record<string, string> = {
+const PLATFORM_SHORT_LABELS: Record<string, string> = {
   LINKEDIN: "LinkedIn",
   TWITTER: "X",
   FACEBOOK: "Facebook",
@@ -73,12 +56,10 @@ const PLATFORM_LABELS: Record<string, string> = {
   YOUTUBE: "YouTube",
 };
 
-const PLATFORM_BADGE_COLORS: Record<string, string> = {
-  LINKEDIN: "#0a66c2",
-  TWITTER: "#0f1419",
-  FACEBOOK: "#1877f2",
-  INSTAGRAM: "#d6249f",
-  YOUTUBE: "#ff0000",
+const ACTIVE_STATUS_COLORS: Record<string, string> = {
+  NOUVEAU: "#6366f1",
+  QUALIFIE: "#06b6d4",
+  PROPOSITION_EN_COURS: "#f59e0b",
 };
 
 const PALETTE = ["#06b6d4", "#6366f1", "#f59e0b", "#f43f5e", "#8b5cf6", "#10b981"];
@@ -91,14 +72,6 @@ function formatShortDate(iso: string) {
   return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit" }).format(new Date(iso));
 }
 
-function formatLongDate(iso: string) {
-  return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long" }).format(new Date(iso));
-}
-
-function initials(user: UserBrief) {
-  return `${user.first_name?.[0] ?? ""}${user.last_name?.[0] ?? ""}`.toUpperCase() || "?";
-}
-
 /** Real week-over-week comparison from the 30-day series — no fabricated
  * trend. Returns null when there isn't enough history yet to compare. */
 function computeWeeklyTrend(points: { count: number }[]) {
@@ -109,15 +82,18 @@ function computeWeeklyTrend(points: { count: number }[]) {
   return { percent: Math.round(((last7 - prev7) / prev7) * 100), positive: last7 >= prev7 };
 }
 
-function BentoCard({
-  href, className, children,
-}: { href: string; className?: string; children: React.ReactNode }) {
+function KpiCard({
+  href, eyebrow, children,
+}: { href: string; eyebrow: string; children: React.ReactNode }) {
   return (
     <Link
       href={href}
-      className={`group relative flex flex-col rounded-3xl border border-neutral-100 bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-neutral-200/60 ${className ?? ""}`}
+      className="group relative flex flex-col rounded-3xl border border-neutral-100 bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-neutral-200/60"
     >
-      <ArrowRight className="absolute top-6 right-6 size-3.5 -translate-x-1 text-neutral-300 opacity-0 transition-all group-hover:translate-x-0 group-hover:text-neutral-400 group-hover:opacity-100" />
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-sm text-neutral-500">{eyebrow}</p>
+        <ArrowRight className="size-3.5 -translate-x-1 text-neutral-300 opacity-0 transition-all group-hover:translate-x-0 group-hover:text-neutral-400 group-hover:opacity-100" />
+      </div>
       {children}
     </Link>
   );
@@ -126,7 +102,7 @@ function BentoCard({
 function TrendPill({ percent, positive }: { percent: number | null; positive: boolean }) {
   const Icon = positive ? ArrowUpRight : ArrowDownRight;
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className="inline-flex items-center gap-1">
       <span className={`flex size-5 items-center justify-center rounded-full ${positive ? "bg-emerald-500" : "bg-rose-500"} text-white`}>
         <Icon className="size-3" />
       </span>
@@ -137,21 +113,29 @@ function TrendPill({ percent, positive }: { percent: number | null; positive: bo
   );
 }
 
-function DualRing({ outer, inner }: { outer: number; inner: number }) {
-  const data = [
-    { name: "outer", value: Math.min(100, Math.max(0, outer)), fill: "#06b6d4" },
-    { name: "inner", value: Math.min(100, Math.max(0, inner)), fill: "#8b5cf6" },
-  ];
+function SegmentedBar({ segments }: { segments: { label: string; value: number; color: string }[] }) {
+  const total = segments.reduce((sum, s) => sum + s.value, 0);
+  if (total === 0) {
+    return <p className="text-xs text-neutral-400">Aucun lead actif dans le pipeline.</p>;
+  }
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <RadialBarChart
-        data={data} startAngle={90} endAngle={-270}
-        innerRadius="38%" outerRadius="100%" barSize={9} barGap={4}
-      >
-        <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-        <RadialBar dataKey="value" cornerRadius={9} background={{ fill: "#f5f5f5" }} />
-      </RadialBarChart>
-    </ResponsiveContainer>
+    <div>
+      <div className="flex h-2 w-full overflow-hidden rounded-full bg-neutral-100">
+        {segments.map((s) =>
+          s.value > 0 ? (
+            <div key={s.label} style={{ width: `${(s.value / total) * 100}%`, background: s.color }} />
+          ) : null
+        )}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5">
+        {segments.map((s) => (
+          <span key={s.label} className="flex items-center gap-1.5 text-[0.7rem] text-neutral-500">
+            <span className="size-1.5 rounded-full" style={{ background: s.color }} />
+            {s.label} <span className="font-medium text-neutral-700">{s.value}</span>
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -161,8 +145,12 @@ function ConversionGauge({ rate }: { rate: number }) {
     <div className="relative mx-auto size-24">
       <ResponsiveContainer width="100%" height="100%">
         <RadialBarChart
-          data={[{ value: clamped }]} startAngle={90} endAngle={-270}
-          innerRadius="72%" outerRadius="100%" barSize={9}
+          data={[{ value: clamped }]}
+          startAngle={90}
+          endAngle={-270}
+          innerRadius="72%"
+          outerRadius="100%"
+          barSize={9}
         >
           <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
           <RadialBar dataKey="value" cornerRadius={9} fill="#06b6d4" background={{ fill: "#f0f9ff" }} />
@@ -188,47 +176,6 @@ function MiniBarChart({ data }: { data: { label: string; value: number }[] }) {
         </Bar>
       </BarChart>
     </ResponsiveContainer>
-  );
-}
-
-function AvatarStack({ users }: { users: UserBrief[] }) {
-  return (
-    <div className="flex -space-x-2.5">
-      {users.slice(0, 4).map((user) => (
-        <span
-          key={user.id}
-          className="flex size-9 items-center justify-center rounded-full border-2 border-white bg-primary/10 text-xs font-semibold text-primary"
-        >
-          {initials(user)}
-        </span>
-      ))}
-      {users.length > 4 && (
-        <span className="flex size-9 items-center justify-center rounded-full border-2 border-white bg-neutral-100 text-xs font-medium text-neutral-500">
-          +{users.length - 4}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function ProgressRows({ segments }: { segments: { label: string; value: number; total: number; color: string }[] }) {
-  return (
-    <div className="space-y-3">
-      {segments.map((s) => {
-        const percent = s.total > 0 ? Math.round((s.value / s.total) * 100) : 0;
-        return (
-          <div key={s.label}>
-            <div className="mb-1 flex items-center justify-between text-xs">
-              <span className="text-neutral-500">{s.label}</span>
-              <span className="font-medium text-neutral-900">{percent}%</span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
-              <div className="h-full rounded-full" style={{ width: `${percent}%`, background: s.color }} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
   );
 }
 
@@ -305,119 +252,54 @@ export function MarketingDashboardView() {
   }
 
   const trendData = data.leads_over_time.map((point) => ({ ...point, label: formatShortDate(point.date) }));
+  const publishedTotal = Object.values(data.published_social_posts_by_platform).reduce((a, b) => a + b, 0);
   const weeklyTrend = computeWeeklyTrend(data.leads_over_time);
-  const leadsThisWeek = data.leads_over_time.slice(-7).reduce((a, p) => a + p.count, 0);
+  const convertedLeads = data.leads_by_status["CONVERTI"] ?? 0;
   const platformBars = Object.entries(data.published_social_posts_by_platform).map(([key, value]) => ({
-    label: PLATFORM_LABELS[key] ?? key,
+    label: PLATFORM_SHORT_LABELS[key] ?? key,
     value,
   }));
-  const totalActiveLeads = ["NOUVEAU", "QUALIFIE", "PROPOSITION_EN_COURS"].reduce(
-    (sum, key) => sum + (data.leads_by_status[key] ?? 0), 0,
-  );
-  const statusRows = Object.entries(data.leads_by_status)
-    .filter(([, value]) => value > 0)
-    .map(([key, value]) => ({
-      label: LEAD_STATUS_LABELS[key] ?? key,
-      value,
-      total: data.total_leads,
-      color: LEAD_STATUS_COLORS[key] ?? "#06b6d4",
-    }));
-  const pipelinePercent = Number(data.active_pipeline_total_estimated) > 0
-    ? Math.round((Number(data.weighted_pipeline) / Number(data.active_pipeline_total_estimated)) * 100)
-    : 0;
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 items-start">
-        {/* 1. Nouveaux leads cette semaine */}
-        <BentoCard href="/admin/marketing/leads">
-          <p className="mb-4 text-sm text-neutral-500">Nouveaux leads<br />7 derniers jours</p>
-          <p className="text-5xl font-semibold tracking-tight text-neutral-900">{leadsThisWeek}</p>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 items-start">
+        <KpiCard href="/admin/marketing/leads" eyebrow="Pipeline pondéré">
+          <p className="text-4xl font-semibold tracking-tight text-neutral-900">
+            {formatCurrency(data.weighted_pipeline)} <span className="text-xl text-neutral-400">€</span>
+          </p>
+          <p className="mt-1 mb-4 text-xs text-neutral-400">Valeur estimée × score de qualification</p>
+          <SegmentedBar
+            segments={Object.keys(ACTIVE_STATUS_COLORS).map((key) => ({
+              label: LEAD_STATUS_LABELS[key],
+              value: data.leads_by_status[key] ?? 0,
+              color: ACTIVE_STATUS_COLORS[key],
+            }))}
+          />
+        </KpiCard>
+
+        <KpiCard href="/admin/marketing/leads" eyebrow="Leads au total">
+          <p className="text-5xl font-semibold tracking-tight text-neutral-900">{data.total_leads}</p>
           <div className="mt-3">
             {weeklyTrend ? (
               <TrendPill percent={weeklyTrend.percent} positive={weeklyTrend.positive} />
             ) : (
-              <span className="text-xs text-neutral-400">Historique insuffisant</span>
+              <span className="text-xs text-neutral-400">Historique insuffisant pour une tendance</span>
             )}
           </div>
-        </BentoCard>
+        </KpiCard>
 
-        {/* 2. Prochaine publication programmée */}
-        <BentoCard href="/admin/marketing/plan-editorial">
-          {data.next_scheduled_post ? (
-            <>
-              <span
-                className="mb-4 inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-medium text-white"
-                style={{ background: PLATFORM_BADGE_COLORS[data.next_scheduled_post.platform] ?? "#525252" }}
-              >
-                {PLATFORM_LABELS[data.next_scheduled_post.platform] ?? data.next_scheduled_post.platform}
-              </span>
-              <p className="text-xs text-neutral-400">Prochaine publication</p>
-              <p className="mt-1 mb-4 text-lg leading-snug font-semibold text-neutral-900">
-                {data.next_scheduled_post.title}
-              </p>
-              <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-                <CalendarClock className="size-3.5" /> {formatLongDate(data.next_scheduled_post.scheduled_at)}
-              </span>
-            </>
-          ) : (
-            <EmptyState label="Plan éditorial" text="Aucune publication programmée" />
-          )}
-        </BentoCard>
-
-        {/* 3. Conversion & Devis acceptés — dual ring */}
-        <BentoCard href="/admin/marketing/devis">
-          <div className="mb-4 flex gap-6">
+        <KpiCard href="/admin/marketing/leads" eyebrow="Taux de conversion">
+          <div className="flex items-center gap-4">
+            <ConversionGauge rate={Number(data.conversion_rate)} />
             <div>
-              <p className="text-2xl font-semibold text-neutral-900">{data.conversion_rate}%</p>
-              <p className="text-xs text-neutral-500">Conversion leads</p>
-            </div>
-            <div>
-              <p className="text-2xl font-semibold text-neutral-900">{data.quote_acceptance_rate}%</p>
-              <p className="text-xs text-neutral-500">Devis acceptés</p>
+              <p className="text-2xl font-semibold text-neutral-900">{convertedLeads}</p>
+              <p className="text-xs text-neutral-400">convertis sur {data.total_leads} leads</p>
             </div>
           </div>
-          <div className="relative mx-auto size-28">
-            <DualRing outer={Number(data.conversion_rate)} inner={Number(data.quote_acceptance_rate)} />
-          </div>
-          <div className="mt-3 flex justify-center gap-4 text-[0.7rem] text-neutral-500">
-            <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-[#06b6d4]" /> Conversion</span>
-            <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-[#8b5cf6]" /> Devis acceptés</span>
-          </div>
-        </BentoCard>
+        </KpiCard>
 
-        {/* 4. Devis proche de l'expiration */}
-        <BentoCard href="/admin/marketing/devis">
-          {data.next_expiring_quote ? (
-            <>
-              <span className="mb-4 inline-flex w-fit items-center rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-600">
-                Devis {data.next_expiring_quote.quote_number}
-              </span>
-              <p className="mb-4 text-lg leading-snug font-semibold text-neutral-900">
-                {data.next_expiring_quote.client_name}
-              </p>
-              <div className="mt-auto flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-xs text-neutral-400">
-                  <Clock className="size-3.5" /> Expire le {formatLongDate(data.next_expiring_quote.expiry_date)}
-                </span>
-                {data.next_expiring_quote.created_by && (
-                  <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                    {initials(data.next_expiring_quote.created_by)}
-                  </span>
-                )}
-              </div>
-            </>
-          ) : (
-            <EmptyState label="Devis" text="Aucun devis envoyé en attente d'expiration" />
-          )}
-        </BentoCard>
-
-        {/* 5. Publications par plateforme */}
-        <BentoCard href="/admin/marketing/plan-editorial">
-          <p className="text-sm text-neutral-500">Publications publiées</p>
-          <p className="mb-1 text-4xl font-semibold tracking-tight text-neutral-900">
-            {platformBars.reduce((a, b) => a + b.value, 0)}
-          </p>
+        <KpiCard href="/admin/marketing/plan-editorial" eyebrow="Publications publiées">
+          <p className="mb-1 text-4xl font-semibold tracking-tight text-neutral-900">{publishedTotal}</p>
           <p className="mb-2 text-xs text-neutral-400">Toutes plateformes confondues</p>
           {platformBars.length > 0 ? (
             <MiniBarChart data={platformBars} />
@@ -426,74 +308,7 @@ export function MarketingDashboardView() {
               <Sparkles className="size-3.5" /> Rien de publié pour l&apos;instant
             </p>
           )}
-        </BentoCard>
-
-        {/* 6. Équipe active */}
-        <BentoCard href="/admin/rh/utilisateurs">
-          <p className="mb-4 text-sm text-neutral-500">Équipe active</p>
-          {data.active_team.length > 0 ? (
-            <>
-              <AvatarStack users={data.active_team} />
-              <p className="mt-4 text-xs text-neutral-400">
-                <Users className="mr-1 inline size-3.5" />
-                {data.active_team.length} membre{data.active_team.length > 1 ? "s" : ""} sur des leads/publications
-              </p>
-            </>
-          ) : (
-            <EmptyState label="Équipe" text="Personne n'est encore assigné" />
-          )}
-        </BentoCard>
-
-        {/* 7. Répartition des leads par statut */}
-        <BentoCard href="/admin/marketing/leads">
-          <p className="mb-4 text-sm text-neutral-500">Leads par statut<br /><span className="text-xs text-neutral-400">{totalActiveLeads} actifs sur {data.total_leads}</span></p>
-          {statusRows.length > 0 ? (
-            <ProgressRows segments={statusRows} />
-          ) : (
-            <EmptyState label="Leads" text="Aucun lead pour l'instant" />
-          )}
-        </BentoCard>
-
-        {/* 8. Devis envoyés cette semaine */}
-        <BentoCard href="/admin/marketing/devis">
-          <p className="mb-1 text-sm text-neutral-500">Devis envoyés<br /><span className="text-xs text-neutral-400">Cette semaine</span></p>
-          <p className="mt-3 text-4xl font-semibold tracking-tight text-neutral-900">
-            {formatCurrency(data.quotes_sent_this_week.amount)} <span className="text-lg text-neutral-400">€</span>
-          </p>
-          <div className="mt-3">
-            {data.quotes_sent_this_week.trend_percent !== null ? (
-              <TrendPill
-                percent={data.quotes_sent_this_week.trend_percent}
-                positive={data.quotes_sent_this_week.trend_percent >= 0}
-              />
-            ) : (
-              <span className="text-xs text-neutral-400">Aucun devis la semaine précédente</span>
-            )}
-          </div>
-        </BentoCard>
-
-        {/* 9. Pipeline utilisé */}
-        <BentoCard href="/admin/marketing/leads">
-          <p className="mb-4 text-sm text-neutral-500">Pipeline pondéré</p>
-          <div className="relative mx-auto size-28">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadialBarChart
-                data={[{ value: pipelinePercent }]} startAngle={90} endAngle={-270}
-                innerRadius="72%" outerRadius="100%" barSize={10}
-              >
-                <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-                <RadialBar dataKey="value" cornerRadius={10} fill="#f59e0b" background={{ fill: "#fffbeb" }} />
-              </RadialBarChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-lg font-semibold text-neutral-900">{formatCurrency(data.weighted_pipeline)} €</span>
-            </div>
-          </div>
-          <div className="mt-3 flex justify-center gap-4 text-[0.7rem] text-neutral-500">
-            <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-amber-500" /> Pondéré: {formatCurrency(data.weighted_pipeline)} €</span>
-            <span className="flex items-center gap-1"><span className="size-1.5 rounded-full bg-amber-100" /> Estimé: {formatCurrency(data.active_pipeline_total_estimated)} €</span>
-          </div>
-        </BentoCard>
+        </KpiCard>
       </div>
 
       <ChartCard title="Nouveaux leads" subtitle="30 derniers jours">
@@ -521,7 +336,10 @@ export function MarketingDashboardView() {
         </ResponsiveContainer>
       </ChartCard>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ChartCard title="Leads par statut" subtitle="Répartition du pipeline">
+          <DonutChart data={data.leads_by_status} labels={LEAD_STATUS_LABELS} />
+        </ChartCard>
         <ChartCard title="Leads par source" subtitle="D'où viennent les prospects">
           <DonutChart data={data.leads_by_source} labels={LEAD_SOURCE_LABELS} />
         </ChartCard>
@@ -529,23 +347,9 @@ export function MarketingDashboardView() {
           <DonutChart data={data.social_posts_by_status} labels={SOCIAL_STATUS_LABELS} />
         </ChartCard>
         <ChartCard title="Publications publiées par plateforme">
-          <DonutChart data={data.published_social_posts_by_platform} labels={PLATFORM_LABELS} />
+          <DonutChart data={data.published_social_posts_by_platform} />
         </ChartCard>
       </div>
     </div>
   );
 }
-
-function EmptyState({ label, text }: { label: string; text: string }) {
-  return (
-    <div className="flex flex-1 flex-col">
-      <span className="mb-4 inline-flex w-fit items-center rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-500">
-        {label}
-      </span>
-      <p className="flex flex-1 items-center gap-1.5 text-sm text-neutral-400">
-        <Sparkles className="size-3.5 shrink-0" /> {text}
-      </p>
-    </div>
-  );
-}
-

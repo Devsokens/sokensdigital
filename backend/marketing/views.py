@@ -9,9 +9,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.models import User
 from core.permissions import has_role
-from core.serializers import UserBriefSerializer
 from marketing.models import BlogPost, Lead, Quote, QuoteLine, SocialPost
 from marketing.ratelimit import get_client_ip, is_rate_limited
 from marketing.serializers import (
@@ -366,7 +364,6 @@ class PublicQuoteTrackView(generics.RetrieveAPIView):
         'type': 'object',
         'properties': {
             'weighted_pipeline': {'type': 'string'},
-            'active_pipeline_total_estimated': {'type': 'string'},
             'total_leads': {'type': 'integer'},
             'conversion_rate': {'type': 'string'},
             'leads_by_status': {'type': 'object'},
@@ -374,11 +371,6 @@ class PublicQuoteTrackView(generics.RetrieveAPIView):
             'leads_over_time': {'type': 'array', 'items': {'type': 'object'}},
             'social_posts_by_status': {'type': 'object'},
             'published_social_posts_by_platform': {'type': 'object'},
-            'next_scheduled_post': {'type': 'object', 'nullable': True},
-            'next_expiring_quote': {'type': 'object', 'nullable': True},
-            'quote_acceptance_rate': {'type': 'string'},
-            'quotes_sent_this_week': {'type': 'object'},
-            'active_team': {'type': 'array', 'items': {'type': 'object'}},
         },
     }},
 )
@@ -401,9 +393,6 @@ def marketing_dashboard(request):
         (lead.estimated_value * Decimal(lead.qualification_score) / Decimal(100) for lead in active_leads),
         Decimal('0'),
     )
-    # Un-weighted total — lets the frontend show "pondéré / estimé total"
-    # as a ring/gauge without guessing a denominator.
-    active_pipeline_total_estimated = sum((lead.estimated_value for lead in active_leads), Decimal('0'))
 
     total_leads = leads.count()
     converted_leads = leads.filter(status=Lead.Status.CONVERTI).count()
@@ -443,71 +432,8 @@ def marketing_dashboard(request):
         .values('platform').annotate(count=Count('id')).order_by()
     }
 
-    # Next post due to go out — real upcoming item, not a fabricated one.
-    upcoming_post = social_posts.filter(
-        status=SocialPost.Status.SCHEDULED, scheduled_at__isnull=False,
-    ).order_by('scheduled_at').first()
-    next_scheduled_post = None
-    if upcoming_post:
-        next_scheduled_post = {
-            'title': upcoming_post.title,
-            'platform': upcoming_post.platform,
-            'scheduled_at': upcoming_post.scheduled_at,
-        }
-
-    # Quotes: Marketing/Chef de Projet see everything (read collaboration),
-    # Commercial only their own — same scoping as QuoteViewSet.
-    if has_role(request.user, *MARKETING_ROLES, *CHEF_DE_PROJET_ROLES):
-        quotes = Quote.objects.select_related('lead', 'created_by')
-    else:
-        quotes = Quote.objects.filter(created_by=request.user).select_related('lead', 'created_by')
-
-    decided_quotes = quotes.filter(status__in=[Quote.Status.ACCEPTE, Quote.Status.REFUSE])
-    accepted_quotes = decided_quotes.filter(status=Quote.Status.ACCEPTE).count()
-    quote_acceptance_rate = (
-        Decimal(accepted_quotes) / Decimal(decided_quotes.count()) * 100 if decided_quotes.count() else Decimal('0')
-    )
-
-    next_expiring = quotes.filter(
-        status=Quote.Status.ENVOYE, expiry_date__isnull=False, expiry_date__gte=today,
-    ).order_by('expiry_date').first()
-    next_expiring_quote = None
-    if next_expiring:
-        if next_expiring.lead:
-            client_name = next_expiring.lead.company_name or f'{next_expiring.lead.first_name} {next_expiring.lead.last_name}'
-        else:
-            client_name = 'Client'
-        next_expiring_quote = {
-            'quote_number': next_expiring.quote_number,
-            'client_name': client_name,
-            'expiry_date': next_expiring.expiry_date,
-            'created_by': UserBriefSerializer(next_expiring.created_by).data if next_expiring.created_by else None,
-        }
-
-    # "Sent" isn't tracked with its own timestamp on Quote — issue_date
-    # (set at creation) is the closest real field to approximate it with.
-    sent_quotes = quotes.exclude(status=Quote.Status.BROUILLON)
-    this_week_sent = sent_quotes.filter(issue_date__gte=window_start + timezone.timedelta(days=23))
-    last_week_sent = sent_quotes.filter(
-        issue_date__gte=window_start + timezone.timedelta(days=16),
-        issue_date__lt=window_start + timezone.timedelta(days=23),
-    )
-    this_week_total = sum((q.total_ttc for q in this_week_sent), Decimal('0'))
-    last_week_total = sum((q.total_ttc for q in last_week_sent), Decimal('0'))
-    if last_week_total:
-        quotes_trend_percent = int(((this_week_total - last_week_total) / last_week_total) * 100)
-    else:
-        quotes_trend_percent = None if this_week_total == 0 else 100
-
-    # Distinct people actually touching Marketing/Commercial work right now
-    # (lead owners + post authors in scope) — not a fake "team" list.
-    team_ids = set(leads.exclude(assigned_to__isnull=True).values_list('assigned_to_id', flat=True))
-    team_ids |= set(social_posts.exclude(author__isnull=True).values_list('author_id', flat=True))
-    active_team = UserBriefSerializer(User.objects.filter(id__in=team_ids)[:6], many=True).data
-
     return Response({
         'weighted_pipeline': str(weighted_pipeline),
-        'active_pipeline_total_estimated': str(active_pipeline_total_estimated),
         'total_leads': total_leads,
         'conversion_rate': str(conversion_rate.quantize(Decimal('0.1'))),
         'leads_by_status': leads_by_status,
@@ -515,12 +441,4 @@ def marketing_dashboard(request):
         'leads_over_time': leads_over_time,
         'social_posts_by_status': social_by_status,
         'published_social_posts_by_platform': social_by_platform,
-        'next_scheduled_post': next_scheduled_post,
-        'next_expiring_quote': next_expiring_quote,
-        'quote_acceptance_rate': str(quote_acceptance_rate.quantize(Decimal('0.1'))),
-        'quotes_sent_this_week': {
-            'amount': str(this_week_total),
-            'trend_percent': quotes_trend_percent,
-        },
-        'active_team': active_team,
     })
