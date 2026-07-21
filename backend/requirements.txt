@@ -18,3 +18,4 @@ factory-boy
 weasyprint
 google-api-python-client
 google-auth
+flake8
