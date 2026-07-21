@@ -10,15 +10,21 @@ type Props = {
   images?: string[];
   videoSrc?: string;
   icon: string;
+  /** Fallback icon size when there's no real media yet — bigger for a
+   * full-width hero banner than for a small grid-card thumbnail. */
+  iconClassName?: string;
 };
 
-/** Small-card media (project grid, related projects, admin card view) —
- * video first, else the uploaded images auto-cycling with a soft
- * crossfade + gentle zoom-in, else the abstract icon-on-gradient
- * placeholder. Fills its `relative` parent (`absolute inset-0`). Plain
- * `object-cover` on purpose: unlike the big hero/tablet mockups, a
- * cropped thumbnail is the expected look for a grid card. */
-export function ProjectCardMedia({ images, videoSrc, icon }: Props) {
+/** Card/banner media (project grid, related projects, admin card view,
+ * detail page hero) — video first, else the uploaded images auto-cycling
+ * with a soft crossfade + gentle zoom-in, else the abstract
+ * icon-on-gradient placeholder. Fills its `relative` parent (`absolute
+ * inset-0`). Plain `object-cover` on purpose: unlike the tablet mockup,
+ * a cropped fill is the expected look here, not letterboxing. */
+export function ProjectCardMedia({
+  images, videoSrc, icon,
+  iconClassName = "relative size-10 text-primary/50 transition-transform duration-300 group-hover:scale-110",
+}: Props) {
   const hasImages = Boolean(images && images.length > 0);
   const [index, setIndex] = useState(0);
 
@@ -65,7 +71,7 @@ export function ProjectCardMedia({ images, videoSrc, icon }: Props) {
     >
       <div className="absolute inset-0 [background-image:linear-gradient(color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px),linear-gradient(90deg,color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px)] [background-size:28px_28px]" />
       <div className="flex h-full items-center justify-center">
-        <SectionIcon name={icon} className="relative size-10 text-primary/50 transition-transform duration-300 group-hover:scale-110" />
+        <SectionIcon name={icon} className={iconClassName} />
       </div>
     </div>
   );

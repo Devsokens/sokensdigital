@@ -64,6 +64,8 @@ export default async function ProjectDetailPage({
             title={project.title}
             description={project.description}
             projectUrl={project.projectUrl}
+            images={project.images}
+            videoSrc={project.videoSrc}
           />
 
           <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_18rem]">
