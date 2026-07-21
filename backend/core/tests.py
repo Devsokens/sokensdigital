@@ -264,3 +264,70 @@ class UserListViewTests(APITestCase):
         client.force_authenticate(user=self.outsider)
         response = client.get('/api/v1/users/')
         self.assertEqual(response.status_code, 403)
+
+
+class GlobalSearchTests(APITestCase):
+    def setUp(self):
+        from marketing.models import Lead
+        from projects.models import Project
+
+        self.marketing_user = User.objects.create(email='searchmkt@sokensdigital.com', first_name='Marketing')
+        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+
+        self.commercial_a = User.objects.create(email='searchcom-a@sokensdigital.com', first_name='CommercialA')
+        self.commercial_a.firestore_role = 'COMMERCIAL'
+
+        self.commercial_b = User.objects.create(email='searchcom-b@sokensdigital.com', first_name='CommercialB')
+        self.commercial_b.firestore_role = 'COMMERCIAL'
+
+        self.outsider = User.objects.create(email='searchdev@sokensdigital.com', first_name='Dev')
+        self.outsider.firestore_role = 'DEVELOPPEUR'
+
+        self.lead_a = Lead.objects.create(
+            first_name='Zelda', last_name='Fitzgerald', email='zelda@example.com',
+            source='SITE_WEB', assigned_to=self.commercial_a,
+        )
+        self.lead_b = Lead.objects.create(
+            first_name='Zelig', last_name='Smith', email='zelig@example.com',
+            source='SITE_WEB', assigned_to=self.commercial_b,
+        )
+        Project.objects.create(name='Zenith Cloud Migration', lead_project_manager=self.marketing_user)
+
+        self.client_marketing = APIClient()
+        self.client_marketing.force_authenticate(user=self.marketing_user)
+        self.client_commercial_a = APIClient()
+        self.client_commercial_a.force_authenticate(user=self.commercial_a)
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def test_short_query_returns_empty(self):
+        response = self.client_marketing.get('/api/v1/search/?q=z')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_marketing_finds_both_leads(self):
+        response = self.client_marketing.get('/api/v1/search/?q=Zel')
+        labels = [r['label'] for r in response.json() if r['category'] == 'Leads']
+        self.assertIn('Zelda Fitzgerald', labels)
+        self.assertIn('Zelig Smith', labels)
+
+    def test_commercial_only_finds_own_lead(self):
+        response = self.client_commercial_a.get('/api/v1/search/?q=Zel')
+        labels = [r['label'] for r in response.json() if r['category'] == 'Leads']
+        self.assertIn('Zelda Fitzgerald', labels)
+        self.assertNotIn('Zelig Smith', labels)
+
+    def test_outsider_sees_no_lead_results_but_no_error(self):
+        response = self.client_outsider.get('/api/v1/search/?q=Zel')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([r for r in response.json() if r['category'] == 'Leads'], [])
+
+    def test_project_search_visible_to_lead(self):
+        response = self.client_marketing.get('/api/v1/search/?q=Zenith')
+        labels = [r['label'] for r in response.json() if r['category'] == 'Projets']
+        self.assertIn('Zenith Cloud Migration', labels)
+
+    def test_project_search_not_visible_to_non_member(self):
+        response = self.client_commercial_a.get('/api/v1/search/?q=Zenith')
+        labels = [r['label'] for r in response.json() if r['category'] == 'Projets']
+        self.assertNotIn('Zenith Cloud Migration', labels)

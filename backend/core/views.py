@@ -1,3 +1,4 @@
+from django.db.models import Q
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import api_view, permission_classes
@@ -262,3 +263,105 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AuditLog.objects.select_related('user').order_by('-created_at')
     serializer_class = AuditLogSerializer
     permission_classes = [IsSuperAdmin]
+
+
+SEARCH_RESULT_LIMIT_PER_CATEGORY = 5
+
+
+@extend_schema(
+    tags=['Système'],
+    summary='Global search across every module the user can access',
+    description='?q=... (min 2 chars). Each category is only searched if the user\'s '
+    'role can actually see that data — same scoping as the category\'s own list '
+    'endpoint. Results link to the screen that owns the record, not a deep link to '
+    'the record itself (most list screens don\'t support that yet).',
+    responses={200: {'type': 'array', 'items': {'type': 'object', 'properties': {
+        'category': {'type': 'string'}, 'label': {'type': 'string'},
+        'sublabel': {'type': 'string'}, 'href': {'type': 'string'},
+    }}}},
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def global_search(request):
+    query = (request.query_params.get('q') or '').strip()
+    if len(query) < 2:
+        return Response([])
+
+    user = request.user
+    results = []
+
+    # Employees — Administration & RH / RH read access.
+    if has_role(user, 'RESPONSABLE_RH', 'SUPER_ADMIN'):
+        matches = User.objects.filter(
+            Q(first_name__icontains=query) | Q(last_name__icontains=query)
+        )[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
+        for u in matches:
+            results.append({
+                'category': 'Employés', 'label': f'{u.first_name} {u.last_name}'.strip(),
+                'sublabel': '', 'href': '/admin/rh',
+            })
+
+    # Leads — Marketing/Commercial.
+    if has_role(user, 'RESPONSABLE_MARKETING', 'COMMERCIAL', 'SUPER_ADMIN'):
+        from marketing.models import BlogPost, Lead, Quote
+
+        leads = Lead.objects.all()
+        if not has_role(user, 'RESPONSABLE_MARKETING', 'SUPER_ADMIN'):
+            leads = leads.filter(assigned_to=user)
+        matches = leads.filter(
+            Q(first_name__icontains=query) | Q(last_name__icontains=query) | Q(company_name__icontains=query)
+        )[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
+        for lead in matches:
+            results.append({
+                'category': 'Leads', 'label': f'{lead.first_name} {lead.last_name}'.strip(),
+                'sublabel': lead.company_name, 'href': '/admin/marketing/leads',
+            })
+
+        quotes = Quote.objects.select_related('lead')
+        if has_role(user, 'COMMERCIAL') and not has_role(user, 'RESPONSABLE_MARKETING', 'SUPER_ADMIN'):
+            quotes = quotes.filter(created_by=user)
+        matches = quotes.filter(quote_number__icontains=query)[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
+        for quote in matches:
+            results.append({
+                'category': 'Devis', 'label': quote.quote_number,
+                'sublabel': quote.lead.company_name if quote.lead else '', 'href': '/admin/marketing/devis',
+            })
+
+        if has_role(user, 'RESPONSABLE_MARKETING', 'SUPER_ADMIN'):
+            matches = BlogPost.objects.filter(title__icontains=query)[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
+            for post in matches:
+                results.append({
+                    'category': 'Contenu', 'label': post.title,
+                    'sublabel': post.get_status_display(), 'href': '/admin/marketing/blog',
+                })
+
+    # Projects — anyone leading/member of one, or wide-read roles.
+    from projects.models import Project
+
+    projects = Project.objects.select_related('lead_project_manager')
+    if not has_role(user, 'DIRECTEUR_FINANCIER', 'SUPER_ADMIN'):
+        projects = projects.filter(Q(lead_project_manager=user) | Q(memberships__user=user)).distinct()
+    matches = projects.filter(name__icontains=query)[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
+    for project in matches:
+        results.append({
+            'category': 'Projets', 'label': project.name,
+            'sublabel': project.get_status_display(), 'href': '/admin/technique/projets',
+        })
+
+    # Décaissements — Chef de Projet (their own), Finance roles (all).
+    if has_role(user, 'CHEF_DE_PROJET', 'DIRECTEUR_FINANCIER', 'COMPTABLE', 'SUPER_ADMIN'):
+        from finance.models import DisbursementRequest
+
+        disbursements = DisbursementRequest.objects.select_related('project')
+        if not has_role(user, 'DIRECTEUR_FINANCIER', 'COMPTABLE', 'SUPER_ADMIN'):
+            disbursements = disbursements.filter(
+                Q(project__lead_project_manager=user) | Q(requested_by=user)
+            ).distinct()
+        matches = disbursements.filter(beneficiary__icontains=query)[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
+        for d in matches:
+            results.append({
+                'category': 'Décaissements', 'label': d.beneficiary,
+                'sublabel': str(d.amount), 'href': '/admin/technique/decaissements',
+            })
+
+    return Response(results)

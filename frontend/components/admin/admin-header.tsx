@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Bell, ChevronRight, Home, LogOut, Search, UserRound } from "lucide-react";
+import { Bell, ChevronRight, Home, Loader2, LogOut, Search, UserRound } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/lib/auth/auth-context";
 import { signOutUser } from "@/lib/firebase/auth";
 import { ROLE_LABELS } from "@/lib/firebase/types";
 import { ADMIN_SECTIONS, findNavMatch, type NavItem } from "@/lib/admin-nav";
+import { globalSearch, type SearchResult } from "@/lib/api/search";
 
 function initials(firstName?: string, lastName?: string) {
   return `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "?";
@@ -39,13 +40,33 @@ function QuickSearch() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [contentResults, setContentResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
 
   const allItems = useMemo(() => ADMIN_SECTIONS.flatMap((section) => section.items.map((item) => ({ ...item, section: section.title }))), []);
-  const results = useMemo(() => {
+  const pageResults = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.trim().toLowerCase();
-    return allItems.filter((item) => item.label.toLowerCase().includes(q) || item.section.toLowerCase().includes(q)).slice(0, 8);
+    return allItems.filter((item) => item.label.toLowerCase().includes(q) || item.section.toLowerCase().includes(q)).slice(0, 5);
   }, [allItems, query]);
+
+  // Debounced live search across leads/devis/projets/employés/contenu/décaissements
+  // — the user's own accessible data, not just the static page list.
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setContentResults([]);
+      return;
+    }
+    setSearching(true);
+    const timeout = setTimeout(() => {
+      globalSearch(trimmed)
+        .then(setContentResults)
+        .catch(() => setContentResults([]))
+        .finally(() => setSearching(false));
+    }, 250);
+    return () => clearTimeout(timeout);
+  }, [query]);
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
@@ -61,12 +82,21 @@ function QuickSearch() {
     return () => window.removeEventListener("keydown", handleShortcut);
   }, []);
 
-  function goTo(item: NavItem) {
+  function goToPage(item: NavItem) {
     router.push(item.href);
     setQuery("");
     setOpen(false);
     inputRef.current?.blur();
   }
+
+  function goToResult(result: SearchResult) {
+    router.push(result.href);
+    setQuery("");
+    setOpen(false);
+    inputRef.current?.blur();
+  }
+
+  const hasResults = pageResults.length > 0 || contentResults.length > 0;
 
   return (
     <div className="relative w-full max-w-md">
@@ -79,33 +109,62 @@ function QuickSearch() {
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 120)}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && results[0]) goTo(results[0]);
+            if (event.key !== "Enter") return;
+            if (pageResults[0]) goToPage(pageResults[0]);
+            else if (contentResults[0]) goToResult(contentResults[0]);
           }}
-          placeholder="Rechercher un module, une page…"
+          placeholder="Rechercher un module, un lead, un devis, un employé…"
           className="w-full min-w-0 bg-transparent text-sm text-neutral-700 placeholder:text-neutral-400 outline-none"
         />
-        <kbd className="hidden shrink-0 items-center rounded-md border border-neutral-200 bg-white px-1.5 py-0.5 text-[0.65rem] text-neutral-400 sm:flex">
-          ⌘ /
-        </kbd>
+        {searching ? (
+          <Loader2 className="size-3.5 shrink-0 animate-spin text-neutral-300" />
+        ) : (
+          <kbd className="hidden shrink-0 items-center rounded-md border border-neutral-200 bg-white px-1.5 py-0.5 text-[0.65rem] text-neutral-400 sm:flex">
+            ⌘ /
+          </kbd>
+        )}
       </div>
 
-      {open && results.length > 0 && (
+      {open && hasResults && (
         <div className="absolute top-full left-0 z-40 mt-2 w-full overflow-hidden rounded-xl border border-neutral-200 bg-white py-1.5 shadow-xl shadow-black/5">
-          {results.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.href}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => goTo(item)}
-                className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm text-neutral-700 transition-colors hover:bg-neutral-50"
-              >
-                <Icon className="size-4 text-neutral-400" />
-                <span>{item.label}</span>
-                <span className="ml-auto text-xs text-neutral-400">{item.section}</span>
-              </button>
-            );
-          })}
+          {pageResults.length > 0 && (
+            <div className="py-1">
+              <p className="px-3.5 py-1 text-[0.65rem] font-semibold tracking-wider text-neutral-400 uppercase">Pages</p>
+              {pageResults.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.href}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => goToPage(item)}
+                    className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm text-neutral-700 transition-colors hover:bg-neutral-50"
+                  >
+                    <Icon className="size-4 text-neutral-400" />
+                    <span>{item.label}</span>
+                    <span className="ml-auto text-xs text-neutral-400">{item.section}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {contentResults.length > 0 && (
+            <div className="border-t border-neutral-100 py-1">
+              <p className="px-3.5 py-1 text-[0.65rem] font-semibold tracking-wider text-neutral-400 uppercase">Résultats</p>
+              {contentResults.map((result, index) => (
+                <button
+                  key={`${result.category}-${index}`}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => goToResult(result)}
+                  className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm text-neutral-700 transition-colors hover:bg-neutral-50"
+                >
+                  <span className="truncate">{result.label}</span>
+                  {result.sublabel && <span className="shrink-0 truncate text-xs text-neutral-400">{result.sublabel}</span>}
+                  <span className="ml-auto shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-[0.65rem] text-neutral-500">{result.category}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
