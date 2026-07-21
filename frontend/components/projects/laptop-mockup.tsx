@@ -89,23 +89,18 @@ export function LaptopMockup({ title, videoSrc, images, sceneVariants }: Props) 
   );
 }
 
-/** Wraps first-reveal content with a quick camera-flash pulse. */
+/** First reveal: an iris wipe expanding from the center until the content
+ * fills the whole screen — a clearly visible "entering" animation rather
+ * than a subtle fade. */
 function RevealFlash({ children }: { children: React.ReactNode }) {
   return (
-    <motion.div initial="hidden" animate="show" className="absolute inset-0">
-      <motion.div
-        variants={{ hidden: { opacity: 0, scale: 0.94 }, show: { opacity: 1, scale: 1 } }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="absolute inset-0"
-      >
-        {children}
-      </motion.div>
-      <motion.span
-        aria-hidden
-        className="absolute inset-0 bg-white"
-        variants={{ hidden: { opacity: 0.9 }, show: { opacity: 0 } }}
-        transition={{ duration: 0.4, ease: "easeOut" }}
-      />
+    <motion.div
+      className="absolute inset-0 bg-black"
+      initial={{ clipPath: "circle(0% at 50% 50%)" }}
+      animate={{ clipPath: "circle(150% at 50% 50%)" }}
+      transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+    >
+      {children}
     </motion.div>
   );
 }

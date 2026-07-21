@@ -9,8 +9,9 @@ import { BlueprintDiagram } from "@/components/sections/expertise/blueprint-diag
  * A floating tablet mockup — same idea as LaptopMockup (never static, always
  * a slow idle drift) but for a single hero visual rather than a cycling
  * gallery. Shows the animated blueprint diagram until clicked; a click
- * reveals the uploaded image with a flash + scale-in. `object-contain`
- * (not `object-cover`) so the full image is always visible, never cropped.
+ * triggers an iris wipe that expands from the center until the image fills
+ * the whole screen. `object-contain` (not `object-cover`) so the full
+ * image is always visible, never cropped.
  */
 export function TabletMockup({ imageUrl }: { imageUrl?: string }) {
   const [revealed, setRevealed] = useState(false);
@@ -30,11 +31,9 @@ export function TabletMockup({ imageUrl }: { imageUrl?: string }) {
           onClick={() => setRevealed(true)}
           className="relative block aspect-[4/3] w-full overflow-hidden rounded-[12px] bg-black"
         >
-          {!showImage && (
-            <div className="absolute inset-0 p-4">
-              <BlueprintDiagram />
-            </div>
-          )}
+          <div className="absolute inset-0 p-4">
+            <BlueprintDiagram />
+          </div>
 
           {imageUrl && !revealed && (
             <span className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/50 text-white opacity-0 transition-opacity hover:opacity-100">
@@ -47,24 +46,15 @@ export function TabletMockup({ imageUrl }: { imageUrl?: string }) {
 
           <AnimatePresence>
             {showImage && (
-              <>
-                <motion.img
-                  key="image"
-                  src={imageUrl}
-                  alt=""
-                  className="absolute inset-0 h-full w-full object-contain"
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                />
-                <motion.span
-                  aria-hidden
-                  className="absolute inset-0 bg-white"
-                  initial={{ opacity: 0.9 }}
-                  animate={{ opacity: 0 }}
-                  transition={{ duration: 0.4, ease: "easeOut" }}
-                />
-              </>
+              <motion.div
+                key="reveal"
+                className="absolute inset-0 bg-black"
+                initial={{ clipPath: "circle(0% at 50% 50%)" }}
+                animate={{ clipPath: "circle(150% at 50% 50%)" }}
+                transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <img src={imageUrl} alt="" className="absolute inset-0 h-full w-full object-contain" />
+              </motion.div>
             )}
           </AnimatePresence>
         </button>
