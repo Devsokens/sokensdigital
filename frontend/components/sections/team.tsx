@@ -8,6 +8,7 @@ type Member = {
   name: string;
   role: string;
   bio: string;
+  photo_url?: string;
 };
 
 const DEFAULT_TITLE = "Notre Équipe";
@@ -61,9 +62,14 @@ export function Team({ section }: { section?: PageSection | null }) {
             className="group rounded-2xl border border-white/10 bg-card/60 p-6 transition-colors hover:border-primary/30 hover:bg-card"
           >
             <div className="flex items-center justify-between">
-              <span className="inline-flex size-12 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary">
-                {initials(member.name)}
-              </span>
+              {member.photo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={member.photo_url} alt={member.name} className="size-12 rounded-full object-cover" />
+              ) : (
+                <span className="inline-flex size-12 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary">
+                  {initials(member.name)}
+                </span>
+              )}
               <a
                 href={`mailto:${member.name
                   .toLowerCase()

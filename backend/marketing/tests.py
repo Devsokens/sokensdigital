@@ -1,4 +1,7 @@
+from unittest.mock import Mock, patch
+
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
@@ -582,3 +585,72 @@ class PageSectionViewSetTests(APITestCase):
         body = anon.get('/api/v1/public/cms/page-sections/?page=ACCUEIL').json()
         self.assertNotIn('id', body[0])
         self.assertNotIn('is_active', body[0])
+
+
+class ImageUploadViewTests(APITestCase):
+    def setUp(self):
+        self.marketing_user = User.objects.create(email='uploadmkt@sokensdigital.com', first_name='Marketing')
+        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        self.outsider = User.objects.create(email='uploaddev@sokensdigital.com', first_name='Dev')
+        self.outsider.firestore_role = 'DEVELOPPEUR'
+
+        self.client_marketing = APIClient()
+        self.client_marketing.force_authenticate(user=self.marketing_user)
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def image_file(self, content_type='image/png', name='logo.png', size=100):
+        return SimpleUploadedFile(name, b'\x00' * size, content_type=content_type)
+
+    @patch('core.storage._bucket_ensured', False)
+    @patch.dict('os.environ', {'SUPABASE_URL': 'https://test-project.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'test-key'})
+    @patch('core.storage.requests.post')
+    def test_marketing_can_upload_image(self, mock_post):
+        mock_post.side_effect = [
+            Mock(status_code=200, text='{}'),  # bucket ensure
+            Mock(status_code=200, text='{}'),  # object upload
+        ]
+        response = self.client_marketing.post(
+            '/api/v1/marketing/cms/upload-image/', {'file': self.image_file()}, format='multipart',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.json()['url'].startswith('https://test-project.supabase.co/storage/v1/object/public/site-content/page-sections/'))
+
+    def test_outsider_forbidden(self):
+        response = self.client_outsider.post(
+            '/api/v1/marketing/cms/upload-image/', {'file': self.image_file()}, format='multipart',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_no_file_rejected(self):
+        response = self.client_marketing.post('/api/v1/marketing/cms/upload-image/', {}, format='multipart')
+        self.assertEqual(response.status_code, 400)
+
+    def test_wrong_content_type_rejected(self):
+        response = self.client_marketing.post(
+            '/api/v1/marketing/cms/upload-image/',
+            {'file': self.image_file(content_type='application/pdf', name='doc.pdf')},
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_oversized_file_rejected(self):
+        response = self.client_marketing.post(
+            '/api/v1/marketing/cms/upload-image/',
+            {'file': self.image_file(size=6 * 1024 * 1024)},
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    @patch('core.storage._bucket_ensured', False)
+    @patch.dict('os.environ', {'SUPABASE_URL': 'https://test-project.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'test-key'})
+    @patch('core.storage.requests.post')
+    def test_supabase_failure_returns_502(self, mock_post):
+        mock_post.side_effect = [
+            Mock(status_code=200, text='{}'),
+            Mock(status_code=500, text='internal error'),
+        ]
+        response = self.client_marketing.post(
+            '/api/v1/marketing/cms/upload-image/', {'file': self.image_file()}, format='multipart',
+        )
+        self.assertEqual(response.status_code, 502)

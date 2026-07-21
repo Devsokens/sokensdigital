@@ -1,15 +1,18 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db.models import Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import generics, mixins, permissions, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.permissions import has_role
+from core.storage import upload_image
 from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, SocialPost
 from marketing.ratelimit import get_client_ip, is_rate_limited
 from marketing.serializers import (
@@ -150,6 +153,32 @@ class PublicPageSectionListView(generics.ListAPIView):
         if not page:
             return PageSection.objects.none()
         return PageSection.objects.filter(page=page, is_active=True)
+
+
+@extend_schema(
+    tags=['Marketing & Commercial'],
+    summary='Upload an image (partner logo, team photo) for the site CMS',
+    description='Responsable Marketing/Super-Admin only. Uploads to Supabase Storage '
+    '(core.storage) and returns its public URL — meant to be pasted into a '
+    'PageSection.items entry (e.g. logo_url, photo_url), not a standalone model.',
+    request={'multipart/form-data': {'type': 'object', 'properties': {'file': {'type': 'string', 'format': 'binary'}}}},
+    responses={201: {'type': 'object', 'properties': {'url': {'type': 'string'}}}},
+)
+class ImageUploadView(APIView):
+    permission_classes = [IsMarketing]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'detail': 'Aucun fichier fourni.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            url = upload_image(file, folder='page-sections')
+        except ValidationError as exc:
+            return Response({'detail': exc.message}, status=status.HTTP_400_BAD_REQUEST)
+        except RuntimeError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({'url': url}, status=status.HTTP_201_CREATED)
 
 
 @extend_schema_view(

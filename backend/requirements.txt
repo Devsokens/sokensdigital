@@ -5,6 +5,7 @@ psycopg2-binary
 celery
 redis
 firebase-admin
+requests
 python-dotenv
 django-cors-headers
 dj-database-url

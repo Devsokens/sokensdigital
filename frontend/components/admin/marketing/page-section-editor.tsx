@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Check,
   Diamond,
+  ImagePlus,
   Loader2,
   Mail,
   Plus,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listPageSections, updatePageSection, type PageSectionInput } from "@/lib/api/marketing";
+import { uploadImage } from "@/lib/api/upload";
 import type { PageSection, SectionKey, SitePage } from "@/lib/api/types";
 import { IconPicker, SectionIcon } from "@/components/admin/marketing/icon-picker";
 
@@ -116,6 +118,57 @@ function EditableTextarea({
         className
       )}
     />
+  );
+}
+
+function ImageUploadField({
+  value, onChange, shape = "square",
+}: { value: string; onChange: (url: string) => void; shape?: "square" | "circle" }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      onChange(await uploadImage(file));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Échec de l'upload.");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        title="Changer l'image"
+        className={cn(
+          "group relative flex size-12 shrink-0 items-center justify-center overflow-hidden border border-dashed border-white/20 bg-white/5 text-muted-foreground transition-colors hover:border-primary/40",
+          shape === "circle" ? "rounded-full" : "rounded-lg"
+        )}
+      >
+        {uploading ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : value ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={value} alt="" className="size-full object-cover" />
+        ) : (
+          <ImagePlus className="size-4" />
+        )}
+        <span className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+          <ImagePlus className="size-3.5 text-white" />
+        </span>
+      </button>
+      <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+      {error && <p className="max-w-20 text-center text-[0.6rem] leading-tight text-destructive">{error}</p>}
+    </div>
   );
 }
 
@@ -490,7 +543,7 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
     }
 
     case "team": {
-      const team = items as { name: string; role: string; bio: string }[];
+      const team = items as { name: string; role: string; bio: string; photo_url?: string }[];
       return (
         <div>
           {editing ? (
@@ -508,9 +561,16 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
               <div key={index} className="group relative rounded-2xl border border-white/10 bg-card/60 p-5">
                 {editing && <RemoveItemButton onClick={() => removeItem(index)} />}
                 <div className="flex items-center justify-between">
-                  <span className="flex size-10 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
-                    {initials(m.name || "?")}
-                  </span>
+                  {editing ? (
+                    <ImageUploadField value={m.photo_url ?? ""} onChange={(url) => updateItem(index, "photo_url", url)} shape="circle" />
+                  ) : m.photo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={m.photo_url} alt={m.name} className="size-10 rounded-full object-cover" />
+                  ) : (
+                    <span className="flex size-10 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+                      {initials(m.name || "?")}
+                    </span>
+                  )}
                   <Mail className="size-3.5 text-muted-foreground" />
                 </div>
                 {editing ? (
@@ -530,28 +590,34 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
                 )}
               </div>
             ))}
-            {editing && <AddItemButton label="Ajouter un membre" onClick={() => addItem({ name: "", role: "", bio: "" })} />}
+            {editing && <AddItemButton label="Ajouter un membre" onClick={() => addItem({ name: "", role: "", bio: "", photo_url: "" })} />}
           </div>
         </div>
       );
     }
 
     case "partner_logos": {
-      const partners = items as { name: string }[];
+      const partners = items as { name: string; logo_url?: string }[];
       return (
-        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 border-y border-white/10 py-6">
+        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 border-y border-white/10 py-6">
           {partners.map((p, index) => (
-            <span key={index} className="group relative">
+            <span key={index} className="group relative flex flex-col items-center gap-1.5">
               {editing && <RemoveItemButton onClick={() => removeItem(index)} />}
               {editing ? (
-                <EditableInput value={p.name} onChange={(v) => updateItem(index, "name", v)} className="text-center text-sm font-semibold tracking-[0.15em] text-muted-foreground/70 uppercase" placeholder="Nom" />
+                <>
+                  <ImageUploadField value={p.logo_url ?? ""} onChange={(url) => updateItem(index, "logo_url", url)} />
+                  <EditableInput value={p.name} onChange={(v) => updateItem(index, "name", v)} className="text-center text-sm font-semibold tracking-[0.15em] text-muted-foreground/70 uppercase" placeholder="Nom" />
+                </>
+              ) : p.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={p.logo_url} alt={p.name} className="h-8 w-auto object-contain opacity-70 grayscale" />
               ) : (
                 <span className="text-sm font-semibold tracking-[0.15em] text-muted-foreground/50 uppercase">{p.name}</span>
               )}
             </span>
           ))}
           {editing && (
-            <button onClick={() => addItem({ name: "" })} className="flex items-center gap-1 rounded-full border border-dashed border-white/15 px-3 py-1 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary">
+            <button onClick={() => addItem({ name: "", logo_url: "" })} className="flex items-center gap-1 rounded-full border border-dashed border-white/15 px-3 py-1 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary">
               <Plus className="size-3" /> Ajouter
             </button>
           )}
