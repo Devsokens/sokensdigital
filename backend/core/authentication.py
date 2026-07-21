@@ -34,13 +34,16 @@ class FirebaseAuthentication(authentication.BaseAuthentication):
         except Exception as e:
             raise exceptions.AuthenticationFailed(f'Invalid Firebase ID token: {str(e)}')
 
+        if not email:
+            raise exceptions.AuthenticationFailed('Firebase token does not contain an email address.')
+
         try:
-            # Get or create the user based on Firebase UID
-            # Using UID as username for Django compatibility
+            # Get or create the user based on email (USERNAME_FIELD)
             user, created = User.objects.get_or_create(
-                username=uid,
-                defaults={'email': email, 'is_active': True}
+                email=email,
+                defaults={'is_active': True}
             )
+            
         except Exception as e:
             raise exceptions.AuthenticationFailed('Could not create or retrieve user.')
 

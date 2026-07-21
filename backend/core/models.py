@@ -7,7 +7,10 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.forms.models import model_to_dict
 from django.core.serializers.json import DjangoJSONEncoder
-from django_cryptography.fields import encrypt
+# TODO: Re-enable field-level encryption for production.
+# django-cryptography is incompatible with Django 5.2+ (baseconv removed).
+# Options: django-encrypted-model-fields, pgcrypto at DB level, or
+# custom Fernet-based field encryption.
 
 class AuditLogManager(models.Manager):
     def log_action(self, user, action, entity_type, entity_id, details=None, ip_address=None):
@@ -123,10 +126,10 @@ class UserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
-    email = encrypt(models.EmailField(unique=True))
+    email = models.EmailField(unique=True)  # TODO: encrypt in production
     first_name = models.CharField(max_length=255, blank=True)
     last_name = models.CharField(max_length=255, blank=True)
-    phone = encrypt(models.CharField(max_length=50, blank=True, null=True))
+    phone = models.CharField(max_length=50, blank=True, null=True)  # TODO: encrypt in production
     avatar_url = models.URLField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
@@ -158,7 +161,7 @@ class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
         # Zod-like strict email validation
         email_regex = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
         if self.email and not email_regex.match(self.email):
-            raise ValidationError({'email': 'Format d\\'email invalide.'})
+            raise ValidationError({'email': "Format d'email invalide."})
 
         # Zod-like E.164 phone validation
         phone_regex = re.compile(r'^\+[1-9]\d{1,14}$')
@@ -186,4 +189,33 @@ class Session(LoggedModel):
     def clean(self):
         super().clean()
         if self.expires_at and self.expires_at <= timezone.now():
-            raise ValidationError({'expires_at': 'La date d\\'expiration doit être dans le futur.'})
+            raise ValidationError({'expires_at': "La date d'expiration doit être dans le futur."})
+
+class Notification(LoggedModel):
+    class NotificationType(models.TextChoices):
+        TASK_ASSIGNED = 'TASK_ASSIGNED', 'Task Assigned'
+        TASK_COMPLETED = 'TASK_COMPLETED', 'Task Completed'
+        PROJECT_STATUS = 'PROJECT_STATUS', 'Project Status'
+        TICKET_UPDATE = 'TICKET_UPDATE', 'Ticket Update'
+        LEAVE_REQUEST = 'LEAVE_REQUEST', 'Leave Request'
+        DOCUMENT_EXPIRY = 'DOCUMENT_EXPIRY', 'Document Expiry'
+        ADMIN_RECORD = 'ADMIN_RECORD', 'Admin Record'
+        BUDGET_ALERT = 'BUDGET_ALERT', 'Budget Alert'
+        FOLLOW_UP = 'FOLLOW_UP', 'Follow Up'
+        GENERAL = 'GENERAL', 'General'
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    notification_type = models.CharField(max_length=50, choices=NotificationType.choices)
+    is_read = models.BooleanField(default=False)
+    entity_type = models.CharField(max_length=100, blank=True)
+    entity_id = models.CharField(max_length=255, blank=True)
+    link = models.CharField(max_length=500, blank=True)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-created_at']
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['user', 'is_read']),
+            models.Index(fields=['notification_type']),
+        ]

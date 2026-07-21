@@ -8,5 +8,13 @@ firebase-admin
 python-dotenv
 django-cors-headers
 dj-database-url
-django-cryptography
+# django-cryptography  # incompatible Django 5.2+ — TODO: use django-encrypted-model-fields
 argon2-cffi
+django-filter
+pytest
+pytest-django
+pytest-cov
+factory-boy
+weasyprint
+google-api-python-client
+google-auth
