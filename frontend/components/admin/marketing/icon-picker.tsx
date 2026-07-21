@@ -32,7 +32,6 @@ export function IconPicker({ value, onChange }: { value: string; onChange: (name
         <div className="flex items-center gap-2 border-b border-neutral-100 px-3 py-2.5">
           <Search className="size-3.5 shrink-0 text-neutral-400" />
           <input
-            autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Rechercher une icône…"
@@ -43,6 +42,7 @@ export function IconPicker({ value, onChange }: { value: string; onChange: (name
           {results.map((name) => (
             <button
               key={name}
+              type="button"
               onClick={() => onChange(name)}
               title={name}
               className="flex size-9 items-center justify-center rounded-lg text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-primary aria-selected:bg-primary/10 aria-selected:text-primary"
