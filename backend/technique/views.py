@@ -15,7 +15,7 @@ from core.permissions import (
     IsDirecteurFinancier, IsOwner, IsProjectMember,
     IsAssignedDeveloper, IsAdminOrReadOnly, ReadOnly,
 )
-from core.models import AuditLog, Notification
+from core.models import User, AuditLog, Notification
 from .models import (
     Project, ProjectPhase, ProjectDocument,
     Task, TimeEntry, Ticket, KnowledgeBase, ProjectStatus,
@@ -63,7 +63,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update']:
-            return [permissions.IsAuthenticated(), IsAdmin() | IsProjectManager()]
+            return [permissions.IsAuthenticated(), (IsAdmin | IsProjectManager)()]
         if self.action == 'destroy':
             return [permissions.IsAuthenticated(), IsSuperAdmin()]
         return [permissions.IsAuthenticated()]
@@ -125,11 +125,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project = self.get_object()
         user_ids = request.data.get('user_ids', [])
 
+        users = User.objects.filter(id__in=user_ids)
         if request.method == 'POST':
-            project.members.add(*user_ids)
+            project.members.add(*users)
             return Response({'status': 'members added'})
         else:
-            project.members.remove(*user_ids)
+            project.members.remove(*users)
             return Response({'status': 'members removed'})
 
 
@@ -144,7 +145,7 @@ class ProjectPhaseViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), IsAdmin() | IsProjectManager()]
+            return [permissions.IsAuthenticated(), (IsAdmin | IsProjectManager)()]
         return [permissions.IsAuthenticated()]
 
     def perform_create(self, serializer):
@@ -174,7 +175,7 @@ class ProjectDocumentViewSet(viewsets.ModelViewSet):
         if self.action in ['create']:
             return [permissions.IsAuthenticated()]
         if self.action in ['update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), IsAdmin() | IsProjectManager()]
+            return [permissions.IsAuthenticated(), (IsAdmin | IsProjectManager)()]
         return [permissions.IsAuthenticated()]
 
     def perform_create(self, serializer):
@@ -203,7 +204,7 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'destroy']:
-            return [permissions.IsAuthenticated(), IsAdmin() | IsProjectManager()]
+            return [permissions.IsAuthenticated(), (IsAdmin | IsProjectManager)()]
         if self.action in ['update', 'partial_update']:
             return [permissions.IsAuthenticated()]
         return [permissions.IsAuthenticated()]
@@ -289,7 +290,7 @@ class KnowledgeBaseViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), IsAdmin() | IsProjectManager()]
+            return [permissions.IsAuthenticated(), (IsAdmin | IsProjectManager)()]
         return [permissions.IsAuthenticated()]
 
     def perform_create(self, serializer):

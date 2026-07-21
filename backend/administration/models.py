@@ -7,7 +7,7 @@ from django.utils import timezone
 from datetime import timedelta
 
 # Assuming core models are importable from core.models
-# We mock them here for the sake of tests if they don't exist, 
+# We mock them here for the sake of tests if they don't exist,
 # but the prompt says they are in core.models
 from core.models import LoggedModel, User
 

@@ -50,7 +50,7 @@ class ClientViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update']:
-            return [permissions.IsAuthenticated(), IsAdmin() | IsCommercial()]
+            return [permissions.IsAuthenticated(), (IsAdmin | IsCommercial)()]
         return [permissions.IsAuthenticated()]
 
     def destroy(self, request, *args, **kwargs):
@@ -76,7 +76,7 @@ class ClientViewSet(viewsets.ModelViewSet):
 
         return qs
 
-    @action(detail=True, methods=['post'], permission_classes=[IsSuperAdmin()])
+    @action(detail=True, methods=['post'], permission_classes=[IsSuperAdmin])
     def archive(self, request, pk=None):
         """Archive un client (Super-Admin uniquement)."""
         client = self.get_object()
@@ -182,7 +182,7 @@ class EmployeeDocumentViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), IsAdmin() | IsRHManager()]
+            return [permissions.IsAuthenticated(), (IsAdmin | IsRHManager)()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
@@ -222,7 +222,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsAdmin()])
+    @action(detail=True, methods=['post'], permission_classes=[IsAdmin])
     def approve(self, request, pk=None):
         """Approuver une demande de congé."""
         leave = self.get_object()
@@ -236,7 +236,7 @@ class LeaveRequestViewSet(viewsets.ModelViewSet):
         leave.save()
         return Response({'status': 'approved'})
 
-    @action(detail=True, methods=['post'], permission_classes=[IsAdmin()])
+    @action(detail=True, methods=['post'], permission_classes=[IsAdmin])
     def reject(self, request, pk=None):
         """Rejeter une demande de congé."""
         leave = self.get_object()
@@ -270,7 +270,7 @@ class CompanyAssetViewSet(viewsets.ModelViewSet):
             return [permissions.IsAuthenticated(), IsAdmin()]
         return [permissions.IsAuthenticated()]
 
-    @action(detail=True, methods=['post'], permission_classes=[IsAdmin()])
+    @action(detail=True, methods=['post'], permission_classes=[IsAdmin])
     def assign(self, request, pk=None):
         """Assigner un actif à un utilisateur avec audit trail."""
         asset = self.get_object()
@@ -308,7 +308,7 @@ class AdministrativeRecordViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy', 'finalize']:
-            return [permissions.IsAuthenticated(), IsAdmin() | IsSuperAdmin()]
+            return [permissions.IsAuthenticated(), (IsAdmin | IsSuperAdmin)()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
@@ -320,7 +320,7 @@ class AdministrativeRecordViewSet(viewsets.ModelViewSet):
             qs = qs.filter(is_public_internally=True)
         return qs
 
-    @action(detail=True, methods=['post'], permission_classes=[IsAdmin()])
+    @action(detail=True, methods=['post'], permission_classes=[IsAdmin])
     def finalize(self, request, pk=None):
         """Finaliser un registre (le rend inaltérable)."""
         record = self.get_object()
@@ -347,7 +347,7 @@ class ContractGeneratorViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create']:
-            return [permissions.IsAuthenticated(), IsAdmin() | IsCommercial()]
+            return [permissions.IsAuthenticated(), (IsAdmin | IsCommercial)()]
         if self.action in ['update', 'partial_update', 'destroy']:
             return [permissions.IsAuthenticated(), IsAdmin()]
         return [permissions.IsAuthenticated()]
