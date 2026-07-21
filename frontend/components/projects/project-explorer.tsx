@@ -159,7 +159,7 @@ function ProjectCard({ project, tall }: { project: Project; tall: boolean }) {
     <Link
       href={`/projects/${project.slug}`}
       className={cn(
-        "group flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-card/60 transition-colors hover:border-primary/30",
+        "group flex flex-col overflow-hidden rounded-2xl border-2 border-primary/20 bg-card/60 transition-colors hover:border-primary/60",
         tall && "lg:row-span-2"
       )}
     >

@@ -32,7 +32,7 @@ export function RelatedProjects({ projects }: { projects: Project[] }) {
           <Link
             key={project.slug}
             href={`/projects/${project.slug}`}
-            className="group overflow-hidden rounded-2xl border border-white/10 bg-card/60 transition-colors hover:border-primary/30"
+            className="group overflow-hidden rounded-2xl border-2 border-primary/20 bg-card/60 transition-colors hover:border-primary/60"
           >
             <div aria-hidden className="relative aspect-video overflow-hidden">
               <ProjectCardMedia images={project.images} videoSrc={project.videoSrc} icon={project.visualIcon} />

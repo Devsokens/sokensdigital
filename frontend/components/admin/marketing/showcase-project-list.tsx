@@ -217,7 +217,7 @@ export function ShowcaseProjectList() {
           {projects.map((project) => (
             <div
               key={project.id}
-              className="group overflow-hidden rounded-2xl border border-neutral-200 bg-[#0a0e13] transition-colors hover:border-primary/40"
+              className="group overflow-hidden rounded-2xl border-2 border-primary/25 bg-[#0a0e13] transition-colors hover:border-primary/70"
             >
               <button
                 type="button"
@@ -574,11 +574,13 @@ function ShowcaseProjectForm({ project, onSaved }: { project?: ShowcaseProject; 
             value={form.description ?? ""} onChange={(v) => set("description", v)}
             className="mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base" placeholder="Description" rows={2}
           />
-          <div className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground">
-            Visiter le projet
+          <div className="mt-5 max-w-md">
+            <span className="text-[11px] font-semibold tracking-[0.1em] text-primary uppercase">
+              Lien du bouton &quot;Visiter le projet&quot;
+            </span>
             <EditableInput
               value={form.project_url ?? ""} onChange={(v) => set("project_url", v)}
-              className="w-48 bg-white/10 text-xs text-primary-foreground ring-primary-foreground/30" placeholder="https://… (optionnel)"
+              className="mt-1 block w-full text-sm text-foreground" placeholder="https://… (laisser vide pour masquer le bouton)"
             />
           </div>
         </div>

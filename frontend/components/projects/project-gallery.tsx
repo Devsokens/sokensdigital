@@ -34,7 +34,7 @@ export function ProjectGallery({ title, images, videoSrc }: Props) {
   if (hasMedia) {
     return (
       <div>
-        <div className="relative aspect-video overflow-hidden rounded-2xl border border-white/10 bg-black">
+        <div className="relative aspect-video overflow-hidden rounded-2xl border-2 border-primary/25 bg-black">
           {videoSrc ? (
             <video
               src={videoSrc}
@@ -42,7 +42,7 @@ export function ProjectGallery({ title, images, videoSrc }: Props) {
               loop
               muted
               playsInline
-              className="absolute inset-0 h-full w-full object-contain"
+              className="absolute inset-0 h-full w-full object-cover"
             />
           ) : (
             <AnimatePresence mode="sync">
@@ -54,7 +54,7 @@ export function ProjectGallery({ title, images, videoSrc }: Props) {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                className="absolute inset-0 h-full w-full object-contain"
+                className="absolute inset-0 h-full w-full object-cover"
               />
             </AnimatePresence>
           )}
