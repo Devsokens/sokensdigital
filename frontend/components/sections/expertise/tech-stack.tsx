@@ -3,7 +3,7 @@
 import { motion } from "motion/react";
 import type { PageSection } from "@/lib/api/types";
 
-type Tech = { name: string; label: string };
+type Tech = { name: string; label: string; logo_url?: string };
 
 const DEFAULT_TITLE = "Stack Technologique";
 const DEFAULT_SUBTITLE = "Nous utilisons exclusivement des technologies de pointe, éprouvées pour leur performance et leur capacité à évoluer.";
@@ -56,9 +56,14 @@ export function TechStack({ section }: { section?: PageSection | null }) {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.5 }}
             transition={{ duration: 0.5, delay: i * 0.06, ease: [0.16, 1, 0.3, 1] as const }}
-            className="flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-card/60 px-4 py-6 text-center transition-colors hover:border-primary/30"
+            className="flex flex-col items-center gap-1.5 rounded-xl border border-white/10 bg-card/60 px-4 py-6 text-center transition-colors hover:border-primary/30"
           >
-            <span className="text-sm font-semibold text-foreground">{tech.name}</span>
+            {tech.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={tech.logo_url} alt={tech.name} className="h-8 w-auto object-contain" />
+            ) : (
+              <span className="text-sm font-semibold text-foreground">{tech.name}</span>
+            )}
             <span className="text-[10px] tracking-[0.1em] text-muted-foreground uppercase">
               {tech.label}
             </span>

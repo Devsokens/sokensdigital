@@ -225,10 +225,14 @@ function SectionCard({ section, onSaved }: { section: PageSection; onSaved: () =
 
   const items = form.items ?? [];
   function updateItem(index: number, key: string, value: string) {
-    setForm((prev) => ({
-      ...prev,
-      items: (prev.items ?? []).map((it, i) => (i === index ? { ...it, [key]: value } : it)),
-    }));
+    setForm((prev) => {
+      const current = prev.items ?? [];
+      // Pad with blank entries if writing past the end — needed for
+      // fixed single-item "panels" (e.g. expertise_hero) that may not
+      // have a seeded row yet.
+      const padded = current.length > index ? current : [...current, ...Array(index + 1 - current.length).fill({})];
+      return { ...prev, items: padded.map((it, i) => (i === index ? { ...it, [key]: value } : it)) };
+    });
   }
   function addItem(blank: Record<string, string>) {
     setForm((prev) => ({ ...prev, items: [...(prev.items ?? []), blank] }));
@@ -691,7 +695,8 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
       );
 
     case "expertise_hero": {
-      const panel = (items[0] as { label: string; sublabel: string } | undefined) ?? { label: "", sublabel: "" };
+      const panel = (items[0] as { header?: string; image_url?: string; label: string; sublabel: string } | undefined)
+        ?? { header: "", image_url: "", label: "", sublabel: "" };
       return (
         <div className="mx-auto max-w-2xl text-center">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-1.5 text-[11px] font-medium tracking-[0.15em] text-primary uppercase">
@@ -720,18 +725,50 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
               <EditableInput value={field(data, "cta_link")} onChange={(v) => setForm((p) => ({ ...p, cta_link: v }))} className="w-52 text-center text-[0.65rem] text-muted-foreground" placeholder="/lien" />
             )}
           </div>
-          <div className="mt-8 rounded-xl border border-white/10 bg-card/60 px-5 py-4 text-left">
-            <p className="mb-1 text-[0.65rem] text-muted-foreground/60 uppercase">Légende du panneau visuel</p>
-            {editing ? (
-              <EditableInput value={panel.label} onChange={(v) => updateItem(0, "label", v)} className="block w-full text-[11px] font-semibold tracking-[0.1em] text-primary uppercase" placeholder="Label" />
-            ) : (
-              <span className="text-[11px] font-semibold tracking-[0.1em] text-primary uppercase">{panel.label}</span>
-            )}
-            {editing ? (
-              <EditableInput value={panel.sublabel} onChange={(v) => updateItem(0, "sublabel", v)} className="mt-1 block w-full text-sm font-semibold text-foreground" placeholder="Sous-label" />
-            ) : (
-              <p className="mt-1 text-sm font-semibold text-foreground">{panel.sublabel}</p>
-            )}
+          <div className="mt-8 overflow-hidden rounded-xl border border-white/10 bg-card/60 text-left">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
+              {editing ? (
+                <EditableInput
+                  value={panel.header ?? ""} onChange={(v) => updateItem(0, "header", v)}
+                  className="w-full font-mono text-[10px] tracking-wide text-muted-foreground uppercase" placeholder="Soken's Digital — Solutions Logicielles"
+                />
+              ) : (
+                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
+                  {panel.header || "Soken's Digital — Solutions Logicielles"}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center justify-center p-4">
+              {editing ? (
+                <div className="flex flex-col items-center gap-2 py-4">
+                  <ImageUploadField value={panel.image_url ?? ""} onChange={(url) => updateItem(0, "image_url", url)} />
+                  <p className="text-[0.65rem] text-muted-foreground/60">
+                    Remplace le schéma d&apos;architecture par une image — laisse vide pour garder le schéma par défaut.
+                  </p>
+                </div>
+              ) : panel.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={panel.image_url} alt="" className="aspect-[16/10] w-full rounded-lg object-cover" />
+              ) : (
+                <div className="flex aspect-[16/10] w-full items-center justify-center text-xs text-muted-foreground/50">
+                  Schéma d&apos;architecture (par défaut)
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-white/10 px-5 py-4">
+              {editing ? (
+                <EditableInput value={panel.label} onChange={(v) => updateItem(0, "label", v)} className="block w-full text-[11px] font-semibold tracking-[0.1em] text-primary uppercase" placeholder="Label" />
+              ) : (
+                <span className="text-[11px] font-semibold tracking-[0.1em] text-primary uppercase">{panel.label}</span>
+              )}
+              {editing ? (
+                <EditableInput value={panel.sublabel} onChange={(v) => updateItem(0, "sublabel", v)} className="mt-1 block w-full text-sm font-semibold text-foreground" placeholder="Sous-label" />
+              ) : (
+                <p className="mt-1 text-sm font-semibold text-foreground">{panel.sublabel}</p>
+              )}
+            </div>
           </div>
         </div>
       );
@@ -818,7 +855,7 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
     }
 
     case "tech_stack": {
-      const stack = items as { name: string; label: string }[];
+      const stack = items as { name: string; label: string; logo_url?: string }[];
       return (
         <div>
           <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end">
@@ -847,12 +884,18 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
           </div>
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {stack.map((tech, index) => (
-              <div key={index} className="group relative flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-card/60 px-4 py-6 text-center">
+              <div key={index} className="group relative flex flex-col items-center gap-1.5 rounded-xl border border-white/10 bg-card/60 px-4 py-6 text-center">
                 {editing && <RemoveItemButton onClick={() => removeItem(index)} />}
+                {editing ? (
+                  <ImageUploadField value={tech.logo_url ?? ""} onChange={(url) => updateItem(index, "logo_url", url)} />
+                ) : tech.logo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={tech.logo_url} alt={tech.name} className="h-8 w-auto object-contain" />
+                ) : null}
                 {editing ? (
                   <EditableInput value={tech.name} onChange={(v) => updateItem(index, "name", v)} className="w-full text-center text-sm font-semibold text-foreground" placeholder="Nom" />
                 ) : (
-                  <span className="text-sm font-semibold text-foreground">{tech.name}</span>
+                  !tech.logo_url && <span className="text-sm font-semibold text-foreground">{tech.name}</span>
                 )}
                 {editing ? (
                   <EditableInput value={tech.label} onChange={(v) => updateItem(index, "label", v)} className="w-full text-center text-[10px] tracking-[0.1em] text-muted-foreground uppercase" placeholder="Catégorie" />
@@ -862,7 +905,7 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
               </div>
             ))}
             {editing && (
-              <button onClick={() => addItem({ name: "", label: "" })} className="flex items-center justify-center rounded-xl border border-dashed border-white/15 px-4 py-6 text-muted-foreground hover:border-primary/40 hover:text-primary">
+              <button onClick={() => addItem({ name: "", label: "", logo_url: "" })} className="flex items-center justify-center rounded-xl border border-dashed border-white/15 px-4 py-6 text-muted-foreground hover:border-primary/40 hover:text-primary">
                 <Plus className="size-4" />
               </button>
             )}

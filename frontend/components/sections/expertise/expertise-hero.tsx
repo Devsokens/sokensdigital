@@ -20,7 +20,12 @@ const DEFAULT_KICKER = "Digital Excellence";
 const DEFAULT_TITLE = "Solutions Digitales Sur Mesure";
 const DEFAULT_SUBTITLE =
   "Propulsez votre entreprise vers l'avenir avec des infrastructures logicielles de haute précision. Nous concevons des écosystèmes scalables, sécurisés et centrés sur la performance pour les leaders de demain.";
-const DEFAULT_PANEL = { label: "Architecture High-Load", sublabel: "Précision Sans Compromis" };
+const DEFAULT_PANEL = {
+  header: "Soken's Digital — Solutions Logicielles",
+  image_url: "",
+  label: "Architecture High-Load",
+  sublabel: "Précision Sans Compromis",
+};
 
 export function ExpertiseHero({ section }: { section?: PageSection | null }) {
   const kicker = section?.kicker || DEFAULT_KICKER;
@@ -28,7 +33,13 @@ export function ExpertiseHero({ section }: { section?: PageSection | null }) {
   const subtitle = section?.subtitle || DEFAULT_SUBTITLE;
   const ctaLabel = section?.cta_label || "Démarrer un projet";
   const ctaLink = section?.cta_link || "/demarrer-un-projet";
-  const panel = (section?.items?.[0] as { label: string; sublabel: string } | undefined) ?? DEFAULT_PANEL;
+  const rawPanel = section?.items?.[0] as { header?: string; image_url?: string; label: string; sublabel: string } | undefined;
+  const panel = {
+    header: rawPanel?.header || DEFAULT_PANEL.header,
+    image_url: rawPanel?.image_url || DEFAULT_PANEL.image_url,
+    label: rawPanel?.label || DEFAULT_PANEL.label,
+    sublabel: rawPanel?.sublabel || DEFAULT_PANEL.sublabel,
+  };
 
   return (
     <section className="relative overflow-hidden">
@@ -85,7 +96,7 @@ export function ExpertiseHero({ section }: { section?: PageSection | null }) {
             <div className="overflow-hidden rounded-2xl border border-white/10 bg-card/60">
               <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
                 <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
-                  Soken&apos;s Digital — Solutions Logicielles
+                  {panel.header}
                 </span>
                 <div className="flex gap-1.5">
                   <span className="size-1.5 rounded-full bg-white/20" />
@@ -94,7 +105,12 @@ export function ExpertiseHero({ section }: { section?: PageSection | null }) {
                 </div>
               </div>
               <div className="aspect-[16/10] p-4">
-                <BlueprintDiagram />
+                {panel.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={panel.image_url} alt="" className="size-full rounded object-cover" />
+                ) : (
+                  <BlueprintDiagram />
+                )}
               </div>
               <div className="border-t border-white/10 px-5 py-4">
                 <span className="text-[11px] font-semibold tracking-[0.1em] text-primary uppercase">
