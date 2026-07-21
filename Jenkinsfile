@@ -25,22 +25,19 @@ pipeline {
 
         stage('Build image de test') {
             steps {
-                sh 'docker compose -f $COMPOSE_FILE build test'
+                bat 'docker compose -f %COMPOSE_FILE% build test'
             }
         }
 
         stage('Lint') {
             steps {
-                sh 'docker compose -f $COMPOSE_FILE run --rm test flake8 technique/ administration/ core/'
+                bat 'docker compose -f %COMPOSE_FILE% run --rm test flake8 technique/ administration/ core/'
             }
         }
 
         stage('Vérification migrations') {
             steps {
-                sh '''
-                    docker compose -f $COMPOSE_FILE run --rm test \
-                        python manage.py makemigrations --check --dry-run
-                '''
+                bat 'docker compose -f %COMPOSE_FILE% run --rm test python manage.py makemigrations --check --dry-run'
             }
         }
 
@@ -53,14 +50,7 @@ pipeline {
                 }
             }
             steps {
-                sh '''
-                    docker compose -f $COMPOSE_FILE run --rm test \
-                        pytest technique/tests/ \
-                        --cov=technique --cov-report=xml:reports/coverage-technique.xml \
-                        --cov-report=html:htmlcov-technique \
-                        --cov-fail-under=80 \
-                        --junitxml=reports/junit-technique.xml -v
-                '''
+                bat 'docker compose -f %COMPOSE_FILE% run --rm test pytest technique/tests/ --cov=technique --cov-report=xml:reports/coverage-technique.xml --cov-report=html:htmlcov-technique --cov-fail-under=80 --junitxml=reports/junit-technique.xml -v'
             }
         }
 
@@ -73,14 +63,7 @@ pipeline {
                 }
             }
             steps {
-                sh '''
-                    docker compose -f $COMPOSE_FILE run --rm test \
-                        pytest administration/tests/ \
-                        --cov=administration --cov-report=xml:reports/coverage-administration.xml \
-                        --cov-report=html:htmlcov-administration \
-                        --cov-fail-under=80 \
-                        --junitxml=reports/junit-administration.xml -v
-                '''
+                bat 'docker compose -f %COMPOSE_FILE% run --rm test pytest administration/tests/ --cov=administration --cov-report=xml:reports/coverage-administration.xml --cov-report=html:htmlcov-administration --cov-fail-under=80 --junitxml=reports/junit-administration.xml -v'
             }
         }
 
@@ -92,18 +75,15 @@ pipeline {
                 }
             }
             steps {
-                sh '''
-                    docker compose -f $COMPOSE_FILE run --rm test \
-                        pytest core/tests/ \
-                        --junitxml=reports/junit-core.xml -v
-                '''
+                bat 'docker compose -f %COMPOSE_FILE% run --rm test pytest core/tests/ --junitxml=reports/junit-core.xml -v'
             }
         }
     }
 
     post {
         always {
-            sh 'docker compose -f $COMPOSE_FILE down -v --remove-orphans || true'
+            // returnStatus: true => n'échoue pas le post même si le "down" retourne une erreur
+            bat(script: 'docker compose -f %COMPOSE_FILE% down -v --remove-orphans', returnStatus: true)
 
             junit allowEmptyResults: true, testResults: 'backend/reports/junit-*.xml'
 
