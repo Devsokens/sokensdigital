@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Eye } from "lucide-react";
 import { MockupScene, type SceneVariant } from "@/components/projects/mockup-scenes";
 
 type Props = {
@@ -14,15 +13,21 @@ type Props = {
 
 /**
  * A floating laptop mockup — idles with a slow, continuous drift/tilt so it
- * never feels static. Shows the animated placeholder scenes until clicked;
- * a click reveals the real video/screenshots with a flash + fade-in.
- * `object-contain` (not `object-cover`) so the full image is always
- * visible, never cropped.
+ * never feels static. Automatically reveals the real video/screenshots a
+ * moment after mount (no click needed) with an iris wipe, then keeps
+ * cycling through screenshots on its own. `object-contain` (not
+ * `object-cover`) so the full image is always visible, never cropped.
  */
 export function LaptopMockup({ title, videoSrc, images, sceneVariants }: Props) {
   const [revealed, setRevealed] = useState(false);
   const hasRealMedia = Boolean(videoSrc || (images && images.length > 0));
   const showReal = hasRealMedia && revealed;
+
+  useEffect(() => {
+    if (!hasRealMedia) return;
+    const id = setTimeout(() => setRevealed(true), 1200);
+    return () => clearTimeout(id);
+  }, [hasRealMedia]);
 
   return (
     <motion.div
@@ -32,22 +37,8 @@ export function LaptopMockup({ title, videoSrc, images, sceneVariants }: Props) 
     >
       {/* Screen */}
       <div className="relative overflow-hidden rounded-t-xl border border-white/15 border-b-0 bg-neutral-900 p-[6px] shadow-2xl shadow-black/40">
-        <button
-          type="button"
-          disabled={!hasRealMedia || revealed}
-          onClick={() => setRevealed(true)}
-          className="relative block aspect-video w-full overflow-hidden rounded-[4px] bg-black"
-        >
+        <div className="relative aspect-video w-full overflow-hidden rounded-[4px] bg-black">
           {!showReal && <PlaceholderReel variants={sceneVariants ?? ["chart"]} />}
-
-          {hasRealMedia && !revealed && (
-            <span className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/50 text-white opacity-0 transition-opacity hover:opacity-100">
-              <span className="flex size-11 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm">
-                <Eye className="size-5" />
-              </span>
-              <span className="text-xs font-medium">Cliquer pour voir</span>
-            </span>
-          )}
 
           {showReal && (
             <>
@@ -67,7 +58,7 @@ export function LaptopMockup({ title, videoSrc, images, sceneVariants }: Props) 
               )}
             </>
           )}
-        </button>
+        </div>
         {/* Webcam notch */}
         <span className="absolute top-1/2 left-1/2 size-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/10" />
       </div>
