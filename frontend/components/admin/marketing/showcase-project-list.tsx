@@ -1,11 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Plus, Trash2, X } from "lucide-react";
+import Link from "next/link";
+import { Diamond, ExternalLink, LayoutGrid, List, Loader2, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/sheet";
-import { inputClass, labelClass } from "@/components/admin/form-styles";
-import { ImageUploadField } from "@/components/admin/marketing/page-section-editor";
+import { cn } from "@/lib/utils";
+import { SectionIcon } from "@/components/dynamic-icon";
+import { IconPicker } from "@/components/admin/marketing/icon-picker";
+import {
+  ImageUploadField,
+  EditableInput,
+  EditableTextarea,
+  RemoveItemButton,
+  AddItemButton,
+} from "@/components/admin/marketing/page-section-editor";
 import {
   listShowcaseProjects,
   createShowcaseProject,
@@ -29,7 +38,7 @@ const EMPTY: ShowcaseProjectInput = {
   tag: "",
   title: "",
   description: "",
-  visual_icon: "",
+  visual_icon: "shield-check",
   video_src: "",
   images: [],
   scene_variants: [],
@@ -44,11 +53,16 @@ const EMPTY: ShowcaseProjectInput = {
   solution_points: [],
 };
 
+function initials(name: string) {
+  return name.trim().split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2) || "?";
+}
+
 export function ShowcaseProjectList() {
   const [projects, setProjects] = useState<ShowcaseProject[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<ShowcaseProject | null>(null);
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState<"list" | "card">("card");
 
   async function load() {
     try {
@@ -73,6 +87,11 @@ export function ShowcaseProjectList() {
     }
   }
 
+  function edit(project: ShowcaseProject) {
+    setEditing(project);
+    setOpen(true);
+  }
+
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!projects) {
     return (
@@ -84,117 +103,219 @@ export function ShowcaseProjectList() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-900">Projets vitrine</h1>
           <p className="text-sm text-neutral-500">
             Les études de cas de la grille /projects et de la fiche détaillée /projects/[slug].
           </p>
         </div>
-        <Sheet
-          open={open && !editing}
-          onOpenChange={(next) => {
-            setOpen(next);
-            if (!next) setEditing(null);
-          }}
-        >
-          <SheetTrigger
-            render={
-              <Button className="gap-1.5 rounded-full px-4">
-                <Plus className="size-4" /> Nouveau projet
-              </Button>
-            }
-          />
-          <SheetContent title="Nouveau projet" className="max-w-2xl">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-full border border-neutral-200 p-0.5">
+            <button
+              type="button"
+              onClick={() => setView("card")}
+              aria-label="Vue carte"
+              aria-pressed={view === "card"}
+              className={cn(
+                "flex size-8 items-center justify-center rounded-full transition-colors",
+                view === "card" ? "bg-neutral-900 text-white" : "text-neutral-400 hover:text-neutral-700"
+              )}
+            >
+              <LayoutGrid className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("list")}
+              aria-label="Vue liste"
+              aria-pressed={view === "list"}
+              className={cn(
+                "flex size-8 items-center justify-center rounded-full transition-colors",
+                view === "list" ? "bg-neutral-900 text-white" : "text-neutral-400 hover:text-neutral-700"
+              )}
+            >
+              <List className="size-4" />
+            </button>
+          </div>
+          <Sheet
+            open={open && !editing}
+            onOpenChange={(next) => {
+              setOpen(next);
+              if (!next) setEditing(null);
+            }}
+          >
+            <SheetTrigger
+              render={
+                <Button className="gap-1.5 rounded-full px-4">
+                  <Plus className="size-4" /> Nouveau projet
+                </Button>
+              }
+            />
+            <SheetContent title="Nouveau projet" className="max-w-3xl">
+              <ShowcaseProjectForm
+                onSaved={() => {
+                  setOpen(false);
+                  load();
+                }}
+              />
+            </SheetContent>
+          </Sheet>
+        </div>
+      </div>
+
+      {projects.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-neutral-200 py-16 text-center text-sm text-neutral-400">
+          Aucun projet pour l&apos;instant.
+        </p>
+      ) : view === "card" ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {projects.map((project) => (
+            <div
+              key={project.id}
+              className="group overflow-hidden rounded-2xl border border-neutral-200 bg-[#0a0e13] transition-colors hover:border-primary/40"
+            >
+              <button
+                type="button"
+                onClick={() => edit(project)}
+                className="relative flex aspect-video w-full items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_65%_25%,color-mix(in_oklch,var(--primary),transparent_78%),transparent_60%),linear-gradient(150deg,oklch(0.17_0.02_235),oklch(0.08_0.01_240))]"
+              >
+                <div className="absolute inset-0 [background-image:linear-gradient(color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px),linear-gradient(90deg,color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px)] [background-size:28px_28px]" />
+                {project.featured && (
+                  <span className="absolute top-3 right-3 rounded-full bg-primary px-3 py-1 text-[10px] font-semibold tracking-[0.1em] text-primary-foreground uppercase">
+                    Featured
+                  </span>
+                )}
+                {!project.is_active && (
+                  <span className="absolute top-3 left-3 rounded-full bg-black/60 px-3 py-1 text-[10px] font-semibold tracking-[0.1em] text-white/70 uppercase">
+                    Inactif
+                  </span>
+                )}
+                <SectionIcon name={project.visual_icon} className="relative size-10 text-primary/50 transition-transform duration-300 group-hover:scale-110" />
+              </button>
+              <div className="p-4">
+                <span className="text-xs text-muted-foreground">{project.client}</span>
+                <h3 className="mt-1 text-base font-semibold text-foreground">{project.title}</h3>
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-foreground/80">
+                    {project.type}
+                  </span>
+                  {project.technologies.slice(0, 2).map((tech) => (
+                    <span key={tech} className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] font-medium text-foreground/80">
+                      {tech}
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
+                  <button type="button" onClick={() => edit(project)} className="text-xs font-medium text-primary hover:underline">
+                    Modifier
+                  </button>
+                  <div className="flex items-center gap-3">
+                    <Link
+                      href={`/projects/${project.slug}`}
+                      target="_blank"
+                      aria-label="Voir le projet"
+                      className="text-muted-foreground transition-colors hover:text-primary"
+                    >
+                      <ExternalLink className="size-3.5" />
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(project)}
+                      aria-label="Supprimer"
+                      className="text-muted-foreground transition-colors hover:text-destructive"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-neutral-200 shadow-sm">
+          <table className="w-full text-sm">
+            <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
+              <tr>
+                <th className="px-4 py-3 font-medium">Titre</th>
+                <th className="px-4 py-3 font-medium">Secteur</th>
+                <th className="px-4 py-3 font-medium">Statut</th>
+                <th className="w-24 px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {projects.map((project) => (
+                <tr key={project.id} className="hover:bg-neutral-50">
+                  <td className="px-4 py-3">
+                    <button type="button" onClick={() => edit(project)} className="text-neutral-900 hover:text-primary">
+                      {project.title}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-neutral-500">{project.sector}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={
+                        project.is_active
+                          ? "rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary"
+                          : "rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500"
+                      }
+                    >
+                      {project.is_active ? "Actif" : "Inactif"}
+                    </span>
+                    {project.show_on_homepage && (
+                      <span className="ml-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">
+                        Accueil
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-3">
+                      <Link
+                        href={`/projects/${project.slug}`}
+                        target="_blank"
+                        aria-label="Voir le projet"
+                        className="text-neutral-400 hover:text-primary"
+                      >
+                        <ExternalLink className="size-4" />
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(project)}
+                        aria-label="Supprimer"
+                        className="text-neutral-400 hover:text-destructive"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Edit sheet — opened from either view via edit(project) */}
+      <Sheet
+        open={open && !!editing}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) setEditing(null);
+        }}
+      >
+        <SheetContent title="Modifier le projet" className="max-w-3xl">
+          {editing && (
             <ShowcaseProjectForm
+              project={editing}
               onSaved={() => {
                 setOpen(false);
+                setEditing(null);
                 load();
               }}
             />
-          </SheetContent>
-        </Sheet>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
-            <tr>
-              <th className="px-4 py-3 font-medium">Titre</th>
-              <th className="px-4 py-3 font-medium">Secteur</th>
-              <th className="px-4 py-3 font-medium">Statut</th>
-              <th className="w-16 px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-100">
-            {projects.map((project) => (
-              <tr key={project.id} className="hover:bg-neutral-50">
-                <td className="px-4 py-3">
-                  <Sheet
-                    open={open && editing?.id === project.id}
-                    onOpenChange={(next) => {
-                      setOpen(next);
-                      setEditing(next ? project : null);
-                    }}
-                  >
-                    <SheetTrigger
-                      render={
-                        <button type="button" className="text-neutral-900 hover:text-primary">
-                          {project.title}
-                        </button>
-                      }
-                    />
-                    <SheetContent title="Modifier le projet" className="max-w-2xl">
-                      <ShowcaseProjectForm
-                        project={project}
-                        onSaved={() => {
-                          setOpen(false);
-                          setEditing(null);
-                          load();
-                        }}
-                      />
-                    </SheetContent>
-                  </Sheet>
-                </td>
-                <td className="px-4 py-3 text-neutral-500">{project.sector}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={
-                      project.is_active
-                        ? "rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary"
-                        : "rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500"
-                    }
-                  >
-                    {project.is_active ? "Actif" : "Inactif"}
-                  </span>
-                  {project.show_on_homepage && (
-                    <span className="ml-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">
-                      Accueil
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(project)}
-                    aria-label="Supprimer"
-                    className="text-neutral-400 hover:text-destructive"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {projects.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-neutral-400">
-                  Aucun projet pour l&apos;instant.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -228,6 +349,12 @@ function toInput(project: ShowcaseProject): ShowcaseProjectInput {
   };
 }
 
+/** The Sheet's body — a faithful, directly-editable reproduction of the
+ * public /projects/[slug] page (same dark card, same layout order: hero
+ * banner -> gallery + specs -> Le Défi -> stats -> La Solution), same
+ * pattern as PageSectionEditor's per-section previews. Admin-only concepts
+ * with no public equivalent (featured/homepage/active/order, scene
+ * variants) sit in a plain light toolbar outside the reproduction. */
 function ShowcaseProjectForm({ project, onSaved }: { project?: ShowcaseProject; onSaved: () => void }) {
   const [form, setForm] = useState<ShowcaseProjectInput>(project ? toInput(project) : EMPTY);
   const [technologiesText, setTechnologiesText] = useState(project?.technologies.join(", ") ?? "");
@@ -254,14 +381,17 @@ function ShowcaseProjectForm({ project, onSaved }: { project?: ShowcaseProject; 
     set("stats", (form.stats ?? []).filter((_, i) => i !== index));
   }
 
+  const technologies = technologiesText.split(",").map((t) => t.trim()).filter(Boolean);
+  const solutionPoints = solutionPointsText.split("\n").map((p) => p.trim()).filter(Boolean);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
     const payload: ShowcaseProjectInput = {
       ...form,
-      technologies: technologiesText.split(",").map((t) => t.trim()).filter(Boolean),
-      solution_points: solutionPointsText.split("\n").map((p) => p.trim()).filter(Boolean),
+      technologies,
+      solution_points: solutionPoints,
     };
 
     setSaving(true);
@@ -280,204 +410,220 @@ function ShowcaseProjectForm({ project, onSaved }: { project?: ShowcaseProject; 
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
         <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
           {error}
         </p>
       )}
 
-      {project?.slug && (
-        <p className="text-[0.7rem] text-neutral-400">Slug : {project.slug}</p>
-      )}
-
-      <label className="block">
-        <span className={labelClass}>Titre</span>
-        <input value={form.title} onChange={(e) => set("title", e.target.value)} className={inputClass} required />
-      </label>
-
-      <label className="block">
-        <span className={labelClass}>Description</span>
-        <textarea value={form.description ?? ""} onChange={(e) => set("description", e.target.value)} className={`${inputClass} min-h-16`} />
-      </label>
-
-      <div className="grid grid-cols-3 gap-4">
-        <label className="block">
-          <span className={labelClass}>Catégorie</span>
-          <input value={form.category} onChange={(e) => set("category", e.target.value)} className={inputClass} placeholder="FINTECH" required />
-        </label>
-        <label className="block">
-          <span className={labelClass}>Secteur</span>
-          <input value={form.sector} onChange={(e) => set("sector", e.target.value)} className={inputClass} placeholder="Fintech" required />
-        </label>
-        <label className="block">
-          <span className={labelClass}>Type</span>
-          <input value={form.type} onChange={(e) => set("type", e.target.value)} className={inputClass} placeholder="Web App" required />
-        </label>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <label className="block">
-          <span className={labelClass}>Tag (affiché sur la fiche)</span>
-          <input value={form.tag ?? ""} onChange={(e) => set("tag", e.target.value)} className={inputClass} placeholder="FINTECH · SÉCURITÉ" />
-        </label>
-        <label className="block">
-          <span className={labelClass}>Statut / date</span>
-          <input value={form.status_tag ?? ""} onChange={(e) => set("status_tag", e.target.value)} className={inputClass} placeholder="2024 · Déploiement" />
-        </label>
-      </div>
-
-      <label className="block">
-        <span className={labelClass}>Icône (lucide-react)</span>
-        <input value={form.visual_icon ?? ""} onChange={(e) => set("visual_icon", e.target.value)} className={inputClass} placeholder="shield-check" />
-      </label>
-
-      <div className="flex flex-wrap items-center gap-4 rounded-lg border border-neutral-200 px-3.5 py-2.5">
+      {/* Admin-only meta — no public equivalent to reproduce */}
+      <div className="flex flex-wrap items-center gap-4 rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 py-2.5">
         <label className="flex items-center gap-1.5 text-sm text-neutral-700">
           <input type="checkbox" checked={form.featured ?? false} onChange={(e) => set("featured", e.target.checked)} />
-          Featured (grille /projects)
+          Featured
         </label>
         <label className="flex items-center gap-1.5 text-sm text-neutral-700">
           <input type="checkbox" checked={form.show_on_homepage ?? false} onChange={(e) => set("show_on_homepage", e.target.checked)} />
-          Afficher sur l&apos;accueil
+          Sur l&apos;accueil
         </label>
         <label className="flex items-center gap-1.5 text-sm text-neutral-700">
           <input type="checkbox" checked={form.is_active ?? true} onChange={(e) => set("is_active", e.target.checked)} />
-          Actif (visible publiquement)
+          Actif
         </label>
-        <label className="ml-auto flex items-center gap-1.5 text-sm text-neutral-700">
+        <label className="flex items-center gap-1.5 text-sm text-neutral-700">
           Ordre
           <input
             type="number"
             value={form.order ?? 0}
             onChange={(e) => set("order", Number(e.target.value))}
-            className="w-16 rounded-md border border-neutral-200 px-2 py-1 text-sm"
+            className="w-14 rounded-md border border-neutral-200 px-2 py-1 text-sm"
           />
         </label>
+        {project?.slug && (
+          <Link
+            href={`/projects/${project.slug}`}
+            target="_blank"
+            className="ml-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+          >
+            Voir le projet <ExternalLink className="size-3" />
+          </Link>
+        )}
       </div>
 
-      <div>
-        <span className={labelClass}>Images</span>
-        <div className="flex flex-wrap items-center gap-2">
-          {(form.images ?? []).map((url, i) => (
-            <div key={i} className="group relative size-14 shrink-0 overflow-hidden rounded-lg border border-neutral-200">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="" className="size-full object-cover" />
-              <button
-                type="button"
-                onClick={() => set("images", (form.images ?? []).filter((_, j) => j !== i))}
-                className="absolute inset-0 flex items-center justify-center bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
-              >
-                <X className="size-4" />
-              </button>
+      {/* Faithful reproduction of /projects/[slug], directly editable */}
+      <div className="rounded-2xl bg-[#0a0e13] p-5 sm:p-8">
+        {/* Hero banner */}
+        <div className="relative flex aspect-[21/9] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_25%_30%,color-mix(in_oklch,var(--primary),transparent_75%),transparent_60%),linear-gradient(135deg,oklch(0.16_0.02_235),oklch(0.06_0.01_240))]">
+          <div className="absolute inset-0 [background-image:linear-gradient(color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px),linear-gradient(90deg,color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px)] [background-size:32px_32px]" />
+          <SectionIcon name={form.visual_icon || "shield-check"} className="relative size-16 text-primary/30 sm:size-24" />
+          <div className="absolute right-3 bottom-3">
+            <IconPicker value={form.visual_icon ?? ""} onChange={(v) => set("visual_icon", v)} />
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-primary/10 px-3 py-1 text-[11px] font-semibold tracking-[0.1em] text-primary uppercase">
+              <EditableInput value={form.category} onChange={(v) => set("category", v)} className="w-32 text-[11px] text-primary uppercase" placeholder="FINTECH" />
+            </span>
+            <span className="text-xs text-muted-foreground">
+              • <EditableInput value={form.status_tag ?? ""} onChange={(v) => set("status_tag", v)} className="w-40 text-xs text-muted-foreground" placeholder="2024 · Déploiement" />
+            </span>
+          </div>
+          <EditableInput
+            value={form.title} onChange={(v) => set("title", v)}
+            className="mt-3 block w-full text-3xl font-semibold tracking-tight text-foreground sm:text-4xl" placeholder="Titre du projet"
+          />
+          <EditableTextarea
+            value={form.description ?? ""} onChange={(v) => set("description", v)}
+            className="mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base" placeholder="Description" rows={2}
+          />
+        </div>
+
+        {/* Gallery + specs */}
+        <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_18rem]">
+          <div>
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-black/20 p-3">
+              {(form.images ?? []).map((url, i) => (
+                <div key={i} className="group relative aspect-video w-32 shrink-0 overflow-hidden rounded-lg border border-white/10">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="" className="size-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => set("images", (form.images ?? []).filter((_, j) => j !== i))}
+                    className="absolute inset-0 flex items-center justify-center bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              ))}
+              <ImageUploadField value="" onChange={(url) => set("images", [...(form.images ?? []), url])} />
             </div>
-          ))}
-          <ImageUploadField value="" onChange={(url) => set("images", [...(form.images ?? []), url])} />
-        </div>
-        <p className="mt-1 text-[0.7rem] text-neutral-400">
-          Plusieurs images s&apos;enchaînent automatiquement sur la fiche projet.
-        </p>
-      </div>
+            <p className="mt-1.5 text-[0.65rem] text-muted-foreground/60">
+              Plusieurs images s&apos;enchaînent automatiquement sur la fiche projet.
+            </p>
 
-      <label className="block">
-        <span className={labelClass}>Vidéo (URL, prioritaire sur les images)</span>
-        <input value={form.video_src ?? ""} onChange={(e) => set("video_src", e.target.value)} className={inputClass} placeholder="https://…" />
-      </label>
-
-      <div>
-        <span className={labelClass}>Scènes animées (tant qu&apos;aucune image/vidéo réelle)</span>
-        <div className="flex flex-wrap gap-1.5">
-          {SCENE_VARIANTS.map((variant) => (
-            <button
-              key={variant}
-              type="button"
-              onClick={() => toggleSceneVariant(variant)}
-              className={
-                (form.scene_variants ?? []).includes(variant)
-                  ? "rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary"
-                  : "rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-500"
-              }
-            >
-              {variant}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4">
-        <label className="block">
-          <span className={labelClass}>Client</span>
-          <input value={form.client ?? ""} onChange={(e) => set("client", e.target.value)} className={inputClass} />
-        </label>
-        <label className="block">
-          <span className={labelClass}>Durée</span>
-          <input value={form.timeline ?? ""} onChange={(e) => set("timeline", e.target.value)} className={inputClass} placeholder="6 Mois" />
-        </label>
-        <label className="block" />
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <label className="block">
-          <span className={labelClass}>Responsable (nom)</span>
-          <input value={form.lead_name ?? ""} onChange={(e) => set("lead_name", e.target.value)} className={inputClass} />
-        </label>
-        <label className="block">
-          <span className={labelClass}>Responsable (rôle)</span>
-          <input value={form.lead_role ?? ""} onChange={(e) => set("lead_role", e.target.value)} className={inputClass} />
-        </label>
-      </div>
-
-      <label className="block">
-        <span className={labelClass}>Technologies (séparées par des virgules)</span>
-        <input value={technologiesText} onChange={(e) => setTechnologiesText(e.target.value)} className={inputClass} placeholder="Rust, Kubernetes, gRPC" />
-      </label>
-
-      <label className="block">
-        <span className={labelClass}>Le Défi</span>
-        <textarea value={form.challenge ?? ""} onChange={(e) => set("challenge", e.target.value)} className={`${inputClass} min-h-24`} />
-      </label>
-
-      <div>
-        <span className={labelClass}>Statistiques</span>
-        <div className="space-y-2">
-          {(form.stats ?? []).map((stat, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <input
-                value={stat.value}
-                onChange={(e) => updateStat(i, "value", e.target.value)}
-                className={`${inputClass} w-24`}
-                placeholder="+40%"
-              />
-              <input
-                value={stat.label}
-                onChange={(e) => updateStat(i, "label", e.target.value)}
-                className={inputClass}
-                placeholder="Efficiency Gain"
-              />
-              <button type="button" onClick={() => removeStat(i)} className="shrink-0 text-neutral-400 hover:text-destructive">
-                <X className="size-4" />
-              </button>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {SCENE_VARIANTS.map((variant) => (
+                <button
+                  key={variant}
+                  type="button"
+                  onClick={() => toggleSceneVariant(variant)}
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-[10px] uppercase tracking-wide",
+                    (form.scene_variants ?? []).includes(variant) ? "bg-primary/15 text-primary" : "bg-white/[0.04] text-muted-foreground"
+                  )}
+                >
+                  {variant}
+                </button>
+              ))}
             </div>
-          ))}
-          <button type="button" onClick={addStat} className="text-xs font-medium text-primary hover:underline">
-            + Ajouter une statistique
-          </button>
+            <p className="mt-1 text-[0.65rem] text-muted-foreground/60">
+              Scènes animées utilisées tant qu&apos;aucune image/vidéo réelle n&apos;est ajoutée.
+            </p>
+            <EditableInput
+              value={form.video_src ?? ""} onChange={(v) => set("video_src", v)}
+              className="mt-2 block w-full text-xs text-muted-foreground" placeholder="URL vidéo (prioritaire sur les images)"
+            />
+          </div>
+
+          <aside className="h-fit rounded-2xl border border-white/10 bg-card/60 p-5">
+            <h3 className="text-base font-semibold text-foreground">Technical Specs</h3>
+
+            <div className="mt-5">
+              <span className="text-[11px] font-semibold tracking-[0.1em] text-muted-foreground uppercase">Client</span>
+              <EditableInput value={form.client ?? ""} onChange={(v) => set("client", v)} className="mt-1 block w-full text-sm font-medium text-foreground" placeholder="Nom du client" />
+            </div>
+
+            <div className="mt-4">
+              <span className="text-[11px] font-semibold tracking-[0.1em] text-muted-foreground uppercase">Technologies</span>
+              <input
+                value={technologiesText}
+                onChange={(e) => setTechnologiesText(e.target.value)}
+                className="mt-1.5 w-full rounded-md bg-white/[0.06] px-1.5 py-1 text-xs text-foreground outline-none ring-1 ring-white/10 focus:bg-white/10 focus:ring-primary/50"
+                placeholder="Rust, Kubernetes, gRPC"
+              />
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {technologies.map((tech) => (
+                  <span key={tech} className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-[11px] font-medium text-foreground">
+                    {tech}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <span className="text-[11px] font-semibold tracking-[0.1em] text-muted-foreground uppercase">Calendrier</span>
+              <EditableInput value={form.timeline ?? ""} onChange={(v) => set("timeline", v)} className="mt-1 block w-full text-sm text-foreground" placeholder="6 Mois" />
+            </div>
+
+            <div className="mt-4 border-t border-white/10 pt-4">
+              <span className="text-[11px] font-semibold tracking-[0.1em] text-muted-foreground uppercase">Chef de Projet</span>
+              <div className="mt-2 flex items-center gap-3">
+                <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+                  {initials(form.lead_name ?? "")}
+                </span>
+                <span className="flex-1">
+                  <EditableInput value={form.lead_name ?? ""} onChange={(v) => set("lead_name", v)} className="block w-full text-sm font-medium text-foreground" placeholder="Nom" />
+                  <EditableInput value={form.lead_role ?? ""} onChange={(v) => set("lead_role", v)} className="mt-0.5 block w-full text-xs text-muted-foreground" placeholder="Rôle" />
+                </span>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        {/* Le Défi */}
+        <div className="mt-14">
+          <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Le Défi</h2>
+          <EditableTextarea
+            value={form.challenge ?? ""} onChange={(v) => set("challenge", v)}
+            className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base" placeholder="Le contexte et le problème à résoudre…" rows={3}
+          />
+        </div>
+
+        {/* Stats */}
+        <div className="mt-8">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {(form.stats ?? []).map((stat, i) => (
+              <div key={i} className="group relative rounded-2xl border border-white/10 bg-card/60 p-6 text-center">
+                <RemoveItemButton onClick={() => removeStat(i)} />
+                <EditableInput value={stat.value} onChange={(v) => updateStat(i, "value", v)} className="mx-auto block w-24 text-center text-3xl font-bold text-primary" placeholder="+40%" />
+                <EditableInput value={stat.label} onChange={(v) => updateStat(i, "label", v)} className="mx-auto mt-1 block w-full text-center text-xs font-medium tracking-[0.1em] text-muted-foreground uppercase" placeholder="Label" />
+              </div>
+            ))}
+            <AddItemButton label="Ajouter une statistique" onClick={addStat} />
+          </div>
+        </div>
+
+        {/* La Solution */}
+        <div className="mt-14">
+          <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">La Solution</h2>
+          <EditableTextarea
+            value={form.solution ?? ""} onChange={(v) => set("solution", v)}
+            className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base" placeholder="L'approche mise en œuvre…" rows={3}
+          />
+          <div className="mt-5">
+            <textarea
+              value={solutionPointsText}
+              onChange={(e) => setSolutionPointsText(e.target.value)}
+              rows={4}
+              className="w-full max-w-3xl resize-none rounded-md bg-white/[0.06] px-2 py-1.5 text-sm text-muted-foreground outline-none ring-1 ring-white/10 focus:bg-white/10 focus:ring-primary/50"
+              placeholder={"Un point clé par ligne…"}
+            />
+            <ul className="mt-4 space-y-3">
+              {solutionPoints.map((point) => (
+                <li key={point} className="flex items-start gap-3">
+                  <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Diamond className="size-2.5 fill-primary" />
+                  </span>
+                  <span className="text-sm leading-relaxed text-muted-foreground">{point}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </div>
-
-      <label className="block">
-        <span className={labelClass}>La Solution</span>
-        <textarea value={form.solution ?? ""} onChange={(e) => set("solution", e.target.value)} className={`${inputClass} min-h-24`} />
-      </label>
-
-      <label className="block">
-        <span className={labelClass}>Points clés de la solution (un par ligne)</span>
-        <textarea
-          value={solutionPointsText}
-          onChange={(e) => setSolutionPointsText(e.target.value)}
-          className={`${inputClass} min-h-24`}
-        />
-      </label>
 
       <div className="flex items-center justify-between pt-2">
         <SheetClose render={<Button type="button" variant="outline" className="rounded-full px-4">Annuler</Button>} />

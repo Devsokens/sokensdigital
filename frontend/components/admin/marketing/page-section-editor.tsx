@@ -107,7 +107,7 @@ export function PageSectionEditor({ page }: { page: SitePage }) {
 
 /* ---------- inline-editable primitives ---------- */
 
-function EditableInput({
+export function EditableInput({
   value, onChange, className, placeholder,
 }: { value: string; onChange: (v: string) => void; className?: string; placeholder?: string }) {
   return (
@@ -124,7 +124,7 @@ function EditableInput({
   );
 }
 
-function EditableTextarea({
+export function EditableTextarea({
   value, onChange, className, placeholder, rows = 2,
 }: { value: string; onChange: (v: string) => void; className?: string; placeholder?: string; rows?: number }) {
   return (
@@ -354,7 +354,7 @@ function field(data: PageSectionInput, key: keyof PageSectionInput) {
   return (data[key] as string) ?? "";
 }
 
-function RemoveItemButton({ onClick }: { onClick: () => void }) {
+export function RemoveItemButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -365,7 +365,7 @@ function RemoveItemButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-function AddItemButton({ onClick, label }: { onClick: () => void; label: string }) {
+export function AddItemButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
     <button
       onClick={onClick}
