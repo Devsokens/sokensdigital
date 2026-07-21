@@ -14,6 +14,8 @@ export type Project = {
   description: string;
   /** Icon name (e.g. "shield-check"), resolved via components/dynamic-icon's SectionIcon — not a component reference. */
   visualIcon: string;
+  /** The live/deployed product itself — not this site's own detail page. */
+  projectUrl?: string;
   /** Real demo video, set once the back office provides one. Takes priority over `images`. */
   videoSrc?: string;
   /** Real screenshots, set once the back office provides them. Auto-cycled with a crossfade. */

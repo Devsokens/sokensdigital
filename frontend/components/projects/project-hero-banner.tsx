@@ -1,3 +1,4 @@
+import { ExternalLink } from "lucide-react";
 import { SectionIcon } from "@/components/dynamic-icon";
 
 type Props = {
@@ -6,9 +7,10 @@ type Props = {
   statusTag: string;
   title: string;
   description: string;
+  projectUrl?: string;
 };
 
-export function ProjectHeroBanner({ icon, category, statusTag, title, description }: Props) {
+export function ProjectHeroBanner({ icon, category, statusTag, title, description, projectUrl }: Props) {
   return (
     <div>
       <div
@@ -32,6 +34,17 @@ export function ProjectHeroBanner({ icon, category, statusTag, title, descriptio
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
           {description}
         </p>
+        {projectUrl && (
+          <a
+            href={projectUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Visiter le projet
+            <ExternalLink className="size-3.5" />
+          </a>
+        )}
       </div>
     </div>
   );

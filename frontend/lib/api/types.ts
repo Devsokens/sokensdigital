@@ -155,6 +155,8 @@ export interface ShowcaseProject {
   title: string;
   description: string;
   visual_icon: string;
+  /** The live/deployed product itself — not this site's own detail page. */
+  project_url: string;
   video_src: string;
   images: string[];
   scene_variants: string[];

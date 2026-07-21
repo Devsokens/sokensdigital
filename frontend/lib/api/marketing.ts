@@ -175,6 +175,7 @@ export interface ShowcaseProjectInput {
   title: string;
   description?: string;
   visual_icon?: string;
+  project_url?: string;
   video_src?: string;
   images?: string[];
   scene_variants?: string[];

@@ -16,6 +16,7 @@ function toProject(p: ApiShowcaseProject): Project {
     title: p.title,
     description: p.description,
     visualIcon: p.visual_icon,
+    projectUrl: p.project_url || undefined,
     videoSrc: p.video_src || undefined,
     images: p.images?.length ? p.images : undefined,
     sceneVariants: p.scene_variants?.length ? (p.scene_variants as SceneVariant[]) : undefined,

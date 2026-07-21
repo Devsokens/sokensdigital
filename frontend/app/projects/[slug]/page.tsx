@@ -63,10 +63,11 @@ export default async function ProjectDetailPage({
             statusTag={project.statusTag}
             title={project.title}
             description={project.description}
+            projectUrl={project.projectUrl}
           />
 
           <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_18rem]">
-            <ProjectGallery title={project.title} />
+            <ProjectGallery title={project.title} images={project.images} videoSrc={project.videoSrc} />
             <TechnicalSpecs
               client={project.client}
               technologies={project.technologies}

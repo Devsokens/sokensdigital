@@ -42,6 +42,7 @@ const EMPTY: ShowcaseProjectInput = {
   title: "",
   description: "",
   visual_icon: "shield-check",
+  project_url: "",
   video_src: "",
   images: [],
   scene_variants: [],
@@ -377,6 +378,7 @@ function toInput(project: ShowcaseProject): ShowcaseProjectInput {
     title: project.title,
     description: project.description,
     visual_icon: project.visual_icon,
+    project_url: project.project_url,
     video_src: project.video_src,
     images: project.images,
     scene_variants: project.scene_variants,
@@ -572,6 +574,13 @@ function ShowcaseProjectForm({ project, onSaved }: { project?: ShowcaseProject; 
             value={form.description ?? ""} onChange={(v) => set("description", v)}
             className="mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base" placeholder="Description" rows={2}
           />
+          <div className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground">
+            Visiter le projet
+            <EditableInput
+              value={form.project_url ?? ""} onChange={(v) => set("project_url", v)}
+              className="w-48 bg-white/10 text-xs text-primary-foreground ring-primary-foreground/30" placeholder="https://… (optionnel)"
+            />
+          </div>
         </div>
 
         {/* Gallery + specs */}

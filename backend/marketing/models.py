@@ -341,6 +341,10 @@ class ShowcaseProject(LoggedModel):
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     visual_icon = models.CharField(max_length=100, blank=True)
+    # The live/deployed product itself — distinct from this site's own
+    # /projects/<slug> case-study page, which is what visitors are already
+    # on when they see the "Visiter le projet" button that uses this.
+    project_url = models.URLField(blank=True)
     video_src = models.URLField(blank=True)
     images = models.JSONField(default=list, blank=True)
     scene_variants = models.JSONField(default=list, blank=True)

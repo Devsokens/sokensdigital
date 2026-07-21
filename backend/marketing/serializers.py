@@ -177,9 +177,9 @@ class ShowcaseProjectSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'slug', 'category', 'sector', 'type', 'featured', 'show_on_homepage',
             'order', 'is_active', 'status_tag', 'tag', 'title', 'description', 'visual_icon',
-            'video_src', 'images', 'scene_variants', 'client', 'technologies', 'timeline',
-            'lead_name', 'lead_role', 'challenge', 'stats', 'solution', 'solution_points',
-            'created_at',
+            'project_url', 'video_src', 'images', 'scene_variants', 'client', 'technologies',
+            'timeline', 'lead_name', 'lead_role', 'challenge', 'stats', 'solution',
+            'solution_points', 'created_at',
         ]
 
 
@@ -191,8 +191,8 @@ class ShowcaseProjectPublicSerializer(serializers.ModelSerializer):
         model = ShowcaseProject
         fields = [
             'slug', 'category', 'sector', 'type', 'featured', 'status_tag', 'tag', 'title',
-            'description', 'visual_icon', 'video_src', 'images', 'scene_variants', 'client',
-            'technologies', 'timeline', 'lead_name', 'lead_role', 'challenge', 'stats',
+            'description', 'visual_icon', 'project_url', 'video_src', 'images', 'scene_variants',
+            'client', 'technologies', 'timeline', 'lead_name', 'lead_role', 'challenge', 'stats',
             'solution', 'solution_points',
         ]
 

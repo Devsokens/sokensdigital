@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { LayoutDashboard, Smartphone, Server, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -11,9 +12,77 @@ const VIEWS = [
   { key: "analytics", label: "Vue analytique", icon: BarChart3 },
 ];
 
-export function ProjectGallery({ title }: { title: string }) {
+const CYCLE_DURATION = 5000;
+
+type Props = {
+  title: string;
+  images?: string[];
+  videoSrc?: string;
+};
+
+export function ProjectGallery({ title, images, videoSrc }: Props) {
+  const hasImages = Boolean(images && images.length > 0);
+  const hasMedia = Boolean(videoSrc) || hasImages;
   const [active, setActive] = useState(0);
-  const ActiveIcon = VIEWS[active].icon;
+
+  useEffect(() => {
+    if (!hasImages || !images || images.length < 2) return;
+    const id = setInterval(() => setActive((i) => (i + 1) % images.length), CYCLE_DURATION);
+    return () => clearInterval(id);
+  }, [hasImages, images]);
+
+  if (hasMedia) {
+    return (
+      <div>
+        <div className="relative aspect-video overflow-hidden rounded-2xl border border-white/10 bg-black">
+          {videoSrc ? (
+            <video
+              src={videoSrc}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 h-full w-full object-contain"
+            />
+          ) : (
+            <AnimatePresence mode="sync">
+              <motion.img
+                key={images![active]}
+                src={images![active]}
+                alt={title}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                className="absolute inset-0 h-full w-full object-contain"
+              />
+            </AnimatePresence>
+          )}
+        </div>
+
+        {!videoSrc && images && images.length > 1 && (
+          <div className="mt-3 grid grid-cols-4 gap-3">
+            {images.map((url, i) => (
+              <button
+                key={url}
+                type="button"
+                onClick={() => setActive(i)}
+                aria-label={`Image ${i + 1}`}
+                aria-pressed={active === i}
+                className={cn(
+                  "relative aspect-video overflow-hidden rounded-lg border transition-colors",
+                  active === i ? "border-primary/60" : "border-white/10 hover:border-white/20"
+                )}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" className="size-full object-cover" />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -22,7 +91,10 @@ export function ProjectGallery({ title }: { title: string }) {
         className="relative flex aspect-video items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_60%_20%,color-mix(in_oklch,var(--primary),transparent_78%),transparent_60%),linear-gradient(150deg,oklch(0.16_0.02_235),oklch(0.07_0.01_240))]"
       >
         <div className="absolute inset-0 [background-image:linear-gradient(color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px),linear-gradient(90deg,color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px)] [background-size:28px_28px]" />
-        <ActiveIcon className="relative size-14 text-primary/40" />
+        {(() => {
+          const ActiveIcon = VIEWS[active].icon;
+          return <ActiveIcon className="relative size-14 text-primary/40" />;
+        })()}
       </div>
 
       <div className="mt-3 grid grid-cols-4 gap-3">
