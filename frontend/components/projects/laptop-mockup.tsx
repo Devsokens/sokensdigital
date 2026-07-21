@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { MockupScene, type SceneVariant } from "@/components/projects/mockup-scenes";
-
-const KEN_BURNS_DURATION = 6;
+import { FramedImage, KEN_BURNS_DURATION } from "@/components/projects/framed-image";
 
 type Props = {
   title: string;
@@ -103,20 +102,13 @@ function ImageReel({ title, images }: { title: string; images: string[] }) {
   return (
     <motion.div
       key={images[index]}
-      className="absolute inset-0 overflow-hidden"
+      className="absolute inset-0"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
     >
-      <motion.img
-        src={images[index]}
-        alt={title}
-        className="absolute inset-0 h-full w-full object-contain"
-        initial={{ scale: 1, x: 0, y: 0 }}
-        animate={{ scale: 1.09, ...pan }}
-        transition={{ duration: KEN_BURNS_DURATION, ease: "easeOut" }}
-      />
+      <FramedImage src={images[index]} alt={title} pan={pan} />
     </motion.div>
   );
 }

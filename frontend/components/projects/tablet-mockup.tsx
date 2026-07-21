@@ -3,25 +3,37 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { BlueprintDiagram } from "@/components/sections/expertise/blueprint-diagram";
-
-const KEN_BURNS_DURATION = 6;
+import { FramedImage, KEN_BURNS_DURATION } from "@/components/projects/framed-image";
 
 /**
  * A floating tablet mockup — fully automatic, cinematic "Ken Burns" style:
- * the device drifts with real 3D depth (rotateX/rotateY), and whichever
- * visual is on screen (blueprint diagram or uploaded image) slowly
- * zooms/pans on its own. Swapping between diagram and image is a soft
- * crossfade, not a hard cut. `object-contain` so the full image is always
- * visible, never cropped.
+ * the device drifts with real 3D depth (rotateX/rotateY). With no images
+ * it shows the animated blueprint diagram; once one or more images are
+ * set, it auto-reveals them and — with several — cycles through them like
+ * a slideshow, each one filling the screen edge-to-edge (blurred backdrop)
+ * while staying fully visible on top (never cropped).
  */
-export function TabletMockup({ imageUrl }: { imageUrl?: string }) {
-  const [showImage, setShowImage] = useState(false);
+export function TabletMockup({ images }: { images?: string[] }) {
+  const hasImages = Boolean(images && images.length > 0);
+  const [revealed, setRevealed] = useState(false);
+  const [index, setIndex] = useState(0);
+  const showReal = hasImages && revealed;
 
   useEffect(() => {
-    if (!imageUrl) return;
-    const id = setInterval(() => setShowImage((v) => !v), KEN_BURNS_DURATION * 1000);
+    setRevealed(false);
+    setIndex(0);
+    if (!hasImages) return;
+    const id = setTimeout(() => setRevealed(true), 1200);
+    return () => clearTimeout(id);
+  }, [hasImages]);
+
+  useEffect(() => {
+    if (!showReal || !images || images.length < 2) return;
+    const id = setInterval(() => setIndex((i) => (i + 1) % images.length), KEN_BURNS_DURATION * 1000);
     return () => clearInterval(id);
-  }, [imageUrl]);
+  }, [showReal, images]);
+
+  const pan = index % 2 === 0 ? { x: -10, y: 6 } : { x: 10, y: -6 };
 
   return (
     <motion.div
@@ -33,7 +45,7 @@ export function TabletMockup({ imageUrl }: { imageUrl?: string }) {
         <span className="absolute top-1 left-1/2 z-10 size-1 -translate-x-1/2 rounded-full bg-white/20" />
         <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[12px] bg-black">
           <AnimatePresence mode="sync">
-            {!showImage && (
+            {!showReal && (
               <motion.div
                 key="diagram"
                 className="absolute inset-0 p-4"
@@ -45,23 +57,16 @@ export function TabletMockup({ imageUrl }: { imageUrl?: string }) {
                 <BlueprintDiagram />
               </motion.div>
             )}
-            {imageUrl && showImage && (
+            {showReal && (
               <motion.div
-                key="image"
-                className="absolute inset-0 overflow-hidden"
+                key={images![index]}
+                className="absolute inset-0"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
               >
-                <motion.img
-                  src={imageUrl}
-                  alt=""
-                  className="absolute inset-0 h-full w-full object-contain"
-                  initial={{ scale: 1, x: 0, y: 0 }}
-                  animate={{ scale: 1.09, x: -10, y: 6 }}
-                  transition={{ duration: KEN_BURNS_DURATION, ease: "easeOut" }}
-                />
+                <FramedImage src={images![index]} pan={pan} />
               </motion.div>
             )}
           </AnimatePresence>

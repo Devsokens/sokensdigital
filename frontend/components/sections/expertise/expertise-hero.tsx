@@ -22,7 +22,7 @@ const DEFAULT_SUBTITLE =
   "Propulsez votre entreprise vers l'avenir avec des infrastructures logicielles de haute précision. Nous concevons des écosystèmes scalables, sécurisés et centrés sur la performance pour les leaders de demain.";
 const DEFAULT_PANEL = {
   header: "Soken's Digital — Solutions Logicielles",
-  image_url: "",
+  images: [] as string[],
   label: "Architecture High-Load",
   sublabel: "Précision Sans Compromis",
 };
@@ -33,10 +33,12 @@ export function ExpertiseHero({ section }: { section?: PageSection | null }) {
   const subtitle = section?.subtitle || DEFAULT_SUBTITLE;
   const ctaLabel = section?.cta_label || "Démarrer un projet";
   const ctaLink = section?.cta_link || "/demarrer-un-projet";
-  const rawPanel = section?.items?.[0] as { header?: string; image_url?: string; label: string; sublabel: string } | undefined;
+  const rawPanel = section?.items?.[0] as
+    | { header?: string; images?: string[]; image_url?: string; label: string; sublabel: string }
+    | undefined;
   const panel = {
     header: rawPanel?.header || DEFAULT_PANEL.header,
-    image_url: rawPanel?.image_url || DEFAULT_PANEL.image_url,
+    images: rawPanel?.images?.length ? rawPanel.images : rawPanel?.image_url ? [rawPanel.image_url] : DEFAULT_PANEL.images,
     label: rawPanel?.label || DEFAULT_PANEL.label,
     sublabel: rawPanel?.sublabel || DEFAULT_PANEL.sublabel,
   };
@@ -99,7 +101,7 @@ export function ExpertiseHero({ section }: { section?: PageSection | null }) {
             </span>
 
             <div className="mt-4">
-              <TabletMockup imageUrl={panel.image_url || undefined} />
+              <TabletMockup images={panel.images} />
             </div>
 
             <div className="mt-5">

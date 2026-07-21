@@ -18,6 +18,8 @@ import { uploadImage } from "@/lib/api/upload";
 import type { PageSection, SectionKey, SitePage } from "@/lib/api/types";
 import { IconPicker, SectionIcon } from "@/components/admin/marketing/icon-picker";
 import { TabletMockup } from "@/components/projects/tablet-mockup";
+import { LaptopMockup } from "@/components/projects/laptop-mockup";
+import { PROJECTS } from "@/lib/projects/projects";
 
 function initials(name: string) {
   return name.replace("Dr. ", "").split(" ").map((p) => p[0]).join("").slice(0, 2);
@@ -506,21 +508,42 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
       );
     }
 
-    case "recent_projects":
+    case "recent_projects": {
+      const sample = PROJECTS[0];
       return (
-        <div>
-          {editing ? (
-            <EditableInput value={field(data, "kicker")} onChange={(v) => setForm((p) => ({ ...p, kicker: v }))} className="text-xs font-semibold tracking-[0.15em] text-primary uppercase" placeholder="Kicker" />
-          ) : (
-            <span className="text-xs font-semibold tracking-[0.15em] text-primary uppercase">{data.kicker}</span>
-          )}
-          {editing ? (
-            <EditableInput value={field(data, "title")} onChange={(v) => setForm((p) => ({ ...p, title: v }))} className="mt-1 block w-full text-xl font-semibold text-foreground" placeholder="Titre" />
-          ) : (
-            <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground">{data.title}</h2>
-          )}
+        <div className="overflow-hidden rounded-3xl border border-white/10 bg-card/60 p-5 sm:p-8">
+          <div className="mb-6">
+            {editing ? (
+              <EditableInput value={field(data, "kicker")} onChange={(v) => setForm((p) => ({ ...p, kicker: v }))} className="text-xs font-semibold tracking-[0.15em] text-primary uppercase" placeholder="Kicker" />
+            ) : (
+              <span className="text-xs font-semibold tracking-[0.15em] text-primary uppercase">{data.kicker}</span>
+            )}
+            {editing ? (
+              <EditableInput value={field(data, "title")} onChange={(v) => setForm((p) => ({ ...p, title: v }))} className="mt-1 block w-full text-xl font-semibold text-foreground" placeholder="Titre" />
+            ) : (
+              <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground">{data.title}</h2>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:items-center">
+            <LaptopMockup
+              title={sample.title}
+              videoSrc={sample.videoSrc}
+              images={sample.images}
+              sceneVariants={sample.sceneVariants}
+            />
+            <div>
+              <span className="text-xs font-semibold tracking-[0.1em] text-primary uppercase">{sample.tag}</span>
+              <h3 className="mt-2 text-2xl font-semibold text-foreground sm:text-3xl">{sample.title}</h3>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">{sample.description}</p>
+            </div>
+          </div>
+          <p className="mt-6 text-[0.65rem] text-muted-foreground/60">
+            Le carrousel (3 projets, images, textes) provient du code (lib/projects) et n&apos;est pas modifiable ici — seuls le kicker et le titre le sont.
+          </p>
         </div>
       );
+    }
 
     case "testimonials": {
       const testimonials = items as { quote: string; name: string; role: string }[];
@@ -696,40 +719,55 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
       );
 
     case "expertise_hero": {
-      const panel = (items[0] as { header?: string; image_url?: string; label: string; sublabel: string } | undefined)
-        ?? { header: "", image_url: "", label: "", sublabel: "" };
+      const rawPanel = items[0] as { header?: string; images?: string[]; image_url?: string; label: string; sublabel: string } | undefined;
+      const panel = {
+        header: rawPanel?.header ?? "",
+        images: rawPanel?.images?.length ? rawPanel.images : rawPanel?.image_url ? [rawPanel.image_url] : [],
+        label: rawPanel?.label ?? "",
+        sublabel: rawPanel?.sublabel ?? "",
+      };
+      function updatePanelImages(newImages: string[]) {
+        setForm((prev) => {
+          const current = prev.items ?? [];
+          const padded = current.length > 0 ? current : [{}];
+          return { ...prev, items: padded.map((it, i) => (i === 0 ? { ...it, images: newImages } : it)) };
+        });
+      }
       return (
-        <div className="mx-auto max-w-2xl text-center">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-1.5 text-[11px] font-medium tracking-[0.15em] text-primary uppercase">
-            <Diamond className="size-2.5 fill-primary" />
-            {editing ? (
-              <EditableInput value={field(data, "kicker")} onChange={(v) => setForm((p) => ({ ...p, kicker: v }))} className="w-64 text-center" placeholder="Kicker" />
-            ) : data.kicker}
-          </div>
-          {editing ? (
-            <EditableInput value={field(data, "title")} onChange={(v) => setForm((p) => ({ ...p, title: v }))} className="w-full text-3xl font-semibold tracking-tight text-foreground sm:text-4xl" placeholder="Titre" />
-          ) : (
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">{data.title}</h1>
-          )}
-          {editing ? (
-            <EditableTextarea value={field(data, "subtitle")} onChange={(v) => setForm((p) => ({ ...p, subtitle: v }))} className="mx-auto mt-4 max-w-xl text-sm text-muted-foreground" placeholder="Sous-titre" />
-          ) : (
-            <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">{data.subtitle}</p>
-          )}
-          <div className="mt-6 flex flex-col items-center gap-1">
-            <span className="rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground">
+        <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
+          <div>
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-1.5 text-[11px] font-medium tracking-[0.15em] text-primary uppercase">
+              <Diamond className="size-2.5 fill-primary" />
               {editing ? (
-                <EditableInput value={field(data, "cta_label")} onChange={(v) => setForm((p) => ({ ...p, cta_label: v }))} className="w-52 bg-white/10 text-center text-primary-foreground ring-primary-foreground/30" placeholder="Bouton" />
-              ) : data.cta_label}
-            </span>
-            {editing && (
-              <EditableInput value={field(data, "cta_link")} onChange={(v) => setForm((p) => ({ ...p, cta_link: v }))} className="w-52 text-center text-[0.65rem] text-muted-foreground" placeholder="/lien" />
+                <EditableInput value={field(data, "kicker")} onChange={(v) => setForm((p) => ({ ...p, kicker: v }))} className="w-64" placeholder="Kicker" />
+              ) : data.kicker}
+            </div>
+            {editing ? (
+              <EditableInput value={field(data, "title")} onChange={(v) => setForm((p) => ({ ...p, title: v }))} className="w-full text-3xl font-semibold tracking-tight text-foreground sm:text-4xl" placeholder="Titre" />
+            ) : (
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">{data.title}</h1>
             )}
+            {editing ? (
+              <EditableTextarea value={field(data, "subtitle")} onChange={(v) => setForm((p) => ({ ...p, subtitle: v }))} className="mt-4 max-w-lg text-sm text-muted-foreground" placeholder="Sous-titre" />
+            ) : (
+              <p className="mt-4 max-w-lg text-sm leading-relaxed text-muted-foreground">{data.subtitle}</p>
+            )}
+            <div className="mt-9 flex flex-col items-start gap-1">
+              <span className="rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground">
+                {editing ? (
+                  <EditableInput value={field(data, "cta_label")} onChange={(v) => setForm((p) => ({ ...p, cta_label: v }))} className="w-52 bg-white/10 text-center text-primary-foreground ring-primary-foreground/30" placeholder="Bouton" />
+                ) : data.cta_label}
+              </span>
+              {editing && (
+                <EditableInput value={field(data, "cta_link")} onChange={(v) => setForm((p) => ({ ...p, cta_link: v }))} className="w-52 text-[0.65rem] text-muted-foreground" placeholder="/lien" />
+              )}
+            </div>
           </div>
-          <div className="mt-8">
+
+          <div className="text-center">
             {editing ? (
               <EditableInput
-                value={panel.header ?? ""} onChange={(v) => updateItem(0, "header", v)}
+                value={panel.header} onChange={(v) => updateItem(0, "header", v)}
                 className="mx-auto block w-full max-w-md text-center font-mono text-[10px] tracking-wide text-muted-foreground uppercase" placeholder="Soken's Digital — Solutions Logicielles"
               />
             ) : (
@@ -739,14 +777,29 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
             )}
 
             <div className="mt-4">
-              <TabletMockup imageUrl={panel.image_url || undefined} />
+              <TabletMockup images={panel.images} />
             </div>
 
             {editing && (
               <div className="mx-auto mt-3 flex max-w-md flex-col items-center gap-2">
-                <ImageUploadField value={panel.image_url ?? ""} onChange={(url) => updateItem(0, "image_url", url)} />
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {panel.images.map((url, i) => (
+                    <div key={i} className="group relative size-12 shrink-0 overflow-hidden rounded-lg border border-white/15">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="" className="size-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => updatePanelImages(panel.images.filter((_, j) => j !== i))}
+                        className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100"
+                      >
+                        <Trash2 className="size-3.5 text-white" />
+                      </button>
+                    </div>
+                  ))}
+                  <ImageUploadField value="" onChange={(url) => updatePanelImages([...panel.images, url])} />
+                </div>
                 <p className="text-[0.65rem] text-muted-foreground/60">
-                  Remplace le schéma d&apos;architecture animé par une image — laisse vide pour garder le schéma par défaut.
+                  Une ou plusieurs images remplacent le schéma d&apos;architecture animé — avec plusieurs, elles s&apos;enchaînent automatiquement. Laisse vide pour garder le schéma par défaut.
                 </p>
               </div>
             )}
