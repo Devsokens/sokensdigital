@@ -1,26 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   Legend,
   Pie,
   PieChart,
-  PolarAngleAxis,
-  RadialBar,
-  RadialBarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
-import { ArrowDownRight, ArrowUpRight, ArrowRight, Loader2, Sparkles } from "lucide-react";
+import { Loader2, Megaphone, Newspaper, TrendingUp, Users } from "lucide-react";
 import { getMarketingDashboard } from "@/lib/api/marketing";
 import type { MarketingDashboard } from "@/lib/api/types";
 
@@ -48,20 +42,6 @@ const SOCIAL_STATUS_LABELS: Record<string, string> = {
   CANCELLED: "Annulé",
 };
 
-const PLATFORM_SHORT_LABELS: Record<string, string> = {
-  LINKEDIN: "LinkedIn",
-  TWITTER: "X",
-  FACEBOOK: "Facebook",
-  INSTAGRAM: "Instagram",
-  YOUTUBE: "YouTube",
-};
-
-const ACTIVE_STATUS_COLORS: Record<string, string> = {
-  NOUVEAU: "#6366f1",
-  QUALIFIE: "#06b6d4",
-  PROPOSITION_EN_COURS: "#f59e0b",
-};
-
 const PALETTE = ["#06b6d4", "#6366f1", "#f59e0b", "#f43f5e", "#8b5cf6", "#10b981"];
 
 function formatCurrency(value: string) {
@@ -72,110 +52,29 @@ function formatShortDate(iso: string) {
   return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit" }).format(new Date(iso));
 }
 
-/** Real week-over-week comparison from the 30-day series — no fabricated
- * trend. Returns null when there isn't enough history yet to compare. */
-function computeWeeklyTrend(points: { count: number }[]) {
-  if (points.length < 14) return null;
-  const last7 = points.slice(-7).reduce((a, p) => a + p.count, 0);
-  const prev7 = points.slice(-14, -7).reduce((a, p) => a + p.count, 0);
-  if (prev7 === 0) return last7 > 0 ? { percent: null, positive: true } : null;
-  return { percent: Math.round(((last7 - prev7) / prev7) * 100), positive: last7 >= prev7 };
-}
-
-function KpiCard({
-  href, eyebrow, children,
-}: { href: string; eyebrow: string; children: React.ReactNode }) {
+function StatCard({
+  label, value, sublabel, icon: Icon, accent,
+}: { label: string; value: string; sublabel?: string; icon: React.ComponentType<{ className?: string }>; accent: string }) {
   return (
-    <Link
-      href={href}
-      className="group relative flex flex-col rounded-3xl border border-neutral-100 bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-neutral-200/60"
-    >
-      <div className="mb-4 flex items-center justify-between">
-        <p className="text-sm text-neutral-500">{eyebrow}</p>
-        <ArrowRight className="size-3.5 -translate-x-1 text-neutral-300 opacity-0 transition-all group-hover:translate-x-0 group-hover:text-neutral-400 group-hover:opacity-100" />
-      </div>
-      {children}
-    </Link>
-  );
-}
-
-function TrendPill({ percent, positive }: { percent: number | null; positive: boolean }) {
-  const Icon = positive ? ArrowUpRight : ArrowDownRight;
-  return (
-    <span className="inline-flex items-center gap-1">
-      <span className={`flex size-5 items-center justify-center rounded-full ${positive ? "bg-emerald-500" : "bg-rose-500"} text-white`}>
-        <Icon className="size-3" />
-      </span>
-      <span className="text-xs text-neutral-500">
-        {percent === null ? "Nouveau" : `${percent > 0 ? "+" : ""}${percent}%`} cette semaine
-      </span>
-    </span>
-  );
-}
-
-function SegmentedBar({ segments }: { segments: { label: string; value: number; color: string }[] }) {
-  const total = segments.reduce((sum, s) => sum + s.value, 0);
-  if (total === 0) {
-    return <p className="text-xs text-neutral-400">Aucun lead actif dans le pipeline.</p>;
-  }
-  return (
-    <div>
-      <div className="flex h-2 w-full overflow-hidden rounded-full bg-neutral-100">
-        {segments.map((s) =>
-          s.value > 0 ? (
-            <div key={s.label} style={{ width: `${(s.value / total) * 100}%`, background: s.color }} />
-          ) : null
-        )}
-      </div>
-      <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5">
-        {segments.map((s) => (
-          <span key={s.label} className="flex items-center gap-1.5 text-[0.7rem] text-neutral-500">
-            <span className="size-1.5 rounded-full" style={{ background: s.color }} />
-            {s.label} <span className="font-medium text-neutral-700">{s.value}</span>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ConversionGauge({ rate }: { rate: number }) {
-  const clamped = Math.min(100, Math.max(0, rate));
-  return (
-    <div className="relative mx-auto size-24">
-      <ResponsiveContainer width="100%" height="100%">
-        <RadialBarChart
-          data={[{ value: clamped }]}
-          startAngle={90}
-          endAngle={-270}
-          innerRadius="72%"
-          outerRadius="100%"
-          barSize={9}
+    <div className="relative overflow-hidden rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+      <div
+        className="absolute -top-8 -right-8 size-24 rounded-full opacity-[0.08]"
+        style={{ background: accent }}
+      />
+      <div className="relative flex items-start justify-between">
+        <div>
+          <p className="text-xs text-neutral-500">{label}</p>
+          <p className="mt-1.5 text-2xl font-semibold text-neutral-900">{value}</p>
+          {sublabel && <p className="mt-1 text-[0.7rem] text-neutral-400">{sublabel}</p>}
+        </div>
+        <span
+          className="flex size-9 shrink-0 items-center justify-center rounded-xl"
+          style={{ background: `${accent}1a`, color: accent }}
         >
-          <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-          <RadialBar dataKey="value" cornerRadius={9} fill="#06b6d4" background={{ fill: "#f0f9ff" }} />
-        </RadialBarChart>
-      </ResponsiveContainer>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-xl font-semibold text-neutral-900">{rate}%</span>
+          <Icon className="size-4.5" />
+        </span>
       </div>
     </div>
-  );
-}
-
-function MiniBarChart({ data }: { data: { label: string; value: number }[] }) {
-  const max = Math.max(...data.map((d) => d.value), 1);
-  return (
-    <ResponsiveContainer width="100%" height={72}>
-      <BarChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-        <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#a3a3a3" }} axisLine={false} tickLine={false} interval={0} />
-        <Bar dataKey="value" radius={[5, 5, 5, 5]} maxBarSize={22}>
-          {data.map((entry) => (
-            <Cell key={entry.label} fill={entry.value === max && max > 0 ? "#06b6d4" : "#dff5fa"} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
   );
 }
 
@@ -253,62 +152,38 @@ export function MarketingDashboardView() {
 
   const trendData = data.leads_over_time.map((point) => ({ ...point, label: formatShortDate(point.date) }));
   const publishedTotal = Object.values(data.published_social_posts_by_platform).reduce((a, b) => a + b, 0);
-  const weeklyTrend = computeWeeklyTrend(data.leads_over_time);
-  const convertedLeads = data.leads_by_status["CONVERTI"] ?? 0;
-  const platformBars = Object.entries(data.published_social_posts_by_platform).map(([key, value]) => ({
-    label: PLATFORM_SHORT_LABELS[key] ?? key,
-    value,
-  }));
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 items-start">
-        <KpiCard href="/admin/marketing/leads" eyebrow="Pipeline pondéré">
-          <p className="text-4xl font-semibold tracking-tight text-neutral-900">
-            {formatCurrency(data.weighted_pipeline)} <span className="text-xl text-neutral-400">€</span>
-          </p>
-          <p className="mt-1 mb-4 text-xs text-neutral-400">Valeur estimée × score de qualification</p>
-          <SegmentedBar
-            segments={Object.keys(ACTIVE_STATUS_COLORS).map((key) => ({
-              label: LEAD_STATUS_LABELS[key],
-              value: data.leads_by_status[key] ?? 0,
-              color: ACTIVE_STATUS_COLORS[key],
-            }))}
-          />
-        </KpiCard>
-
-        <KpiCard href="/admin/marketing/leads" eyebrow="Leads au total">
-          <p className="text-5xl font-semibold tracking-tight text-neutral-900">{data.total_leads}</p>
-          <div className="mt-3">
-            {weeklyTrend ? (
-              <TrendPill percent={weeklyTrend.percent} positive={weeklyTrend.positive} />
-            ) : (
-              <span className="text-xs text-neutral-400">Historique insuffisant pour une tendance</span>
-            )}
-          </div>
-        </KpiCard>
-
-        <KpiCard href="/admin/marketing/leads" eyebrow="Taux de conversion">
-          <div className="flex items-center gap-4">
-            <ConversionGauge rate={Number(data.conversion_rate)} />
-            <div>
-              <p className="text-2xl font-semibold text-neutral-900">{convertedLeads}</p>
-              <p className="text-xs text-neutral-400">convertis sur {data.total_leads} leads</p>
-            </div>
-          </div>
-        </KpiCard>
-
-        <KpiCard href="/admin/marketing/plan-editorial" eyebrow="Publications publiées">
-          <p className="mb-1 text-4xl font-semibold tracking-tight text-neutral-900">{publishedTotal}</p>
-          <p className="mb-2 text-xs text-neutral-400">Toutes plateformes confondues</p>
-          {platformBars.length > 0 ? (
-            <MiniBarChart data={platformBars} />
-          ) : (
-            <p className="flex h-[72px] items-center gap-1.5 text-xs text-neutral-400">
-              <Sparkles className="size-3.5" /> Rien de publié pour l&apos;instant
-            </p>
-          )}
-        </KpiCard>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Pipeline pondéré"
+          value={`${formatCurrency(data.weighted_pipeline)} €`}
+          sublabel="Leads actifs × score de qualification"
+          icon={TrendingUp}
+          accent="#06b6d4"
+        />
+        <StatCard
+          label="Leads au total"
+          value={String(data.total_leads)}
+          sublabel="Toutes sources confondues"
+          icon={Users}
+          accent="#6366f1"
+        />
+        <StatCard
+          label="Taux de conversion"
+          value={`${data.conversion_rate} %`}
+          sublabel="Leads convertis / total"
+          icon={Megaphone}
+          accent="#f59e0b"
+        />
+        <StatCard
+          label="Publications publiées"
+          value={String(publishedTotal)}
+          sublabel="Toutes plateformes confondues"
+          icon={Newspaper}
+          accent="#10b981"
+        />
       </div>
 
       <ChartCard title="Nouveaux leads" subtitle="30 derniers jours">
