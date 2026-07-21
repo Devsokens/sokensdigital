@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { MockupScene, type SceneVariant } from "@/components/projects/mockup-scenes";
 
+const KEN_BURNS_DURATION = 6;
+
 type Props = {
   title: string;
   videoSrc?: string;
@@ -12,10 +14,11 @@ type Props = {
 };
 
 /**
- * A floating laptop mockup — idles with a slow, continuous drift/tilt so it
+ * A floating laptop mockup — idles with a slow, continuous 3D drift so it
  * never feels static. Automatically reveals the real video/screenshots a
- * moment after mount (no click needed) with an iris wipe, then keeps
- * cycling through screenshots on its own. `object-contain` (not
+ * moment after mount (no click needed), then keeps cycling screenshots on
+ * its own, cinematic "Ken Burns" style: each screenshot slowly zooms/pans
+ * while on screen, crossfading softly into the next. `object-contain` (not
  * `object-cover`) so the full image is always visible, never cropped.
  */
 export function LaptopMockup({ title, videoSrc, images, sceneVariants }: Props) {
@@ -32,7 +35,7 @@ export function LaptopMockup({ title, videoSrc, images, sceneVariants }: Props) 
   return (
     <motion.div
       className="relative mx-auto w-full max-w-md [perspective:1200px]"
-      animate={{ y: [0, -10, 0], rotate: [-1.2, 1.2, -1.2] }}
+      animate={{ y: [0, -10, 0], rotateY: [-3, 3, -3], rotateX: [1, -1, 1] }}
       transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
     >
       {/* Screen */}
@@ -41,9 +44,15 @@ export function LaptopMockup({ title, videoSrc, images, sceneVariants }: Props) 
           {!showReal && <PlaceholderReel variants={sceneVariants ?? ["chart"]} />}
 
           {showReal && (
-            <>
+            <AnimatePresence mode="sync">
               {videoSrc ? (
-                <RevealFlash>
+                <motion.div
+                  key="video"
+                  className="absolute inset-0"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+                >
                   <video
                     src={videoSrc}
                     autoPlay
@@ -52,11 +61,11 @@ export function LaptopMockup({ title, videoSrc, images, sceneVariants }: Props) 
                     playsInline
                     className="absolute inset-0 h-full w-full object-contain"
                   />
-                </RevealFlash>
+                </motion.div>
               ) : (
                 <ImageReel title={title} images={images!} />
               )}
-            </>
+            </AnimatePresence>
           )}
         </div>
         {/* Webcam notch */}
@@ -80,50 +89,35 @@ export function LaptopMockup({ title, videoSrc, images, sceneVariants }: Props) 
   );
 }
 
-/** First reveal: an iris wipe expanding from the center until the content
- * fills the whole screen — a clearly visible "entering" animation rather
- * than a subtle fade. */
-function RevealFlash({ children }: { children: React.ReactNode }) {
-  return (
-    <motion.div
-      className="absolute inset-0 bg-black"
-      initial={{ clipPath: "circle(0% at 50% 50%)" }}
-      animate={{ clipPath: "circle(150% at 50% 50%)" }}
-      transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
 function ImageReel({ title, images }: { title: string; images: string[] }) {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
     if (images.length < 2) return;
-    const id = setInterval(() => setIndex((i) => (i + 1) % images.length), 4000);
+    const id = setInterval(() => setIndex((i) => (i + 1) % images.length), KEN_BURNS_DURATION * 1000);
     return () => clearInterval(id);
   }, [images.length]);
 
+  const pan = index % 2 === 0 ? { x: -10, y: 6 } : { x: 10, y: -6 };
+
   return (
-    <AnimatePresence mode="sync">
-      {index === 0 ? (
-        <RevealFlash key={images[0]}>
-          <img src={images[0]} alt={title} className="absolute inset-0 h-full w-full object-contain" />
-        </RevealFlash>
-      ) : (
-        <motion.img
-          key={images[index]}
-          src={images[index]}
-          alt={title}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-          className="absolute inset-0 h-full w-full object-contain"
-        />
-      )}
-    </AnimatePresence>
+    <motion.div
+      key={images[index]}
+      className="absolute inset-0 overflow-hidden"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+    >
+      <motion.img
+        src={images[index]}
+        alt={title}
+        className="absolute inset-0 h-full w-full object-contain"
+        initial={{ scale: 1, x: 0, y: 0 }}
+        animate={{ scale: 1.09, ...pan }}
+        transition={{ duration: KEN_BURNS_DURATION, ease: "easeOut" }}
+      />
+    </motion.div>
   );
 }
 

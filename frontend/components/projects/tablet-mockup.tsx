@@ -4,47 +4,64 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { BlueprintDiagram } from "@/components/sections/expertise/blueprint-diagram";
 
+const KEN_BURNS_DURATION = 6;
+
 /**
- * A floating tablet mockup — same idea as LaptopMockup (never static, always
- * a slow idle drift) but for a single hero visual rather than a cycling
- * gallery. Fully automatic: alternates between the animated blueprint
- * diagram and the uploaded image, each transition an iris wipe expanding
- * from the center until it fills the whole screen. `object-contain` (not
- * `object-cover`) so the full image is always visible, never cropped.
+ * A floating tablet mockup — fully automatic, cinematic "Ken Burns" style:
+ * the device drifts with real 3D depth (rotateX/rotateY), and whichever
+ * visual is on screen (blueprint diagram or uploaded image) slowly
+ * zooms/pans on its own. Swapping between diagram and image is a soft
+ * crossfade, not a hard cut. `object-contain` so the full image is always
+ * visible, never cropped.
  */
 export function TabletMockup({ imageUrl }: { imageUrl?: string }) {
   const [showImage, setShowImage] = useState(false);
 
   useEffect(() => {
     if (!imageUrl) return;
-    const id = setInterval(() => setShowImage((v) => !v), 5000);
+    const id = setInterval(() => setShowImage((v) => !v), KEN_BURNS_DURATION * 1000);
     return () => clearInterval(id);
   }, [imageUrl]);
 
   return (
     <motion.div
       className="relative mx-auto w-full max-w-sm [perspective:1200px]"
-      animate={{ y: [0, -9, 0], rotate: [1.4, -1.4, 1.4] }}
+      animate={{ y: [0, -9, 0], rotateY: [4, -4, 4], rotateX: [1.5, -1.5, 1.5] }}
       transition={{ duration: 6.5, repeat: Infinity, ease: "easeInOut" }}
     >
       <div className="relative overflow-hidden rounded-[22px] border-[10px] border-neutral-900 bg-neutral-900 shadow-2xl shadow-black/40 ring-1 ring-white/10">
         <span className="absolute top-1 left-1/2 z-10 size-1 -translate-x-1/2 rounded-full bg-white/20" />
         <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[12px] bg-black">
-          <div className="absolute inset-0 p-4">
-            <BlueprintDiagram />
-          </div>
-
-          <AnimatePresence>
-            {imageUrl && showImage && (
+          <AnimatePresence mode="sync">
+            {!showImage && (
               <motion.div
-                key="reveal"
-                className="absolute inset-0 bg-black"
-                initial={{ clipPath: "circle(0% at 50% 50%)" }}
-                animate={{ clipPath: "circle(150% at 50% 50%)" }}
-                exit={{ clipPath: "circle(0% at 50% 50%)" }}
+                key="diagram"
+                className="absolute inset-0 p-4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
                 transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
               >
-                <img src={imageUrl} alt="" className="absolute inset-0 h-full w-full object-contain" />
+                <BlueprintDiagram />
+              </motion.div>
+            )}
+            {imageUrl && showImage && (
+              <motion.div
+                key="image"
+                className="absolute inset-0 overflow-hidden"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+              >
+                <motion.img
+                  src={imageUrl}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-contain"
+                  initial={{ scale: 1, x: 0, y: 0 }}
+                  animate={{ scale: 1.09, x: -10, y: 6 }}
+                  transition={{ duration: KEN_BURNS_DURATION, ease: "easeOut" }}
+                />
               </motion.div>
             )}
           </AnimatePresence>

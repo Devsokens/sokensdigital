@@ -17,6 +17,7 @@ import { listPageSections, updatePageSection, type PageSectionInput } from "@/li
 import { uploadImage } from "@/lib/api/upload";
 import type { PageSection, SectionKey, SitePage } from "@/lib/api/types";
 import { IconPicker, SectionIcon } from "@/components/admin/marketing/icon-picker";
+import { TabletMockup } from "@/components/projects/tablet-mockup";
 
 function initials(name: string) {
   return name.replace("Dr. ", "").split(" ").map((p) => p[0]).join("").slice(0, 2);
@@ -725,46 +726,39 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
               <EditableInput value={field(data, "cta_link")} onChange={(v) => setForm((p) => ({ ...p, cta_link: v }))} className="w-52 text-center text-[0.65rem] text-muted-foreground" placeholder="/lien" />
             )}
           </div>
-          <div className="mt-8 overflow-hidden rounded-xl border border-white/10 bg-card/60 text-left">
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
-              {editing ? (
-                <EditableInput
-                  value={panel.header ?? ""} onChange={(v) => updateItem(0, "header", v)}
-                  className="w-full font-mono text-[10px] tracking-wide text-muted-foreground uppercase" placeholder="Soken's Digital — Solutions Logicielles"
-                />
-              ) : (
-                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
-                  {panel.header || "Soken's Digital — Solutions Logicielles"}
-                </span>
-              )}
+          <div className="mt-8">
+            {editing ? (
+              <EditableInput
+                value={panel.header ?? ""} onChange={(v) => updateItem(0, "header", v)}
+                className="mx-auto block w-full max-w-md text-center font-mono text-[10px] tracking-wide text-muted-foreground uppercase" placeholder="Soken's Digital — Solutions Logicielles"
+              />
+            ) : (
+              <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
+                {panel.header || "Soken's Digital — Solutions Logicielles"}
+              </span>
+            )}
+
+            <div className="mt-4">
+              <TabletMockup imageUrl={panel.image_url || undefined} />
             </div>
 
-            <div className="flex items-center justify-center p-4">
-              {editing ? (
-                <div className="flex flex-col items-center gap-2 py-4">
-                  <ImageUploadField value={panel.image_url ?? ""} onChange={(url) => updateItem(0, "image_url", url)} />
-                  <p className="text-[0.65rem] text-muted-foreground/60">
-                    Remplace le schéma d&apos;architecture par une image — laisse vide pour garder le schéma par défaut.
-                  </p>
-                </div>
-              ) : panel.image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={panel.image_url} alt="" className="aspect-[16/10] w-full rounded-lg object-cover" />
-              ) : (
-                <div className="flex aspect-[16/10] w-full items-center justify-center text-xs text-muted-foreground/50">
-                  Schéma d&apos;architecture (par défaut)
-                </div>
-              )}
-            </div>
+            {editing && (
+              <div className="mx-auto mt-3 flex max-w-md flex-col items-center gap-2">
+                <ImageUploadField value={panel.image_url ?? ""} onChange={(url) => updateItem(0, "image_url", url)} />
+                <p className="text-[0.65rem] text-muted-foreground/60">
+                  Remplace le schéma d&apos;architecture animé par une image — laisse vide pour garder le schéma par défaut.
+                </p>
+              </div>
+            )}
 
-            <div className="border-t border-white/10 px-5 py-4">
+            <div className="mt-5">
               {editing ? (
-                <EditableInput value={panel.label} onChange={(v) => updateItem(0, "label", v)} className="block w-full text-[11px] font-semibold tracking-[0.1em] text-primary uppercase" placeholder="Label" />
+                <EditableInput value={panel.label} onChange={(v) => updateItem(0, "label", v)} className="mx-auto block w-full max-w-md text-center text-[11px] font-semibold tracking-[0.1em] text-primary uppercase" placeholder="Label" />
               ) : (
                 <span className="text-[11px] font-semibold tracking-[0.1em] text-primary uppercase">{panel.label}</span>
               )}
               {editing ? (
-                <EditableInput value={panel.sublabel} onChange={(v) => updateItem(0, "sublabel", v)} className="mt-1 block w-full text-sm font-semibold text-foreground" placeholder="Sous-label" />
+                <EditableInput value={panel.sublabel} onChange={(v) => updateItem(0, "sublabel", v)} className="mx-auto mt-1 block w-full max-w-md text-center text-sm font-semibold text-foreground" placeholder="Sous-label" />
               ) : (
                 <p className="mt-1 text-sm font-semibold text-foreground">{panel.sublabel}</p>
               )}
