@@ -46,3 +46,9 @@ build/
 # Logs
 logs/
 *.log
+
+# Coverage & Tests
+.coverage
+htmlcov*/
+reports/
+.pytest_cache/
