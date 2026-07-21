@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react";
 import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/ui/tabs";
 import { PageSectionEditor } from "@/components/admin/marketing/page-section-editor";
 import { BlogPostList } from "@/components/admin/marketing/blog-post-list";
+import { ShowcaseProjectList } from "@/components/admin/marketing/showcase-project-list";
 
 function ComingSoon({ text }: { text: string }) {
   return (
@@ -45,7 +46,7 @@ export function ContentManagement() {
         </TabsPanel>
 
         <TabsPanel value="projets" className="pt-6">
-          <ComingSoon text="Les projets vitrine (liste + fiches détaillées) nécessitent un module dédié — pas encore construit." />
+          <ShowcaseProjectList />
         </TabsPanel>
 
         <TabsPanel value="blog" className="pt-6">

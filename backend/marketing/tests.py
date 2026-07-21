@@ -8,7 +8,7 @@ from rest_framework.test import APIClient, APITestCase
 from decimal import Decimal
 
 from core.models import User
-from marketing.models import BlogPost, Lead, PageSection, Quote, SocialPost
+from marketing.models import BlogPost, Lead, PageSection, Quote, ShowcaseProject, SocialPost
 
 
 class PublicLeadCreateTests(APITestCase):
@@ -204,6 +204,78 @@ class BlogPostViewSetTests(APITestCase):
         response = anon.get(f'/api/v1/public/cms/blog/{post.slug}/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['content'], [{'type': 'p', 'text': 'Salut'}])
+
+
+class ShowcaseProjectViewSetTests(APITestCase):
+    def setUp(self):
+        self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
+        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+
+        self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
+        self.outsider.firestore_role = 'DEVELOPPEUR'
+
+        self.client_marketing = APIClient()
+        self.client_marketing.force_authenticate(user=self.marketing_user)
+
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+        self.payload = {
+            'category': 'FINTECH', 'sector': 'Fintech', 'type': 'Sécurité',
+            'title': 'Test Project', 'description': 'Une description.',
+            'visual_icon': 'shield-check', 'technologies': ['Rust'],
+            'stats': [{'value': '99%', 'label': 'Uptime'}],
+            'solution_points': ['Point A'],
+        }
+
+    def test_marketing_can_create_project(self):
+        response = self.client_marketing.post('/api/v1/marketing/cms/showcase-projects/', self.payload, format='json')
+        self.assertEqual(response.status_code, 201)
+        project = ShowcaseProject.objects.get(slug='test-project')
+        self.assertTrue(project.is_active)
+
+    def test_outsider_cannot_manage_projects(self):
+        response = self.client_outsider.post('/api/v1/marketing/cms/showcase-projects/', self.payload, format='json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_marketing_can_update_project(self):
+        project = ShowcaseProject.objects.create(title='Original Titre Unique', **{k: v for k, v in self.payload.items() if k != 'title'})
+        response = self.client_marketing.patch(
+            f'/api/v1/marketing/cms/showcase-projects/{project.id}/', {'title': 'Updated', 'is_active': False}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        project.refresh_from_db()
+        self.assertEqual(project.title, 'Updated')
+        self.assertFalse(project.is_active)
+        # slug stays stable — only auto-derived once, on first save.
+        self.assertEqual(project.slug, 'original-titre-unique')
+
+    def test_public_list_only_shows_active(self):
+        ShowcaseProject.objects.create(title='Inactif Titre Unique', is_active=False, **{k: v for k, v in self.payload.items() if k != 'title'})
+        active = ShowcaseProject.objects.create(title='Actif Titre Unique', **{k: v for k, v in self.payload.items() if k != 'title'})
+
+        anon = APIClient()
+        response = anon.get('/api/v1/public/showcase-projects/')
+        self.assertEqual(response.status_code, 200)
+        slugs = [p['slug'] for p in response.json()]
+        self.assertIn(active.slug, slugs)
+        self.assertNotIn('inactif-titre-unique', slugs)
+
+    def test_public_detail_404s_on_inactive(self):
+        inactive = ShowcaseProject.objects.create(title='Inactif', is_active=False, **{k: v for k, v in self.payload.items() if k != 'title'})
+        anon = APIClient()
+        response = anon.get(f'/api/v1/public/showcase-projects/{inactive.slug}/')
+        self.assertEqual(response.status_code, 404)
+
+    def test_public_detail_returns_full_case_study(self):
+        project = ShowcaseProject.objects.create(title='Actif', **{k: v for k, v in self.payload.items() if k != 'title'})
+        anon = APIClient()
+        response = anon.get(f'/api/v1/public/showcase-projects/{project.slug}/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['solution_points'], ['Point A'])
+        self.assertNotIn('id', data)
+        self.assertNotIn('is_active', data)
 
 
 class SocialPostViewSetTests(APITestCase):

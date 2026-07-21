@@ -314,3 +314,57 @@ class PageSection(LoggedModel):
 
     def __str__(self):
         return f'{self.get_page_display()} — {self.get_section_key_display()}'
+
+
+class ShowcaseProject(LoggedModel):
+    """A public "Projets vitrine" case study — the /projects grid and
+    /projects/<slug> detail page. Replaces the array that used to live in
+    the frontend's lib/projects/projects.ts. `visual_icon` stores an icon
+    *name* (e.g. "shield-check"), not a component — same convention as
+    BlogPost.visual_icon, resolved client-side via components/dynamic-icon.
+
+    `featured` drives the "Featured" ribbon on the /projects grid card.
+    `show_on_homepage` + `order` independently control the separate
+    Accueil "Projets récents" carousel — a project can be featured without
+    being on the homepage, and vice versa."""
+
+    slug = models.SlugField(max_length=255, unique=True, blank=True)
+    category = models.CharField(max_length=100)
+    sector = models.CharField(max_length=100)
+    type = models.CharField(max_length=100)
+    featured = models.BooleanField(default=False)
+    show_on_homepage = models.BooleanField(default=False)
+    order = models.PositiveSmallIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    status_tag = models.CharField(max_length=100, blank=True)
+    tag = models.CharField(max_length=100, blank=True)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    visual_icon = models.CharField(max_length=100, blank=True)
+    video_src = models.URLField(blank=True)
+    images = models.JSONField(default=list, blank=True)
+    scene_variants = models.JSONField(default=list, blank=True)
+    client = models.CharField(max_length=255, blank=True)
+    technologies = models.JSONField(default=list, blank=True)
+    timeline = models.CharField(max_length=255, blank=True)
+    lead_name = models.CharField(max_length=255, blank=True)
+    lead_role = models.CharField(max_length=255, blank=True)
+    challenge = models.TextField(blank=True)
+    stats = models.JSONField(default=list, blank=True)
+    solution = models.TextField(blank=True)
+    solution_points = models.JSONField(default=list, blank=True)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['order', '-created_at']
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['slug']),
+            models.Index(fields=['show_on_homepage']),
+        ]
+
+    def __str__(self):
+        return self.title
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.title)
+        super().save(*args, **kwargs)

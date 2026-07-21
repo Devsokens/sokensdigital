@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api/client";
-import type { BlogPost, Lead, MarketingDashboard, PageSection, Paginated, Quote, SitePage, SocialPost } from "@/lib/api/types";
+import type { BlogPost, Lead, MarketingDashboard, PageSection, Paginated, Quote, ShowcaseProject, SitePage, SocialPost } from "@/lib/api/types";
 
 export function listLeads() {
   return apiFetch<Paginated<Lead>>("/api/v1/marketing/leads/");
@@ -159,4 +159,54 @@ export function updatePageSection(id: string, data: PageSectionInput) {
     method: "PATCH",
     body: JSON.stringify(data),
   });
+}
+
+export interface ShowcaseProjectInput {
+  slug?: string;
+  category: string;
+  sector: string;
+  type: string;
+  featured?: boolean;
+  show_on_homepage?: boolean;
+  order?: number;
+  is_active?: boolean;
+  status_tag?: string;
+  tag?: string;
+  title: string;
+  description?: string;
+  visual_icon?: string;
+  video_src?: string;
+  images?: string[];
+  scene_variants?: string[];
+  client?: string;
+  technologies?: string[];
+  timeline?: string;
+  lead_name?: string;
+  lead_role?: string;
+  challenge?: string;
+  stats?: { value: string; label: string }[];
+  solution?: string;
+  solution_points?: string[];
+}
+
+export function listShowcaseProjects() {
+  return apiFetch<Paginated<ShowcaseProject>>("/api/v1/marketing/cms/showcase-projects/");
+}
+
+export function createShowcaseProject(data: ShowcaseProjectInput) {
+  return apiFetch<ShowcaseProject>("/api/v1/marketing/cms/showcase-projects/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateShowcaseProject(id: string, data: Partial<ShowcaseProjectInput>) {
+  return apiFetch<ShowcaseProject>(`/api/v1/marketing/cms/showcase-projects/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteShowcaseProject(id: string) {
+  return apiFetch<void>(`/api/v1/marketing/cms/showcase-projects/${id}/`, { method: "DELETE" });
 }

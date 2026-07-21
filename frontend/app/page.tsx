@@ -9,9 +9,13 @@ import { PartnerLogos } from "@/components/sections/partner-logos";
 import { BlogInsights } from "@/components/sections/blog-insights";
 import { Cta } from "@/components/sections/cta";
 import { getPageSections, findSection } from "@/lib/api/public";
+import { getShowcaseProjects } from "@/lib/projects/public";
 
 export default async function Home() {
-  const sections = await getPageSections("ACCUEIL");
+  const [sections, homepageProjects] = await Promise.all([
+    getPageSections("ACCUEIL"),
+    getShowcaseProjects({ homepage: true }),
+  ]);
 
   return (
     <>
@@ -19,7 +23,7 @@ export default async function Home() {
       <main className="flex-1">
         <Hero section={findSection(sections, "hero")} />
         <Services section={findSection(sections, "services")} />
-        <RecentProjects section={findSection(sections, "recent_projects")} />
+        <RecentProjects section={findSection(sections, "recent_projects")} projects={homepageProjects} />
         <Testimonials section={findSection(sections, "testimonials")} />
         <Team section={findSection(sections, "team")} />
         <PartnerLogos section={findSection(sections, "partner_logos")} />

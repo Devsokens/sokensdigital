@@ -11,7 +11,10 @@ from marketing.views import (
     PublicLeadCreateView,
     PublicPageSectionListView,
     PublicQuoteTrackView,
+    PublicShowcaseProjectDetailView,
+    PublicShowcaseProjectListView,
     QuoteViewSet,
+    ShowcaseProjectViewSet,
     SocialPostViewSet,
     marketing_dashboard,
 )
@@ -20,6 +23,7 @@ router = DefaultRouter()
 router.register('leads', LeadViewSet, basename='lead')
 router.register('cms/blog', BlogPostViewSet, basename='blog-post')
 router.register('cms/page-sections', PageSectionViewSet, basename='page-section')
+router.register('cms/showcase-projects', ShowcaseProjectViewSet, basename='showcase-project')
 router.register('social-posts', SocialPostViewSet, basename='social-post')
 router.register('quotes', QuoteViewSet, basename='quote')
 
@@ -33,5 +37,7 @@ public_urlpatterns = [
     path('cms/blog/', PublicBlogListView.as_view(), name='public-blog-list'),
     path('cms/blog/<slug:slug>/', PublicBlogDetailView.as_view(), name='public-blog-detail'),
     path('cms/page-sections/', PublicPageSectionListView.as_view(), name='public-page-sections'),
+    path('showcase-projects/', PublicShowcaseProjectListView.as_view(), name='public-showcase-project-list'),
+    path('showcase-projects/<slug:slug>/', PublicShowcaseProjectDetailView.as_view(), name='public-showcase-project-detail'),
     path('quotes/track/<uuid:tracking_token>/', PublicQuoteTrackView.as_view(), name='public-quote-track'),
 ]

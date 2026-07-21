@@ -1,14 +1,14 @@
-import type { LucideIcon } from "lucide-react";
+import { SectionIcon } from "@/components/dynamic-icon";
 
 type Props = {
-  icon: LucideIcon;
+  icon: string;
   category: string;
   statusTag: string;
   title: string;
   description: string;
 };
 
-export function ProjectHeroBanner({ icon: Icon, category, statusTag, title, description }: Props) {
+export function ProjectHeroBanner({ icon, category, statusTag, title, description }: Props) {
   return (
     <div>
       <div
@@ -16,7 +16,7 @@ export function ProjectHeroBanner({ icon: Icon, category, statusTag, title, desc
         className="relative flex aspect-[21/9] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_25%_30%,color-mix(in_oklch,var(--primary),transparent_75%),transparent_60%),linear-gradient(135deg,oklch(0.16_0.02_235),oklch(0.06_0.01_240))]"
       >
         <div className="absolute inset-0 [background-image:linear-gradient(color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px),linear-gradient(90deg,color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px)] [background-size:32px_32px]" />
-        <Icon className="relative size-16 text-primary/30 sm:size-24" />
+        <SectionIcon name={icon} className="relative size-16 text-primary/30 sm:size-24" />
       </div>
 
       <div className="mt-6">

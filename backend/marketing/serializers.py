@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from core.models import User
 from core.serializers import UserBriefSerializer
-from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, SocialPost
+from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, ShowcaseProject, SocialPost
 
 
 class LeadPublicCreateSerializer(serializers.ModelSerializer):
@@ -164,6 +164,36 @@ class PageSectionPublicSerializer(serializers.ModelSerializer):
         fields = [
             'section_key', 'kicker', 'title', 'subtitle', 'cta_label', 'cta_link',
             'cta_secondary_label', 'cta_secondary_link', 'items',
+        ]
+
+
+class ShowcaseProjectSerializer(serializers.ModelSerializer):
+    """Admin shape — Responsable Marketing/Super-Admin. `slug` is
+    read-only-on-write-but-editable-if-blank: auto-derived from `title` the
+    first time it's saved (see model.save()), then stays stable."""
+
+    class Meta:
+        model = ShowcaseProject
+        fields = [
+            'id', 'slug', 'category', 'sector', 'type', 'featured', 'show_on_homepage',
+            'order', 'is_active', 'status_tag', 'tag', 'title', 'description', 'visual_icon',
+            'video_src', 'images', 'scene_variants', 'client', 'technologies', 'timeline',
+            'lead_name', 'lead_role', 'challenge', 'stats', 'solution', 'solution_points',
+            'created_at',
+        ]
+
+
+class ShowcaseProjectPublicSerializer(serializers.ModelSerializer):
+    """What the public site vitrine reads — no id/is_active, and the view's
+    queryset already filters to is_active=True only."""
+
+    class Meta:
+        model = ShowcaseProject
+        fields = [
+            'slug', 'category', 'sector', 'type', 'featured', 'status_tag', 'tag', 'title',
+            'description', 'visual_icon', 'video_src', 'images', 'scene_variants', 'client',
+            'technologies', 'timeline', 'lead_name', 'lead_role', 'challenge', 'stats',
+            'solution', 'solution_points',
         ]
 
 

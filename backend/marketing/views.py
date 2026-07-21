@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 
 from core.permissions import has_role
 from core.storage import upload_image
-from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, SocialPost
+from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, ShowcaseProject, SocialPost
 from marketing.ratelimit import get_client_ip, is_rate_limited
 from marketing.serializers import (
     BlogPostPublicSerializer,
@@ -24,6 +24,8 @@ from marketing.serializers import (
     PageSectionSerializer,
     QuoteSerializer,
     QuoteTrackSerializer,
+    ShowcaseProjectPublicSerializer,
+    ShowcaseProjectSerializer,
     SocialPostSerializer,
 )
 
@@ -179,6 +181,52 @@ class ImageUploadView(APIView):
         except RuntimeError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
         return Response({'url': url}, status=status.HTTP_201_CREATED)
+
+
+@extend_schema_view(
+    list=extend_schema(tags=['Marketing & Commercial'], summary='List showcase projects (all, incl. inactive)'),
+    create=extend_schema(tags=['Marketing & Commercial'], summary='Create a showcase project'),
+    retrieve=extend_schema(tags=['Marketing & Commercial'], summary='Get a showcase project'),
+    update=extend_schema(tags=['Marketing & Commercial'], summary='Update a showcase project'),
+    partial_update=extend_schema(tags=['Marketing & Commercial'], summary='Partially update a showcase project'),
+    destroy=extend_schema(tags=['Marketing & Commercial'], summary='Delete a showcase project'),
+)
+class ShowcaseProjectViewSet(viewsets.ModelViewSet):
+    """Internal CMS management (the /projects public grid + detail pages) —
+    Responsable Marketing/Super-Admin only. Public read access is served
+    separately by PublicShowcaseProject{List,Detail}View, filtered to
+    is_active=True."""
+
+    queryset = ShowcaseProject.objects.all()
+    serializer_class = ShowcaseProjectSerializer
+    permission_classes = [IsMarketing]
+
+
+@extend_schema(
+    tags=['Marketing & Commercial'],
+    summary='List active showcase projects (public)',
+    description='?homepage=true restricts to the projects flagged for the Accueil "Projets récents" carousel.',
+)
+class PublicShowcaseProjectListView(generics.ListAPIView):
+    serializer_class = ShowcaseProjectPublicSerializer
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = ShowcaseProject.objects.filter(is_active=True)
+        if self.request.query_params.get('homepage') == 'true':
+            qs = qs.filter(show_on_homepage=True)
+        return qs
+
+
+@extend_schema(tags=['Marketing & Commercial'], summary='Get an active showcase project by slug (public)')
+class PublicShowcaseProjectDetailView(generics.RetrieveAPIView):
+    queryset = ShowcaseProject.objects.filter(is_active=True)
+    serializer_class = ShowcaseProjectPublicSerializer
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    lookup_field = 'slug'
 
 
 @extend_schema_view(

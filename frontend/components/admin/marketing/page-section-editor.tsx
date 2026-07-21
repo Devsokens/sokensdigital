@@ -142,7 +142,7 @@ function EditableTextarea({
   );
 }
 
-function ImageUploadField({
+export function ImageUploadField({
   value, onChange, shape = "square",
 }: { value: string; onChange: (url: string) => void; shape?: "square" | "circle" }) {
   const inputRef = useRef<HTMLInputElement>(null);

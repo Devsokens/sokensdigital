@@ -131,6 +131,46 @@ export interface PageSection {
   created_at: string;
 }
 
+export interface ShowcaseProjectStat {
+  value: string;
+  label: string;
+}
+
+export interface ShowcaseProject {
+  /** Admin-only — absent from the public serializer's response. */
+  id?: string;
+  slug: string;
+  category: string;
+  sector: string;
+  type: string;
+  featured: boolean;
+  /** Admin-only. */
+  show_on_homepage?: boolean;
+  /** Admin-only. */
+  order?: number;
+  /** Admin-only. */
+  is_active?: boolean;
+  status_tag: string;
+  tag: string;
+  title: string;
+  description: string;
+  visual_icon: string;
+  video_src: string;
+  images: string[];
+  scene_variants: string[];
+  client: string;
+  technologies: string[];
+  timeline: string;
+  lead_name: string;
+  lead_role: string;
+  challenge: string;
+  stats: ShowcaseProjectStat[];
+  solution: string;
+  solution_points: string[];
+  /** Admin-only. */
+  created_at?: string;
+}
+
 export type SocialPlatform = "LINKEDIN" | "TWITTER" | "FACEBOOK" | "INSTAGRAM" | "YOUTUBE";
 export type SocialPostStatus = "DRAFT" | "SCHEDULED" | "PUBLISHED" | "FAILED" | "CANCELLED";
 

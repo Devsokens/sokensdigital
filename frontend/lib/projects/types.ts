@@ -1,4 +1,3 @@
-import type { LucideIcon } from "lucide-react";
 import type { SceneVariant } from "@/components/projects/mockup-scenes";
 
 export type ProjectStat = { value: string; label: string };
@@ -13,7 +12,8 @@ export type Project = {
   tag: string;
   title: string;
   description: string;
-  visualIcon: LucideIcon;
+  /** Icon name (e.g. "shield-check"), resolved via components/dynamic-icon's SectionIcon — not a component reference. */
+  visualIcon: string;
   /** Real demo video, set once the back office provides one. Takes priority over `images`. */
   videoSrc?: string;
   /** Real screenshots, set once the back office provides them. Auto-cycled with a crossfade. */

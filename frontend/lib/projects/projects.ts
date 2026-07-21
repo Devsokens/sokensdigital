@@ -1,12 +1,3 @@
-import {
-  ShieldCheck,
-  TrendingUp,
-  PlaneTakeoff,
-  HeartPulse,
-  Cloud,
-  LineChart,
-  Fingerprint,
-} from "lucide-react";
 import type { Project } from "@/lib/projects/types";
 
 export const PROJECTS: Project[] = [
@@ -22,7 +13,7 @@ export const PROJECTS: Project[] = [
     title: "QuantumGuard: Architecture de Transaction Sécurisée",
     description:
       "Une couche de sécurité révolutionnaire haute performance conçue pour les réseaux financiers décentralisés, réduisant la latence de 40%.",
-    visualIcon: ShieldCheck,
+    visualIcon: "shield-check",
     client: "Nexus Wealth Management",
     technologies: ["Rust", "Kubernetes", "gRPC", "Wasm"],
     timeline: "6 Mois (de la découverte au lancement)",
@@ -54,7 +45,7 @@ export const PROJECTS: Project[] = [
     title: "Nova Finance Dashboard",
     description:
       "Refonte complète de l'interface de trading haute fréquence avec latence réduite de 40%.",
-    visualIcon: TrendingUp,
+    visualIcon: "trending-up",
     client: "Nova Capital Partners",
     technologies: ["React", "WebSocket", "Go", "TimescaleDB"],
     timeline: "4 Mois (de la découverte au lancement)",
@@ -86,7 +77,7 @@ export const PROJECTS: Project[] = [
     title: "AeroLogistics Platform",
     description:
       "Plateforme robuste de gestion de flotte gérant plus d'un million de transactions quotidiennes.",
-    visualIcon: PlaneTakeoff,
+    visualIcon: "plane-takeoff",
     client: "AeroLogistics Group",
     technologies: ["Node.js", "Kafka", "PostgreSQL", "AWS"],
     timeline: "8 Mois (de la découverte au lancement)",
@@ -118,7 +109,7 @@ export const PROJECTS: Project[] = [
     title: "MediSecure Portal",
     description:
       "Infrastructure conforme HDS pour la gestion sécurisée de dossiers médicaux sensibles.",
-    visualIcon: HeartPulse,
+    visualIcon: "heart-pulse",
     client: "Groupe Hospitalier Rhône Santé",
     technologies: ["Next.js", "PostgreSQL", "Vault", "OVH HDS"],
     timeline: "5 Mois (de la découverte au lancement)",
@@ -149,7 +140,7 @@ export const PROJECTS: Project[] = [
     tag: "INFRASTRUCTURE · CLOUD",
     title: "Pont cloud Aether",
     description: "Système de synchronisation de niveau entreprise.",
-    visualIcon: Cloud,
+    visualIcon: "cloud",
     client: "Aether Industries",
     technologies: ["Terraform", "Kubernetes", "gRPC", "PostgreSQL"],
     timeline: "5 Mois (de la découverte au lancement)",
@@ -181,7 +172,7 @@ export const PROJECTS: Project[] = [
     title: "Interface utilisateur de trading Vortex",
     description:
       "Interface à faible latence pour les traders algorithmique haute fréquence.",
-    visualIcon: LineChart,
+    visualIcon: "line-chart",
     client: "Vortex Capital",
     technologies: ["React", "Rust", "WebGL", "gRPC"],
     timeline: "4 Mois (de la découverte au lancement)",
@@ -212,7 +203,7 @@ export const PROJECTS: Project[] = [
     tag: "GOVTECH · IDENTITÉ",
     title: "Sentinel Core",
     description: "Système de vérification d'identité au matériel pour GovTech.",
-    visualIcon: Fingerprint,
+    visualIcon: "fingerprint",
     client: "Agence Nationale du Numérique",
     technologies: ["Rust", "TPM", "PostgreSQL", "Kubernetes"],
     timeline: "9 Mois (de la découverte au lancement)",

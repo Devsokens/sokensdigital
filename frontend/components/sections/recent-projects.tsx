@@ -5,28 +5,20 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { PROJECTS } from "@/lib/projects/projects";
 import { LaptopMockup } from "@/components/projects/laptop-mockup";
 import type { PageSection } from "@/lib/api/types";
+import type { Project } from "@/lib/projects/types";
 
-const CAROUSEL_SLUGS = [
-  "nova-finance-dashboard",
-  "aerologistics-platform",
-  "medisecure-portal",
-];
-
-const CAROUSEL_PROJECTS = CAROUSEL_SLUGS.map(
-  (slug) => PROJECTS.find((p) => p.slug === slug)!
-);
-
-export function RecentProjects({ section }: { section?: PageSection | null }) {
+export function RecentProjects({ section, projects }: { section?: PageSection | null; projects: Project[] }) {
   const [index, setIndex] = useState(0);
-  const project = CAROUSEL_PROJECTS[index];
   const kicker = section?.kicker || "Réalisations";
   const title = section?.title || "Projects récents";
 
+  if (projects.length === 0) return null;
+  const project = projects[index];
+
   const goTo = (delta: number) => {
-    setIndex((prev) => (prev + delta + CAROUSEL_PROJECTS.length) % CAROUSEL_PROJECTS.length);
+    setIndex((prev) => (prev + delta + projects.length) % projects.length);
   };
 
   return (
@@ -72,7 +64,7 @@ export function RecentProjects({ section }: { section?: PageSection | null }) {
         </div>
 
         <div className="mt-8 flex items-center justify-end gap-2">
-          {CAROUSEL_PROJECTS.map((p, i) => (
+          {projects.map((p, i) => (
             <span
               key={p.slug}
               className={cn(

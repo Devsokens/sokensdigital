@@ -9,10 +9,11 @@ import { ProjectGallery } from "@/components/projects/project-gallery";
 import { TechnicalSpecs } from "@/components/projects/technical-specs";
 import { ProjectStats } from "@/components/projects/project-stats";
 import { RelatedProjects } from "@/components/projects/related-projects";
-import { PROJECTS, getProjectBySlug, getRelatedProjects } from "@/lib/projects/projects";
+import { getShowcaseProjectBySlug, getShowcaseProjects, getRelatedShowcaseProjects } from "@/lib/projects/public";
 
-export function generateStaticParams() {
-  return PROJECTS.map((project) => ({ slug: project.slug }));
+export async function generateStaticParams() {
+  const projects = await getShowcaseProjects();
+  return projects.map((project) => ({ slug: project.slug }));
 }
 
 export async function generateMetadata({
@@ -21,7 +22,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const project = getProjectBySlug(slug);
+  const project = await getShowcaseProjectBySlug(slug);
   if (!project) return {};
   return {
     title: `${project.title} — Soken's Digital`,
@@ -35,10 +36,13 @@ export default async function ProjectDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const project = getProjectBySlug(slug);
+  const [project, allProjects] = await Promise.all([
+    getShowcaseProjectBySlug(slug),
+    getShowcaseProjects(),
+  ]);
   if (!project) notFound();
 
-  const relatedProjects = getRelatedProjects(project.slug);
+  const relatedProjects = getRelatedShowcaseProjects(allProjects, project.slug);
 
   return (
     <>

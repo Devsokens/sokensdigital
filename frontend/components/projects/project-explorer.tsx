@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PROJECTS } from "@/lib/projects/projects";
+import { SectionIcon } from "@/components/dynamic-icon";
 import type { Project } from "@/lib/projects/types";
 
 const ALL = "All";
@@ -13,22 +13,22 @@ function unique(values: string[]) {
   return Array.from(new Set(values));
 }
 
-export function ProjectExplorer() {
+export function ProjectExplorer({ projects }: { projects: Project[] }) {
   const [type, setType] = useState(ALL);
   const [techStack, setTechStack] = useState(ALL);
   const [sector, setSector] = useState(ALL);
   const [query, setQuery] = useState("");
 
-  const types = useMemo(() => unique(PROJECTS.map((p) => p.type)), []);
+  const types = useMemo(() => unique(projects.map((p) => p.type)), [projects]);
   const techStacks = useMemo(
-    () => unique(PROJECTS.flatMap((p) => p.technologies)),
-    []
+    () => unique(projects.flatMap((p) => p.technologies)),
+    [projects]
   );
-  const sectors = useMemo(() => unique(PROJECTS.map((p) => p.sector)), []);
+  const sectors = useMemo(() => unique(projects.map((p) => p.sector)), [projects]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return PROJECTS.filter((p) => {
+    return projects.filter((p) => {
       if (type !== ALL && p.type !== type) return false;
       if (sector !== ALL && p.sector !== sector) return false;
       if (techStack !== ALL && !p.technologies.includes(techStack)) return false;
@@ -41,7 +41,7 @@ export function ProjectExplorer() {
         return false;
       return true;
     });
-  }, [type, sector, techStack, query]);
+  }, [projects, type, sector, techStack, query]);
 
   return (
     <section className="mx-auto max-w-6xl px-4 pt-32 pb-20 sm:px-6 sm:pt-40 sm:pb-24 lg:px-8">
@@ -173,7 +173,7 @@ function ProjectCard({ project, tall }: { project: Project; tall: boolean }) {
             Featured
           </span>
         )}
-        <project.visualIcon className="relative size-10 text-primary/50 transition-transform duration-300 group-hover:scale-110" />
+        <SectionIcon name={project.visualIcon} className="relative size-10 text-primary/50 transition-transform duration-300 group-hover:scale-110" />
       </div>
       <div className="p-4">
         <span className="text-xs text-muted-foreground">{project.client}</span>
