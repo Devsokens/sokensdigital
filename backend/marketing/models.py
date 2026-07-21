@@ -251,8 +251,11 @@ class PageSection(LoggedModel):
 
     class Page(models.TextChoices):
         ACCUEIL = 'ACCUEIL', 'Accueil'
+        EXPERTISE = 'EXPERTISE', 'Expertise'
+        SUIVI_PROJET = 'SUIVI_PROJET', 'Suivi de projet'
 
     class SectionKey(models.TextChoices):
+        # --- Accueil ---
         # items: [{value, label}] — the 3 stat callouts under the hero.
         HERO = 'hero', 'Hero'
         # items: [{icon, title, description}]
@@ -263,15 +266,31 @@ class PageSection(LoggedModel):
         RECENT_PROJECTS = 'recent_projects', 'Projets récents'
         # items: [{quote, name, role}]
         TESTIMONIALS = 'testimonials', 'Témoignages'
-        # items: [{name, role, bio}]
+        # items: [{name, role, bio, photo_url}]
         TEAM = 'team', 'Équipe'
-        # items: [{name}] — logo images not supported yet, text wordmarks only.
+        # items: [{name, logo_url}]
         PARTNER_LOGOS = 'partner_logos', 'Logos partenaires'
         # items unused — posts themselves still come from lib/blog/posts.ts
         # until the public blog is wired to BlogPost; only title/cta editable.
         BLOG_INSIGHTS = 'blog_insights', 'Aperçu blog'
         # items unused — title/subtitle/cta only.
         CTA = 'cta', 'CTA final'
+        # --- Expertise ---
+        # items: [{label, sublabel}] — single entry, the visual panel caption.
+        EXPERTISE_HERO = 'expertise_hero', 'Hero (Expertise)'
+        # items: [{icon, title, description}]
+        STRATEGIC_ADVANTAGES = 'strategic_advantages', 'Avantages stratégiques'
+        # items: [{phase, title, description}]
+        PROCESS_TIMELINE = 'process_timeline', 'Processus'
+        # items: [{name, label}]
+        TECH_STACK = 'tech_stack', 'Stack technique'
+        # items unused — title/subtitle/cta only.
+        FEATURED_CASE_STUDY = 'featured_case_study', 'Étude de cas vedette'
+        # --- Suivi de projet ---
+        # items unused — title/subtitle only (the search form itself isn't editable content).
+        TRACKING_HERO = 'tracking_hero', 'Hero (Suivi de projet)'
+        # items: [{icon, title, description}]
+        TRACKING_FEATURES = 'tracking_features', 'Fonctionnalités mises en avant'
 
     page = models.CharField(max_length=20, choices=Page.choices)
     section_key = models.CharField(max_length=30, choices=SectionKey.choices)

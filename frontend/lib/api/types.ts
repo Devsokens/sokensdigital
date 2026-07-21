@@ -95,7 +95,7 @@ export interface BlogPost {
   created_at: string;
 }
 
-export type SitePage = "ACCUEIL";
+export type SitePage = "ACCUEIL" | "EXPERTISE" | "SUIVI_PROJET";
 
 export type SectionKey =
   | "hero"
@@ -105,7 +105,14 @@ export type SectionKey =
   | "team"
   | "partner_logos"
   | "blog_insights"
-  | "cta";
+  | "cta"
+  | "expertise_hero"
+  | "strategic_advantages"
+  | "process_timeline"
+  | "tech_stack"
+  | "featured_case_study"
+  | "tracking_hero"
+  | "tracking_features";
 
 export interface PageSection {
   id: string;

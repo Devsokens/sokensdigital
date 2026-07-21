@@ -31,16 +31,32 @@ const SECTION_LABELS: Record<SectionKey, string> = {
   partner_logos: "Partenaires",
   blog_insights: "Aperçu blog",
   cta: "CTA final",
+  expertise_hero: "Hero",
+  strategic_advantages: "Avantages stratégiques",
+  process_timeline: "Processus",
+  tech_stack: "Stack technique",
+  featured_case_study: "Étude de cas vedette",
+  tracking_hero: "Hero",
+  tracking_features: "Fonctionnalités mises en avant",
 };
 
 const SECTION_NOTES: Partial<Record<SectionKey, string>> = {
   recent_projects: "Le carrousel lui-même reste géré par le module Projets vitrine (à venir).",
   blog_insights: "Les articles affichés viennent automatiquement du Blog.",
+  tracking_hero: "Le formulaire de recherche de référence n'est pas éditable ici.",
 };
 
-const SECTION_ORDER: SectionKey[] = [
-  "hero", "services", "recent_projects", "testimonials", "team", "partner_logos", "blog_insights", "cta",
-];
+const PAGE_SECTION_ORDER: Record<SitePage, SectionKey[]> = {
+  ACCUEIL: ["hero", "services", "recent_projects", "testimonials", "team", "partner_logos", "blog_insights", "cta"],
+  EXPERTISE: ["expertise_hero", "strategic_advantages", "process_timeline", "tech_stack", "featured_case_study"],
+  SUIVI_PROJET: ["tracking_hero", "tracking_features"],
+};
+
+const PAGE_DESCRIPTIONS: Record<SitePage, string> = {
+  ACCUEIL: "page d'accueil",
+  EXPERTISE: "page Expertise",
+  SUIVI_PROJET: "page Suivi de projet",
+};
 
 export function PageSectionEditor({ page }: { page: SitePage }) {
   const [sections, setSections] = useState<PageSection[] | null>(null);
@@ -56,7 +72,9 @@ export function PageSectionEditor({ page }: { page: SitePage }) {
   }
 
   useEffect(() => {
+    setSections(null);
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
@@ -71,11 +89,11 @@ export function PageSectionEditor({ page }: { page: SitePage }) {
   return (
     <div className="space-y-5">
       <p className="text-sm text-neutral-500">
-        Reproduction fidèle de la page d&apos;accueil publique, section par section, dans l&apos;ordre réel d&apos;affichage —
+        Reproduction fidèle de la {PAGE_DESCRIPTIONS[page]} publique, section par section, dans l&apos;ordre réel d&apos;affichage —
         mêmes couleurs, mêmes icônes. Clique sur « Modifier » : la carte devient directement éditable.
       </p>
 
-      {SECTION_ORDER.map((key) => {
+      {PAGE_SECTION_ORDER[page].map((key) => {
         const section = sections.find((s) => s.section_key === key);
         if (!section) return null;
         return <SectionCard key={key} section={section} onSaved={load} />;
@@ -671,6 +689,266 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
           </div>
         </div>
       );
+
+    case "expertise_hero": {
+      const panel = (items[0] as { label: string; sublabel: string } | undefined) ?? { label: "", sublabel: "" };
+      return (
+        <div className="mx-auto max-w-2xl text-center">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-1.5 text-[11px] font-medium tracking-[0.15em] text-primary uppercase">
+            <Diamond className="size-2.5 fill-primary" />
+            {editing ? (
+              <EditableInput value={field(data, "kicker")} onChange={(v) => setForm((p) => ({ ...p, kicker: v }))} className="w-64 text-center" placeholder="Kicker" />
+            ) : data.kicker}
+          </div>
+          {editing ? (
+            <EditableInput value={field(data, "title")} onChange={(v) => setForm((p) => ({ ...p, title: v }))} className="w-full text-3xl font-semibold tracking-tight text-foreground sm:text-4xl" placeholder="Titre" />
+          ) : (
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">{data.title}</h1>
+          )}
+          {editing ? (
+            <EditableTextarea value={field(data, "subtitle")} onChange={(v) => setForm((p) => ({ ...p, subtitle: v }))} className="mx-auto mt-4 max-w-xl text-sm text-muted-foreground" placeholder="Sous-titre" />
+          ) : (
+            <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground">{data.subtitle}</p>
+          )}
+          <div className="mt-6 flex flex-col items-center gap-1">
+            <span className="rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground">
+              {editing ? (
+                <EditableInput value={field(data, "cta_label")} onChange={(v) => setForm((p) => ({ ...p, cta_label: v }))} className="w-52 bg-white/10 text-center text-primary-foreground ring-primary-foreground/30" placeholder="Bouton" />
+              ) : data.cta_label}
+            </span>
+            {editing && (
+              <EditableInput value={field(data, "cta_link")} onChange={(v) => setForm((p) => ({ ...p, cta_link: v }))} className="w-52 text-center text-[0.65rem] text-muted-foreground" placeholder="/lien" />
+            )}
+          </div>
+          <div className="mt-8 rounded-xl border border-white/10 bg-card/60 px-5 py-4 text-left">
+            <p className="mb-1 text-[0.65rem] text-muted-foreground/60 uppercase">Légende du panneau visuel</p>
+            {editing ? (
+              <EditableInput value={panel.label} onChange={(v) => updateItem(0, "label", v)} className="block w-full text-[11px] font-semibold tracking-[0.1em] text-primary uppercase" placeholder="Label" />
+            ) : (
+              <span className="text-[11px] font-semibold tracking-[0.1em] text-primary uppercase">{panel.label}</span>
+            )}
+            {editing ? (
+              <EditableInput value={panel.sublabel} onChange={(v) => updateItem(0, "sublabel", v)} className="mt-1 block w-full text-sm font-semibold text-foreground" placeholder="Sous-label" />
+            ) : (
+              <p className="mt-1 text-sm font-semibold text-foreground">{panel.sublabel}</p>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    case "strategic_advantages": {
+      const advantages = items as { icon: string; title: string; description: string }[];
+      return (
+        <div>
+          {editing ? (
+            <EditableInput value={field(data, "title")} onChange={(v) => setForm((p) => ({ ...p, title: v }))} className="w-full text-xl font-semibold text-foreground" placeholder="Titre" />
+          ) : (
+            <h2 className="text-xl font-semibold tracking-tight text-foreground">{data.title}</h2>
+          )}
+          {editing ? (
+            <EditableTextarea value={field(data, "subtitle")} onChange={(v) => setForm((p) => ({ ...p, subtitle: v }))} rows={2} className="mt-1.5 max-w-xl text-sm text-muted-foreground" placeholder="Sous-titre" />
+          ) : (
+            <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">{data.subtitle}</p>
+          )}
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {advantages.map((a, index) => (
+              <div key={index} className="group relative rounded-2xl border border-white/10 bg-card/60 p-5">
+                {editing && <RemoveItemButton onClick={() => removeItem(index)} />}
+                <div className="mb-3 inline-flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <SectionIcon name={a.icon} className="size-4.5" />
+                </div>
+                {editing && (
+                  <div className="mb-2">
+                    <IconPicker value={a.icon} onChange={(v) => updateItem(index, "icon", v)} />
+                  </div>
+                )}
+                {editing ? (
+                  <EditableInput value={a.title} onChange={(v) => updateItem(index, "title", v)} className="w-full text-sm font-semibold text-foreground" placeholder="Titre" />
+                ) : (
+                  <h3 className="text-sm font-semibold text-foreground">{a.title}</h3>
+                )}
+                {editing ? (
+                  <EditableTextarea value={a.description} onChange={(v) => updateItem(index, "description", v)} rows={3} className="mt-1.5 text-xs text-muted-foreground" placeholder="Description" />
+                ) : (
+                  <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{a.description}</p>
+                )}
+              </div>
+            ))}
+            {editing && <AddItemButton label="Ajouter un avantage" onClick={() => addItem({ icon: "shield-check", title: "", description: "" })} />}
+          </div>
+        </div>
+      );
+    }
+
+    case "process_timeline": {
+      const phases = items as { phase: string; title: string; description: string }[];
+      return (
+        <div>
+          {editing ? (
+            <EditableInput value={field(data, "title")} onChange={(v) => setForm((p) => ({ ...p, title: v }))} className="mx-auto block w-full text-center text-xl font-semibold text-foreground" placeholder="Titre" />
+          ) : (
+            <h2 className="text-center text-xl font-semibold tracking-tight text-foreground">{data.title}</h2>
+          )}
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {phases.map((phase, index) => (
+              <div key={index} className="group relative rounded-xl border-l-2 border-primary bg-card/60 p-5">
+                {editing && <RemoveItemButton onClick={() => removeItem(index)} />}
+                {editing ? (
+                  <EditableInput value={phase.phase} onChange={(v) => updateItem(index, "phase", v)} className="w-32 text-[11px] font-semibold tracking-[0.15em] text-primary uppercase" placeholder="Phase 0X" />
+                ) : (
+                  <span className="text-[11px] font-semibold tracking-[0.15em] text-primary uppercase">{phase.phase}</span>
+                )}
+                {editing ? (
+                  <EditableInput value={phase.title} onChange={(v) => updateItem(index, "title", v)} className="mt-1.5 block w-full text-lg font-semibold text-foreground" placeholder="Titre" />
+                ) : (
+                  <h3 className="mt-1.5 text-lg font-semibold text-foreground">{phase.title}</h3>
+                )}
+                {editing ? (
+                  <EditableTextarea value={phase.description} onChange={(v) => updateItem(index, "description", v)} rows={2} className="mt-2 text-sm text-muted-foreground" placeholder="Description" />
+                ) : (
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{phase.description}</p>
+                )}
+              </div>
+            ))}
+            {editing && <AddItemButton label="Ajouter une phase" onClick={() => addItem({ phase: `Phase 0${phases.length + 1}`, title: "", description: "" })} />}
+          </div>
+        </div>
+      );
+    }
+
+    case "tech_stack": {
+      const stack = items as { name: string; label: string }[];
+      return (
+        <div>
+          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end">
+            <div className="w-full">
+              {editing ? (
+                <EditableInput value={field(data, "title")} onChange={(v) => setForm((p) => ({ ...p, title: v }))} className="w-full text-xl font-semibold text-foreground" placeholder="Titre" />
+              ) : (
+                <h2 className="text-xl font-semibold tracking-tight text-foreground">{data.title}</h2>
+              )}
+              {editing ? (
+                <EditableTextarea value={field(data, "subtitle")} onChange={(v) => setForm((p) => ({ ...p, subtitle: v }))} rows={2} className="mt-1.5 max-w-lg text-sm text-muted-foreground" placeholder="Sous-titre" />
+              ) : (
+                <p className="mt-1.5 max-w-lg text-sm text-muted-foreground">{data.subtitle}</p>
+              )}
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              {editing ? (
+                <EditableInput value={field(data, "cta_label")} onChange={(v) => setForm((p) => ({ ...p, cta_label: v }))} className="w-52 text-right text-sm font-medium text-primary" placeholder="Lien CTA" />
+              ) : (
+                <span className="text-sm font-medium text-primary">{data.cta_label} →</span>
+              )}
+              {editing && (
+                <EditableInput value={field(data, "cta_link")} onChange={(v) => setForm((p) => ({ ...p, cta_link: v }))} className="w-52 text-right text-[0.65rem] text-muted-foreground" placeholder="/lien" />
+              )}
+            </div>
+          </div>
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {stack.map((tech, index) => (
+              <div key={index} className="group relative flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-card/60 px-4 py-6 text-center">
+                {editing && <RemoveItemButton onClick={() => removeItem(index)} />}
+                {editing ? (
+                  <EditableInput value={tech.name} onChange={(v) => updateItem(index, "name", v)} className="w-full text-center text-sm font-semibold text-foreground" placeholder="Nom" />
+                ) : (
+                  <span className="text-sm font-semibold text-foreground">{tech.name}</span>
+                )}
+                {editing ? (
+                  <EditableInput value={tech.label} onChange={(v) => updateItem(index, "label", v)} className="w-full text-center text-[10px] tracking-[0.1em] text-muted-foreground uppercase" placeholder="Catégorie" />
+                ) : (
+                  <span className="text-[10px] tracking-[0.1em] text-muted-foreground uppercase">{tech.label}</span>
+                )}
+              </div>
+            ))}
+            {editing && (
+              <button onClick={() => addItem({ name: "", label: "" })} className="flex items-center justify-center rounded-xl border border-dashed border-white/15 px-4 py-6 text-muted-foreground hover:border-primary/40 hover:text-primary">
+                <Plus className="size-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    case "featured_case_study":
+      return (
+        <div className="rounded-2xl border border-white/10 bg-card/60 p-6 sm:p-8">
+          {editing ? (
+            <EditableInput value={field(data, "kicker")} onChange={(v) => setForm((p) => ({ ...p, kicker: v }))} className="text-xs font-semibold tracking-[0.15em] text-primary uppercase" placeholder="Kicker" />
+          ) : (
+            <span className="text-xs font-semibold tracking-[0.15em] text-primary uppercase">{data.kicker}</span>
+          )}
+          {editing ? (
+            <EditableInput value={field(data, "title")} onChange={(v) => setForm((p) => ({ ...p, title: v }))} className="mt-2 block w-full text-2xl font-semibold text-foreground" placeholder="Titre" />
+          ) : (
+            <h3 className="mt-2 text-2xl font-semibold text-foreground">{data.title}</h3>
+          )}
+          {editing ? (
+            <EditableTextarea value={field(data, "subtitle")} onChange={(v) => setForm((p) => ({ ...p, subtitle: v }))} rows={3} className="mt-3 max-w-xl text-sm text-muted-foreground" placeholder="Description" />
+          ) : (
+            <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">{data.subtitle}</p>
+          )}
+          <div className="mt-4 flex flex-col items-start gap-1">
+            {editing ? (
+              <EditableInput value={field(data, "cta_label")} onChange={(v) => setForm((p) => ({ ...p, cta_label: v }))} className="w-56 text-sm font-medium text-foreground" placeholder="Lien" />
+            ) : (
+              <span className="text-sm font-medium text-foreground">{data.cta_label} ↗</span>
+            )}
+            {editing && (
+              <EditableInput value={field(data, "cta_link")} onChange={(v) => setForm((p) => ({ ...p, cta_link: v }))} className="w-56 text-[0.65rem] text-muted-foreground" placeholder="#lien" />
+            )}
+          </div>
+        </div>
+      );
+
+    case "tracking_hero":
+      return (
+        <div className="mx-auto max-w-xl text-center">
+          {editing ? (
+            <EditableInput value={field(data, "title")} onChange={(v) => setForm((p) => ({ ...p, title: v }))} className="w-full text-center text-3xl font-semibold text-foreground" placeholder="Titre" />
+          ) : (
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">{data.title}</h1>
+          )}
+          {editing ? (
+            <EditableTextarea value={field(data, "subtitle")} onChange={(v) => setForm((p) => ({ ...p, subtitle: v }))} className="mx-auto mt-3 max-w-lg text-sm text-muted-foreground" placeholder="Sous-titre" />
+          ) : (
+            <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-muted-foreground">{data.subtitle}</p>
+          )}
+        </div>
+      );
+
+    case "tracking_features": {
+      const features = items as { icon: string; title: string; description: string }[];
+      return (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {features.map((f, index) => (
+            <div key={index} className="group relative rounded-2xl border border-white/10 bg-card/60 p-5">
+              {editing && <RemoveItemButton onClick={() => removeItem(index)} />}
+              <div className="mb-3 inline-flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <SectionIcon name={f.icon} className="size-4.5" />
+              </div>
+              {editing && (
+                <div className="mb-2">
+                  <IconPicker value={f.icon} onChange={(v) => updateItem(index, "icon", v)} />
+                </div>
+              )}
+              {editing ? (
+                <EditableInput value={f.title} onChange={(v) => updateItem(index, "title", v)} className="w-full text-sm font-semibold text-foreground" placeholder="Titre" />
+              ) : (
+                <h3 className="text-sm font-semibold text-foreground">{f.title}</h3>
+              )}
+              {editing ? (
+                <EditableTextarea value={f.description} onChange={(v) => updateItem(index, "description", v)} rows={3} className="mt-1.5 text-xs text-muted-foreground" placeholder="Description" />
+              ) : (
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{f.description}</p>
+              )}
+            </div>
+          ))}
+          {editing && <AddItemButton label="Ajouter une fonctionnalité" onClick={() => addItem({ icon: "shield", title: "", description: "" })} />}
+        </div>
+      );
+    }
 
     default:
       return null;

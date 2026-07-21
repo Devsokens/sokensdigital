@@ -1,42 +1,26 @@
 "use client";
 
 import { motion } from "motion/react";
-import { Shield, Gauge, BadgeCheck, type LucideIcon } from "lucide-react";
+import type { PageSection } from "@/lib/api/types";
+import { SectionIcon } from "@/components/dynamic-icon";
 
-type Feature = {
-  icon: LucideIcon;
-  title: string;
-  description: string;
-};
+type Feature = { icon: string; title: string; description: string };
 
-const FEATURES: Feature[] = [
-  {
-    icon: Shield,
-    title: "Sécurité Active",
-    description:
-      "Toutes les données de ce projet sont chiffrées de bout en bout et accessibles uniquement via votre portail sécurisé.",
-  },
-  {
-    icon: Gauge,
-    title: "Performance",
-    description:
-      "Suivi en temps réel avec latence réduite pour une visibilité instantanée sur l'avancement de vos livrables.",
-  },
-  {
-    icon: BadgeCheck,
-    title: "Audit Continu",
-    description:
-      "Chaque étape validée par notre équipe qualité avant transmission, pour une traçabilité complète du projet.",
-  },
+const DEFAULT_FEATURES: Feature[] = [
+  { icon: "shield", title: "Sécurité Active", description: "Toutes les données de ce projet sont chiffrées de bout en bout et accessibles uniquement via votre portail sécurisé." },
+  { icon: "gauge", title: "Performance", description: "Suivi en temps réel avec latence réduite pour une visibilité instantanée sur l'avancement de vos livrables." },
+  { icon: "badge-check", title: "Audit Continu", description: "Chaque étape validée par notre équipe qualité avant transmission, pour une traçabilité complète du projet." },
 ];
 
-export function TrackingFeatures() {
+export function TrackingFeatures({ section }: { section?: PageSection | null }) {
+  const features: Feature[] = section?.items?.length ? (section.items as Feature[]) : DEFAULT_FEATURES;
+
   return (
     <section className="mx-auto max-w-4xl px-4 pb-20 sm:px-6 sm:pb-24 lg:px-8">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {FEATURES.map((feature, i) => (
+        {features.map((feature, i) => (
           <motion.div
-            key={feature.title}
+            key={i}
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.5 }}
@@ -44,7 +28,7 @@ export function TrackingFeatures() {
             className="rounded-2xl border border-white/10 bg-card/60 p-6 transition-colors hover:border-primary/30"
           >
             <div className="mb-4 inline-flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <feature.icon className="size-5" />
+              <SectionIcon name={feature.icon} className="size-5" />
             </div>
             <h3 className="text-base font-semibold text-foreground">{feature.title}</h3>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">

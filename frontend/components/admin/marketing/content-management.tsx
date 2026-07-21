@@ -41,7 +41,7 @@ export function ContentManagement() {
         </TabsPanel>
 
         <TabsPanel value="expertise" className="pt-6">
-          <ComingSoon text="La page Expertise (Hero, Avantages, Processus, Stack technique, Étude de cas) arrive après l'Accueil." />
+          <PageSectionEditor page="EXPERTISE" />
         </TabsPanel>
 
         <TabsPanel value="projets" className="pt-6">
@@ -57,7 +57,7 @@ export function ContentManagement() {
         </TabsPanel>
 
         <TabsPanel value="suivi" className="pt-6">
-          <ComingSoon text="Le contenu éditorial de la page Suivi de projet arrive bientôt." />
+          <PageSectionEditor page="SUIVI_PROJET" />
         </TabsPanel>
 
         <TabsPanel value="header-footer" className="pt-6">

@@ -2,8 +2,20 @@
 
 import { motion } from "motion/react";
 import { LineChart } from "lucide-react";
+import type { PageSection } from "@/lib/api/types";
 
-export function FeaturedCaseStudy() {
+const DEFAULT_KICKER = "Projet en Vedette";
+const DEFAULT_TITLE = "Nexus Corp: Refonte Infrastructure Cloud";
+const DEFAULT_SUBTITLE =
+  "Découvrez comment nous avons aidé Nexus Corp à réduire ses temps de latence de 60% tout en automatisant 90% de ses déploiements critiques.";
+
+export function FeaturedCaseStudy({ section }: { section?: PageSection | null }) {
+  const kicker = section?.kicker || DEFAULT_KICKER;
+  const title = section?.title || DEFAULT_TITLE;
+  const subtitle = section?.subtitle || DEFAULT_SUBTITLE;
+  const ctaLabel = section?.cta_label || "Lire l'étude de cas";
+  const ctaLink = section?.cta_link || "#contact";
+
   return (
     <section className="mx-auto max-w-6xl px-4 pb-20 sm:px-6 sm:pb-24 lg:px-8">
       <motion.div
@@ -23,21 +35,19 @@ export function FeaturedCaseStudy() {
 
         <div className="flex flex-col justify-center p-6 sm:p-10">
           <span className="text-xs font-semibold tracking-[0.15em] text-primary uppercase">
-            Projet en Vedette
+            {kicker}
           </span>
           <h3 className="mt-2 text-2xl font-semibold text-foreground sm:text-3xl">
-            Nexus Corp: Refonte Infrastructure Cloud
+            {title}
           </h3>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
-            Découvrez comment nous avons aidé Nexus Corp à réduire ses temps
-            de latence de 60% tout en automatisant 90% de ses déploiements
-            critiques.
+            {subtitle}
           </p>
           <a
-            href="#contact"
+            href={ctaLink}
             className="mt-6 inline-flex w-fit items-center gap-2 rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
           >
-            Lire l&apos;étude de cas
+            {ctaLabel}
             <span aria-hidden>↗</span>
           </a>
         </div>

@@ -3,8 +3,16 @@
 import { motion } from "motion/react";
 import { Fingerprint, Radar } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { PageSection } from "@/lib/api/types";
 
-export function TrackingHero() {
+const DEFAULT_TITLE = "Suivi de Projet";
+const DEFAULT_SUBTITLE =
+  "Accédez en temps réel à l'état d'avancement de votre solution digitale sécurisée. Saisissez votre code de référence unique ci-dessous.";
+
+export function TrackingHero({ section }: { section?: PageSection | null }) {
+  const title = section?.title || DEFAULT_TITLE;
+  const subtitle = section?.subtitle || DEFAULT_SUBTITLE;
+
   return (
     <section className="relative overflow-hidden">
       <div
@@ -19,7 +27,7 @@ export function TrackingHero() {
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] as const }}
           className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl"
         >
-          Suivi de Projet
+          {title}
         </motion.h1>
 
         <motion.p
@@ -28,9 +36,7 @@ export function TrackingHero() {
           transition={{ duration: 0.7, delay: 0.1, ease: [0.16, 1, 0.3, 1] as const }}
           className="mx-auto mt-4 max-w-lg text-base leading-relaxed text-muted-foreground"
         >
-          Accédez en temps réel à l&apos;état d&apos;avancement de votre
-          solution digitale sécurisée. Saisissez votre code de référence
-          unique ci-dessous.
+          {subtitle}
         </motion.p>
 
         <motion.form

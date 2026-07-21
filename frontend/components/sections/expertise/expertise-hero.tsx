@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { Diamond } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BlueprintDiagram } from "@/components/sections/expertise/blueprint-diagram";
+import type { PageSection } from "@/lib/api/types";
 
 const container = {
   hidden: {},
@@ -15,7 +16,20 @@ const item = {
   show: { opacity: 1, y: 0, transition: { duration: 0.7, ease: [0.16, 1, 0.3, 1] as const } },
 };
 
-export function ExpertiseHero() {
+const DEFAULT_KICKER = "Digital Excellence";
+const DEFAULT_TITLE = "Solutions Digitales Sur Mesure";
+const DEFAULT_SUBTITLE =
+  "Propulsez votre entreprise vers l'avenir avec des infrastructures logicielles de haute précision. Nous concevons des écosystèmes scalables, sécurisés et centrés sur la performance pour les leaders de demain.";
+const DEFAULT_PANEL = { label: "Architecture High-Load", sublabel: "Précision Sans Compromis" };
+
+export function ExpertiseHero({ section }: { section?: PageSection | null }) {
+  const kicker = section?.kicker || DEFAULT_KICKER;
+  const title = section?.title || DEFAULT_TITLE;
+  const subtitle = section?.subtitle || DEFAULT_SUBTITLE;
+  const ctaLabel = section?.cta_label || "Démarrer un projet";
+  const ctaLink = section?.cta_link || "/demarrer-un-projet";
+  const panel = (section?.items?.[0] as { label: string; sublabel: string } | undefined) ?? DEFAULT_PANEL;
+
   return (
     <section className="relative overflow-hidden">
       <div
@@ -31,31 +45,28 @@ export function ExpertiseHero() {
               className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-1.5 text-[11px] font-medium tracking-[0.15em] text-primary uppercase sm:text-xs"
             >
               <Diamond className="size-2.5 fill-primary" />
-              Digital Excellence
+              {kicker}
             </motion.div>
 
             <motion.h1
               variants={item}
               className="text-4xl leading-[1.1] font-semibold tracking-tight text-foreground sm:text-5xl"
             >
-              Solutions Digitales Sur Mesure
+              {title}
             </motion.h1>
 
             <motion.p
               variants={item}
               className="mt-6 max-w-lg text-base leading-relaxed text-muted-foreground sm:text-lg"
             >
-              Propulsez votre entreprise vers l&apos;avenir avec des
-              infrastructures logicielles de haute précision. Nous concevons
-              des écosystèmes scalables, sécurisés et centrés sur la
-              performance pour les leaders de demain.
+              {subtitle}
             </motion.p>
 
             <motion.div variants={item} className="mt-9">
               <Button
                 render={
-                  <a href="/demarrer-un-projet" className="inline-flex items-center gap-1.5">
-                    Démarrer un projet
+                  <a href={ctaLink} className="inline-flex items-center gap-1.5">
+                    {ctaLabel}
                     <span aria-hidden>→</span>
                   </a>
                 }
@@ -87,10 +98,10 @@ export function ExpertiseHero() {
               </div>
               <div className="border-t border-white/10 px-5 py-4">
                 <span className="text-[11px] font-semibold tracking-[0.1em] text-primary uppercase">
-                  Architecture High-Load
+                  {panel.label}
                 </span>
                 <p className="mt-1 text-sm font-semibold text-foreground">
-                  Précision Sans Compromis
+                  {panel.sublabel}
                 </p>
               </div>
             </div>

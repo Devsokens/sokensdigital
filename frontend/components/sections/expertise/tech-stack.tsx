@@ -1,8 +1,13 @@
 "use client";
 
 import { motion } from "motion/react";
+import type { PageSection } from "@/lib/api/types";
 
-const STACK = [
+type Tech = { name: string; label: string };
+
+const DEFAULT_TITLE = "Stack Technologique";
+const DEFAULT_SUBTITLE = "Nous utilisons exclusivement des technologies de pointe, éprouvées pour leur performance et leur capacité à évoluer.";
+const DEFAULT_STACK: Tech[] = [
   { name: "Next.js", label: "Frontend" },
   { name: "Python", label: "Django" },
   { name: "Docker", label: "DevOps" },
@@ -11,7 +16,13 @@ const STACK = [
   { name: "Redis", label: "Caching" },
 ];
 
-export function TechStack() {
+export function TechStack({ section }: { section?: PageSection | null }) {
+  const title = section?.title || DEFAULT_TITLE;
+  const subtitle = section?.subtitle || DEFAULT_SUBTITLE;
+  const ctaLabel = section?.cta_label || "Standards Industriels";
+  const ctaLink = section?.cta_link || "#contact";
+  const stack: Tech[] = section?.items?.length ? (section.items as Tech[]) : DEFAULT_STACK;
+
   return (
     <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
@@ -22,26 +33,25 @@ export function TechStack() {
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] as const }}
         >
           <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-            Stack Technologique
+            {title}
           </h2>
           <p className="mt-2 max-w-lg text-sm text-muted-foreground sm:text-base">
-            Nous utilisons exclusivement des technologies de pointe, éprouvées
-            pour leur performance et leur capacité à évoluer.
+            {subtitle}
           </p>
         </motion.div>
         <a
-          href="#contact"
+          href={ctaLink}
           className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
         >
-          Standards Industriels
+          {ctaLabel}
           <span aria-hidden>→</span>
         </a>
       </div>
 
       <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        {STACK.map((tech, i) => (
+        {stack.map((tech, i) => (
           <motion.div
-            key={tech.name}
+            key={i}
             initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.5 }}

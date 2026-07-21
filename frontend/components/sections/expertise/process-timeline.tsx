@@ -2,8 +2,12 @@
 
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
+import type { PageSection } from "@/lib/api/types";
 
-const PHASES = [
+type Phase = { phase: string; title: string; description: string };
+
+const DEFAULT_TITLE = "Notre Processus";
+const DEFAULT_PHASES: Phase[] = [
   {
     phase: "Phase 01",
     title: "Audit & Stratégie",
@@ -30,7 +34,10 @@ const PHASES = [
   },
 ];
 
-export function ProcessTimeline() {
+export function ProcessTimeline({ section }: { section?: PageSection | null }) {
+  const title = section?.title || DEFAULT_TITLE;
+  const PHASES: Phase[] = section?.items?.length ? (section.items as Phase[]) : DEFAULT_PHASES;
+
   return (
     <section className="mx-auto max-w-5xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
       <motion.div
@@ -41,7 +48,7 @@ export function ProcessTimeline() {
         className="flex flex-col items-center text-center"
       >
         <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-          Notre Processus
+          {title}
         </h2>
         <span className="mt-3 h-0.5 w-10 rounded-full bg-primary" />
       </motion.div>

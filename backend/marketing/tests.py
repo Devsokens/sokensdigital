@@ -534,6 +534,14 @@ class PageSectionViewSetTests(APITestCase):
         # unpaginated (see PageSectionViewSet docstring).
         self.assertEqual(len(response.json()), 8)
 
+    def test_expertise_and_tracking_pages_seeded(self):
+        # 5 sections seeded by 0008_seed_expertise_and_tracking_sections.
+        response = self.client_marketing.get('/api/v1/marketing/cms/page-sections/?page=EXPERTISE')
+        self.assertEqual(len(response.json()), 5)
+        # 2 sections.
+        response = self.client_marketing.get('/api/v1/marketing/cms/page-sections/?page=SUIVI_PROJET')
+        self.assertEqual(len(response.json()), 2)
+
     def test_outsider_forbidden(self):
         response = self.client_outsider.get('/api/v1/marketing/cms/page-sections/?page=ACCUEIL')
         self.assertEqual(response.status_code, 403)
