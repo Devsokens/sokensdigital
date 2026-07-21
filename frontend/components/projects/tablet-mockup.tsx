@@ -1,15 +1,21 @@
 "use client";
 
-import { motion } from "motion/react";
+import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { Eye } from "lucide-react";
 import { BlueprintDiagram } from "@/components/sections/expertise/blueprint-diagram";
 
 /**
  * A floating tablet mockup — same idea as LaptopMockup (never static, always
  * a slow idle drift) but for a single hero visual rather than a cycling
- * gallery. Shows an uploaded image with a slow Ken Burns zoom if set,
- * otherwise falls back to the animated blueprint diagram.
+ * gallery. Shows the animated blueprint diagram until clicked; a click
+ * reveals the uploaded image with a flash + scale-in. `object-contain`
+ * (not `object-cover`) so the full image is always visible, never cropped.
  */
 export function TabletMockup({ imageUrl }: { imageUrl?: string }) {
+  const [revealed, setRevealed] = useState(false);
+  const showImage = imageUrl && revealed;
+
   return (
     <motion.div
       className="relative mx-auto w-full max-w-sm [perspective:1200px]"
@@ -18,22 +24,50 @@ export function TabletMockup({ imageUrl }: { imageUrl?: string }) {
     >
       <div className="relative overflow-hidden rounded-[22px] border-[10px] border-neutral-900 bg-neutral-900 shadow-2xl shadow-black/40 ring-1 ring-white/10">
         <span className="absolute top-1 left-1/2 z-10 size-1 -translate-x-1/2 rounded-full bg-white/20" />
-        <div className="relative aspect-[4/3] overflow-hidden rounded-[12px] bg-black">
-          {imageUrl ? (
-            <motion.img
-              src={imageUrl}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover"
-              initial={{ scale: 1 }}
-              animate={{ scale: 1.07 }}
-              transition={{ duration: 9, repeat: Infinity, repeatType: "mirror", ease: "easeInOut" }}
-            />
-          ) : (
+        <button
+          type="button"
+          disabled={!imageUrl || revealed}
+          onClick={() => setRevealed(true)}
+          className="relative block aspect-[4/3] w-full overflow-hidden rounded-[12px] bg-black"
+        >
+          {!showImage && (
             <div className="absolute inset-0 p-4">
               <BlueprintDiagram />
             </div>
           )}
-        </div>
+
+          {imageUrl && !revealed && (
+            <span className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/50 text-white opacity-0 transition-opacity hover:opacity-100">
+              <span className="flex size-11 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm">
+                <Eye className="size-5" />
+              </span>
+              <span className="text-xs font-medium">Cliquer pour voir</span>
+            </span>
+          )}
+
+          <AnimatePresence>
+            {showImage && (
+              <>
+                <motion.img
+                  key="image"
+                  src={imageUrl}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-contain"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                />
+                <motion.span
+                  aria-hidden
+                  className="absolute inset-0 bg-white"
+                  initial={{ opacity: 0.9 }}
+                  animate={{ opacity: 0 }}
+                  transition={{ duration: 0.4, ease: "easeOut" }}
+                />
+              </>
+            )}
+          </AnimatePresence>
+        </button>
       </div>
 
       <motion.div

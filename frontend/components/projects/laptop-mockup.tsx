@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { Eye } from "lucide-react";
 import { MockupScene, type SceneVariant } from "@/components/projects/mockup-scenes";
 
 type Props = {
@@ -13,13 +14,16 @@ type Props = {
 
 /**
  * A floating laptop mockup — idles with a slow, continuous drift/tilt so it
- * never feels static, and its screen cycles through the project's real
- * uploaded images with a crossfade + slow Ken Burns zoom for a "video-like"
- * feel. Falls back to a real video, then to the same animated placeholder
- * scenes as ProjectMedia when no assets exist yet — same priority order,
- * just a different frame around the content.
+ * never feels static. Shows the animated placeholder scenes until clicked;
+ * a click reveals the real video/screenshots with a flash + fade-in.
+ * `object-contain` (not `object-cover`) so the full image is always
+ * visible, never cropped.
  */
 export function LaptopMockup({ title, videoSrc, images, sceneVariants }: Props) {
+  const [revealed, setRevealed] = useState(false);
+  const hasRealMedia = Boolean(videoSrc || (images && images.length > 0));
+  const showReal = hasRealMedia && revealed;
+
   return (
     <motion.div
       className="relative mx-auto w-full max-w-md [perspective:1200px]"
@@ -28,22 +32,42 @@ export function LaptopMockup({ title, videoSrc, images, sceneVariants }: Props) 
     >
       {/* Screen */}
       <div className="relative overflow-hidden rounded-t-xl border border-white/15 border-b-0 bg-neutral-900 p-[6px] shadow-2xl shadow-black/40">
-        <div className="relative aspect-video overflow-hidden rounded-[4px] bg-black">
-          {videoSrc ? (
-            <video
-              src={videoSrc}
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-          ) : images && images.length > 0 ? (
-            <ImageReel title={title} images={images} />
-          ) : (
-            <PlaceholderReel variants={sceneVariants ?? ["chart"]} />
+        <button
+          type="button"
+          disabled={!hasRealMedia || revealed}
+          onClick={() => setRevealed(true)}
+          className="relative block aspect-video w-full overflow-hidden rounded-[4px] bg-black"
+        >
+          {!showReal && <PlaceholderReel variants={sceneVariants ?? ["chart"]} />}
+
+          {hasRealMedia && !revealed && (
+            <span className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-black/50 text-white opacity-0 transition-opacity hover:opacity-100">
+              <span className="flex size-11 items-center justify-center rounded-full bg-white/15 backdrop-blur-sm">
+                <Eye className="size-5" />
+              </span>
+              <span className="text-xs font-medium">Cliquer pour voir</span>
+            </span>
           )}
-        </div>
+
+          {showReal && (
+            <>
+              {videoSrc ? (
+                <RevealFlash>
+                  <video
+                    src={videoSrc}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="absolute inset-0 h-full w-full object-contain"
+                  />
+                </RevealFlash>
+              ) : (
+                <ImageReel title={title} images={images!} />
+              )}
+            </>
+          )}
+        </button>
         {/* Webcam notch */}
         <span className="absolute top-1/2 left-1/2 size-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/10" />
       </div>
@@ -65,6 +89,27 @@ export function LaptopMockup({ title, videoSrc, images, sceneVariants }: Props) 
   );
 }
 
+/** Wraps first-reveal content with a quick camera-flash pulse. */
+function RevealFlash({ children }: { children: React.ReactNode }) {
+  return (
+    <motion.div initial="hidden" animate="show" className="absolute inset-0">
+      <motion.div
+        variants={{ hidden: { opacity: 0, scale: 0.94 }, show: { opacity: 1, scale: 1 } }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="absolute inset-0"
+      >
+        {children}
+      </motion.div>
+      <motion.span
+        aria-hidden
+        className="absolute inset-0 bg-white"
+        variants={{ hidden: { opacity: 0.9 }, show: { opacity: 0 } }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+      />
+    </motion.div>
+  );
+}
+
 function ImageReel({ title, images }: { title: string; images: string[] }) {
   const [index, setIndex] = useState(0);
 
@@ -76,19 +121,22 @@ function ImageReel({ title, images }: { title: string; images: string[] }) {
 
   return (
     <AnimatePresence mode="sync">
-      <motion.img
-        key={images[index]}
-        src={images[index]}
-        alt={title}
-        initial={{ opacity: 0, scale: 1.06 }}
-        animate={{ opacity: 1, scale: 1.14 }}
-        exit={{ opacity: 0 }}
-        transition={{
-          opacity: { duration: 1, ease: [0.16, 1, 0.3, 1] },
-          scale: { duration: 4, ease: "linear" },
-        }}
-        className="absolute inset-0 h-full w-full object-cover"
-      />
+      {index === 0 ? (
+        <RevealFlash key={images[0]}>
+          <img src={images[0]} alt={title} className="absolute inset-0 h-full w-full object-contain" />
+        </RevealFlash>
+      ) : (
+        <motion.img
+          key={images[index]}
+          src={images[index]}
+          alt={title}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+          className="absolute inset-0 h-full w-full object-contain"
+        />
+      )}
     </AnimatePresence>
   );
 }
