@@ -171,23 +171,23 @@ function SectionPreview({
   config, section, onEdit,
 }: { config: SectionConfig; section: PageSection; onEdit: () => void }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-2.5">
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-background shadow-sm">
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold tracking-wider text-neutral-400 uppercase">{config.label}</span>
+          <span className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">{config.label}</span>
           {!section.is_active && (
-            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[0.65rem] text-neutral-500">Masquée</span>
+            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[0.65rem] text-muted-foreground">Masquée</span>
           )}
         </div>
         <button
           onClick={onEdit}
-          className="flex items-center gap-1.5 rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-200"
+          className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs text-neutral-700 hover:bg-white/90"
         >
           <Pencil className="size-3" /> Modifier
         </button>
       </div>
 
-      <div className="bg-background p-6 sm:p-8">
+      <div className="p-6 sm:p-8">
         <SectionPreviewBody sectionKey={section.section_key} section={section} />
       </div>
     </div>
