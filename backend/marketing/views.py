@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.db.models import Count
+from django.db.models import Count, Max
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
@@ -226,6 +226,14 @@ class ShowcaseProjectViewSet(viewsets.ModelViewSet):
     queryset = ShowcaseProject.objects.all()
     serializer_class = ShowcaseProjectSerializer
     permission_classes = [IsMarketing]
+
+    def perform_create(self, serializer):
+        # New projects append to the end of the (curated) ordering by
+        # default, instead of tying with whatever already sits at order=0
+        # and jumping to the front of the public grid — `order` stays
+        # freely editable afterward via PATCH.
+        max_order = ShowcaseProject.objects.aggregate(Max('order'))['order__max'] or 0
+        serializer.save(order=max_order + 1)
 
 
 @extend_schema(

@@ -234,6 +234,15 @@ class ShowcaseProjectViewSetTests(APITestCase):
         project = ShowcaseProject.objects.get(slug='test-project')
         self.assertTrue(project.is_active)
 
+    def test_new_project_appends_to_end_of_order_regardless_of_payload(self):
+        # The seed data migration already has 7 projects at order 0-6.
+        response = self.client_marketing.post(
+            '/api/v1/marketing/cms/showcase-projects/', {**self.payload, 'order': 0}, format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        project = ShowcaseProject.objects.get(slug='test-project')
+        self.assertEqual(project.order, 7)
+
     def test_outsider_cannot_manage_projects(self):
         response = self.client_outsider.post('/api/v1/marketing/cms/showcase-projects/', self.payload, format='json')
         self.assertEqual(response.status_code, 403)
