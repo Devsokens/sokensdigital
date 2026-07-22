@@ -480,60 +480,60 @@ function ShowcaseProjectForm({ project, onSaved }: { project?: ShowcaseProject; 
         </p>
       )}
 
-      {/* Admin-only meta — no public equivalent to reproduce */}
-      <div className="flex flex-wrap items-center gap-4 rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 py-2.5">
-        <label className="flex items-center gap-1.5 text-sm text-neutral-700">
-          Secteur
-          <input
-            value={form.sector}
-            onChange={(e) => set("sector", e.target.value)}
-            placeholder="Fintech"
-            className="w-28 rounded-md border border-neutral-200 px-2 py-1 text-sm"
-          />
-        </label>
-        <label className="flex items-center gap-1.5 text-sm text-neutral-700">
-          Type
-          <input
-            value={form.type}
-            onChange={(e) => set("type", e.target.value)}
-            placeholder="Web App"
-            className="w-28 rounded-md border border-neutral-200 px-2 py-1 text-sm"
-          />
-        </label>
-        <label className="flex items-center gap-1.5 text-sm text-neutral-700">
-          <input type="checkbox" checked={form.featured ?? false} onChange={(e) => set("featured", e.target.checked)} />
-          Featured
-        </label>
-        <label className="flex items-center gap-1.5 text-sm text-neutral-700">
-          <input type="checkbox" checked={form.show_on_homepage ?? false} onChange={(e) => set("show_on_homepage", e.target.checked)} />
-          Sur l&apos;accueil
-        </label>
-        <label className="flex items-center gap-1.5 text-sm text-neutral-700">
-          <input type="checkbox" checked={form.is_active ?? true} onChange={(e) => set("is_active", e.target.checked)} />
-          Actif
-        </label>
-        <label className="flex items-center gap-1.5 text-sm text-neutral-700">
-          Ordre
-          <input
-            type="number"
-            value={form.order ?? 0}
-            onChange={(e) => set("order", Number(e.target.value))}
-            className="w-14 rounded-md border border-neutral-200 px-2 py-1 text-sm"
-          />
-        </label>
-        {project?.slug && (
-          <Link
-            href={`/projects/${project.slug}`}
-            target="_blank"
-            className="ml-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-          >
-            Voir le projet <ExternalLink className="size-3" />
-          </Link>
-        )}
-      </div>
-
       {/* Faithful reproduction of /projects/[slug], directly editable */}
       <div className="rounded-2xl bg-[#0a0e13] p-5 sm:p-8">
+        {/* Admin-only meta — no public equivalent to reproduce */}
+        <div className="mb-5 flex flex-wrap items-center gap-4 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2.5">
+          <label className="flex items-center gap-1.5 text-sm text-foreground/80">
+            Secteur
+            <input
+              value={form.sector}
+              onChange={(e) => set("sector", e.target.value)}
+              placeholder="Fintech"
+              className="w-28 rounded-md bg-white/[0.06] px-2 py-1 text-sm text-foreground ring-1 ring-white/10 outline-none focus:ring-primary/50"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-sm text-foreground/80">
+            Type
+            <input
+              value={form.type}
+              onChange={(e) => set("type", e.target.value)}
+              placeholder="Web App"
+              className="w-28 rounded-md bg-white/[0.06] px-2 py-1 text-sm text-foreground ring-1 ring-white/10 outline-none focus:ring-primary/50"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-sm text-foreground/80">
+            <input type="checkbox" checked={form.featured ?? false} onChange={(e) => set("featured", e.target.checked)} />
+            Featured
+          </label>
+          <label className="flex items-center gap-1.5 text-sm text-foreground/80">
+            <input type="checkbox" checked={form.show_on_homepage ?? false} onChange={(e) => set("show_on_homepage", e.target.checked)} />
+            Sur l&apos;accueil
+          </label>
+          <label className="flex items-center gap-1.5 text-sm text-foreground/80">
+            <input type="checkbox" checked={form.is_active ?? true} onChange={(e) => set("is_active", e.target.checked)} />
+            Actif
+          </label>
+          <label className="flex items-center gap-1.5 text-sm text-foreground/80">
+            Ordre
+            <input
+              type="number"
+              value={form.order ?? 0}
+              onChange={(e) => set("order", Number(e.target.value))}
+              className="w-14 rounded-md bg-white/[0.06] px-2 py-1 text-sm text-foreground ring-1 ring-white/10 outline-none focus:ring-primary/50"
+            />
+          </label>
+          {project?.slug && (
+            <Link
+              href={`/projects/${project.slug}`}
+              target="_blank"
+              className="ml-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+            >
+              Voir le projet <ExternalLink className="size-3" />
+            </Link>
+          )}
+        </div>
+
         {/* Hero banner — mirrors what's uploaded below: video first, else the first image, else the plain icon */}
         <div className="relative flex aspect-[21/9] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_25%_30%,color-mix(in_oklch,var(--primary),transparent_75%),transparent_60%),linear-gradient(135deg,oklch(0.16_0.02_235),oklch(0.06_0.01_240))]">
           {!hasCoverMedia && (
