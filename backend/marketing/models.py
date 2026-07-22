@@ -284,7 +284,8 @@ class PageSection(LoggedModel):
         PROCESS_TIMELINE = 'process_timeline', 'Processus'
         # items: [{name, label}]
         TECH_STACK = 'tech_stack', 'Stack technique'
-        # items unused — title/subtitle/cta only.
+        # items unused — kicker/cta_label only. title/subtitle/image/link
+        # come from whichever ShowcaseProject has featured=True instead.
         FEATURED_CASE_STUDY = 'featured_case_study', 'Étude de cas vedette'
         # --- Suivi de projet ---
         # items unused — title/subtitle only (the search form itself isn't editable content).

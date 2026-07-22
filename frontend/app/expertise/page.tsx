@@ -7,6 +7,7 @@ import { ProcessTimeline } from "@/components/sections/expertise/process-timelin
 import { TechStack } from "@/components/sections/expertise/tech-stack";
 import { FeaturedCaseStudy } from "@/components/sections/expertise/featured-case-study";
 import { getPageSections, findSection } from "@/lib/api/public";
+import { getShowcaseProjects } from "@/lib/projects/public";
 
 export const metadata: Metadata = {
   title: "Expertise — Soken's Digital",
@@ -15,7 +16,11 @@ export const metadata: Metadata = {
 };
 
 export default async function ExpertisePage() {
-  const sections = await getPageSections("EXPERTISE");
+  const [sections, projects] = await Promise.all([
+    getPageSections("EXPERTISE"),
+    getShowcaseProjects(),
+  ]);
+  const featuredProject = projects.find((p) => p.featured) ?? null;
 
   return (
     <>
@@ -25,7 +30,7 @@ export default async function ExpertisePage() {
         <StrategicAdvantages section={findSection(sections, "strategic_advantages")} />
         <ProcessTimeline section={findSection(sections, "process_timeline")} />
         <TechStack section={findSection(sections, "tech_stack")} />
-        <FeaturedCaseStudy section={findSection(sections, "featured_case_study")} />
+        <FeaturedCaseStudy section={findSection(sections, "featured_case_study")} featuredProject={featuredProject} />
       </main>
       <SiteFooter />
     </>

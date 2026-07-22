@@ -13,12 +13,13 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { listPageSections, updatePageSection, type PageSectionInput } from "@/lib/api/marketing";
+import { listPageSections, listShowcaseProjects, updatePageSection, type PageSectionInput } from "@/lib/api/marketing";
 import { uploadImage } from "@/lib/api/upload";
-import type { PageSection, SectionKey, SitePage } from "@/lib/api/types";
+import type { PageSection, SectionKey, ShowcaseProject, SitePage } from "@/lib/api/types";
 import { IconPicker, SectionIcon } from "@/components/admin/marketing/icon-picker";
 import { TabletMockup } from "@/components/projects/tablet-mockup";
 import { LaptopMockup } from "@/components/projects/laptop-mockup";
+import { ProjectCardMedia } from "@/components/projects/card-media";
 import { PROJECTS } from "@/lib/projects/projects";
 
 function initials(name: string) {
@@ -63,6 +64,7 @@ const PAGE_DESCRIPTIONS: Record<SitePage, string> = {
 
 export function PageSectionEditor({ page }: { page: SitePage }) {
   const [sections, setSections] = useState<PageSection[] | null>(null);
+  const [projects, setProjects] = useState<ShowcaseProject[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
@@ -79,6 +81,12 @@ export function PageSectionEditor({ page }: { page: SitePage }) {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
+
+  useEffect(() => {
+    // Only featured_case_study (Expertise) needs this, but it's cheap and
+    // avoids threading a page-specific fetch through the section map.
+    listShowcaseProjects().then((data) => setProjects(data.results)).catch(() => {});
+  }, []);
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!sections) {
@@ -99,7 +107,7 @@ export function PageSectionEditor({ page }: { page: SitePage }) {
       {PAGE_SECTION_ORDER[page].map((key) => {
         const section = sections.find((s) => s.section_key === key);
         if (!section) return null;
-        return <SectionCard key={key} section={section} onSaved={load} />;
+        return <SectionCard key={key} section={section} onSaved={load} projects={projects} />;
       })}
     </div>
   );
@@ -195,7 +203,7 @@ export function ImageUploadField({
 
 /* ---------- card shell ---------- */
 
-function SectionCard({ section, onSaved }: { section: PageSection; onSaved: () => void }) {
+function SectionCard({ section, onSaved, projects }: { section: PageSection; onSaved: () => void; projects: ShowcaseProject[] }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<PageSectionInput>(() => toForm(section));
   const [saving, setSaving] = useState(false);
@@ -312,6 +320,7 @@ function SectionCard({ section, onSaved }: { section: PageSection; onSaved: () =
           updateItem={updateItem}
           addItem={addItem}
           removeItem={removeItem}
+          projects={projects}
         />
         {note && (
           <p className="mt-4 flex items-start gap-1.5 text-xs text-muted-foreground/70 italic">
@@ -348,6 +357,7 @@ interface BodyProps {
   updateItem: (index: number, key: string, value: string) => void;
   addItem: (blank: Record<string, string>) => void;
   removeItem: (index: number) => void;
+  projects: ShowcaseProject[];
 }
 
 function field(data: PageSectionInput, key: keyof PageSectionInput) {
@@ -376,7 +386,7 @@ export function AddItemButton({ onClick, label }: { onClick: () => void; label: 
   );
 }
 
-function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, addItem, removeItem }: BodyProps) {
+function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, addItem, removeItem, projects }: BodyProps) {
   switch (sectionKey) {
     case "hero": {
       const stats = items as { value: string; label: string }[];
@@ -961,36 +971,45 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
       );
     }
 
-    case "featured_case_study":
+    case "featured_case_study": {
+      const featured = projects.find((p) => p.featured);
       return (
-        <div className="rounded-2xl border border-white/10 bg-card/60 p-6 sm:p-8">
-          {editing ? (
-            <EditableInput value={field(data, "kicker")} onChange={(v) => setForm((p) => ({ ...p, kicker: v }))} className="text-xs font-semibold tracking-[0.15em] text-primary uppercase" placeholder="Kicker" />
-          ) : (
-            <span className="text-xs font-semibold tracking-[0.15em] text-primary uppercase">{data.kicker}</span>
-          )}
-          {editing ? (
-            <EditableInput value={field(data, "title")} onChange={(v) => setForm((p) => ({ ...p, title: v }))} className="mt-2 block w-full text-2xl font-semibold text-foreground" placeholder="Titre" />
-          ) : (
-            <h3 className="mt-2 text-2xl font-semibold text-foreground">{data.title}</h3>
-          )}
-          {editing ? (
-            <EditableTextarea value={field(data, "subtitle")} onChange={(v) => setForm((p) => ({ ...p, subtitle: v }))} rows={3} className="mt-3 max-w-xl text-sm text-muted-foreground" placeholder="Description" />
-          ) : (
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">{data.subtitle}</p>
-          )}
-          <div className="mt-4 flex flex-col items-start gap-1">
-            {editing ? (
-              <EditableInput value={field(data, "cta_label")} onChange={(v) => setForm((p) => ({ ...p, cta_label: v }))} className="w-56 text-sm font-medium text-foreground" placeholder="Lien" />
+        <div className="overflow-hidden rounded-2xl border-2 border-primary/25 bg-card/60 sm:grid sm:grid-cols-2">
+          <div className="relative aspect-[4/3] overflow-hidden sm:aspect-auto">
+            {featured ? (
+              <ProjectCardMedia images={featured.images} videoSrc={featured.video_src} icon={featured.visual_icon} iconClassName="relative size-14 text-primary/50" />
             ) : (
-              <span className="text-sm font-medium text-foreground">{data.cta_label} ↗</span>
+              <div className="flex h-full items-center justify-center bg-white/[0.02] text-center text-xs text-muted-foreground/60">
+                Aucun projet marqué « Featured » dans l&apos;onglet Projets
+              </div>
             )}
-            {editing && (
-              <EditableInput value={field(data, "cta_link")} onChange={(v) => setForm((p) => ({ ...p, cta_link: v }))} className="w-56 text-[0.65rem] text-muted-foreground" placeholder="#lien" />
+          </div>
+          <div className="p-6 sm:p-8">
+            {editing ? (
+              <EditableInput value={field(data, "kicker")} onChange={(v) => setForm((p) => ({ ...p, kicker: v }))} className="text-xs font-semibold tracking-[0.15em] text-primary uppercase" placeholder="Kicker" />
+            ) : (
+              <span className="text-xs font-semibold tracking-[0.15em] text-primary uppercase">{data.kicker}</span>
             )}
+            <h3 className="mt-2 text-2xl font-semibold text-foreground">{featured?.title ?? data.title}</h3>
+            <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">{featured?.description ?? data.subtitle}</p>
+            <div className="mt-4 flex flex-col items-start gap-1">
+              {editing ? (
+                <EditableInput value={field(data, "cta_label")} onChange={(v) => setForm((p) => ({ ...p, cta_label: v }))} className="w-56 text-sm font-medium text-foreground" placeholder="Lien" />
+              ) : (
+                <span className="text-sm font-medium text-foreground">{data.cta_label} ↗</span>
+              )}
+              <span className="text-[0.65rem] text-muted-foreground/60">
+                {featured ? `→ /projects/${featured.slug}` : "Lien vers la fiche du projet Featured, une fois défini"}
+              </span>
+            </div>
+            <p className="mt-4 text-[0.65rem] text-muted-foreground/60">
+              Le titre, la description, l&apos;image et le lien viennent automatiquement du projet coché « Featured »
+              dans l&apos;onglet Projets — seuls le kicker et le libellé du bouton se modifient ici.
+            </p>
           </div>
         </div>
       );
+    }
 
     case "tracking_hero":
       return (
