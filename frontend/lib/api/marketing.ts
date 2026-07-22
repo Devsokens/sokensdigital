@@ -21,6 +21,7 @@ export interface BlogPostInput {
   excerpt: string;
   content: Record<string, unknown>[];
   visual_icon: string;
+  visual_image: string;
   visual_label: string;
   visual_sublabel: string;
   tags: string[];

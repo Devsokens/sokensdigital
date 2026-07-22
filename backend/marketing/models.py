@@ -87,6 +87,10 @@ class BlogPost(LoggedModel):
     # frontend maps name -> lucide-react component itself.
     content = models.JSONField(default=list)
     visual_icon = models.CharField(max_length=100, blank=True)
+    # The article's cover photo — replaces visual_icon as the hero visual
+    # once set (icon still shows as a fallback badge, same convention as
+    # ShowcaseProject's ProjectCardMedia).
+    visual_image = models.URLField(blank=True)
     visual_label = models.CharField(max_length=255, blank=True)
     visual_sublabel = models.CharField(max_length=255, blank=True)
     tags = models.JSONField(default=list)

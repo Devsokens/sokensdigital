@@ -10,11 +10,13 @@ import { BlogInsights } from "@/components/sections/blog-insights";
 import { Cta } from "@/components/sections/cta";
 import { getPageSections, findSection } from "@/lib/api/public";
 import { getShowcaseProjects } from "@/lib/projects/public";
+import { getBlogPosts } from "@/lib/blog/public";
 
 export default async function Home() {
-  const [sections, homepageProjects] = await Promise.all([
+  const [sections, homepageProjects, blogPosts] = await Promise.all([
     getPageSections("ACCUEIL"),
     getShowcaseProjects({ homepage: true }),
+    getBlogPosts(),
   ]);
 
   return (
@@ -27,7 +29,7 @@ export default async function Home() {
         <Testimonials section={findSection(sections, "testimonials")} />
         <Team section={findSection(sections, "team")} />
         <PartnerLogos section={findSection(sections, "partner_logos")} />
-        <BlogInsights section={findSection(sections, "blog_insights")} />
+        <BlogInsights section={findSection(sections, "blog_insights")} posts={blogPosts} />
         <Cta section={findSection(sections, "cta")} />
       </main>
       <SiteFooter />

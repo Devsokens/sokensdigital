@@ -1,4 +1,3 @@
-import { Cpu, GitBranch, Gauge, Atom, Server, ShieldCheck } from "lucide-react";
 import type { BlogPost } from "@/lib/blog/types";
 
 export const POSTS: BlogPost[] = [
@@ -9,7 +8,7 @@ export const POSTS: BlogPost[] = [
     date: "18 OCT 2024",
     excerpt:
       "L'IA comme sentinelle, l'analyse des menaces et l'architecture Zero Trust : notre feuille de route sécurité.",
-    visualIcon: ShieldCheck,
+    visualIcon: "shield-check",
     visualLabel: "Global Digital Security Network",
     visualSublabel: "Advanced Cybersecurity & Threat Intelligence Visualization",
     tags: ["Blockchain", "AI Defense", "Cloud Security", "Compliance"],
@@ -70,7 +69,7 @@ export const POSTS: BlogPost[] = [
       },
       {
         type: "callout",
-        icon: ShieldCheck,
+        icon: "shield-check",
         title: "Infrastructures Immuables",
         description:
           "La prochaine étape est le déploiement de clusters auto-réparateurs capables de se reconstruire après chaque transaction suspecte.",
@@ -84,7 +83,7 @@ export const POSTS: BlogPost[] = [
     date: "12 OCT 2024",
     excerpt:
       "Comment intégrer les modèles LLM privés pour sécuriser vos données métier...",
-    visualIcon: Cpu,
+    visualIcon: "cpu",
     visualLabel: "Generative AI in Enterprise Systems",
     visualSublabel: "Private LLM Architecture Overview",
     tags: ["IA Générative", "ERP", "Data Privacy"],
@@ -106,7 +105,7 @@ export const POSTS: BlogPost[] = [
     author: "Marc Dubois",
     date: "05 OCT 2024",
     excerpt: "Choisir la bonne architecture pour votre croissance en 2025.",
-    visualIcon: GitBranch,
+    visualIcon: "git-branch",
     visualLabel: "Architecture Decision Map",
     visualSublabel: "Microservices vs Modular Monolith",
     tags: ["Architecture", "Scalabilité", "DevOps"],
@@ -129,7 +128,7 @@ export const POSTS: BlogPost[] = [
     date: "28 SEP 2024",
     excerpt:
       "Optimisation des bundles pour un chargement instantané sur mobile.",
-    visualIcon: Gauge,
+    visualIcon: "gauge",
     visualLabel: "Bundle Performance Audit",
     visualSublabel: "JavaScript Payload Optimization",
     tags: ["Performance", "Frontend", "Mobile"],
@@ -151,7 +150,7 @@ export const POSTS: BlogPost[] = [
     author: "Dr. Elias Vance",
     date: "02 OCT 2024",
     excerpt: "La menace quantique sur le cryptage actuel.",
-    visualIcon: Atom,
+    visualIcon: "atom",
     visualLabel: "Post-Quantum Cryptography",
     visualSublabel: "Preparing Encryption for the Quantum Era",
     tags: ["Cryptographie", "Quantum", "Compliance"],
@@ -173,7 +172,7 @@ export const POSTS: BlogPost[] = [
     author: "Marc Dubois",
     date: "20 SEP 2024",
     excerpt: "Optimiser la performance sans sacrifier la sécurité.",
-    visualIcon: Server,
+    visualIcon: "server",
     visualLabel: "Secure Infrastructure Design",
     visualSublabel: "Performance & Security Trade-off Analysis",
     tags: ["Infrastructure", "Cloud", "Performance"],

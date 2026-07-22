@@ -7,10 +7,11 @@ import { SiteFooter } from "@/components/site-footer";
 import { ArticleVisual } from "@/components/blog/article-visual";
 import { ArticleContent } from "@/components/blog/article-content";
 import { ArticleSidebar } from "@/components/blog/article-sidebar";
-import { POSTS, getPostBySlug, getRelatedPosts } from "@/lib/blog/posts";
+import { getBlogPostBySlug, getBlogPosts, getRelatedBlogPosts } from "@/lib/blog/public";
 
-export function generateStaticParams() {
-  return POSTS.map((post) => ({ slug: post.slug }));
+export async function generateStaticParams() {
+  const posts = await getBlogPosts();
+  return posts.map((post) => ({ slug: post.slug }));
 }
 
 export async function generateMetadata({
@@ -19,7 +20,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const post = getPostBySlug(slug);
+  const post = await getBlogPostBySlug(slug);
   if (!post) return {};
   return {
     title: `${post.title} — Soken's Digital`,
@@ -33,10 +34,13 @@ export default async function BlogArticlePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const post = getPostBySlug(slug);
+  const [post, allPosts] = await Promise.all([
+    getBlogPostBySlug(slug),
+    getBlogPosts(),
+  ]);
   if (!post) notFound();
 
-  const relatedPosts = getRelatedPosts(post.slug);
+  const relatedPosts = getRelatedBlogPosts(allPosts, post.slug);
 
   return (
     <>
@@ -61,6 +65,7 @@ export default async function BlogArticlePage({
               <div className="mt-6">
                 <ArticleVisual
                   icon={post.visualIcon}
+                  image={post.visualImage}
                   label={post.visualLabel}
                   sublabel={post.visualSublabel}
                 />

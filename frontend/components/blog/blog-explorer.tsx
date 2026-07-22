@@ -4,24 +4,25 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Search, ChevronLeft, ChevronRight, Diamond } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { POSTS } from "@/lib/blog/posts";
+import { ProjectCardMedia } from "@/components/projects/card-media";
+import type { BlogPost } from "@/lib/blog/types";
 
 type SortOrder = "recent" | "oldest";
 
-export function BlogExplorer() {
+export function BlogExplorer({ posts }: { posts: BlogPost[] }) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortOrder>("recent");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const base = q
-      ? POSTS.filter(
+      ? posts.filter(
           (p) =>
             p.title.toLowerCase().includes(q) || p.excerpt.toLowerCase().includes(q)
         )
-      : POSTS;
+      : posts;
     return sort === "oldest" ? [...base].reverse() : base;
-  }, [query, sort]);
+  }, [posts, query, sort]);
 
   const isSearching = query.trim().length > 0;
   const [featured, ...rest] = filtered;
@@ -88,17 +89,16 @@ export function BlogExplorer() {
         <>
           <Link
             href={`/blog/${featured.slug}`}
-            className="mt-10 grid grid-cols-1 overflow-hidden rounded-2xl border border-white/10 bg-card/60 transition-colors hover:border-primary/30 md:grid-cols-2"
+            className="mt-10 grid grid-cols-1 overflow-hidden rounded-2xl border-2 border-primary/20 bg-card/60 transition-colors hover:border-primary/60 md:grid-cols-2"
           >
-            <div
-              aria-hidden
-              className="relative flex aspect-video items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_30%_20%,color-mix(in_oklch,var(--primary),transparent_75%),transparent_60%),linear-gradient(135deg,oklch(0.16_0.02_235),oklch(0.07_0.01_240))] md:aspect-auto"
-            >
-              <div className="absolute inset-0 [background-image:linear-gradient(color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px),linear-gradient(90deg,color-mix(in_oklch,var(--primary),transparent_92%)_1px,transparent_1px)] [background-size:28px_28px]" />
-              <span className="absolute top-4 left-4 rounded-full bg-primary px-3 py-1 text-[10px] font-semibold tracking-[0.1em] text-primary-foreground uppercase">
+            <div aria-hidden className="relative aspect-video overflow-hidden md:aspect-auto">
+              <ProjectCardMedia
+                images={featured.visualImage ? [featured.visualImage] : undefined} icon={featured.visualIcon}
+                iconClassName="relative size-14 text-primary/40"
+              />
+              <span className="absolute top-4 left-4 z-10 rounded-full bg-primary px-3 py-1 text-[10px] font-semibold tracking-[0.1em] text-primary-foreground uppercase">
                 Tech Insights
               </span>
-              <featured.visualIcon className="relative size-14 text-primary/40" />
             </div>
             <div className="flex flex-col justify-center p-6 sm:p-8">
               <span className="inline-flex items-center gap-2 text-xs font-medium tracking-[0.1em] text-muted-foreground uppercase">
@@ -142,19 +142,16 @@ function PostCard({
   post,
   showArrow = false,
 }: {
-  post: (typeof POSTS)[number];
+  post: BlogPost;
   showArrow?: boolean;
 }) {
   return (
     <Link
       href={`/blog/${post.slug}`}
-      className="group overflow-hidden rounded-2xl border border-white/10 bg-card/60 transition-colors hover:border-primary/30"
+      className="group overflow-hidden rounded-2xl border-2 border-primary/20 bg-card/60 transition-colors hover:border-primary/60"
     >
-      <div
-        aria-hidden
-        className="relative flex aspect-video items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_70%_30%,color-mix(in_oklch,var(--primary),transparent_78%),transparent_65%),linear-gradient(160deg,oklch(0.17_0.02_235),oklch(0.08_0.01_240))]"
-      >
-        <post.visualIcon className="size-9 text-primary/50 transition-transform duration-300 group-hover:scale-110" />
+      <div aria-hidden className="relative aspect-video overflow-hidden">
+        <ProjectCardMedia images={post.visualImage ? [post.visualImage] : undefined} icon={post.visualIcon} />
       </div>
       <div className="p-5">
         <span className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">

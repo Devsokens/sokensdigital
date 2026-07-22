@@ -79,20 +79,26 @@ export interface Lead {
 export type BlogPostStatus = "BROUILLON" | "PUBLIE";
 
 export interface BlogPost {
-  id: string;
+  /** Admin-only — absent from the public serializer's response. */
+  id?: string;
   title: string;
   slug: string;
-  author: UserBrief | null;
+  /** Admin shape: UserBrief. Public shape: a plain "First Last" string (or null). */
+  author: UserBrief | string | null;
   excerpt: string;
   content: Record<string, unknown>[];
   visual_icon: string;
+  visual_image: string;
   visual_label: string;
   visual_sublabel: string;
   tags: string[];
-  status: BlogPostStatus;
+  /** Admin-only. */
+  status?: BlogPostStatus;
   published_at: string | null;
-  meta_description: string;
-  created_at: string;
+  /** Admin-only. */
+  meta_description?: string;
+  /** Admin-only. */
+  created_at?: string;
 }
 
 export type SitePage = "ACCUEIL" | "EXPERTISE" | "SUIVI_PROJET";

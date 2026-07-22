@@ -1,5 +1,3 @@
-import type { LucideIcon } from "lucide-react";
-
 export type Tone = "medium" | "high" | "critical";
 
 export type Block =
@@ -17,7 +15,9 @@ export type Block =
       left: { title: string; description: string; accent: "cyan" | "amber" };
       right: { title: string; description: string; accent: "cyan" | "amber" };
     }
-  | { type: "callout"; icon: LucideIcon; title: string; description: string };
+  /** `icon` is a name (e.g. "shield-check"), resolved via
+   * components/dynamic-icon's SectionIcon — not a component reference. */
+  | { type: "callout"; icon: string; title: string; description: string };
 
 export type BlogPost = {
   slug: string;
@@ -25,7 +25,9 @@ export type BlogPost = {
   author: string;
   date: string;
   excerpt: string;
-  visualIcon: LucideIcon;
+  /** Icon name (e.g. "shield-check"), resolved via SectionIcon — not a component reference. */
+  visualIcon: string;
+  visualImage?: string;
   visualLabel: string;
   visualSublabel: string;
   tags: string[];

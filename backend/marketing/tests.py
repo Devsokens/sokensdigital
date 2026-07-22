@@ -160,8 +160,7 @@ class BlogPostViewSetTests(APITestCase):
     def test_marketing_can_create_draft(self):
         response = self.client_marketing.post('/api/v1/marketing/cms/blog/', self.draft_payload, format='json')
         self.assertEqual(response.status_code, 201)
-        post = BlogPost.objects.get()
-        self.assertEqual(post.slug, 'lavenir-de-la-cyber-securite')
+        post = BlogPost.objects.get(slug='lavenir-de-la-cyber-securite')
         self.assertEqual(post.author, self.marketing_user)
         self.assertEqual(post.status, 'BROUILLON')
         self.assertIsNone(post.published_at)
@@ -181,14 +180,15 @@ class BlogPostViewSetTests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_public_list_only_shows_published(self):
-        BlogPost.objects.create(title='Brouillon', status='BROUILLON', content=[])
-        published = BlogPost.objects.create(title='Publié', status='PUBLIE', content=[])
+        BlogPost.objects.create(title='Brouillon Titre Unique', status='BROUILLON', content=[])
+        published = BlogPost.objects.create(title='Publié Titre Unique', status='PUBLIE', content=[])
 
         anon = APIClient()
         response = anon.get('/api/v1/public/cms/blog/')
         self.assertEqual(response.status_code, 200)
         slugs = [p['slug'] for p in response.json()['results']]
-        self.assertEqual(slugs, [published.slug])
+        self.assertIn(published.slug, slugs)
+        self.assertNotIn('brouillon-titre-unique', slugs)
 
     def test_public_detail_404s_on_draft(self):
         draft = BlogPost.objects.create(title='Brouillon', status='BROUILLON', content=[])

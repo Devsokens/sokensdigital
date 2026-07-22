@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Share2 } from "lucide-react";
 import type { BlogPost } from "@/lib/blog/types";
+import { ProjectCardMedia } from "@/components/projects/card-media";
 import { CopyLinkButton } from "@/components/blog/copy-link-button";
 import { NewsletterForm } from "@/components/blog/newsletter-form";
 
@@ -71,11 +72,11 @@ export function ArticleSidebar({ tags, relatedPosts }: Props) {
                 href={`/blog/${post.slug}`}
                 className="group flex gap-3 rounded-xl border border-white/10 bg-card/60 p-3 transition-colors hover:border-primary/30"
               >
-                <div
-                  aria-hidden
-                  className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[radial-gradient(circle_at_70%_30%,color-mix(in_oklch,var(--primary),transparent_78%),transparent_65%),linear-gradient(160deg,oklch(0.17_0.02_235),oklch(0.08_0.01_240))]"
-                >
-                  <post.visualIcon className="size-6 text-primary/60 transition-transform duration-300 group-hover:scale-110" />
+                <div aria-hidden className="relative size-16 shrink-0 overflow-hidden rounded-lg">
+                  <ProjectCardMedia
+                    images={post.visualImage ? [post.visualImage] : undefined} icon={post.visualIcon}
+                    iconClassName="relative size-6 text-primary/60 transition-transform duration-300 group-hover:scale-110"
+                  />
                 </div>
                 <div className="min-w-0">
                   <h4 className="truncate text-sm font-semibold text-primary">

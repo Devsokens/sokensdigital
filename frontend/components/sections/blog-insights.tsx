@@ -1,12 +1,15 @@
 import Link from "next/link";
-import { POSTS } from "@/lib/blog/posts";
+import { ProjectCardMedia } from "@/components/projects/card-media";
 import type { PageSection } from "@/lib/api/types";
+import type { BlogPost } from "@/lib/blog/types";
 
-export function BlogInsights({ section }: { section?: PageSection | null }) {
-  const featured = POSTS.slice(0, 3);
+export function BlogInsights({ section, posts }: { section?: PageSection | null; posts: BlogPost[] }) {
+  const featured = posts.slice(0, 3);
   const title = section?.title || "Insights Techniques";
   const ctaLabel = section?.cta_label || "Lire le blog";
   const ctaLink = section?.cta_link || "/blog";
+
+  if (featured.length === 0) return null;
 
   return (
     <section id="blog" className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
@@ -28,13 +31,10 @@ export function BlogInsights({ section }: { section?: PageSection | null }) {
           <Link
             key={post.slug}
             href={`/blog/${post.slug}`}
-            className="group overflow-hidden rounded-2xl border border-white/10 bg-card/60 transition-colors hover:border-primary/30"
+            className="group overflow-hidden rounded-2xl border-2 border-primary/20 bg-card/60 transition-colors hover:border-primary/60"
           >
-            <div
-              aria-hidden
-              className="relative flex aspect-video items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_70%_30%,color-mix(in_oklch,var(--primary),transparent_78%),transparent_65%),linear-gradient(160deg,oklch(0.17_0.02_235),oklch(0.08_0.01_240))]"
-            >
-              <post.visualIcon className="size-9 text-primary/50 transition-transform duration-300 group-hover:scale-110" />
+            <div aria-hidden className="relative aspect-video overflow-hidden">
+              <ProjectCardMedia images={post.visualImage ? [post.visualImage] : undefined} icon={post.visualIcon} />
             </div>
             <div className="p-5">
               <span className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">

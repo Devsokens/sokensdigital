@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import type { Block, Tone } from "@/lib/blog/types";
 import { CodeBlock } from "@/components/blog/code-block";
+import { SectionIcon } from "@/components/dynamic-icon";
 
 const TONE_CLASSES: Record<Tone, string> = {
   medium: "border-amber-500/30 bg-amber-500/15 text-amber-400",
@@ -132,7 +133,7 @@ export function ArticleContent({ blocks }: { blocks: Block[] }) {
                 className="flex flex-col items-center gap-2 rounded-xl border border-white/10 bg-white/[0.02] p-6 text-center"
               >
                 <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <block.icon className="size-4" />
+                  <SectionIcon name={block.icon} className="size-4" />
                 </span>
                 <h4 className="text-sm font-semibold text-foreground">{block.title}</h4>
                 <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
