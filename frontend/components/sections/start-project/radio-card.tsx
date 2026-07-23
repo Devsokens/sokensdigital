@@ -1,10 +1,10 @@
 "use client";
 
-import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SectionIcon } from "@/components/dynamic-icon";
 
 type RadioCardProps = {
-  icon: LucideIcon;
+  icon: string;
   title: string;
   description?: string;
   selected: boolean;
@@ -13,7 +13,7 @@ type RadioCardProps = {
 };
 
 export function RadioCard({
-  icon: Icon,
+  icon,
   title,
   description,
   selected,
@@ -41,7 +41,7 @@ export function RadioCard({
         {selected && <span className="size-2 rounded-full bg-primary" />}
       </span>
 
-      <Icon className={cn("size-5", selected ? "text-primary" : "text-foreground/80")} />
+      <SectionIcon name={icon} className={cn("size-5", selected ? "text-primary" : "text-foreground/80")} />
 
       <h4 className={cn("mt-3 font-semibold text-foreground", compact ? "text-sm" : "text-base")}>
         {title}

@@ -27,12 +27,6 @@ export function findSection(sections: PageSection[], key: string) {
 const DEFAULT_SITE_SETTINGS: SiteSettings = {
   logo_url: "",
   tagline: "Architectes de solutions numériques haute performance. Sécurité. Précision. Innovation.",
-  nav_links: [
-    { label: "Expertise", href: "/expertise" },
-    { label: "Projects", href: "/projects" },
-    { label: "Blog", href: "/blog" },
-    { label: "contact", href: "#contact" },
-  ],
   services_links: [
     { label: "Logiciel client" },
     { label: "App Web & Mobile" },

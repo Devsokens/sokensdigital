@@ -1,33 +1,24 @@
-export type Objectif = "transformation" | "logiciel" | "audit";
-export type Delai = "express" | "standard" | "etendue";
-export type Canal = "email" | "video" | "slack" | "appel";
-
 export type ProjectFormData = {
   prenom: string;
   nom: string;
   email: string;
   entreprise: string;
   secteur: string;
-  objectif: Objectif | null;
+  /** The chosen objective's title text (not a coded key) — the option
+   * list is admin-editable, so there's no fixed enum to key off anymore. */
+  objectif: string | null;
   typeSolution: string;
   budget: string;
   description: string;
-  delai: Delai;
-  canal: Canal;
+  delai: string;
+  canal: string;
   nda: boolean;
 };
 
-export const INITIAL_FORM_DATA: ProjectFormData = {
-  prenom: "",
-  nom: "",
-  email: "",
-  entreprise: "",
-  secteur: "",
-  objectif: null,
-  typeSolution: "Développement Web",
-  budget: "",
-  description: "",
-  delai: "standard",
-  canal: "email",
-  nda: false,
-};
+/** The wizard's 4 multiple-choice "questions" — admin-editable via the
+ * "Démarrer un projet" CMS tab (PageSection, page=DEMARRER_PROJET). Each
+ * type mirrors the shape of that section's `items` JSON. */
+export type ObjectifOption = { icon: string; title: string; description: string };
+export type SolutionOption = { label: string };
+export type DelaiOption = { title: string; subtitle: string };
+export type CanalOption = { icon: string; label: string };

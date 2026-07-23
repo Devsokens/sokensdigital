@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { getSiteSettings } from "@/lib/api/public";
+import { NAV_LINKS } from "@/lib/site-nav";
 import { SectionIcon } from "@/components/dynamic-icon";
 
 export async function SiteFooter() {
@@ -61,7 +62,7 @@ export async function SiteFooter() {
               Navigation
             </h3>
             <ul className="mt-4 space-y-3">
-              {settings.nav_links.map((link) => (
+              {NAV_LINKS.map((link) => (
                 <li key={link.label}>
                   <a
                     href={link.href}

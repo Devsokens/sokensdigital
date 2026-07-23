@@ -9,30 +9,21 @@ import { StepConcept } from "@/components/sections/start-project/step-concept";
 import { StepTechnique } from "@/components/sections/start-project/step-technique";
 import { StepLogistique } from "@/components/sections/start-project/step-logistique";
 import { StepSuccess } from "@/components/sections/start-project/step-success";
-import {
-  INITIAL_FORM_DATA,
-  type ProjectFormData,
+import type {
+  ProjectFormData,
+  ObjectifOption,
+  SolutionOption,
+  DelaiOption,
+  CanalOption,
 } from "@/components/sections/start-project/types";
 import { createLead } from "@/lib/api/public";
 
-const OBJECTIF_LABELS: Record<string, string> = {
-  transformation: "Transformation Digitale",
-  logiciel: "Logiciel Sur-Mesure",
-  audit: "Audit Cybersécurité",
-};
-
-const DELAI_LABELS: Record<string, string> = {
-  express: "Express (< 1 mois)",
-  standard: "Standard (2-3 mois)",
-  etendue: "Étendue (4+ mois)",
-};
-
 function buildLeadPayload(data: ProjectFormData) {
   const notes = [
-    data.objectif && `Objectif : ${OBJECTIF_LABELS[data.objectif]}`,
+    data.objectif && `Objectif : ${data.objectif}`,
     data.secteur && `Secteur d'activité : ${data.secteur}`,
     `Type de solution : ${data.typeSolution}`,
-    `Délai souhaité : ${DELAI_LABELS[data.delai]}`,
+    `Délai souhaité : ${data.delai}`,
     `Canal privilégié : ${data.canal}`,
     `NDA demandé : ${data.nda ? "Oui" : "Non"}`,
     data.description && `\nCahier des charges :\n${data.description}`,
@@ -77,12 +68,32 @@ function generateReference() {
   return `SKN-2026-${code}`;
 }
 
-export function StartProjectWizard() {
+type Props = {
+  objectifs: ObjectifOption[];
+  solutions: SolutionOption[];
+  delais: DelaiOption[];
+  canaux: CanalOption[];
+};
+
+export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Props) {
   const [stepIndex, setStepIndex] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [data, setData] = useState<ProjectFormData>(INITIAL_FORM_DATA);
+  const [data, setData] = useState<ProjectFormData>(() => ({
+    prenom: "",
+    nom: "",
+    email: "",
+    entreprise: "",
+    secteur: "",
+    objectif: null,
+    typeSolution: solutions[0]?.label ?? "",
+    budget: "",
+    description: "",
+    delai: delais[0]?.title ?? "",
+    canal: canaux[0]?.label ?? "",
+    nda: false,
+  }));
   const [reference] = useState(generateReference);
 
   const update = (patch: Partial<ProjectFormData>) =>
@@ -155,9 +166,9 @@ export function StartProjectWizard() {
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] as const }}
           >
-            {currentKey === "concept" && <StepConcept data={data} update={update} />}
-            {currentKey === "technique" && <StepTechnique data={data} update={update} />}
-            {currentKey === "logistique" && <StepLogistique data={data} update={update} />}
+            {currentKey === "concept" && <StepConcept data={data} update={update} objectifs={objectifs} />}
+            {currentKey === "technique" && <StepTechnique data={data} update={update} solutions={solutions} />}
+            {currentKey === "logistique" && <StepLogistique data={data} update={update} delais={delais} canaux={canaux} />}
           </motion.div>
         </AnimatePresence>
       </div>

@@ -95,7 +95,7 @@ export interface BlogPost {
   created_at?: string;
 }
 
-export type SitePage = "ACCUEIL" | "EXPERTISE" | "SUIVI_PROJET";
+export type SitePage = "ACCUEIL" | "EXPERTISE" | "SUIVI_PROJET" | "DEMARRER_PROJET";
 
 export type SectionKey =
   | "hero"
@@ -112,7 +112,11 @@ export type SectionKey =
   | "tech_stack"
   | "featured_case_study"
   | "tracking_hero"
-  | "tracking_features";
+  | "tracking_features"
+  | "start_project_objectifs"
+  | "start_project_solutions"
+  | "start_project_delais"
+  | "start_project_canaux";
 
 export interface PageSection {
   id: string;
@@ -148,7 +152,6 @@ export interface SiteSocialLink {
 export interface SiteSettings {
   logo_url: string;
   tagline: string;
-  nav_links: SiteNavLink[];
   services_links: SiteServiceLink[];
   legal_links: SiteNavLink[];
   social_links: SiteSocialLink[];

@@ -242,6 +242,7 @@ class PageSection(LoggedModel):
         ACCUEIL = 'ACCUEIL', 'Accueil'
         EXPERTISE = 'EXPERTISE', 'Expertise'
         SUIVI_PROJET = 'SUIVI_PROJET', 'Suivi de projet'
+        DEMARRER_PROJET = 'DEMARRER_PROJET', 'Démarrer un projet'
 
     class SectionKey(models.TextChoices):
         # --- Accueil ---
@@ -281,6 +282,18 @@ class PageSection(LoggedModel):
         TRACKING_HERO = 'tracking_hero', 'Hero (Suivi de projet)'
         # items: [{icon, title, description}]
         TRACKING_FEATURES = 'tracking_features', 'Fonctionnalités mises en avant'
+        # --- Démarrer un projet --- the wizard's fixed fields (name, email,
+        # budget, description...) aren't editorial content, but its
+        # multiple-choice "questions" are — each of these 4 keys is one
+        # question's answer list, kept/added/removed/reordered freely.
+        # items: [{icon, title, description}] — "Objectif du projet" (step 1)
+        START_PROJECT_OBJECTIFS = 'start_project_objectifs', 'Démarrer — Objectifs du projet'
+        # items: [{label}] — "Type de Solution" dropdown (step 2)
+        START_PROJECT_SOLUTIONS = 'start_project_solutions', 'Démarrer — Types de solution'
+        # items: [{title, subtitle}] — "Délai souhaité" (step 3)
+        START_PROJECT_DELAIS = 'start_project_delais', 'Démarrer — Délais'
+        # items: [{icon, label}] — "Canal de communication" (step 3)
+        START_PROJECT_CANAUX = 'start_project_canaux', 'Démarrer — Canaux de communication'
 
     page = models.CharField(max_length=20, choices=Page.choices)
     section_key = models.CharField(max_length=30, choices=SectionKey.choices)
@@ -369,19 +382,19 @@ class SiteSettings(LoggedModel):
     every LoggedModel, so it's "the only row" by convention, not by a
     fixed pk). Not a page's content, so it doesn't fit PageSection's
     per-page-per-section model; there's exactly one of these, editable,
-    never listed/created/destroyed via the API. `nav_links` is shared by
-    the header and footer (they show the same links today); `logo_url`
-    overrides the static logo asset in frontend/public only when set —
-    leave blank to keep it.
+    never listed/created/destroyed via the API. Navigation links are
+    deliberately NOT here — they're fixed site structure, not editorial
+    content, and stay hardcoded in the frontend. `logo_url` overrides the
+    static logo asset in frontend/public only when set — leave blank to
+    keep it.
 
     items shapes:
-      nav_links / legal_links: [{label, href}]
+      legal_links: [{label, href}]
       services_links: [{label}] — footer's "Services" column
       social_links: [{icon, url}] — icon is a lucide name, e.g. "globe" """
 
     logo_url = models.URLField(blank=True)
     tagline = models.TextField(blank=True)
-    nav_links = models.JSONField(default=list, blank=True)
     services_links = models.JSONField(default=list, blank=True)
     legal_links = models.JSONField(default=list, blank=True)
     social_links = models.JSONField(default=list, blank=True)

@@ -1,16 +1,7 @@
 "use client";
 
 import { Cog, ChevronDown, Lightbulb } from "lucide-react";
-import type { ProjectFormData } from "@/components/sections/start-project/types";
-
-const SOLUTION_TYPES = [
-  "Développement Web",
-  "Application Mobile",
-  "Logiciel Sur-Mesure",
-  "Infrastructure Cloud",
-  "Audit Cybersécurité",
-  "Autre",
-];
+import type { ProjectFormData, SolutionOption } from "@/components/sections/start-project/types";
 
 const inputClass =
   "w-full rounded-lg border border-white/10 bg-white/[0.02] px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 transition-colors focus:border-primary/50 focus:outline-none";
@@ -18,9 +9,10 @@ const inputClass =
 type Props = {
   data: ProjectFormData;
   update: (patch: Partial<ProjectFormData>) => void;
+  solutions: SolutionOption[];
 };
 
-export function StepTechnique({ data, update }: Props) {
+export function StepTechnique({ data, update, solutions }: Props) {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_18rem]">
       <div className="rounded-2xl border border-white/10 bg-card/60 p-6 sm:p-7">
@@ -38,9 +30,9 @@ export function StepTechnique({ data, update }: Props) {
                 onChange={(e) => update({ typeSolution: e.target.value })}
                 className={`${inputClass} appearance-none pr-9`}
               >
-                {SOLUTION_TYPES.map((type) => (
-                  <option key={type} value={type} className="bg-background">
-                    {type}
+                {solutions.map((type) => (
+                  <option key={type.label} value={type.label} className="bg-background">
+                    {type.label}
                   </option>
                 ))}
               </select>

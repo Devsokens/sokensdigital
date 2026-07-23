@@ -172,7 +172,7 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = SiteSettings
         fields = [
-            'logo_url', 'tagline', 'nav_links', 'services_links',
+            'logo_url', 'tagline', 'services_links',
             'legal_links', 'social_links', 'copyright_text',
         ]
 

@@ -5,12 +5,6 @@ import { Check, ShieldCheck, Rocket, RotateCw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ProjectFormData } from "@/components/sections/start-project/types";
 
-const OBJECTIF_LABELS: Record<string, string> = {
-  transformation: "Transformation Digitale",
-  logiciel: "Logiciel Sur-Mesure",
-  audit: "Audit Cybersécurité",
-};
-
 const NEXT_STEPS = [
   {
     title: "Analyse technique approfondie",
@@ -36,7 +30,7 @@ export function StepSuccess({
   data: ProjectFormData;
   reference: string;
 }) {
-  const conceptTitle = data.objectif ? OBJECTIF_LABELS[data.objectif] : "Votre Projet";
+  const conceptTitle = data.objectif || "Votre Projet";
 
   return (
     <motion.div

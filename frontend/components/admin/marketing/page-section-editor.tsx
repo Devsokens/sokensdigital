@@ -42,6 +42,10 @@ const SECTION_LABELS: Record<SectionKey, string> = {
   featured_case_study: "Étude de cas vedette",
   tracking_hero: "Hero",
   tracking_features: "Fonctionnalités mises en avant",
+  start_project_objectifs: "Objectif du projet",
+  start_project_solutions: "Type de solution",
+  start_project_delais: "Délai souhaité",
+  start_project_canaux: "Canal de communication",
 };
 
 const SECTION_NOTES: Partial<Record<SectionKey, string>> = {
@@ -54,12 +58,14 @@ const PAGE_SECTION_ORDER: Record<SitePage, SectionKey[]> = {
   ACCUEIL: ["hero", "services", "recent_projects", "testimonials", "team", "partner_logos", "blog_insights", "cta"],
   EXPERTISE: ["expertise_hero", "strategic_advantages", "process_timeline", "tech_stack", "featured_case_study"],
   SUIVI_PROJET: ["tracking_hero", "tracking_features"],
+  DEMARRER_PROJET: ["start_project_objectifs", "start_project_solutions", "start_project_delais", "start_project_canaux"],
 };
 
 const PAGE_DESCRIPTIONS: Record<SitePage, string> = {
   ACCUEIL: "page d'accueil",
   EXPERTISE: "page Expertise",
   SUIVI_PROJET: "page Suivi de projet",
+  DEMARRER_PROJET: "page Démarrer un projet",
 };
 
 export function PageSectionEditor({ page }: { page: SitePage }) {
@@ -1055,6 +1061,105 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
             </div>
           ))}
           {editing && <AddItemButton label="Ajouter une fonctionnalité" onClick={() => addItem({ icon: "shield", title: "", description: "" })} />}
+        </div>
+      );
+    }
+
+    case "start_project_objectifs": {
+      const objectifs = items as { icon: string; title: string; description: string }[];
+      return (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {objectifs.map((o, index) => (
+            <div key={index} className="group relative rounded-xl border border-white/10 bg-card/60 p-4">
+              {editing && <RemoveItemButton onClick={() => removeItem(index)} />}
+              <SectionIcon name={o.icon} className="size-5 text-foreground/80" />
+              {editing && (
+                <div className="mt-2">
+                  <IconPicker value={o.icon} onChange={(v) => updateItem(index, "icon", v)} />
+                </div>
+              )}
+              {editing ? (
+                <EditableInput value={o.title} onChange={(v) => updateItem(index, "title", v)} className="mt-3 block w-full text-sm font-semibold text-foreground" placeholder="Titre" />
+              ) : (
+                <h4 className="mt-3 text-sm font-semibold text-foreground">{o.title}</h4>
+              )}
+              {editing ? (
+                <EditableTextarea value={o.description} onChange={(v) => updateItem(index, "description", v)} rows={2} className="mt-1.5 text-xs text-muted-foreground" placeholder="Description" />
+              ) : (
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{o.description}</p>
+              )}
+            </div>
+          ))}
+          {editing && <AddItemButton label="Ajouter un objectif" onClick={() => addItem({ icon: "rocket", title: "", description: "" })} />}
+        </div>
+      );
+    }
+
+    case "start_project_solutions": {
+      const solutions = items as { label: string }[];
+      return (
+        <div className="flex flex-wrap gap-2">
+          {solutions.map((s, index) => (
+            <div key={index} className="group relative">
+              {editing ? (
+                <div className="flex items-center gap-1 rounded-full bg-white/[0.06] py-1 pr-1 pl-3 ring-1 ring-white/10">
+                  <EditableInput value={s.label} onChange={(v) => updateItem(index, "label", v)} className="w-32 text-xs text-foreground" />
+                  <RemoveItemButton onClick={() => removeItem(index)} />
+                </div>
+              ) : (
+                <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-foreground">{s.label}</span>
+              )}
+            </div>
+          ))}
+          {editing && <AddItemButton label="Ajouter" onClick={() => addItem({ label: "" })} />}
+        </div>
+      );
+    }
+
+    case "start_project_delais": {
+      const delais = items as { title: string; subtitle: string }[];
+      return (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {delais.map((d, index) => (
+            <div key={index} className="group relative rounded-xl border border-white/10 bg-card/60 p-4">
+              {editing && <RemoveItemButton onClick={() => removeItem(index)} />}
+              {editing ? (
+                <EditableInput value={d.title} onChange={(v) => updateItem(index, "title", v)} className="block w-full text-sm font-semibold text-foreground" placeholder="Titre" />
+              ) : (
+                <h4 className="text-sm font-semibold text-foreground">{d.title}</h4>
+              )}
+              {editing ? (
+                <EditableInput value={d.subtitle} onChange={(v) => updateItem(index, "subtitle", v)} className="mt-1 block w-full text-xs text-muted-foreground" placeholder="Sous-titre" />
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">{d.subtitle}</p>
+              )}
+            </div>
+          ))}
+          {editing && <AddItemButton label="Ajouter un délai" onClick={() => addItem({ title: "", subtitle: "" })} />}
+        </div>
+      );
+    }
+
+    case "start_project_canaux": {
+      const canaux = items as { icon: string; label: string }[];
+      return (
+        <div className="flex flex-wrap gap-2">
+          {canaux.map((c, index) => (
+            <div key={index} className="group relative">
+              {editing ? (
+                <div className="flex items-center gap-1 rounded-full bg-white/[0.06] py-1 pr-1 pl-2 ring-1 ring-white/10">
+                  <IconPicker value={c.icon} onChange={(v) => updateItem(index, "icon", v)} />
+                  <EditableInput value={c.label} onChange={(v) => updateItem(index, "label", v)} className="w-24 text-xs text-foreground" />
+                  <RemoveItemButton onClick={() => removeItem(index)} />
+                </div>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-foreground">
+                  <SectionIcon name={c.icon} className="size-3.5" /> {c.label}
+                </span>
+              )}
+            </div>
+          ))}
+          {editing && <AddItemButton label="Ajouter" onClick={() => addItem({ icon: "mail", label: "" })} />}
         </div>
       );
     }

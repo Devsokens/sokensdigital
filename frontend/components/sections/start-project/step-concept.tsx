@@ -1,30 +1,8 @@
 "use client";
 
-import { User, Lightbulb, ShieldCheck, Rocket, SquareTerminal, Shield } from "lucide-react";
+import { User, Lightbulb, ShieldCheck } from "lucide-react";
 import { RadioCard } from "@/components/sections/start-project/radio-card";
-import type { ProjectFormData, Objectif } from "@/components/sections/start-project/types";
-
-const OBJECTIFS: { key: Objectif; icon: typeof Rocket; title: string; description: string }[] = [
-  {
-    key: "transformation",
-    icon: Rocket,
-    title: "Transformation Digitale",
-    description: "Modernisez vos processus internes et votre stack technologique.",
-  },
-  {
-    key: "logiciel",
-    icon: SquareTerminal,
-    title: "Logiciel Sur-Mesure",
-    description:
-      "Conception et développement d'applications critiques hautes performances.",
-  },
-  {
-    key: "audit",
-    icon: Shield,
-    title: "Audit Cybersécurité",
-    description: "Évaluation des vulnérabilités et renforcement de l'infrastructure.",
-  },
-];
+import type { ProjectFormData, ObjectifOption } from "@/components/sections/start-project/types";
 
 const inputClass =
   "w-full rounded-lg border border-white/10 bg-white/[0.02] px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 transition-colors focus:border-primary/50 focus:outline-none";
@@ -32,9 +10,10 @@ const inputClass =
 type Props = {
   data: ProjectFormData;
   update: (patch: Partial<ProjectFormData>) => void;
+  objectifs: ObjectifOption[];
 };
 
-export function StepConcept({ data, update }: Props) {
+export function StepConcept({ data, update, objectifs }: Props) {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_18rem]">
       <div className="space-y-6">
@@ -109,14 +88,14 @@ export function StepConcept({ data, update }: Props) {
           </h3>
 
           <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {OBJECTIFS.map((obj) => (
+            {objectifs.map((obj) => (
               <RadioCard
-                key={obj.key}
+                key={obj.title}
                 icon={obj.icon}
                 title={obj.title}
                 description={obj.description}
-                selected={data.objectif === obj.key}
-                onSelect={() => update({ objectif: obj.key })}
+                selected={data.objectif === obj.title}
+                onSelect={() => update({ objectif: obj.title })}
               />
             ))}
           </div>

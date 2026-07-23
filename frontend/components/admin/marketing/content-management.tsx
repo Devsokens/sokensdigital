@@ -1,20 +1,10 @@
 "use client";
 
-import { CheckCircle2 } from "lucide-react";
 import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/ui/tabs";
 import { PageSectionEditor } from "@/components/admin/marketing/page-section-editor";
 import { BlogPostList } from "@/components/admin/marketing/blog-post-list";
 import { ShowcaseProjectList } from "@/components/admin/marketing/showcase-project-list";
 import { SiteSettingsForm } from "@/components/admin/marketing/site-settings-form";
-
-function InfoNote({ text }: { text: string }) {
-  return (
-    <div className="flex items-start gap-3 rounded-2xl border border-primary/20 bg-primary/[0.03] p-5">
-      <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
-      <p className="text-sm text-neutral-600">{text}</p>
-    </div>
-  );
-}
 
 export function ContentManagement() {
   return (
@@ -55,11 +45,7 @@ export function ContentManagement() {
         </TabsPanel>
 
         <TabsPanel value="demarrer" className="pt-6">
-          <InfoNote
-            text={
-              "Le formulaire « Démarrer un projet » n'a pas de contenu éditorial (ses champs sont fixes) — chaque soumission crée maintenant un vrai Lead, visible dans Marketing > Leads."
-            }
-          />
+          <PageSectionEditor page="DEMARRER_PROJET" />
         </TabsPanel>
 
         <TabsPanel value="suivi" className="pt-6">

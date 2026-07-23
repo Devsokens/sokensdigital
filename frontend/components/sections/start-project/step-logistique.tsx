@@ -1,46 +1,25 @@
 "use client";
 
-import { Clock, Mail, Video, MessageSquare, Phone, BarChart3, Headset, ExternalLink } from "lucide-react";
+import { Clock, BarChart3, Headset, ExternalLink } from "lucide-react";
 import { RadioCard } from "@/components/sections/start-project/radio-card";
+import { SectionIcon } from "@/components/dynamic-icon";
 import { cn } from "@/lib/utils";
 import type {
   ProjectFormData,
-  Delai,
-  Canal,
+  DelaiOption,
+  CanalOption,
 } from "@/components/sections/start-project/types";
-
-const DELAIS: { key: Delai; title: string; subtitle: string }[] = [
-  { key: "express", title: "Express", subtitle: "Moins d'un mois" },
-  { key: "standard", title: "Standard", subtitle: "2 à 3 mois" },
-  { key: "etendue", title: "Étendue", subtitle: "Plus de 4 mois" },
-];
-
-const DELAI_LABELS: Record<Delai, string> = {
-  express: "Express (< 1 mois)",
-  standard: "Standard (2-3 mois)",
-  etendue: "Étendue (4+ mois)",
-};
-
-const CANAUX: { key: Canal; icon: typeof Mail; label: string }[] = [
-  { key: "email", icon: Mail, label: "Email" },
-  { key: "video", icon: Video, label: "Vidéo" },
-  { key: "slack", icon: MessageSquare, label: "Slack" },
-  { key: "appel", icon: Phone, label: "Appel" },
-];
-
-const OBJECTIF_LABELS: Record<string, string> = {
-  transformation: "Transformation Digitale",
-  logiciel: "Logiciel Sur-Mesure",
-  audit: "Audit Cybersécurité",
-};
 
 type Props = {
   data: ProjectFormData;
   update: (patch: Partial<ProjectFormData>) => void;
+  delais: DelaiOption[];
+  canaux: CanalOption[];
 };
 
-export function StepLogistique({ data, update }: Props) {
-  const conceptTitle = data.objectif ? OBJECTIF_LABELS[data.objectif] : "Votre Projet";
+export function StepLogistique({ data, update, delais, canaux }: Props) {
+  const conceptTitle = data.objectif || "Votre Projet";
+  const selectedDelai = delais.find((d) => d.title === data.delai);
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_20rem]">
@@ -55,14 +34,14 @@ export function StepLogistique({ data, update }: Props) {
             Délai souhaité pour le lancement
           </span>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {DELAIS.map((d) => (
+            {delais.map((d) => (
               <RadioCard
-                key={d.key}
-                icon={Clock}
+                key={d.title}
+                icon="clock"
                 title={d.title}
                 description={d.subtitle}
-                selected={data.delai === d.key}
-                onSelect={() => update({ delai: d.key })}
+                selected={data.delai === d.title}
+                onSelect={() => update({ delai: d.title })}
                 compact
               />
             ))}
@@ -74,20 +53,20 @@ export function StepLogistique({ data, update }: Props) {
             Canal de communication privilégié
           </span>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {CANAUX.map((c) => (
+            {canaux.map((c) => (
               <button
-                key={c.key}
+                key={c.label}
                 type="button"
-                onClick={() => update({ canal: c.key })}
-                aria-pressed={data.canal === c.key}
+                onClick={() => update({ canal: c.label })}
+                aria-pressed={data.canal === c.label}
                 className={cn(
                   "flex flex-col items-center gap-2 rounded-xl border p-4 text-center transition-colors",
-                  data.canal === c.key
+                  data.canal === c.label
                     ? "border-primary/60 bg-primary/5 text-primary"
                     : "border-white/10 bg-white/[0.02] text-foreground/80 hover:border-white/20"
                 )}
               >
-                <c.icon className="size-5" />
+                <SectionIcon name={c.icon} className="size-5" />
                 <span className="text-[11px] font-semibold tracking-[0.1em] uppercase">
                   {c.label}
                 </span>
@@ -154,11 +133,13 @@ export function StepLogistique({ data, update }: Props) {
             <div className="mt-2 space-y-1 text-xs">
               <p className="flex justify-between text-muted-foreground">
                 Délai :
-                <span className="font-medium text-foreground">{DELAI_LABELS[data.delai]}</span>
+                <span className="font-medium text-foreground">
+                  {data.delai}{selectedDelai ? ` (${selectedDelai.subtitle})` : ""}
+                </span>
               </p>
               <p className="flex justify-between text-muted-foreground">
                 Contact :
-                <span className="font-medium text-foreground capitalize">{data.canal}</span>
+                <span className="font-medium text-foreground">{data.canal}</span>
               </p>
             </div>
           </div>

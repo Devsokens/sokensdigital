@@ -834,7 +834,7 @@ class SiteSettingsViewTests(APITestCase):
         anon = APIClient()
         response = anon.get('/api/v1/public/site-settings/')
         self.assertEqual(response.status_code, 200)
-        self.assertIn('nav_links', response.json())
+        self.assertIn('services_links', response.json())
 
     def test_settings_are_a_singleton(self):
         anon = APIClient()
@@ -847,7 +847,7 @@ class SiteSettingsViewTests(APITestCase):
     def test_marketing_can_update_settings(self):
         response = self.client_marketing.patch(
             '/api/v1/marketing/cms/site-settings/',
-            {'tagline': 'Nouvelle signature.', 'nav_links': [{'label': 'Blog', 'href': '/blog'}]},
+            {'tagline': 'Nouvelle signature.', 'services_links': [{'label': 'Audit'}]},
             format='json',
         )
         self.assertEqual(response.status_code, 200)
@@ -856,7 +856,7 @@ class SiteSettingsViewTests(APITestCase):
         anon = APIClient()
         public = anon.get('/api/v1/public/site-settings/').json()
         self.assertEqual(public['tagline'], 'Nouvelle signature.')
-        self.assertEqual(public['nav_links'], [{'label': 'Blog', 'href': '/blog'}])
+        self.assertEqual(public['services_links'], [{'label': 'Audit'}])
 
     def test_outsider_cannot_update_settings(self):
         response = self.client_outsider.patch(
