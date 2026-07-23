@@ -18,3 +18,4 @@ gunicorn
 whitenoise
 django-filter
 django-redis
+Pillow

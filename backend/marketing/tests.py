@@ -1,8 +1,10 @@
+import io
 from unittest.mock import Mock, patch
 
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
+from PIL import Image
 from rest_framework.test import APIClient, APITestCase
 
 from decimal import Decimal
@@ -682,8 +684,16 @@ class ImageUploadViewTests(APITestCase):
         self.client_outsider = APIClient()
         self.client_outsider.force_authenticate(user=self.outsider)
 
-    def image_file(self, content_type='image/png', name='logo.png', size=100):
-        return SimpleUploadedFile(name, b'\x00' * size, content_type=content_type)
+    def image_file(self, content_type='image/png', name='logo.png', size=None):
+        # `size` (oversized-rejection test): garbage bytes are fine — the
+        # size check runs before anything tries to decode them as an image.
+        if size is not None:
+            content = b'\x00' * size
+        else:
+            buffer = io.BytesIO()
+            Image.new('RGB', (10, 10), color='red').save(buffer, format='PNG')
+            content = buffer.getvalue()
+        return SimpleUploadedFile(name, content, content_type=content_type)
 
     @patch('core.storage._bucket_ensured', False)
     @patch.dict('os.environ', {'SUPABASE_URL': 'https://test-project.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'test-key'})
