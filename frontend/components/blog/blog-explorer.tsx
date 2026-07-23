@@ -77,7 +77,11 @@ export function BlogExplorer({ posts }: { posts: BlogPost[] }) {
 
       {filtered.length === 0 ? (
         <p className="mt-16 text-center text-sm text-muted-foreground">
-          Aucun article ne correspond à &laquo;&nbsp;{query}&nbsp;&raquo;.
+          {isSearching ? (
+            <>Aucun article ne correspond à &laquo;&nbsp;{query}&nbsp;&raquo;.</>
+          ) : (
+            "Aucun article publié pour l'instant."
+          )}
         </p>
       ) : isSearching ? (
         <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -93,7 +97,7 @@ export function BlogExplorer({ posts }: { posts: BlogPost[] }) {
           >
             <div aria-hidden className="relative aspect-video overflow-hidden md:aspect-auto">
               <ProjectCardMedia
-                images={featured.visualImage ? [featured.visualImage] : undefined} icon={featured.visualIcon}
+                images={featured.coverImage ? [featured.coverImage] : undefined}
                 iconClassName="relative size-14 text-primary/40"
               />
               <span className="absolute top-4 left-4 z-10 rounded-full bg-primary px-3 py-1 text-[10px] font-semibold tracking-[0.1em] text-primary-foreground uppercase">
@@ -151,7 +155,7 @@ function PostCard({
       className="group overflow-hidden rounded-2xl border-2 border-primary/20 bg-card/60 transition-colors hover:border-primary/60"
     >
       <div aria-hidden className="relative aspect-video overflow-hidden">
-        <ProjectCardMedia images={post.visualImage ? [post.visualImage] : undefined} icon={post.visualIcon} />
+        <ProjectCardMedia images={post.coverImage ? [post.coverImage] : undefined} />
       </div>
       <div className="p-5">
         <span className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">

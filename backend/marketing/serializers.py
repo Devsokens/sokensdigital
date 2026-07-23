@@ -41,11 +41,7 @@ class BlogPostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlogPost
-        fields = [
-            'id', 'title', 'slug', 'author', 'excerpt', 'content',
-            'visual_icon', 'visual_image', 'visual_label', 'visual_sublabel', 'tags',
-            'status', 'published_at', 'meta_description', 'created_at',
-        ]
+        fields = ['id', 'title', 'slug', 'author', 'cover_image', 'content', 'status', 'published_at', 'created_at']
         read_only_fields = ['slug', 'author']
 
 
@@ -57,10 +53,7 @@ class BlogPostPublicSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlogPost
-        fields = [
-            'title', 'slug', 'author', 'excerpt', 'content',
-            'visual_icon', 'visual_image', 'visual_label', 'visual_sublabel', 'tags', 'published_at',
-        ]
+        fields = ['title', 'slug', 'author', 'cover_image', 'content', 'published_at']
 
     def get_author(self, obj) -> str | None:
         if not obj.author:

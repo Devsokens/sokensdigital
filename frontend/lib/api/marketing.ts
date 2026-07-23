@@ -18,15 +18,9 @@ export function updateLead(id: string, data: Partial<{
 
 export interface BlogPostInput {
   title: string;
-  excerpt: string;
-  content: Record<string, unknown>[];
-  visual_icon: string;
-  visual_image: string;
-  visual_label: string;
-  visual_sublabel: string;
-  tags: string[];
+  cover_image: string;
+  content: string;
   status: string;
-  meta_description: string;
 }
 
 export function listBlogPosts() {

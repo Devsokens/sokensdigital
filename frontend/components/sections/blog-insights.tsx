@@ -34,7 +34,7 @@ export function BlogInsights({ section, posts }: { section?: PageSection | null;
             className="group overflow-hidden rounded-2xl border-2 border-primary/20 bg-card/60 transition-colors hover:border-primary/60"
           >
             <div aria-hidden className="relative aspect-video overflow-hidden">
-              <ProjectCardMedia images={post.visualImage ? [post.visualImage] : undefined} icon={post.visualIcon} />
+              <ProjectCardMedia images={post.coverImage ? [post.coverImage] : undefined} />
             </div>
             <div className="p-5">
               <span className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">

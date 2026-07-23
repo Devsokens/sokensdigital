@@ -85,18 +85,12 @@ export interface BlogPost {
   slug: string;
   /** Admin shape: UserBrief. Public shape: a plain "First Last" string (or null). */
   author: UserBrief | string | null;
-  excerpt: string;
-  content: Record<string, unknown>[];
-  visual_icon: string;
-  visual_image: string;
-  visual_label: string;
-  visual_sublabel: string;
-  tags: string[];
+  cover_image: string;
+  /** HTML from the admin's rich text editor. */
+  content: string;
   /** Admin-only. */
   status?: BlogPostStatus;
   published_at: string | null;
-  /** Admin-only. */
-  meta_description?: string;
   /** Admin-only. */
   created_at?: string;
 }

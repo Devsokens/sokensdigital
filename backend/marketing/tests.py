@@ -149,12 +149,8 @@ class BlogPostViewSetTests(APITestCase):
 
         self.draft_payload = {
             'title': "L'avenir de la Cyber-Sécurité",
-            'excerpt': 'Un aperçu.',
-            'content': [{'type': 'p', 'text': 'Bonjour le monde.'}],
-            'visual_icon': 'ShieldCheck',
-            'visual_label': 'Global Digital Security Network',
-            'visual_sublabel': 'Advanced Cybersecurity Visualization',
-            'tags': ['AI Defense', 'Cloud Security'],
+            'content': '<p>Bonjour le monde.</p>',
+            'cover_image': '',
         }
 
     def test_marketing_can_create_draft(self):
@@ -166,7 +162,7 @@ class BlogPostViewSetTests(APITestCase):
         self.assertIsNone(post.published_at)
 
     def test_publishing_sets_published_at(self):
-        post = BlogPost.objects.create(title='Test', content=[])
+        post = BlogPost.objects.create(title='Test', content='')
         response = self.client_marketing.patch(
             f'/api/v1/marketing/cms/blog/{post.id}/', {'status': 'PUBLIE'}, format='json',
         )
@@ -180,8 +176,8 @@ class BlogPostViewSetTests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_public_list_only_shows_published(self):
-        BlogPost.objects.create(title='Brouillon Titre Unique', status='BROUILLON', content=[])
-        published = BlogPost.objects.create(title='Publié Titre Unique', status='PUBLIE', content=[])
+        BlogPost.objects.create(title='Brouillon Titre Unique', status='BROUILLON', content='')
+        published = BlogPost.objects.create(title='Publié Titre Unique', status='PUBLIE', content='')
 
         anon = APIClient()
         response = anon.get('/api/v1/public/cms/blog/')
@@ -191,19 +187,17 @@ class BlogPostViewSetTests(APITestCase):
         self.assertNotIn('brouillon-titre-unique', slugs)
 
     def test_public_detail_404s_on_draft(self):
-        draft = BlogPost.objects.create(title='Brouillon', status='BROUILLON', content=[])
+        draft = BlogPost.objects.create(title='Brouillon', status='BROUILLON', content='')
         anon = APIClient()
         response = anon.get(f'/api/v1/public/cms/blog/{draft.slug}/')
         self.assertEqual(response.status_code, 404)
 
     def test_public_detail_returns_published_post_content(self):
-        post = BlogPost.objects.create(
-            title='Publié', status='PUBLIE', content=[{'type': 'p', 'text': 'Salut'}],
-        )
+        post = BlogPost.objects.create(title='Publié', status='PUBLIE', content='<p>Salut</p>')
         anon = APIClient()
         response = anon.get(f'/api/v1/public/cms/blog/{post.slug}/')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['content'], [{'type': 'p', 'text': 'Salut'}])
+        self.assertEqual(response.json()['content'], '<p>Salut</p>')
 
 
 class ShowcaseProjectViewSetTests(APITestCase):

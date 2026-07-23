@@ -6,11 +6,9 @@ import { ExternalLink, LayoutGrid, List, Loader2, Plus, Trash2, X } from "lucide
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { ApiError } from "@/lib/api/client";
 import { ImageUploadField } from "@/components/admin/marketing/page-section-editor";
-import { IconPicker } from "@/components/admin/marketing/icon-picker";
-import { BlockListEditor } from "@/components/admin/marketing/block-list-editor";
+import { RichTextEditor } from "@/components/admin/marketing/rich-text-editor";
 import { ProjectCardMedia } from "@/components/projects/card-media";
 import {
   listBlogPosts,
@@ -19,20 +17,13 @@ import {
   deleteBlogPost,
   type BlogPostInput,
 } from "@/lib/api/marketing";
-import type { BlogPost, BlogPostStatus } from "@/lib/api/types";
-import type { Block } from "@/lib/blog/types";
+import type { BlogPost } from "@/lib/api/types";
 
 const EMPTY: BlogPostInput = {
   title: "",
-  excerpt: "",
-  content: [],
-  visual_icon: "shield-check",
-  visual_image: "",
-  visual_label: "",
-  visual_sublabel: "",
-  tags: [],
+  cover_image: "",
+  content: "",
   status: "BROUILLON",
-  meta_description: "",
 };
 
 function authorName(author: BlogPost["author"]): string {
@@ -127,7 +118,7 @@ export function BlogPostList() {
                 </Button>
               }
             />
-            <SheetContent title="Nouvel article" className="max-w-3xl">
+            <SheetContent title="Nouvel article" className="max-w-2xl">
               <BlogPostForm
                 onSaved={() => {
                   setOpen(false);
@@ -146,7 +137,7 @@ export function BlogPostList() {
           if (!next) setEditing(null);
         }}
       >
-        <SheetContent title="Modifier l'article" className="max-w-3xl">
+        <SheetContent title="Modifier l'article" className="max-w-2xl">
           {editing && (
             <BlogPostForm
               post={editing}
@@ -220,7 +211,7 @@ export function BlogPostList() {
           {posts.map((post) => (
             <div key={post.id} className="group overflow-hidden rounded-2xl border-2 border-primary/25 bg-[#0a0e13] transition-colors hover:border-primary/70">
               <button type="button" onClick={() => edit(post)} className="relative flex aspect-video w-full items-center justify-center overflow-hidden">
-                <ProjectCardMedia images={post.visual_image ? [post.visual_image] : undefined} icon={post.visual_icon} />
+                <ProjectCardMedia images={post.cover_image ? [post.cover_image] : undefined} />
                 <span
                   className={cn(
                     "absolute top-3 left-3 z-10 rounded-full px-3 py-1 text-[10px] font-semibold tracking-[0.1em] uppercase",
@@ -235,7 +226,6 @@ export function BlogPostList() {
                   {post.published_at ? new Date(post.published_at).toLocaleDateString("fr-FR") : "Non publié"}
                 </span>
                 <h3 className="mt-1 text-base font-semibold text-foreground">{post.title}</h3>
-                <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{post.excerpt}</p>
                 <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
                   <button type="button" onClick={() => edit(post)} className="text-xs font-medium text-primary hover:underline">
                     Modifier
@@ -259,21 +249,9 @@ export function BlogPostList() {
 function BlogPostForm({ post, onSaved }: { post?: BlogPost; onSaved: () => void }) {
   const [form, setForm] = useState<BlogPostInput>(
     post
-      ? {
-          title: post.title,
-          excerpt: post.excerpt,
-          content: post.content,
-          visual_icon: post.visual_icon,
-          visual_image: post.visual_image,
-          visual_label: post.visual_label,
-          visual_sublabel: post.visual_sublabel,
-          tags: post.tags,
-          status: post.status ?? "BROUILLON",
-          meta_description: post.meta_description ?? "",
-        }
+      ? { title: post.title, cover_image: post.cover_image, content: post.content, status: post.status ?? "BROUILLON" }
       : EMPTY
   );
-  const [tagsText, setTagsText] = useState(post?.tags.join(", ") ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -290,17 +268,12 @@ function BlogPostForm({ post, onSaved }: { post?: BlogPost; onSaved: () => void 
       return;
     }
 
-    const payload: BlogPostInput = {
-      ...form,
-      tags: tagsText.split(",").map((t) => t.trim()).filter(Boolean),
-    };
-
     setSaving(true);
     try {
       if (post) {
-        await updateBlogPost(post.id!, payload);
+        await updateBlogPost(post.id!, form);
       } else {
-        await createBlogPost(payload);
+        await createBlogPost(form);
       }
       onSaved();
     } catch (err) {
@@ -325,99 +298,55 @@ function BlogPostForm({ post, onSaved }: { post?: BlogPost; onSaved: () => void 
         </p>
       )}
 
-      {/* Faithful reproduction of /blog/[slug]'s header, directly editable */}
-      <div className="rounded-2xl bg-[#0a0e13] p-5 sm:p-8">
-        {/* Admin-only meta — no public equivalent to reproduce */}
-        <div className="mb-5 flex flex-wrap items-center gap-4 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2.5">
-          <label className="flex items-center gap-1.5 text-sm text-foreground/80">
-            Statut
-            <select
-              value={form.status}
-              onChange={(e) => set("status", e.target.value)}
-              className="rounded-md bg-white/[0.06] px-2 py-1 text-sm text-foreground ring-1 ring-white/10 outline-none focus:ring-primary/50"
-            >
-              <option value="BROUILLON" className="bg-background">Brouillon</option>
-              <option value="PUBLIE" className="bg-background">Publié</option>
-            </select>
-          </label>
-          {post && (
-            <span className="text-sm text-foreground/80">
-              Auteur : {authorName(post.author) || "—"}
-            </span>
-          )}
-          {post?.slug && (
-            <Link
-              href={`/blog/${post.slug}`}
-              target="_blank"
-              className="ml-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-            >
-              Voir l&apos;article <ExternalLink className="size-3" />
-            </Link>
-          )}
-        </div>
+      <div className="flex flex-wrap items-center gap-4 rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 py-2.5">
+        <label className="flex items-center gap-1.5 text-sm text-neutral-700">
+          Statut
+          <select
+            value={form.status}
+            onChange={(e) => set("status", e.target.value)}
+            className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-sm"
+          >
+            <option value="BROUILLON">Brouillon</option>
+            <option value="PUBLIE">Publié</option>
+          </select>
+        </label>
+        {post && <span className="text-sm text-neutral-500">Auteur : {authorName(post.author) || "—"}</span>}
+        {post?.slug && (
+          <Link
+            href={`/blog/${post.slug}`}
+            target="_blank"
+            className="ml-auto inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+          >
+            Voir l&apos;article <ExternalLink className="size-3" />
+          </Link>
+        )}
+      </div>
 
-        {/* Article visual — mirrors ArticleVisual: image first, else the icon, with an editable caption overlay */}
+      <div>
         <div className="relative flex aspect-[21/9] items-center justify-center overflow-hidden rounded-2xl border-2 border-primary/25">
-          <ProjectCardMedia
-            images={form.visual_image ? [form.visual_image] : undefined} icon={form.visual_icon}
-            iconClassName="relative size-16 text-primary/40 sm:size-20"
-          />
-          <div className="absolute right-3 top-3 z-10">
-            <IconPicker value={form.visual_icon} onChange={(v) => set("visual_icon", v)} />
-          </div>
-          <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-5 py-4">
-            <input
-              value={form.visual_label} onChange={(e) => set("visual_label", e.target.value)}
-              className="block w-full bg-transparent text-xs font-semibold tracking-[0.15em] text-foreground uppercase outline-none placeholder:text-foreground/40"
-              placeholder="LIBELLÉ DU VISUEL"
-            />
-            <input
-              value={form.visual_sublabel} onChange={(e) => set("visual_sublabel", e.target.value)}
-              className="mt-0.5 block w-full bg-transparent text-[11px] text-muted-foreground outline-none placeholder:text-muted-foreground/50"
-              placeholder="Sous-libellé du visuel"
-            />
-          </div>
+          <ProjectCardMedia images={form.cover_image ? [form.cover_image] : undefined} iconClassName="relative size-16 text-primary/40 sm:size-20" />
         </div>
         <div className="mt-3 flex items-center gap-2">
-          <ImageUploadField value={form.visual_image} onChange={(url) => set("visual_image", url)} />
-          {form.visual_image && (
-            <button type="button" onClick={() => set("visual_image", "")} className="text-muted-foreground transition-colors hover:text-destructive">
+          <ImageUploadField value={form.cover_image} onChange={(url) => set("cover_image", url)} />
+          {form.cover_image && (
+            <button type="button" onClick={() => set("cover_image", "")} className="text-neutral-400 transition-colors hover:text-destructive">
               <X className="size-4" />
             </button>
           )}
-          <p className="text-[0.65rem] text-muted-foreground/60">
-            Remplace l&apos;icône par une photo de couverture — laisse vide pour garder l&apos;icône.
-          </p>
+          <p className="text-xs text-neutral-500">Image de couverture</p>
         </div>
-
-        <input
-          value={form.title} onChange={(e) => set("title", e.target.value)}
-          className="mt-6 block w-full bg-transparent text-3xl font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground/40 sm:text-4xl"
-          placeholder="Titre de l'article"
-        />
-        <textarea
-          value={form.excerpt} onChange={(e) => set("excerpt", e.target.value)}
-          className="mt-3 block w-full max-w-2xl resize-none bg-transparent text-sm text-muted-foreground outline-none placeholder:text-muted-foreground/40 sm:text-base"
-          placeholder="Extrait affiché sur les cartes"
-          rows={2}
-        />
-        <input
-          value={tagsText} onChange={(e) => setTagsText(e.target.value)}
-          className="mt-4 block w-full max-w-md bg-transparent text-xs text-primary outline-none placeholder:text-muted-foreground/40"
-          placeholder="Tags séparés par des virgules"
-        />
       </div>
 
       <label className="block">
-        <span className={labelClass}>Meta description (SEO)</span>
-        <input value={form.meta_description} onChange={(e) => set("meta_description", e.target.value)} className={inputClass} />
+        <input
+          value={form.title} onChange={(e) => set("title", e.target.value)}
+          className="block w-full border-b border-neutral-200 pb-2 text-3xl font-semibold tracking-tight text-neutral-900 outline-none placeholder:text-neutral-300 focus:border-primary/50"
+          placeholder="Titre de l'article"
+        />
       </label>
 
       <div>
-        <span className={labelClass}>Contenu de l&apos;article</span>
-        <div className="mt-1.5">
-          <BlockListEditor blocks={form.content as unknown as Block[]} onChange={(blocks) => set("content", blocks as unknown as Record<string, unknown>[])} />
-        </div>
+        <RichTextEditor value={form.content} onChange={(html) => set("content", html)} />
       </div>
 
       <div className="flex items-center justify-between pt-2">

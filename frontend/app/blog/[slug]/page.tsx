@@ -63,16 +63,11 @@ export default async function BlogArticlePage({
               <p className="mt-3 text-sm text-muted-foreground">{post.author}</p>
 
               <div className="mt-6">
-                <ArticleVisual
-                  icon={post.visualIcon}
-                  image={post.visualImage}
-                  label={post.visualLabel}
-                  sublabel={post.visualSublabel}
-                />
+                <ArticleVisual image={post.coverImage} />
               </div>
 
               <div className="mt-8">
-                <ArticleContent blocks={post.content} />
+                <ArticleContent html={post.content} />
               </div>
 
               <div className="mt-10 flex justify-end">
@@ -86,7 +81,7 @@ export default async function BlogArticlePage({
               </div>
             </div>
 
-            <ArticleSidebar tags={post.tags} relatedPosts={relatedPosts} />
+            <ArticleSidebar relatedPosts={relatedPosts} />
           </div>
         </article>
       </main>

@@ -1,7 +1,8 @@
 import type { BlogPost as ApiBlogPost } from "@/lib/api/types";
-import type { BlogPost, Block } from "@/lib/blog/types";
+import type { BlogPost } from "@/lib/blog/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const EXCERPT_LENGTH = 160;
 
 function formatDate(iso: string | null) {
   if (!iso) return "";
@@ -14,19 +15,31 @@ function authorName(author: ApiBlogPost["author"]): string {
   return `${author.first_name} ${author.last_name}`.trim();
 }
 
+const HTML_ENTITIES: Record<string, string> = {
+  "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"',
+  "&#39;": "'", "&apos;": "'", "&nbsp;": " ",
+};
+
+function decodeEntities(text: string): string {
+  return text.replace(/&(amp|lt|gt|quot|#39|apos|nbsp);/g, (m) => HTML_ENTITIES[m] ?? m);
+}
+
+/** Strips HTML tags to build a plain-text card preview — there's no
+ * separate excerpt field to author, it's derived from the content itself. */
+function excerptFromHtml(html: string): string {
+  const text = decodeEntities(html.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+  return text.length > EXCERPT_LENGTH ? `${text.slice(0, EXCERPT_LENGTH).trimEnd()}…` : text;
+}
+
 function toPost(p: ApiBlogPost): BlogPost {
   return {
     slug: p.slug,
     title: p.title,
     author: authorName(p.author),
     date: formatDate(p.published_at),
-    excerpt: p.excerpt,
-    visualIcon: p.visual_icon,
-    visualImage: p.visual_image || undefined,
-    visualLabel: p.visual_label,
-    visualSublabel: p.visual_sublabel,
-    tags: p.tags,
-    content: p.content as unknown as Block[],
+    coverImage: p.cover_image || undefined,
+    excerpt: excerptFromHtml(p.content),
+    content: p.content,
   };
 }
 

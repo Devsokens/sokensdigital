@@ -6,11 +6,10 @@ import { CopyLinkButton } from "@/components/blog/copy-link-button";
 import { NewsletterForm } from "@/components/blog/newsletter-form";
 
 type Props = {
-  tags: string[];
   relatedPosts: BlogPost[];
 };
 
-export function ArticleSidebar({ tags, relatedPosts }: Props) {
+export function ArticleSidebar({ relatedPosts }: Props) {
   return (
     <aside className="space-y-6">
       <div>
@@ -44,22 +43,6 @@ export function ArticleSidebar({ tags, relatedPosts }: Props) {
         </p>
       </div>
 
-      <div>
-        <span className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">
-          Sujets connexes
-        </span>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {tags.map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full border border-white/10 bg-white/[0.02] px-3 py-1 text-xs text-foreground/80"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-      </div>
-
       {relatedPosts.length > 0 && (
         <div>
           <span className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">
@@ -74,7 +57,7 @@ export function ArticleSidebar({ tags, relatedPosts }: Props) {
               >
                 <div aria-hidden className="relative size-16 shrink-0 overflow-hidden rounded-lg">
                   <ProjectCardMedia
-                    images={post.visualImage ? [post.visualImage] : undefined} icon={post.visualIcon}
+                    images={post.coverImage ? [post.coverImage] : undefined}
                     iconClassName="relative size-6 text-primary/60 transition-transform duration-300 group-hover:scale-110"
                   />
                 </div>

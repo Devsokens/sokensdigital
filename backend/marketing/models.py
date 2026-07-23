@@ -76,27 +76,12 @@ class BlogPost(LoggedModel):
     title = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, unique=True, blank=True)
     author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='blog_posts')
-    excerpt = models.TextField(blank=True)
-    # Rich content as structured JSON blocks — mirrors frontend's
-    # lib/blog/types.ts `Block[]` shape exactly (p/h2/h3/code/table/compare/
-    # callout), NOT a single HTML string. The original spec's
-    # `content_html` was written before checking what the frontend already
-    # renders; a flat HTML string would have meant rebuilding the blog
-    # article renderer from scratch. `callout` blocks and `visual_icon`
-    # store an icon *name* (e.g. "ShieldCheck"), not a component — the
-    # frontend maps name -> lucide-react component itself.
-    content = models.JSONField(default=list)
-    visual_icon = models.CharField(max_length=100, blank=True)
-    # The article's cover photo — replaces visual_icon as the hero visual
-    # once set (icon still shows as a fallback badge, same convention as
-    # ShowcaseProject's ProjectCardMedia).
-    visual_image = models.URLField(blank=True)
-    visual_label = models.CharField(max_length=255, blank=True)
-    visual_sublabel = models.CharField(max_length=255, blank=True)
-    tags = models.JSONField(default=list)
+    cover_image = models.URLField(blank=True)
+    # Rich text as HTML (Tiptap's editor.getHTML() output) — deliberately
+    # simple: title + cover image + formatted content, nothing else.
+    content = models.TextField(blank=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.BROUILLON)
     published_at = models.DateTimeField(null=True, blank=True)
-    meta_description = models.CharField(max_length=300, blank=True)
 
     class Meta(LoggedModel.Meta):
         ordering = ['-published_at', '-created_at']

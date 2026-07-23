@@ -9,7 +9,8 @@ const CYCLE_DURATION = 4500;
 type Props = {
   images?: string[];
   videoSrc?: string;
-  icon: string;
+  /** Omit for content types with no per-item icon (e.g. blog posts) — falls back to a generic image glyph. */
+  icon?: string;
   /** Fallback icon size when there's no real media yet — bigger for a
    * full-width hero banner than for a small grid-card thumbnail. */
   iconClassName?: string;
@@ -22,7 +23,7 @@ type Props = {
  * inset-0`). Plain `object-cover` on purpose: unlike the tablet mockup,
  * a cropped fill is the expected look here, not letterboxing. */
 export function ProjectCardMedia({
-  images, videoSrc, icon,
+  images, videoSrc, icon = "image",
   iconClassName = "relative size-10 text-primary/50 transition-transform duration-300 group-hover:scale-110",
 }: Props) {
   const hasImages = Boolean(images && images.length > 0);
