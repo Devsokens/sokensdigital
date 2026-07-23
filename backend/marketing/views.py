@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 
 from core.permissions import has_role
 from core.storage import upload_image, upload_video
-from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, ShowcaseProject, SocialPost
+from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, ShowcaseProject, SiteSettings, SocialPost
 from marketing.ratelimit import get_client_ip, is_rate_limited
 from marketing.serializers import (
     BlogPostPublicSerializer,
@@ -26,6 +26,7 @@ from marketing.serializers import (
     QuoteTrackSerializer,
     ShowcaseProjectPublicSerializer,
     ShowcaseProjectSerializer,
+    SiteSettingsSerializer,
     SocialPostSerializer,
 )
 
@@ -155,6 +156,43 @@ class PublicPageSectionListView(generics.ListAPIView):
         if not page:
             return PageSection.objects.none()
         return PageSection.objects.filter(page=page, is_active=True)
+
+
+@extend_schema(
+    tags=['Marketing & Commercial'],
+    summary='Get the site-wide header/footer settings (admin)',
+    responses={200: SiteSettingsSerializer},
+)
+@extend_schema(
+    methods=['PATCH'],
+    tags=['Marketing & Commercial'],
+    summary='Edit the site-wide header/footer settings (admin)',
+    responses={200: SiteSettingsSerializer},
+)
+class SiteSettingsView(APIView):
+    """Singleton — no list/create/destroy, same reasoning as PageSection
+    but simpler still: there's exactly one row, always. GET+PATCH only."""
+
+    permission_classes = [IsMarketing]
+
+    def get(self, request):
+        return Response(SiteSettingsSerializer(SiteSettings.load()).data)
+
+    def patch(self, request):
+        instance = SiteSettings.load()
+        serializer = SiteSettingsSerializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+@extend_schema(tags=['Marketing & Commercial'], summary='Get the site-wide header/footer settings (public)')
+class PublicSiteSettingsView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return Response(SiteSettingsSerializer(SiteSettings.load()).data)
 
 
 @extend_schema(

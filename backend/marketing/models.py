@@ -362,3 +362,35 @@ class ShowcaseProject(LoggedModel):
         if not self.slug:
             self.slug = slugify(self.title)
         super().save(*args, **kwargs)
+
+
+class SiteSettings(LoggedModel):
+    """Site-wide chrome (header + footer) — a singleton (id is a UUID like
+    every LoggedModel, so it's "the only row" by convention, not by a
+    fixed pk). Not a page's content, so it doesn't fit PageSection's
+    per-page-per-section model; there's exactly one of these, editable,
+    never listed/created/destroyed via the API. `nav_links` is shared by
+    the header and footer (they show the same links today); `logo_url`
+    overrides the static logo asset in frontend/public only when set —
+    leave blank to keep it.
+
+    items shapes:
+      nav_links / legal_links: [{label, href}]
+      services_links: [{label}] — footer's "Services" column
+      social_links: [{icon, url}] — icon is a lucide name, e.g. "globe" """
+
+    logo_url = models.URLField(blank=True)
+    tagline = models.TextField(blank=True)
+    nav_links = models.JSONField(default=list, blank=True)
+    services_links = models.JSONField(default=list, blank=True)
+    legal_links = models.JSONField(default=list, blank=True)
+    social_links = models.JSONField(default=list, blank=True)
+    copyright_text = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return 'Paramètres du site'
+
+    @classmethod
+    def load(cls) -> 'SiteSettings':
+        obj = cls.objects.first()
+        return obj if obj is not None else cls.objects.create()

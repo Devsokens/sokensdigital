@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Stepper, type StepKey } from "@/components/sections/start-project/stepper";
 import { StepConcept } from "@/components/sections/start-project/step-concept";
@@ -13,6 +13,43 @@ import {
   INITIAL_FORM_DATA,
   type ProjectFormData,
 } from "@/components/sections/start-project/types";
+import { createLead } from "@/lib/api/public";
+
+const OBJECTIF_LABELS: Record<string, string> = {
+  transformation: "Transformation Digitale",
+  logiciel: "Logiciel Sur-Mesure",
+  audit: "Audit Cybersécurité",
+};
+
+const DELAI_LABELS: Record<string, string> = {
+  express: "Express (< 1 mois)",
+  standard: "Standard (2-3 mois)",
+  etendue: "Étendue (4+ mois)",
+};
+
+function buildLeadPayload(data: ProjectFormData) {
+  const notes = [
+    data.objectif && `Objectif : ${OBJECTIF_LABELS[data.objectif]}`,
+    data.secteur && `Secteur d'activité : ${data.secteur}`,
+    `Type de solution : ${data.typeSolution}`,
+    `Délai souhaité : ${DELAI_LABELS[data.delai]}`,
+    `Canal privilégié : ${data.canal}`,
+    `NDA demandé : ${data.nda ? "Oui" : "Non"}`,
+    data.description && `\nCahier des charges :\n${data.description}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return {
+    first_name: data.prenom,
+    last_name: data.nom,
+    email: data.email,
+    company_name: data.entreprise,
+    source: "FORMULAIRE_DEVIS" as const,
+    message: notes,
+    estimated_value: data.budget || undefined,
+  };
+}
 
 const FORM_STEPS: StepKey[] = ["concept", "technique", "logistique"];
 
@@ -43,6 +80,8 @@ function generateReference() {
 export function StartProjectWizard() {
   const [stepIndex, setStepIndex] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [data, setData] = useState<ProjectFormData>(INITIAL_FORM_DATA);
   const [reference] = useState(generateReference);
 
@@ -53,9 +92,18 @@ export function StartProjectWizard() {
   const isFirst = stepIndex === 0;
   const isLast = stepIndex === FORM_STEPS.length - 1;
 
-  const goNext = () => {
+  const goNext = async () => {
     if (isLast) {
-      setSubmitted(true);
+      setSubmitError(null);
+      setSubmitting(true);
+      try {
+        await createLead(buildLeadPayload(data));
+        setSubmitted(true);
+      } catch (err) {
+        setSubmitError(err instanceof Error ? err.message : "Impossible d'envoyer la demande.");
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
     setStepIndex((i) => Math.min(i + 1, FORM_STEPS.length - 1));
@@ -114,6 +162,12 @@ export function StartProjectWizard() {
         </AnimatePresence>
       </div>
 
+      {submitError && (
+        <p className="mt-6 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {submitError}
+        </p>
+      )}
+
       <div className="mt-10 flex items-center justify-between">
         {isFirst ? (
           <a
@@ -136,16 +190,26 @@ export function StartProjectWizard() {
 
         <Button
           onClick={goNext}
+          disabled={submitting}
           size="lg"
           className={
             isLast
-              ? "h-12 rounded-lg bg-primary px-7 text-sm font-semibold tracking-wide text-primary-foreground uppercase shadow-[0_0_30px_-6px_color-mix(in_oklch,var(--primary),transparent_30%)] hover:bg-primary/90"
+              ? "h-12 rounded-lg bg-primary px-7 text-sm font-semibold tracking-wide text-primary-foreground uppercase shadow-[0_0_30px_-6px_color-mix(in_oklch,var(--primary),transparent_30%)] hover:bg-primary/90 disabled:opacity-60"
               : "h-12 rounded-full bg-primary px-7 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
           }
         >
           <span className="inline-flex items-center gap-2">
-            {isLast ? "Soumettre le Projet" : "Suivant"}
-            <ArrowRight className="size-4" />
+            {submitting ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Envoi en cours…
+              </>
+            ) : (
+              <>
+                {isLast ? "Soumettre le Projet" : "Suivant"}
+                <ArrowRight className="size-4" />
+              </>
+            )}
           </span>
         </Button>
       </div>

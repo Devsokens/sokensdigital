@@ -2,16 +2,20 @@ from rest_framework import serializers
 
 from core.models import User
 from core.serializers import UserBriefSerializer
-from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, ShowcaseProject, SocialPost
+from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, ShowcaseProject, SiteSettings, SocialPost
 
 
 class LeadPublicCreateSerializer(serializers.ModelSerializer):
     """Public intake — the site vitrine's 'Démarrer un projet' form. No
-    status/assigned_to/qualification_score: those are internal-only."""
+    status/assigned_to/qualification_score: those are internal-only.
+    `estimated_value` IS accepted here (unlike the others) — it's the
+    wizard's own "Budget estimé" field, and populating it is what makes
+    the "pipeline pondéré" dashboard metric mean anything for organic
+    web leads instead of always being null."""
 
     class Meta:
         model = Lead
-        fields = ['first_name', 'last_name', 'company_name', 'email', 'phone', 'source', 'message']
+        fields = ['first_name', 'last_name', 'company_name', 'email', 'phone', 'source', 'message', 'estimated_value']
 
 
 class LeadSerializer(serializers.ModelSerializer):
@@ -157,6 +161,19 @@ class PageSectionPublicSerializer(serializers.ModelSerializer):
         fields = [
             'section_key', 'kicker', 'title', 'subtitle', 'cta_label', 'cta_link',
             'cta_secondary_label', 'cta_secondary_link', 'items',
+        ]
+
+
+class SiteSettingsSerializer(serializers.ModelSerializer):
+    """Same shape for admin (read/write) and public (read) — nothing here
+    is sensitive, it's the header/footer content every visitor already
+    sees rendered on every page."""
+
+    class Meta:
+        model = SiteSettings
+        fields = [
+            'logo_url', 'tagline', 'nav_links', 'services_links',
+            'legal_links', 'social_links', 'copyright_text',
         ]
 
 

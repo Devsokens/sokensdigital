@@ -1,16 +1,17 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/ui/tabs";
 import { PageSectionEditor } from "@/components/admin/marketing/page-section-editor";
 import { BlogPostList } from "@/components/admin/marketing/blog-post-list";
 import { ShowcaseProjectList } from "@/components/admin/marketing/showcase-project-list";
+import { SiteSettingsForm } from "@/components/admin/marketing/site-settings-form";
 
-function ComingSoon({ text }: { text: string }) {
+function InfoNote({ text }: { text: string }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-neutral-200 py-16 text-center">
-      <Sparkles className="size-5 text-neutral-300" />
-      <p className="text-sm text-neutral-400">{text}</p>
+    <div className="flex items-start gap-3 rounded-2xl border border-primary/20 bg-primary/[0.03] p-5">
+      <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
+      <p className="text-sm text-neutral-600">{text}</p>
     </div>
   );
 }
@@ -54,7 +55,11 @@ export function ContentManagement() {
         </TabsPanel>
 
         <TabsPanel value="demarrer" className="pt-6">
-          <ComingSoon text="Les libellés du formulaire 'Démarrer un projet' et son branchement sur l'API Lead arrivent bientôt." />
+          <InfoNote
+            text={
+              "Le formulaire « Démarrer un projet » n'a pas de contenu éditorial (ses champs sont fixes) — chaque soumission crée maintenant un vrai Lead, visible dans Marketing > Leads."
+            }
+          />
         </TabsPanel>
 
         <TabsPanel value="suivi" className="pt-6">
@@ -62,7 +67,7 @@ export function ContentManagement() {
         </TabsPanel>
 
         <TabsPanel value="header-footer" className="pt-6">
-          <ComingSoon text="Logo, liens de navigation, réseaux sociaux et mentions légales — arrive bientôt." />
+          <SiteSettingsForm />
         </TabsPanel>
       </Tabs>
     </div>

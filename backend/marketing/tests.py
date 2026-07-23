@@ -34,6 +34,16 @@ class PublicLeadCreateTests(APITestCase):
     def test_public_can_create_lead(self):
         response = self.client.post('/api/v1/public/leads/', self.valid_payload(), format='json')
         self.assertEqual(response.status_code, 201)
+
+    def test_public_can_set_estimated_value(self):
+        # The "Démarrer un projet" wizard's Budget field — unlike
+        # status/qualification_score, this one IS meant to be settable
+        # from the public form so the weighted-pipeline dashboard metric
+        # reflects organic web leads.
+        response = self.client.post('/api/v1/public/leads/', self.valid_payload(estimated_value='5000'), format='json')
+        self.assertEqual(response.status_code, 201)
+        lead = Lead.objects.get(email='ada@example.com')
+        self.assertEqual(str(lead.estimated_value), '5000.00')
         self.assertEqual(Lead.objects.count(), 1)
         self.assertEqual(Lead.objects.first().status, 'NOUVEAU')
 
@@ -62,6 +72,13 @@ class PublicLeadCreateTests(APITestCase):
         self.assertEqual(blocked.status_code, 429)
         still_ok = self.client.post('/api/v1/public/leads/', self.valid_payload(), format='json', REMOTE_ADDR='2.2.2.2')
         self.assertEqual(still_ok.status_code, 201)
+
+    @patch('marketing.ratelimit.cache.incr', side_effect=ConnectionError('Redis unreachable'))
+    def test_submission_still_works_if_cache_backend_is_down(self, mock_incr):
+        # is_rate_limited() must fail open — a cache/Redis outage should
+        # never take down the whole public form with a 500.
+        response = self.client.post('/api/v1/public/leads/', self.valid_payload(), format='json')
+        self.assertEqual(response.status_code, 201)
 
 
 class LeadViewSetTests(APITestCase):
@@ -799,3 +816,55 @@ class VideoUploadViewTests(APITestCase):
             format='multipart',
         )
         self.assertEqual(response.status_code, 400)
+
+
+class SiteSettingsViewTests(APITestCase):
+    def setUp(self):
+        self.marketing_user = User.objects.create(email='chrome-mkt@sokensdigital.com', first_name='Marketing')
+        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        self.outsider = User.objects.create(email='chrome-dev@sokensdigital.com', first_name='Dev')
+        self.outsider.firestore_role = 'DEVELOPPEUR'
+
+        self.client_marketing = APIClient()
+        self.client_marketing.force_authenticate(user=self.marketing_user)
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def test_public_can_read_settings(self):
+        anon = APIClient()
+        response = anon.get('/api/v1/public/site-settings/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('nav_links', response.json())
+
+    def test_settings_are_a_singleton(self):
+        anon = APIClient()
+        first = anon.get('/api/v1/public/site-settings/').json()
+        second = anon.get('/api/v1/public/site-settings/').json()
+        self.assertEqual(first, second)
+        from marketing.models import SiteSettings
+        self.assertEqual(SiteSettings.objects.count(), 1)
+
+    def test_marketing_can_update_settings(self):
+        response = self.client_marketing.patch(
+            '/api/v1/marketing/cms/site-settings/',
+            {'tagline': 'Nouvelle signature.', 'nav_links': [{'label': 'Blog', 'href': '/blog'}]},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['tagline'], 'Nouvelle signature.')
+
+        anon = APIClient()
+        public = anon.get('/api/v1/public/site-settings/').json()
+        self.assertEqual(public['tagline'], 'Nouvelle signature.')
+        self.assertEqual(public['nav_links'], [{'label': 'Blog', 'href': '/blog'}])
+
+    def test_outsider_cannot_update_settings(self):
+        response = self.client_outsider.patch(
+            '/api/v1/marketing/cms/site-settings/', {'tagline': 'Hack'}, format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_anonymous_cannot_update_settings(self):
+        anon = APIClient()
+        response = anon.patch('/api/v1/marketing/cms/site-settings/', {'tagline': 'Hack'}, format='json')
+        self.assertIn(response.status_code, (401, 403))

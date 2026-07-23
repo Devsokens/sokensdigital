@@ -13,8 +13,10 @@ from marketing.views import (
     PublicQuoteTrackView,
     PublicShowcaseProjectDetailView,
     PublicShowcaseProjectListView,
+    PublicSiteSettingsView,
     QuoteViewSet,
     ShowcaseProjectViewSet,
+    SiteSettingsView,
     SocialPostViewSet,
     VideoUploadView,
     marketing_dashboard,
@@ -32,6 +34,7 @@ urlpatterns = [
     path('dashboard/', marketing_dashboard, name='marketing-dashboard'),
     path('cms/upload-image/', ImageUploadView.as_view(), name='upload-image'),
     path('cms/upload-video/', VideoUploadView.as_view(), name='upload-video'),
+    path('cms/site-settings/', SiteSettingsView.as_view(), name='site-settings'),
 ] + router.urls
 
 public_urlpatterns = [
@@ -42,4 +45,5 @@ public_urlpatterns = [
     path('showcase-projects/', PublicShowcaseProjectListView.as_view(), name='public-showcase-project-list'),
     path('showcase-projects/<slug:slug>/', PublicShowcaseProjectDetailView.as_view(), name='public-showcase-project-detail'),
     path('quotes/track/<uuid:tracking_token>/', PublicQuoteTrackView.as_view(), name='public-quote-track'),
+    path('site-settings/', PublicSiteSettingsView.as_view(), name='public-site-settings'),
 ]

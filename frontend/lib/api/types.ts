@@ -131,6 +131,30 @@ export interface PageSection {
   created_at: string;
 }
 
+export interface SiteNavLink {
+  label: string;
+  href: string;
+}
+
+export interface SiteServiceLink {
+  label: string;
+}
+
+export interface SiteSocialLink {
+  icon: string;
+  url: string;
+}
+
+export interface SiteSettings {
+  logo_url: string;
+  tagline: string;
+  nav_links: SiteNavLink[];
+  services_links: SiteServiceLink[];
+  legal_links: SiteNavLink[];
+  social_links: SiteSocialLink[];
+  copyright_text: string;
+}
+
 export interface ShowcaseProjectStat {
   value: string;
   label: string;

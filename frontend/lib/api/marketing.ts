@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api/client";
-import type { BlogPost, Lead, MarketingDashboard, PageSection, Paginated, Quote, ShowcaseProject, SitePage, SocialPost } from "@/lib/api/types";
+import type { BlogPost, Lead, MarketingDashboard, PageSection, Paginated, Quote, ShowcaseProject, SitePage, SiteSettings, SocialPost } from "@/lib/api/types";
 
 export function listLeads() {
   return apiFetch<Paginated<Lead>>("/api/v1/marketing/leads/");
@@ -205,4 +205,15 @@ export function updateShowcaseProject(id: string, data: Partial<ShowcaseProjectI
 
 export function deleteShowcaseProject(id: string) {
   return apiFetch<void>(`/api/v1/marketing/cms/showcase-projects/${id}/`, { method: "DELETE" });
+}
+
+export function getSiteSettingsAdmin() {
+  return apiFetch<SiteSettings>("/api/v1/marketing/cms/site-settings/");
+}
+
+export function updateSiteSettings(data: Partial<SiteSettings>) {
+  return apiFetch<SiteSettings>("/api/v1/marketing/cms/site-settings/", {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
 }
