@@ -1,20 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Plus, Trash2, CalendarClock, Ban } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, Plus, Trash2, CalendarClock, Ban, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/ui/tabs";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
+import { uploadImage } from "@/lib/api/upload";
 import {
   listSocialPosts,
   createSocialPost,
+  updateSocialPost,
   deleteSocialPost,
   scheduleSocialPost,
   cancelSocialPost,
   type SocialPostInput,
 } from "@/lib/api/marketing";
-import type { SocialPost, SocialPostStatus } from "@/lib/api/types";
+import type { SocialPost, SocialPostStatus, SocialPlatform } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/auth-context";
+import { PlatformBadge } from "@/components/admin/marketing/social-platform";
+import { SocialCalendar } from "@/components/admin/marketing/social-calendar";
+import { SocialPostPreview } from "@/components/admin/marketing/social-post-preview";
 
 const STATUS_LABELS: Record<SocialPostStatus, string> = {
   DRAFT: "Brouillon",
@@ -32,15 +38,12 @@ const STATUS_COLORS: Record<SocialPostStatus, string> = {
   CANCELLED: "bg-neutral-100 text-neutral-400",
 };
 
-const EMPTY: SocialPostInput = {
-  title: "",
-  content: "",
-  image_path: "",
-  platform: "LINKEDIN",
-  scheduled_at: "",
-  notes: "",
-  tags: [],
-};
+function toDatetimeLocal(iso: string | null) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export function SocialPostList() {
   const { profile } = useAuth();
@@ -48,6 +51,8 @@ export function SocialPostList() {
   const [posts, setPosts] = useState<SocialPost[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<SocialPost | null>(null);
+  const [prefillDate, setPrefillDate] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function load() {
@@ -97,6 +102,18 @@ export function SocialPostList() {
     }
   }
 
+  function openCreate(dateIso?: string) {
+    setEditing(null);
+    setPrefillDate(dateIso ?? null);
+    setOpen(true);
+  }
+
+  function openEdit(post: SocialPost) {
+    setEditing(post);
+    setPrefillDate(null);
+    setOpen(true);
+  }
+
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!posts) {
     return (
@@ -117,16 +134,39 @@ export function SocialPostList() {
               : "Rôle de proposition — tes brouillons attendent une validation Marketing."}
           </p>
         </div>
-        <Sheet open={open} onOpenChange={setOpen}>
+        <Sheet
+          open={open}
+          onOpenChange={(next) => {
+            setOpen(next);
+            if (!next) {
+              setEditing(null);
+              setPrefillDate(null);
+            }
+          }}
+        >
           <SheetTrigger
             render={
-              <Button className="gap-1.5 rounded-full px-4">
+              <Button
+                data-tour="module-marketing-plan-editorial"
+                className="gap-1.5 rounded-full px-4"
+                onClick={() => openCreate()}
+              >
                 <Plus className="size-4" /> Nouvelle publication
               </Button>
             }
           />
-          <SheetContent title="Nouvelle publication">
-            <SocialPostForm onSaved={() => { setOpen(false); load(); }} />
+          <SheetContent title={editing ? "Modifier la publication" : "Nouvelle publication"} className="sm:max-w-2xl">
+            <SocialPostForm
+              post={editing ?? undefined}
+              prefillDate={prefillDate}
+              readOnly={!isMarketing}
+              onSaved={() => {
+                setOpen(false);
+                setEditing(null);
+                setPrefillDate(null);
+                load();
+              }}
+            />
           </SheetContent>
         </Sheet>
       </div>
@@ -136,88 +176,180 @@ export function SocialPostList() {
         connectée — aucune plateforme externe n&apos;est configurée. Cet écran gère le statut et la planification en interne.
       </p>
 
-      <div className="overflow-hidden rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
-            <tr>
-              <th className="px-4 py-3 font-medium">Titre</th>
-              <th className="px-4 py-3 font-medium">Plateforme</th>
-              <th className="px-4 py-3 font-medium">Statut</th>
-              <th className="px-4 py-3 font-medium">Programmé pour</th>
-              <th className="w-24 px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-100">
-            {posts.map((post) => (
-              <tr key={post.id}>
-                <td className="px-4 py-3">
-                  <p className="text-neutral-900">{post.title}</p>
-                  <p className="max-w-xs truncate text-xs text-neutral-400">{post.content}</p>
-                </td>
-                <td className="px-4 py-3 text-neutral-500">{post.platform}</td>
-                <td className="px-4 py-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_COLORS[post.status]}`}>
-                    {STATUS_LABELS[post.status]}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-neutral-500">
-                  {post.scheduled_at ? new Date(post.scheduled_at).toLocaleString("fr-FR") : "—"}
-                </td>
-                <td className="px-4 py-3">
-                  {isMarketing && (
-                    <div className="flex items-center justify-end gap-2">
-                      {post.status === "DRAFT" && (
-                        <button
-                          type="button"
-                          onClick={() => handleSchedule(post)}
-                          disabled={busyId === post.id}
-                          aria-label="Programmer"
-                          className="text-neutral-400 hover:text-primary"
-                        >
-                          <CalendarClock className="size-4" />
-                        </button>
-                      )}
-                      {(post.status === "DRAFT" || post.status === "SCHEDULED") && (
-                        <button
-                          type="button"
-                          onClick={() => handleCancel(post)}
-                          disabled={busyId === post.id}
-                          aria-label="Annuler"
-                          className="text-neutral-400 hover:text-amber-600"
-                        >
-                          <Ban className="size-4" />
-                        </button>
-                      )}
+      <Tabs defaultValue="calendrier">
+        <TabsList>
+          <TabsTab value="calendrier">Calendrier</TabsTab>
+          <TabsTab value="liste">Liste</TabsTab>
+          <TabsIndicator />
+        </TabsList>
+
+        <TabsPanel value="calendrier" className="pt-4">
+          <SocialCalendar posts={posts} onSelectDay={(iso) => openCreate(`${iso}T09:00`)} onSelectPost={openEdit} />
+        </TabsPanel>
+
+        <TabsPanel value="liste" className="pt-4">
+          <div className="overflow-hidden rounded-xl border border-neutral-200 shadow-sm">
+            <table className="w-full text-sm">
+              <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Titre</th>
+                  <th className="px-4 py-3 font-medium">Plateforme</th>
+                  <th className="px-4 py-3 font-medium">Statut</th>
+                  <th className="px-4 py-3 font-medium">Programmé pour</th>
+                  <th className="w-24 px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {posts.map((post) => (
+                  <tr key={post.id}>
+                    <td className="px-4 py-3">
                       <button
                         type="button"
-                        onClick={() => handleDelete(post)}
-                        aria-label="Supprimer"
-                        className="text-neutral-400 hover:text-destructive"
+                        onClick={() => openEdit(post)}
+                        className="text-left text-neutral-900 hover:text-primary hover:underline"
                       >
-                        <Trash2 className="size-4" />
+                        {post.title}
                       </button>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {posts.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-neutral-400">
-                  Aucune publication pour l&apos;instant.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                      <p className="max-w-xs truncate text-xs text-neutral-400">{post.content}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <PlatformBadge platform={post.platform} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_COLORS[post.status]}`}>
+                        {STATUS_LABELS[post.status]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-neutral-500">
+                      {post.scheduled_at ? new Date(post.scheduled_at).toLocaleString("fr-FR") : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      {isMarketing && (
+                        <div className="flex items-center justify-end gap-2">
+                          {post.status === "DRAFT" && (
+                            <button
+                              type="button"
+                              onClick={() => handleSchedule(post)}
+                              disabled={busyId === post.id}
+                              aria-label="Programmer"
+                              className="text-neutral-400 hover:text-primary"
+                            >
+                              <CalendarClock className="size-4" />
+                            </button>
+                          )}
+                          {(post.status === "DRAFT" || post.status === "SCHEDULED") && (
+                            <button
+                              type="button"
+                              onClick={() => handleCancel(post)}
+                              disabled={busyId === post.id}
+                              aria-label="Annuler"
+                              className="text-neutral-400 hover:text-amber-600"
+                            >
+                              <Ban className="size-4" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(post)}
+                            aria-label="Supprimer"
+                            className="text-neutral-400 hover:text-destructive"
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {posts.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-neutral-400">
+                      Aucune publication pour l&apos;instant.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </TabsPanel>
+      </Tabs>
     </div>
   );
 }
 
-function SocialPostForm({ onSaved }: { onSaved: () => void }) {
-  const [form, setForm] = useState<SocialPostInput>(EMPTY);
-  const [tagsText, setTagsText] = useState("");
+function ImageUploadButton({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      onChange(await uploadImage(file));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Échec de l'upload.");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-neutral-300 bg-neutral-50 text-neutral-400 hover:border-primary/40"
+      >
+        {uploading ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : value ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={value} alt="" className="size-full object-cover" />
+        ) : (
+          <ImagePlus className="size-5" />
+        )}
+      </button>
+      <div className="flex-1">
+        <button type="button" onClick={() => inputRef.current?.click()} className="text-xs font-medium text-primary hover:underline">
+          {value ? "Changer l'image" : "Téléverser une image"}
+        </button>
+        {value && (
+          <button type="button" onClick={() => onChange("")} className="ml-3 text-xs text-neutral-400 hover:text-destructive">
+            Retirer
+          </button>
+        )}
+        {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+    </div>
+  );
+}
+
+function SocialPostForm({
+  post,
+  prefillDate,
+  readOnly,
+  onSaved,
+}: {
+  post?: SocialPost;
+  prefillDate: string | null;
+  readOnly: boolean;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState<SocialPostInput>({
+    title: post?.title ?? "",
+    content: post?.content ?? "",
+    image_path: post?.image_path ?? "",
+    platform: post?.platform ?? "LINKEDIN",
+    scheduled_at: post ? toDatetimeLocal(post.scheduled_at) : (prefillDate ?? ""),
+    notes: post?.notes ?? "",
+    tags: post?.tags ?? [],
+  });
+  const [tagsText, setTagsText] = useState((post?.tags ?? []).join(", "));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -225,78 +357,123 @@ function SocialPostForm({ onSaved }: { onSaved: () => void }) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  const charLimit = form.platform === "TWITTER" ? 280 : null;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSaving(true);
     try {
-      await createSocialPost({
+      const payload = {
         ...form,
         scheduled_at: form.scheduled_at || undefined,
         tags: tagsText.split(",").map((t) => t.trim()).filter(Boolean),
-      });
+      };
+      if (post) {
+        await updateSocialPost(post.id, payload);
+      } else {
+        await createSocialPost(payload);
+      }
       onSaved();
     } catch {
-      setError("Impossible de créer la publication — vérifie les contraintes par plateforme (280 caractères max sur X, image obligatoire sur Instagram).");
+      setError("Impossible d'enregistrer — vérifie les contraintes par plateforme (280 caractères max sur X, image obligatoire sur Instagram).");
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
-          {error}
-        </p>
-      )}
+    <div className="grid gap-6 sm:grid-cols-2">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <fieldset disabled={readOnly} className="space-y-4">
+          {error && (
+            <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
+              {error}
+            </p>
+          )}
 
-      <label className="block">
-        <span className={labelClass}>Titre</span>
-        <input value={form.title} onChange={(e) => set("title", e.target.value)} className={inputClass} required />
-      </label>
+          <label className="block">
+            <span className={labelClass}>Titre</span>
+            <input value={form.title} onChange={(e) => set("title", e.target.value)} className={inputClass} required />
+          </label>
 
-      <label className="block">
-        <span className={labelClass}>Plateforme</span>
-        <select value={form.platform} onChange={(e) => set("platform", e.target.value)} className={inputClass}>
-          <option value="LINKEDIN">LinkedIn</option>
-          <option value="TWITTER">Twitter/X</option>
-          <option value="FACEBOOK">Facebook</option>
-          <option value="INSTAGRAM">Instagram</option>
-          <option value="YOUTUBE">YouTube</option>
-        </select>
-      </label>
+          <label className="block">
+            <span className={labelClass}>Plateforme</span>
+            <select value={form.platform} onChange={(e) => set("platform", e.target.value)} className={inputClass}>
+              <option value="LINKEDIN">LinkedIn</option>
+              <option value="TWITTER">Twitter/X</option>
+              <option value="FACEBOOK">Facebook</option>
+              <option value="INSTAGRAM">Instagram</option>
+              <option value="YOUTUBE">YouTube</option>
+            </select>
+          </label>
 
-      <label className="block">
-        <span className={labelClass}>Contenu</span>
-        <textarea value={form.content} onChange={(e) => set("content", e.target.value)} className={`${inputClass} min-h-28`} required />
-      </label>
+          <label className="block">
+            <span className={labelClass}>
+              Contenu {charLimit && <span className="text-neutral-400">({form.content.length}/{charLimit})</span>}
+            </span>
+            <textarea
+              value={form.content}
+              onChange={(e) => set("content", e.target.value)}
+              className={`${inputClass} min-h-28`}
+              required
+              maxLength={charLimit ?? undefined}
+            />
+          </label>
 
-      <label className="block">
-        <span className={labelClass}>Image (URL)</span>
-        <input value={form.image_path} onChange={(e) => set("image_path", e.target.value)} className={inputClass} placeholder="https://..." />
-      </label>
+          <label className="block">
+            <span className={labelClass}>Image</span>
+            <ImageUploadButton value={form.image_path ?? ""} onChange={(url) => set("image_path", url)} />
+          </label>
 
-      <label className="block">
-        <span className={labelClass}>Tags (séparés par des virgules)</span>
-        <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} className={inputClass} />
-      </label>
+          <label className="block">
+            <span className={labelClass}>Date et heure de programmation</span>
+            <input
+              type="datetime-local"
+              value={form.scheduled_at ?? ""}
+              onChange={(e) => set("scheduled_at", e.target.value)}
+              className={inputClass}
+            />
+          </label>
 
-      <label className="block">
-        <span className={labelClass}>Notes internes</span>
-        <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} className={`${inputClass} min-h-16`} />
-      </label>
+          <label className="block">
+            <span className={labelClass}>Tags (séparés par des virgules)</span>
+            <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} className={inputClass} />
+          </label>
 
-      <p className="text-xs text-neutral-400">
-        La publication est créée en brouillon — la planification (date + passage à &quot;Programmé&quot;) se fait ensuite depuis la liste.
-      </p>
+          <label className="block">
+            <span className={labelClass}>Notes internes</span>
+            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} className={`${inputClass} min-h-16`} />
+          </label>
 
-      <div className="flex items-center justify-between pt-2">
-        <SheetClose render={<Button type="button" variant="outline" className="rounded-full px-4">Annuler</Button>} />
-        <Button type="submit" disabled={saving} className="rounded-full px-5">
-          {saving ? <Loader2 className="size-4 animate-spin" /> : "Créer"}
-        </Button>
+          {!post && (
+            <p className="text-xs text-neutral-400">
+              La publication est créée en brouillon — la programmation (passage à &quot;Programmé&quot;) se fait ensuite depuis la liste.
+            </p>
+          )}
+        </fieldset>
+
+        {!readOnly && (
+          <div className="flex items-center justify-between pt-2">
+            <SheetClose render={<Button type="button" variant="outline" className="rounded-full px-4">Annuler</Button>} />
+            <Button type="submit" disabled={saving} className="rounded-full px-5">
+              {saving ? <Loader2 className="size-4 animate-spin" /> : post ? "Enregistrer" : "Créer"}
+            </Button>
+          </div>
+        )}
+      </form>
+
+      <div>
+        <p className={labelClass}>Aperçu</p>
+        <div className="mt-2 flex justify-center rounded-xl bg-neutral-50 p-4">
+          <SocialPostPreview
+            platform={form.platform as SocialPlatform}
+            title={form.title}
+            content={form.content}
+            imagePath={form.image_path ?? ""}
+          />
+        </div>
       </div>
-    </form>
+    </div>
   );
 }
