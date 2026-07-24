@@ -18,6 +18,7 @@ import {
   type QuoteLineInput,
 } from "@/lib/api/marketing";
 import type { Quote, QuoteStatus, QuotePaymentTerm, QuoteSettings } from "@/lib/api/types";
+import { QuoteViewerModal } from "@/components/admin/marketing/quote-viewer-modal";
 
 const STATUS_LABELS: Record<QuoteStatus, string> = {
   BROUILLON: "Brouillon",
@@ -43,6 +44,7 @@ export function QuoteList() {
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editing, setEditing] = useState<Quote | null>(null);
+  const [viewing, setViewing] = useState<Quote | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function load() {
@@ -193,15 +195,14 @@ export function QuoteList() {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-2">
-                    <a
-                      href={`/admin/marketing/devis/${quote.id}/imprimer`}
-                      target="_blank"
-                      rel="noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => setViewing(quote)}
                       aria-label="Aperçu / PDF"
                       className="text-neutral-400 hover:text-primary"
                     >
                       <Printer className="size-4" />
-                    </a>
+                    </button>
                     {quote.status === "BROUILLON" && (
                       <>
                         <button
@@ -271,6 +272,10 @@ export function QuoteList() {
           </tbody>
         </table>
       </div>
+
+      {viewing && (
+        <QuoteViewerModal quoteId={viewing.id} quoteNumber={viewing.quote_number} onClose={() => setViewing(null)} />
+      )}
     </div>
   );
 }

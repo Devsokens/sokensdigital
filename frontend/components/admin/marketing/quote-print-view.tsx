@@ -81,7 +81,7 @@ function ContactBlock({ settings }: { settings: QuoteSettings }) {
   );
 }
 
-export function QuotePrintView({ id }: { id: string }) {
+export function QuotePrintView({ id, hideToolbar }: { id: string; hideToolbar?: boolean }) {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [settings, setSettings] = useState<QuoteSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -111,14 +111,16 @@ export function QuotePrintView({ id }: { id: string }) {
 
   return (
     <div style={{ background: "#dfe1e6" }}>
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-200 bg-white px-6 py-3 print:hidden">
-        <p className="text-sm text-neutral-500">
-          Aperçu du devis <span className="font-medium text-neutral-900">{quote.quote_number}</span>
-        </p>
-        <Button onClick={() => window.print()} className="gap-1.5 rounded-full px-4">
-          <Printer className="size-4" /> Imprimer / Télécharger en PDF
-        </Button>
-      </div>
+      {!hideToolbar && (
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-200 bg-white px-6 py-3 print:hidden">
+          <p className="text-sm text-neutral-500">
+            Aperçu du devis <span className="font-medium text-neutral-900">{quote.quote_number}</span>
+          </p>
+          <Button onClick={() => window.print()} className="gap-1.5 rounded-full px-4">
+            <Printer className="size-4" /> Imprimer / Télécharger en PDF
+          </Button>
+        </div>
+      )}
 
       <style>{`
         @media print {
