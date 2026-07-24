@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from PIL import Image
 from rest_framework.test import APIClient, APITestCase
@@ -943,3 +944,159 @@ class SiteSettingsViewTests(APITestCase):
         anon = APIClient()
         response = anon.patch('/api/v1/marketing/cms/site-settings/', {'tagline': 'Hack'}, format='json')
         self.assertIn(response.status_code, (401, 403))
+
+
+class FacebookPublishingTests(TestCase):
+    """marketing/publishing.py — Facebook is the only platform wired up so
+    far. No real Graph API calls happen here: requests.post is mocked
+    throughout, and FACEBOOK_PAGE_ID/FACEBOOK_PAGE_ACCESS_TOKEN are blank
+    by default (see settings.py) so the "not configured" path is exactly
+    what runs today, in production, until real credentials are set."""
+
+    def _mock_response(self, status_code=200, json_data=None):
+        response = Mock()
+        response.status_code = status_code
+        response.json.return_value = json_data or {}
+        response.text = str(json_data)
+        return response
+
+    def test_raises_not_configured_when_credentials_are_blank(self):
+        from marketing.publishing import PublishingNotConfiguredError, publish_to_facebook
+
+        post = SocialPost(title='x', content='hello', platform=SocialPost.Platform.FACEBOOK)
+        with self.assertRaises(PublishingNotConfiguredError):
+            publish_to_facebook(post)
+
+    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
+    def test_text_only_post_uses_feed_endpoint(self):
+        from marketing.publishing import publish_to_facebook
+
+        post = SocialPost(title='x', content='Bonjour Facebook', platform=SocialPost.Platform.FACEBOOK)
+        with patch('marketing.publishing.requests.post') as mock_post:
+            mock_post.return_value = self._mock_response(200, {'id': '999_111'})
+            url = publish_to_facebook(post)
+
+        called_url = mock_post.call_args.args[0]
+        self.assertTrue(called_url.endswith('/999/feed'))
+        self.assertEqual(mock_post.call_args.kwargs['data']['message'], 'Bonjour Facebook')
+        self.assertEqual(url, 'https://www.facebook.com/999_111')
+
+    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
+    def test_post_with_image_uses_photos_endpoint(self):
+        from marketing.publishing import publish_to_facebook
+
+        post = SocialPost(
+            title='x', content='Regardez', platform=SocialPost.Platform.FACEBOOK,
+            image_path='https://example.com/pic.jpg',
+        )
+        with patch('marketing.publishing.requests.post') as mock_post:
+            mock_post.return_value = self._mock_response(200, {'id': 'photo1', 'post_id': '999_222'})
+            url = publish_to_facebook(post)
+
+        called_url = mock_post.call_args.args[0]
+        self.assertTrue(called_url.endswith('/999/photos'))
+        self.assertEqual(mock_post.call_args.kwargs['data']['url'], 'https://example.com/pic.jpg')
+        self.assertEqual(url, 'https://www.facebook.com/999_222')
+
+    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
+    def test_api_error_raises_publishing_error(self):
+        from marketing.publishing import PublishingError, publish_to_facebook
+
+        post = SocialPost(title='x', content='hello', platform=SocialPost.Platform.FACEBOOK)
+        with patch('marketing.publishing.requests.post') as mock_post:
+            mock_post.return_value = self._mock_response(400, {'error': {'message': 'Invalid token'}})
+            with self.assertRaises(PublishingError):
+                publish_to_facebook(post)
+
+
+class RunScheduledPublishingTests(TestCase):
+    def setUp(self):
+        self.past = timezone.now() - timezone.timedelta(hours=1)
+        self.future = timezone.now() + timezone.timedelta(hours=1)
+
+    def _mock_response(self, status_code=200, json_data=None):
+        response = Mock()
+        response.status_code = status_code
+        response.json.return_value = json_data or {}
+        response.text = str(json_data)
+        return response
+
+    def test_skips_everything_when_not_configured(self):
+        from marketing.publishing import run_scheduled_publishing
+
+        post = SocialPost.objects.create(
+            title='x', content='hello', platform=SocialPost.Platform.FACEBOOK,
+            status=SocialPost.Status.SCHEDULED, scheduled_at=self.past,
+        )
+        results = run_scheduled_publishing()
+        self.assertEqual(results, [])
+        post.refresh_from_db()
+        self.assertEqual(post.status, SocialPost.Status.SCHEDULED)
+
+    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
+    def test_publishes_due_facebook_posts(self):
+        from marketing.publishing import run_scheduled_publishing
+
+        post = SocialPost.objects.create(
+            title='x', content='hello', platform=SocialPost.Platform.FACEBOOK,
+            status=SocialPost.Status.SCHEDULED, scheduled_at=self.past,
+        )
+        with patch('marketing.publishing.requests.post') as mock_post:
+            mock_post.return_value = self._mock_response(200, {'id': '999_333'})
+            results = run_scheduled_publishing()
+
+        self.assertEqual(len(results), 1)
+        post.refresh_from_db()
+        self.assertEqual(post.status, SocialPost.Status.PUBLISHED)
+        self.assertEqual(post.post_url, 'https://www.facebook.com/999_333')
+        self.assertIsNotNone(post.published_at)
+
+    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
+    def test_marks_failed_on_api_error_with_note(self):
+        from marketing.publishing import run_scheduled_publishing
+
+        post = SocialPost.objects.create(
+            title='x', content='hello', platform=SocialPost.Platform.FACEBOOK,
+            status=SocialPost.Status.SCHEDULED, scheduled_at=self.past,
+        )
+        with patch('marketing.publishing.requests.post') as mock_post:
+            mock_post.return_value = self._mock_response(400, {'error': {'message': 'Invalid token'}})
+            run_scheduled_publishing()
+
+        post.refresh_from_db()
+        self.assertEqual(post.status, SocialPost.Status.FAILED)
+        self.assertIn('Invalid token', post.notes)
+
+    def test_ignores_platforms_without_a_publisher(self):
+        from marketing.publishing import run_scheduled_publishing
+
+        post = SocialPost.objects.create(
+            title='x', content='hello', platform=SocialPost.Platform.LINKEDIN,
+            status=SocialPost.Status.SCHEDULED, scheduled_at=self.past,
+        )
+        run_scheduled_publishing()
+        post.refresh_from_db()
+        self.assertEqual(post.status, SocialPost.Status.SCHEDULED)
+
+    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
+    def test_ignores_posts_not_due_yet(self):
+        from marketing.publishing import run_scheduled_publishing
+
+        post = SocialPost.objects.create(
+            title='x', content='hello', platform=SocialPost.Platform.FACEBOOK,
+            status=SocialPost.Status.SCHEDULED, scheduled_at=self.future,
+        )
+        with patch('marketing.publishing.requests.post') as mock_post:
+            run_scheduled_publishing()
+        mock_post.assert_not_called()
+        post.refresh_from_db()
+        self.assertEqual(post.status, SocialPost.Status.SCHEDULED)
+
+
+class PublishScheduledPostsCommandTests(TestCase):
+    def test_command_runs_and_reports_when_nothing_is_due(self):
+        from django.core.management import call_command
+
+        out = io.StringIO()
+        call_command('publish_scheduled_posts', stdout=out)
+        self.assertIn('Aucune publication', out.getvalue())

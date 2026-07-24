@@ -249,6 +249,14 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
+# Facebook Page publishing (marketing/publishing.py) — blank by default,
+# nothing publishes until both are set. FACEBOOK_PAGE_ACCESS_TOKEN must be
+# a long-lived PAGE access token (not a User token, those expire in ~1-2h),
+# generated once via Graph API Explorer / a "Facebook Login for Business"
+# flow and pasted here — see the setup checklist for the exact steps.
+FACEBOOK_PAGE_ID = os.environ.get('FACEBOOK_PAGE_ID', '')
+FACEBOOK_PAGE_ACCESS_TOKEN = os.environ.get('FACEBOOK_PAGE_ACCESS_TOKEN', '')
+
 # Firebase Admin SDK (server-side) credentials. Set one of:
 # - FIREBASE_SERVICE_ACCOUNT_JSON: the full service account JSON as a
 #   single-line string (used on Render, where mounting a file isn't

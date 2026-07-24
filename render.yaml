@@ -18,6 +18,8 @@
 #   - REDIS_URL                  (Upstash connection string, rediss:// with TLS)
 #   - CORS_ALLOWED_ORIGINS       (the frontend's deployed URL)
 #   - FIREBASE_SERVICE_ACCOUNT_JSON
+#   - FACEBOOK_PAGE_ID            (blank until Facebook publishing is set up, see marketing/publishing.py)
+#   - FACEBOOK_PAGE_ACCESS_TOKEN  (idem — long-lived Page token, not a User token)
 
 services:
   - name: sokens-backend
@@ -41,4 +43,8 @@ services:
       - key: CORS_ALLOWED_ORIGINS
         sync: false
       - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: FACEBOOK_PAGE_ID
+        sync: false
+      - key: FACEBOOK_PAGE_ACCESS_TOKEN
         sync: false
