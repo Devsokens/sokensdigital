@@ -598,6 +598,81 @@ class QuoteViewSetTests(APITestCase):
         self.assertNotIn('created_by', body)
         self.assertNotIn('tracking_token', body)
 
+    def test_new_quote_copies_default_payment_terms_from_settings(self):
+        # 0021_seed_quote_settings already seeded default_payment_terms.
+        response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
+        self.assertEqual(response.status_code, 201)
+        terms = response.json()['payment_terms']
+        self.assertEqual(len(terms), 3)
+        self.assertEqual(terms[0]['label'], 'Acompte à la commande')
+
+    def test_custom_payment_terms_override_the_default(self):
+        response = self.client_a.post(
+            '/api/v1/marketing/quotes/',
+            self.payload(payment_terms=[{'label': 'Comptant', 'percentage': 100}]),
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['payment_terms'], [{'label': 'Comptant', 'percentage': 100}])
+
+    def test_line_amount_label_and_description_round_trip(self):
+        response = self.client_a.post(
+            '/api/v1/marketing/quotes/',
+            self.payload(lines=[
+                {'service_title': 'Formation', 'description': 'Séance d\'accompagnement.', 'quantity': '1', 'unit_price': '0', 'amount_label': 'Offert'},
+            ]),
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        line = response.json()['lines'][0]
+        self.assertEqual(line['amount_label'], 'Offert')
+        self.assertEqual(line['description'], "Séance d'accompagnement.")
+
+
+class QuoteSettingsViewTests(APITestCase):
+    def setUp(self):
+        self.commercial = User.objects.create(email='devis-commercial@sokensdigital.com', first_name='Commercial')
+        self.commercial.firestore_role = 'COMMERCIAL'
+        self.chef_projet = User.objects.create(email='devis-chef@sokensdigital.com', first_name='Chef')
+        self.chef_projet.firestore_role = 'CHEF_DE_PROJET'
+        self.outsider = User.objects.create(email='devis-dev@sokensdigital.com', first_name='Dev')
+        self.outsider.firestore_role = 'DEVELOPPEUR'
+
+        self.client_commercial = APIClient()
+        self.client_commercial.force_authenticate(user=self.commercial)
+        self.client_chef = APIClient()
+        self.client_chef.force_authenticate(user=self.chef_projet)
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def test_commercial_can_read_and_update_settings(self):
+        get_response = self.client_commercial.get('/api/v1/marketing/quote-settings/')
+        self.assertEqual(get_response.status_code, 200)
+        self.assertIn('default_payment_terms', get_response.json())
+
+        patch_response = self.client_commercial.patch(
+            '/api/v1/marketing/quote-settings/',
+            {'footer_note': 'Nouvelle note.'},
+            format='json',
+        )
+        self.assertEqual(patch_response.status_code, 200)
+        self.assertEqual(patch_response.json()['footer_note'], 'Nouvelle note.')
+
+    def test_settings_are_a_singleton(self):
+        first = self.client_commercial.get('/api/v1/marketing/quote-settings/').json()
+        second = self.client_commercial.get('/api/v1/marketing/quote-settings/').json()
+        self.assertEqual(first, second)
+        from marketing.models import QuoteSettings
+        self.assertEqual(QuoteSettings.objects.count(), 1)
+
+    def test_chef_de_projet_can_read_but_not_update(self):
+        self.assertEqual(self.client_chef.get('/api/v1/marketing/quote-settings/').status_code, 200)
+        response = self.client_chef.patch('/api/v1/marketing/quote-settings/', {'footer_note': 'x'}, format='json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_outsider_forbidden(self):
+        self.assertEqual(self.client_outsider.get('/api/v1/marketing/quote-settings/').status_code, 403)
+
 
 class PageSectionViewSetTests(APITestCase):
     def setUp(self):

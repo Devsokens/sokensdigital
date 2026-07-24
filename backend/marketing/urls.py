@@ -14,6 +14,7 @@ from marketing.views import (
     PublicShowcaseProjectDetailView,
     PublicShowcaseProjectListView,
     PublicSiteSettingsView,
+    QuoteSettingsView,
     QuoteViewSet,
     ShowcaseProjectViewSet,
     SiteSettingsView,
@@ -35,6 +36,7 @@ urlpatterns = [
     path('cms/upload-image/', ImageUploadView.as_view(), name='upload-image'),
     path('cms/upload-video/', VideoUploadView.as_view(), name='upload-video'),
     path('cms/site-settings/', SiteSettingsView.as_view(), name='site-settings'),
+    path('quote-settings/', QuoteSettingsView.as_view(), name='quote-settings'),
 ] + router.urls
 
 public_urlpatterns = [

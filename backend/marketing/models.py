@@ -154,10 +154,27 @@ class Quote(LoggedModel):
         REFUSE = 'REFUSE', 'Refusé'
 
     # `client` (FK -> ClientAccount) omitted — same open question as Lead
-    # (docs/backend-specifications.md §13).
+    # (docs/backend-specifications.md §13). `client_name` is a plain text
+    # stand-in so a quote's PDF/print document always has a recipient name,
+    # even without a Lead attached.
     lead = models.ForeignKey(Lead, on_delete=models.SET_NULL, null=True, blank=True, related_name='quotes')
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='quotes')
     quote_number = models.CharField(max_length=20, unique=True, editable=False)
+    client_name = models.CharField(max_length=255, blank=True)
+    # Free-text content for the printable document — deliberately plain
+    # (no rich text), reproducing the fixed sections of the reference PDF
+    # template: a cover-letter paragraph, the "OBJET :" line, and the
+    # devis page's own short "DESCRIPTION :" paragraph.
+    intro_message = models.TextField(blank=True)
+    subject = models.CharField(max_length=500, blank=True)
+    description = models.TextField(blank=True)
+    project_duration = models.CharField(max_length=100, blank=True)
+    # [{label, percentage}] — copied from QuoteSettings.default_payment_terms
+    # when the quote is created, then editable per-quote like everything
+    # else while status=BROUILLON. FCFA amounts are computed from total_ht
+    # at render time, never stored (so editing total_ht later can't leave
+    # stale amounts behind).
+    payment_terms = models.JSONField(default=list, blank=True)
     issue_date = models.DateField(default=timezone.now)
     expiry_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.BROUILLON)
@@ -208,11 +225,20 @@ class Quote(LoggedModel):
 class QuoteLine(LoggedModel):
     quote = models.ForeignKey(Quote, on_delete=models.CASCADE, related_name='lines')
     service_title = models.CharField(max_length=255)
+    # The devis template's middle "Description" column — a short paragraph
+    # explaining the prestation, distinct from the title.
+    description = models.TextField(blank=True)
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('1'))
     unit_price = models.DecimalField(max_digits=12, decimal_places=2)
     # Recalculated server-side on every save — never trust a client-supplied
     # total_line (docs/backend-specifications.md §7.2).
     total_line = models.DecimalField(max_digits=12, decimal_places=2, editable=False)
+    # Some lines in the reference template show text instead of a clean
+    # number in the "Montant" column ("Offert", "10 000 FCFA (...), version
+    # Free pour l'hébergement"). When set, this is what the PDF/print page
+    # displays for the line instead of the computed total_line — total_line
+    # still participates in the quote's totals normally.
+    amount_label = models.CharField(max_length=255, blank=True)
 
     class Meta(LoggedModel.Meta):
         indexes = LoggedModel.Meta.indexes
@@ -405,5 +431,34 @@ class SiteSettings(LoggedModel):
 
     @classmethod
     def load(cls) -> 'SiteSettings':
+        obj = cls.objects.first()
+        return obj if obj is not None else cls.objects.create()
+
+
+class QuoteSettings(LoggedModel):
+    """Singleton (same convention as SiteSettings) holding the parts of the
+    devis PDF/print document that are the same across every quote: company
+    contact block, accepted payment methods, the default payment-schedule
+    breakdown copied onto new quotes, and the small-print footer note.
+    Structural layout (which sections exist, their order) mirrors the
+    reference template exactly and is NOT here — only text content is.
+
+    items shapes:
+      payment_methods: [{label}]
+      default_payment_terms: [{label, percentage}] — percentage is 0-100,
+        applied to a quote's total_ht at render time to get the FCFA amount"""
+
+    company_address = models.TextField(blank=True)
+    company_phone = models.CharField(max_length=100, blank=True)
+    company_email = models.CharField(max_length=255, blank=True)
+    payment_methods = models.JSONField(default=list, blank=True)
+    default_payment_terms = models.JSONField(default=list, blank=True)
+    footer_note = models.TextField(blank=True)
+
+    def __str__(self):
+        return 'Paramètres des devis'
+
+    @classmethod
+    def load(cls) -> 'QuoteSettings':
         obj = cls.objects.first()
         return obj if obj is not None else cls.objects.create()

@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.db.models import Count, Max
+from django.db.models import Count, F, Max, Sum
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 
 from core.permissions import has_role
 from core.storage import upload_image, upload_video
-from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, ShowcaseProject, SiteSettings, SocialPost
+from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject, SiteSettings, SocialPost
 from marketing.ratelimit import get_client_ip, is_rate_limited
 from marketing.serializers import (
     BlogPostPublicSerializer,
@@ -23,6 +23,7 @@ from marketing.serializers import (
     PageSectionPublicSerializer,
     PageSectionSerializer,
     QuoteSerializer,
+    QuoteSettingsSerializer,
     QuoteTrackSerializer,
     ShowcaseProjectPublicSerializer,
     ShowcaseProjectSerializer,
@@ -522,6 +523,12 @@ class QuoteViewSet(viewsets.ModelViewSet):
         new_quote = Quote.objects.create(
             lead=original.lead,
             created_by=original.created_by,
+            client_name=original.client_name,
+            intro_message=original.intro_message,
+            subject=original.subject,
+            description=original.description,
+            project_duration=original.project_duration,
+            payment_terms=original.payment_terms,
             expiry_date=original.expiry_date,
             discount_amount=original.discount_amount,
             parent_quote=original,
@@ -529,11 +536,40 @@ class QuoteViewSet(viewsets.ModelViewSet):
         )
         for line in original.lines.all():
             QuoteLine.objects.create(
-                quote=new_quote, service_title=line.service_title,
-                quantity=line.quantity, unit_price=line.unit_price,
+                quote=new_quote, service_title=line.service_title, description=line.description,
+                quantity=line.quantity, unit_price=line.unit_price, amount_label=line.amount_label,
             )
         new_quote.refresh_from_db()
         return Response(QuoteSerializer(new_quote).data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(
+    tags=['Marketing & Commercial'],
+    summary='Get the devis document settings (admin)',
+    responses={200: QuoteSettingsSerializer},
+)
+@extend_schema(
+    methods=['PATCH'],
+    tags=['Marketing & Commercial'],
+    summary='Edit the devis document settings (admin)',
+    responses={200: QuoteSettingsSerializer},
+)
+class QuoteSettingsView(APIView):
+    """Singleton — same convention as SiteSettingsView. Gated like Quote
+    itself (Commercial/Chef de Projet/Super-Admin), not IsMarketing, since
+    this is devis document config, not site-vitrine CMS content."""
+
+    permission_classes = [IsCommercialOwnerOrReadCollaborator]
+
+    def get(self, request):
+        return Response(QuoteSettingsSerializer(QuoteSettings.load()).data)
+
+    def patch(self, request):
+        instance = QuoteSettings.load()
+        serializer = QuoteSettingsSerializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 
 @extend_schema(
@@ -589,21 +625,27 @@ def marketing_dashboard(request):
 
     # "Pipeline pondéré" = Sum(estimated_value * qualification_score / 100)
     # over leads still active in the funnel (excludes PERDU/CONVERTI —
-    # closed either way, no longer "pipeline").
+    # closed either way, no longer "pipeline"). Computed DB-side (not by
+    # fetching every active lead and summing in Python) — with Postgres and
+    # the app on separate free-tier hosts, avoiding an extra row-transfer
+    # matters more here than it would on a single-host setup.
     active_statuses = [Lead.Status.NOUVEAU, Lead.Status.QUALIFIE, Lead.Status.PROPOSITION_EN_COURS]
     active_leads = leads.filter(status__in=active_statuses, estimated_value__isnull=False)
-    weighted_pipeline = sum(
-        (lead.estimated_value * Decimal(lead.qualification_score) / Decimal(100) for lead in active_leads),
-        Decimal('0'),
-    )
+    weighted_pipeline = (active_leads.aggregate(
+        total=Sum(F('estimated_value') * F('qualification_score'))
+    )['total'] or Decimal('0')) / Decimal(100)
+    weighted_pipeline = weighted_pipeline.quantize(Decimal('0.01'))
 
-    total_leads = leads.count()
-    converted_leads = leads.filter(status=Lead.Status.CONVERTI).count()
-    conversion_rate = (Decimal(converted_leads) / Decimal(total_leads) * 100) if total_leads else Decimal('0')
-
+    # total_leads/converted_leads are derived from leads_by_status below
+    # instead of two extra .count() queries — same numbers, fewer round
+    # trips to a database that isn't on the same host as this app.
     leads_by_status = {
         row['status']: row['count'] for row in leads.values('status').annotate(count=Count('id')).order_by()
     }
+    total_leads = sum(leads_by_status.values())
+    converted_leads = leads_by_status.get(Lead.Status.CONVERTI, 0)
+    conversion_rate = (Decimal(converted_leads) / Decimal(total_leads) * 100) if total_leads else Decimal('0')
+
     leads_by_source = {
         row['source']: row['count'] for row in leads.values('source').annotate(count=Count('id')).order_by()
     }

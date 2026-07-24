@@ -1,15 +1,32 @@
 import { apiFetch } from "@/lib/api/client";
-import type { BlogPost, Lead, MarketingDashboard, PageSection, Paginated, Quote, ShowcaseProject, SitePage, SiteSettings, SocialPost } from "@/lib/api/types";
+import type { BlogPost, Lead, MarketingDashboard, PageSection, Paginated, Quote, QuotePaymentTerm, QuoteSettings, ShowcaseProject, SitePage, SiteSettings, SocialPost } from "@/lib/api/types";
+
+export interface LeadInput {
+  first_name: string;
+  last_name: string;
+  company_name?: string;
+  email: string;
+  phone?: string;
+  source: string;
+  message?: string;
+  status?: string;
+  qualification_score?: number;
+  assigned_to_id?: string | null;
+  estimated_value?: string | null;
+}
 
 export function listLeads() {
   return apiFetch<Paginated<Lead>>("/api/v1/marketing/leads/");
 }
 
-export function updateLead(id: string, data: Partial<{
-  status: string;
-  qualification_score: number;
-  assigned_to_id: string | null;
-}>) {
+export function createLead(data: LeadInput) {
+  return apiFetch<Lead>("/api/v1/marketing/leads/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateLead(id: string, data: Partial<LeadInput>) {
   return apiFetch<Lead>(`/api/v1/marketing/leads/${id}/`, {
     method: "PATCH",
     body: JSON.stringify(data),
@@ -92,12 +109,20 @@ export function getMarketingDashboard() {
 
 export interface QuoteLineInput {
   service_title: string;
+  description?: string;
   quantity: string;
   unit_price: string;
+  amount_label?: string;
 }
 
 export interface QuoteInput {
   lead?: string | null;
+  client_name?: string;
+  intro_message?: string;
+  subject?: string;
+  description?: string;
+  project_duration?: string;
+  payment_terms?: QuotePaymentTerm[];
   expiry_date?: string | null;
   discount_amount?: string;
   lines: QuoteLineInput[];
@@ -105,6 +130,10 @@ export interface QuoteInput {
 
 export function listQuotes() {
   return apiFetch<Paginated<Quote>>("/api/v1/marketing/quotes/");
+}
+
+export function getQuote(id: string) {
+  return apiFetch<Quote>(`/api/v1/marketing/quotes/${id}/`);
 }
 
 export function createQuote(data: QuoteInput) {
@@ -131,6 +160,17 @@ export function sendQuote(id: string) {
 
 export function cloneQuote(id: string) {
   return apiFetch<Quote>(`/api/v1/marketing/quotes/${id}/clone/`, { method: "POST" });
+}
+
+export function getQuoteSettings() {
+  return apiFetch<QuoteSettings>("/api/v1/marketing/quote-settings/");
+}
+
+export function updateQuoteSettings(data: Partial<QuoteSettings>) {
+  return apiFetch<QuoteSettings>("/api/v1/marketing/quote-settings/", {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
 }
 
 export function listPageSections(page: SitePage) {

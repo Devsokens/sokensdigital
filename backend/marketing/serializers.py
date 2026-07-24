@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from core.models import User
 from core.serializers import UserBriefSerializer
-from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, ShowcaseProject, SiteSettings, SocialPost
+from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject, SiteSettings, SocialPost
 
 
 class LeadPublicCreateSerializer(serializers.ModelSerializer):
@@ -91,7 +91,7 @@ class SocialPostSerializer(serializers.ModelSerializer):
 class QuoteLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuoteLine
-        fields = ['id', 'service_title', 'quantity', 'unit_price', 'total_line']
+        fields = ['id', 'service_title', 'description', 'quantity', 'unit_price', 'total_line', 'amount_label']
         read_only_fields = ['total_line']
 
 
@@ -107,9 +107,11 @@ class QuoteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Quote
         fields = [
-            'id', 'quote_number', 'lead', 'created_by', 'issue_date', 'expiry_date',
-            'status', 'discount_amount', 'total_ht', 'total_ttc', 'tracking_token',
-            'opened_at', 'signed_at', 'parent_quote', 'version', 'lines', 'created_at',
+            'id', 'quote_number', 'lead', 'created_by', 'client_name', 'intro_message',
+            'subject', 'description', 'project_duration', 'payment_terms', 'issue_date',
+            'expiry_date', 'status', 'discount_amount', 'total_ht', 'total_ttc',
+            'tracking_token', 'opened_at', 'signed_at', 'parent_quote', 'version',
+            'lines', 'created_at',
         ]
         read_only_fields = [
             'quote_number', 'status', 'total_ht', 'total_ttc', 'tracking_token',
@@ -118,6 +120,8 @@ class QuoteSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         lines_data = validated_data.pop('lines', [])
+        if not validated_data.get('payment_terms'):
+            validated_data['payment_terms'] = QuoteSettings.load().default_payment_terms
         quote = Quote.objects.create(**validated_data)
         for line_data in lines_data:
             QuoteLine.objects.create(quote=quote, **line_data)
@@ -216,6 +220,16 @@ class QuoteTrackSerializer(serializers.ModelSerializer):
     class Meta:
         model = Quote
         fields = [
-            'quote_number', 'issue_date', 'expiry_date', 'status',
+            'quote_number', 'client_name', 'intro_message', 'subject', 'description',
+            'project_duration', 'payment_terms', 'issue_date', 'expiry_date', 'status',
             'discount_amount', 'total_ht', 'total_ttc', 'lines',
+        ]
+
+
+class QuoteSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuoteSettings
+        fields = [
+            'company_address', 'company_phone', 'company_email',
+            'payment_methods', 'default_payment_terms', 'footer_note',
         ]

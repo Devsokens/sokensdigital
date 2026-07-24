@@ -225,9 +225,16 @@ export type QuoteStatus = "BROUILLON" | "ENVOYE" | "ACCEPTE" | "REFUSE";
 export interface QuoteLine {
   id: string;
   service_title: string;
+  description: string;
   quantity: string;
   unit_price: string;
   total_line: string;
+  amount_label: string;
+}
+
+export interface QuotePaymentTerm {
+  label: string;
+  percentage: number;
 }
 
 export interface Quote {
@@ -235,6 +242,12 @@ export interface Quote {
   quote_number: string;
   lead: string | null;
   created_by: UserBrief | null;
+  client_name: string;
+  intro_message: string;
+  subject: string;
+  description: string;
+  project_duration: string;
+  payment_terms: QuotePaymentTerm[];
   issue_date: string;
   expiry_date: string | null;
   status: QuoteStatus;
@@ -248,6 +261,15 @@ export interface Quote {
   version: number;
   lines: QuoteLine[];
   created_at: string;
+}
+
+export interface QuoteSettings {
+  company_address: string;
+  company_phone: string;
+  company_email: string;
+  payment_methods: { label: string }[];
+  default_payment_terms: QuotePaymentTerm[];
+  footer_note: string;
 }
 
 export interface LeadsOverTimePoint {
