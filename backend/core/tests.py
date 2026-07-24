@@ -331,3 +331,75 @@ class GlobalSearchTests(APITestCase):
         response = self.client_commercial_a.get('/api/v1/search/?q=Zenith')
         labels = [r['label'] for r in response.json() if r['category'] == 'Projets']
         self.assertNotIn('Zenith Cloud Migration', labels)
+
+
+class GetProfileRoleCacheTests(APITestCase):
+    """get_profile_role() used to hit Firestore on every call (i.e. every
+    authenticated request) — this is the fix: cache the result briefly so
+    repeated calls for the same uid don't each pay a Firestore round-trip."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+
+    def _mock_snapshot(self, exists, role=None):
+        snapshot = MagicMock()
+        snapshot.exists = exists
+        snapshot.to_dict.return_value = {'role': role} if exists else None
+        return snapshot
+
+    def test_second_call_uses_cache_not_firestore(self):
+        from core.firestore_client import get_profile_role
+
+        with patch('core.firestore_client._get_client') as mock_get_client:
+            mock_get_client.return_value.collection.return_value.document.return_value.get.return_value = (
+                self._mock_snapshot(exists=True, role='COMMERCIAL')
+            )
+            first = get_profile_role('uid-1')
+            second = get_profile_role('uid-1')
+
+        self.assertEqual(first, 'COMMERCIAL')
+        self.assertEqual(second, 'COMMERCIAL')
+        mock_get_client.return_value.collection.return_value.document.return_value.get.assert_called_once()
+
+    def test_no_role_is_cached_too_not_just_a_miss(self):
+        from core.firestore_client import get_profile_role
+
+        with patch('core.firestore_client._get_client') as mock_get_client:
+            mock_get_client.return_value.collection.return_value.document.return_value.get.return_value = (
+                self._mock_snapshot(exists=False)
+            )
+            first = get_profile_role('uid-2')
+            second = get_profile_role('uid-2')
+
+        self.assertIsNone(first)
+        self.assertIsNone(second)
+        mock_get_client.return_value.collection.return_value.document.return_value.get.assert_called_once()
+
+    def test_invalidate_forces_a_fresh_fetch(self):
+        from core.firestore_client import get_profile_role, invalidate_role_cache
+
+        with patch('core.firestore_client._get_client') as mock_get_client:
+            mock_get_client.return_value.collection.return_value.document.return_value.get.side_effect = [
+                self._mock_snapshot(exists=True, role='COMMERCIAL'),
+                self._mock_snapshot(exists=True, role='RESPONSABLE_MARKETING'),
+            ]
+            first = get_profile_role('uid-3')
+            invalidate_role_cache('uid-3')
+            second = get_profile_role('uid-3')
+
+        self.assertEqual(first, 'COMMERCIAL')
+        self.assertEqual(second, 'RESPONSABLE_MARKETING')
+
+    def test_cache_backend_error_falls_back_to_firestore(self):
+        from core.firestore_client import get_profile_role
+
+        with patch('core.firestore_client.cache.get', side_effect=ConnectionError('cache down')), \
+             patch('core.firestore_client.cache.set', side_effect=ConnectionError('cache down')), \
+             patch('core.firestore_client._get_client') as mock_get_client:
+            mock_get_client.return_value.collection.return_value.document.return_value.get.return_value = (
+                self._mock_snapshot(exists=True, role='COMMERCIAL')
+            )
+            role = get_profile_role('uid-4')
+
+        self.assertEqual(role, 'COMMERCIAL')

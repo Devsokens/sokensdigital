@@ -6,7 +6,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.firestore_client import create_profile, update_profile_fields, upsert_chat_room
+from core.firestore_client import create_profile, invalidate_role_cache, update_profile_fields, upsert_chat_room
 from core.models import AuditLog, Department, User, hash_email
 from core.permissions import has_role
 from core.serializers import (
@@ -243,6 +243,7 @@ class SetUserRoleView(APIView):
             'role': data['role'],
             'departmentId': str(department.id) if department else None,
         })
+        invalidate_role_cache(django_user.firebase_uid)
         django_user.department = department
         django_user.save(update_fields=['department'])
 

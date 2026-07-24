@@ -1,8 +1,34 @@
 import logging
 
+from django.core.cache import cache
+
 logger = logging.getLogger(__name__)
 
 _client = None
+
+# get_profile_role() used to hit Firestore on every single authenticated
+# request (every API call, from every admin page) — with the backend,
+# Postgres and Firestore all on different free-tier providers, that
+# round-trip was showing up as the app-wide "everything feels slow"
+# complaint. A short TTL keeps a role change propagating in well under a
+# minute while removing Firestore from the hot path of almost every
+# request. SetUserRoleView proactively invalidates on an explicit role
+# change, so the common case (an admin changes a role, expects it to take
+# effect) doesn't even wait out the TTL.
+ROLE_CACHE_TTL = 45  # seconds
+_ROLE_CACHE_NONE = '__none__'  # cache.get() returning None is ambiguous
+# between "not cached" and "cached as no role" — this sentinel disambiguates.
+
+
+def _role_cache_key(firebase_uid: str) -> str:
+    return f'firestore-role:{firebase_uid}'
+
+
+def invalidate_role_cache(firebase_uid: str) -> None:
+    try:
+        cache.delete(_role_cache_key(firebase_uid))
+    except Exception:
+        logger.exception('Could not invalidate role cache for uid=%s', firebase_uid)
 
 
 def _get_client():
@@ -24,17 +50,36 @@ def get_profile_role(firebase_uid: str) -> str | None:
     Firestore owns identity/role, Django owns RH/Finance/Projects data).
     Returns None if the doc doesn't exist or Firestore is unreachable —
     callers should treat that as "no role", not raise.
+
+    Cached for ROLE_CACHE_TTL seconds (see module docstring above) — cache
+    reads/writes are wrapped so a Redis hiccup just means "cache miss",
+    never a failed request; the Firestore fetch below is still the
+    fallback of record.
     """
     if not firebase_uid:
         return None
+
+    cache_key = _role_cache_key(firebase_uid)
+    try:
+        cached = cache.get(cache_key)
+    except Exception:
+        cached = None
+    if cached is not None:
+        return None if cached == _ROLE_CACHE_NONE else cached
+
     try:
         snapshot = _get_client().collection('profiles').document(firebase_uid).get()
     except Exception:
         logger.exception('Could not fetch Firestore profile for uid=%s', firebase_uid)
         return None
-    if not snapshot.exists:
-        return None
-    return snapshot.to_dict().get('role')
+    role = snapshot.to_dict().get('role') if snapshot.exists else None
+
+    try:
+        cache.set(cache_key, role if role is not None else _ROLE_CACHE_NONE, timeout=ROLE_CACHE_TTL)
+    except Exception:
+        logger.exception('Could not cache role for uid=%s', firebase_uid)
+
+    return role
 
 
 def create_profile(firebase_uid: str, data: dict) -> None:
