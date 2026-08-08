@@ -51,6 +51,25 @@ class ViewTests(APITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
+    def test_project_detail_dev_hides_budget(self):
+        """Un Développeur ne voit ni budget, ni cost_rate en lecture."""
+        self.project.members.add(self.dev)
+        self.client.force_authenticate(user=self.dev)
+        url = reverse('project-detail', kwargs={'pk': self.project.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('budget', response.data)
+        self.assertNotIn('cost_rate', response.data)
+
+    def test_project_detail_admin_sees_budget(self):
+        """Un Admin voit toujours budget et cost_rate."""
+        self.client.force_authenticate(user=self.admin)
+        url = reverse('project-detail', kwargs={'pk': self.project.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('budget', response.data)
+        self.assertIn('cost_rate', response.data)
+
     def test_project_change_status(self):
         self.client.force_authenticate(user=self.admin)
         url = reverse('project-change-status', kwargs={'pk': self.project.pk})

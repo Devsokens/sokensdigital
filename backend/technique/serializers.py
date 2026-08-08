@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Project, ProjectPhase, ProjectDocument, Task, TimeEntry, Ticket, KnowledgeBase
 from core.models import User
+from core.constants import ROLE_DEVELOPER, MANAGEMENT_ROLES
 from administration.models import Client
 from django.db.models import Sum
 from django.utils import timezone
@@ -10,6 +11,18 @@ class UserMinimalSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'email', 'first_name', 'last_name']
         read_only_fields = fields
+
+def _is_dev_only(context):
+    """True si l'utilisateur de la requête n'a que le rôle Développeur (pas
+    de rôle de management) — utilisé pour masquer budget/marge en lecture."""
+    request = context.get('request')
+    user = getattr(request, 'user', None)
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    return (
+        user.roles.filter(name=ROLE_DEVELOPER).exists()
+        and not user.roles.filter(name__in=MANAGEMENT_ROLES).exists()
+    )
 
 class ProjectListSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source='client.company_name', read_only=True)
@@ -23,6 +36,13 @@ class ProjectListSerializer(serializers.ModelSerializer):
         if obj.project_manager:
             return f"{obj.project_manager.first_name} {obj.project_manager.last_name}".strip() or obj.project_manager.email
         return None
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        if _is_dev_only(self.context):
+            rep.pop('total_cost', None)
+            rep.pop('is_over_budget', None)
+        return rep
 
 class ProjectSerializer(serializers.ModelSerializer):
     phases_count = serializers.IntegerField(source='phases.count', read_only=True)
@@ -44,6 +64,11 @@ class ProjectSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         rep = super().to_representation(instance)
         rep['members'] = UserMinimalSerializer(instance.members.all(), many=True).data
+        if _is_dev_only(self.context):
+            rep.pop('budget', None)
+            rep.pop('cost_rate', None)
+            rep.pop('total_cost', None)
+            rep.pop('is_over_budget', None)
         return rep
 
 class ProjectPhaseSerializer(serializers.ModelSerializer):
