@@ -1,8 +1,15 @@
+import hashlib
+import hmac
+
+from django.test import override_settings
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.urls import reverse
 from core.models import User, Role
-from core.constants import ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_COMMERCIAL, ROLE_RH_MANAGER
+from core.constants import (
+    ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_COMMERCIAL, ROLE_RH_MANAGER,
+    ROLE_DIRECTEUR_FINANCIER,
+)
 from .factories import (
     ClientFactory, UserFactory, ClientDocumentFactory, ClientInteractionFactory,
     EmployeeDocumentFactory, LeaveRequestFactory, CompanyAssetFactory,
@@ -116,8 +123,88 @@ class AdditionalViewTests(APITestCase):
         response = self.client.post(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_signature_webhook(self):
+    @override_settings(SIGNATURE_WEBHOOK_SECRET='test-secret')
+    def test_signature_webhook_valid_signature(self):
         contract = ContractGeneratorFactory(envelope_id='env-123')
         url = reverse('signature-webhook')
-        response = self.client.post(url, {'envelope_id': 'env-123', 'status': 'completed'}, format='json')
+        import json
+        body = json.dumps({'envelope_id': 'env-123', 'status': 'completed'}).encode()
+        sig = hmac.new(b'test-secret', body, hashlib.sha256).hexdigest()
+        response = self.client.post(
+            url, data=body, content_type='application/json',
+            HTTP_X_SIGNATURE=sig,
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    @override_settings(SIGNATURE_WEBHOOK_SECRET='test-secret')
+    def test_signature_webhook_rejects_unsigned(self):
+        contract = ContractGeneratorFactory(envelope_id='env-456')
+        url = reverse('signature-webhook')
+        response = self.client.post(
+            url, {'envelope_id': 'env-456', 'status': 'completed'}, format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_signature_webhook_unconfigured_returns_503(self):
+        """Sans secret configuré, le webhook refuse plutôt que d'accepter en clair."""
+        contract = ContractGeneratorFactory(envelope_id='env-789')
+        url = reverse('signature-webhook')
+        response = self.client.post(
+            url, {'envelope_id': 'env-789', 'status': 'completed'}, format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+class ClientRBACTests(APITestCase):
+    def setUp(self):
+        self.admin_role = Role.objects.create(name=ROLE_ADMIN)
+        self.commercial_role = Role.objects.create(name=ROLE_COMMERCIAL)
+        self.admin = UserFactory()
+        self.admin.roles.add(self.admin_role)
+        self.commercial = UserFactory()
+        self.commercial.roles.add(self.commercial_role)
+        self.other_commercial = UserFactory()
+        self.other_commercial.roles.add(self.commercial_role)
+        self.my_client = ClientFactory(assigned_to=self.commercial)
+        self.other_client = ClientFactory(assigned_to=self.other_commercial)
+
+    def test_commercial_create_forces_self_assigned(self):
+        self.client.force_authenticate(user=self.commercial)
+        url = reverse('client-list')
+        response = self.client.post(url, {
+            'company_name': 'New Co', 'siret': '99999999999999', 'status': 'PROSPECT',
+        })
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['assigned_to'], str(self.commercial.id))
+
+    def test_client_interaction_forbidden_on_inaccessible_client(self):
+        """Un Commercial ne peut pas créer d'interaction sur le client d'un autre."""
+        self.client.force_authenticate(user=self.commercial)
+        url = reverse('client-interactions-list', kwargs={'client_pk': self.other_client.pk})
+        response = self.client.post(url, {'interaction_type': 'CALL', 'subject': 'x', 'notes': 'x'})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_client_document_commercial_devis_allowed(self):
+        self.client.force_authenticate(user=self.commercial)
+        url = reverse('client-documents-list', kwargs={'client_pk': self.my_client.pk})
+        response = self.client.post(url, {
+            'name': 'Devis 1', 'file_path': '/x', 'file_type': 'DEVIS',
+        })
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_client_document_commercial_contrat_forbidden(self):
+        self.client.force_authenticate(user=self.commercial)
+        url = reverse('client-documents-list', kwargs={'client_pk': self.my_client.pk})
+        response = self.client.post(url, {
+            'name': 'Contrat 1', 'file_path': '/x', 'file_type': 'CONTRAT',
+        })
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_client_document_plain_user_forbidden(self):
+        plain = UserFactory()
+        self.client.force_authenticate(user=plain)
+        url = reverse('client-documents-list', kwargs={'client_pk': self.my_client.pk})
+        response = self.client.post(url, {
+            'name': 'Doc', 'file_path': '/x', 'file_type': 'DEVIS',
+        })
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

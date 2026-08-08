@@ -270,6 +270,13 @@ CELERY_TIMEZONE = TIME_ZONE
 FACEBOOK_PAGE_ID = os.environ.get('FACEBOOK_PAGE_ID', '')
 FACEBOOK_PAGE_ACCESS_TOKEN = os.environ.get('FACEBOOK_PAGE_ACCESS_TOKEN', '')
 
+# Shared secret for the e-signature provider's webhook (administration app,
+# SignatureWebhookView). Blank by default — the webhook returns 503 until
+# this is set, rather than accepting unsigned callbacks. Must match the
+# secret configured on the provider side (HMAC-SHA256 over the raw request
+# body, sent back in the X-Signature header).
+SIGNATURE_WEBHOOK_SECRET = os.environ.get('SIGNATURE_WEBHOOK_SECRET', '')
+
 # Firebase Admin SDK (server-side) credentials. Set one of:
 # - FIREBASE_SERVICE_ACCOUNT_JSON: the full service account JSON as a
 #   single-line string (used on Render, where mounting a file isn't

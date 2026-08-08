@@ -127,10 +127,17 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
         return Response({'status': project.status})
 
-    @action(detail=True, methods=['post', 'delete'], url_path='members')
+    @action(
+        detail=True, methods=['post', 'delete'], url_path='members',
+        permission_classes=[permissions.IsAuthenticated, (IsAdmin | IsProjectManager)],
+    )
     def manage_members(self, request, pk=None):
         """Ajouter/retirer des membres au projet."""
         project = self.get_object()
+        user = request.user
+        is_admin = user.roles.filter(name__in=ADMIN_ROLES).exists()
+        if not is_admin and project.project_manager_id != user.pk:
+            raise PermissionDenied("Vous ne gérez pas ce projet.")
         user_ids = request.data.get('user_ids', [])
 
         users = User.objects.filter(id__in=user_ids)

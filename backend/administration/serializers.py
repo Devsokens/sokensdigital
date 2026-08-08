@@ -26,7 +26,9 @@ class ClientInteractionSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClientInteraction
         fields = '__all__'
-        read_only_fields = ['user', 'is_locked']
+        # 'client' est fixé par la vue nested (perform_create), jamais
+        # attendu dans le payload — sinon POST échoue en 400 "champ requis".
+        read_only_fields = ['user', 'is_locked', 'client']
 
     def validate(self, data):
         if self.instance and self.instance.is_locked:
@@ -37,7 +39,9 @@ class ClientDocumentSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClientDocument
         fields = '__all__'
-        read_only_fields = ['uploaded_by']
+        # 'client' est fixé par la vue nested (perform_create), jamais
+        # attendu dans le payload — sinon POST échoue en 400 "champ requis".
+        read_only_fields = ['uploaded_by', 'client']
 
     def to_representation(self, instance):
         # We handle hiding CONTRAT in views, but we can also handle it here if needed

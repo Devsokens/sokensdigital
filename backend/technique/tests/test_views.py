@@ -82,6 +82,22 @@ class ViewTests(APITestCase):
         response = self.client.post(url, {'user_ids': [str(self.dev.id)]}, format='json')
         self.assertEqual(response.status_code, 200)
 
+    def test_project_manage_members_non_manager_forbidden(self):
+        """Un ChefProjet qui ne gère pas ce projet ne peut pas gérer ses membres."""
+        other_pm = UserFactory()
+        other_pm.roles.add(self.pm_role)
+        self.client.force_authenticate(user=other_pm)
+        url = reverse('project-manage-members', kwargs={'pk': self.project.pk})
+        response = self.client.post(url, {'user_ids': [str(self.dev.id)]}, format='json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_project_manage_members_dev_forbidden(self):
+        """Un Développeur ne peut pas gérer les membres d'un projet."""
+        self.client.force_authenticate(user=self.dev)
+        url = reverse('project-manage-members', kwargs={'pk': self.project.pk})
+        response = self.client.post(url, {'user_ids': [str(self.dev.id)]}, format='json')
+        self.assertEqual(response.status_code, 403)
+
     def test_project_phases_list(self):
         phase = ProjectPhaseFactory(project=self.project)
         self.client.force_authenticate(user=self.admin)

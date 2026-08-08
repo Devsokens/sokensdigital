@@ -1,5 +1,10 @@
+import hashlib
+import hmac
+
+from django.conf import settings
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
@@ -26,6 +31,27 @@ from .serializers import (
     ClientDocumentSerializer, EmployeeDocumentSerializer, LeaveRequestSerializer,
     CompanyAssetSerializer, AdministrativeRecordSerializer, ContractGeneratorSerializer,
 )
+
+
+def _accessible_clients_qs(user):
+    """
+    Clients visibles par cet utilisateur.
+
+    Admin / Directeur Financier / Commercial&Marketing (non scopé
+    ci-dessous) : tous les clients. Commercial seul : ses clients
+    assignés. Chef de Projet seul : clients liés à ses projets.
+    """
+    qs = Client.objects.all()
+
+    if (user.roles.filter(name=ROLE_COMMERCIAL).exists()
+            and not user.roles.filter(name__in=ADMIN_ROLES).exists()):
+        return qs.filter(assigned_to=user)
+
+    if (user.roles.filter(name=ROLE_PROJECT_MANAGER).exists()
+            and not user.roles.filter(name__in=ADMIN_ROLES).exists()):
+        return qs.filter(projects__project_manager=user).distinct()
+
+    return qs
 
 
 # ---------------------------------------------------------------------------
@@ -61,20 +87,19 @@ class ClientViewSet(viewsets.ModelViewSet):
         )
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        return _accessible_clients_qs(self.request.user)
+
+    def perform_create(self, serializer):
         user = self.request.user
-
-        # Commerciaux : uniquement leurs clients assignés
-        if (user.roles.filter(name=ROLE_COMMERCIAL).exists()
-                and not user.roles.filter(name__in=ADMIN_ROLES).exists()):
-            return qs.filter(assigned_to=user)
-
-        # Chef de Projet : clients liés à leurs projets
-        if (user.roles.filter(name=ROLE_PROJECT_MANAGER).exists()
-                and not user.roles.filter(name__in=ADMIN_ROLES).exists()):
-            return qs.filter(projects__project_manager=user).distinct()
-
-        return qs
+        is_commercial_only = (
+            user.roles.filter(name=ROLE_COMMERCIAL).exists()
+            and not user.roles.filter(name__in=ADMIN_ROLES).exists()
+        )
+        if is_commercial_only:
+            # Un Commercial ne peut créer un client que pour lui-même.
+            serializer.save(assigned_to=user)
+        else:
+            serializer.save()
 
     @action(detail=True, methods=['post'], permission_classes=[IsSuperAdmin])
     def archive(self, request, pk=None):
@@ -109,12 +134,18 @@ class ClientInteractionViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        client_pk = self.kwargs.get('client_pk')
+        if not _accessible_clients_qs(self.request.user).filter(pk=client_pk).exists():
+            return ClientInteraction.objects.none()
         return ClientInteraction.objects.filter(
-            client_id=self.kwargs.get('client_pk')
+            client_id=client_pk
         ).order_by('-created_at')
 
     def perform_create(self, serializer):
-        client = get_object_or_404(Client, pk=self.kwargs.get('client_pk'))
+        client_pk = self.kwargs.get('client_pk')
+        if not _accessible_clients_qs(self.request.user).filter(pk=client_pk).exists():
+            raise PermissionDenied("Vous n'avez pas accès à ce client.")
+        client = get_object_or_404(Client, pk=client_pk)
         serializer.save(client=client, user=self.request.user)
 
     def update(self, request, *args, **kwargs):
@@ -147,13 +178,21 @@ class ClientDocumentViewSet(viewsets.ModelViewSet):
     Les documents de type CONTRAT sont masqués aux rôles non autorisés.
     """
     serializer_class = ClientDocumentSerializer
-    permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [
+                permissions.IsAuthenticated(),
+                (IsAdmin | IsDirecteurFinancier | IsCommercial)(),
+            ]
+        return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
-        qs = ClientDocument.objects.filter(
-            client_id=self.kwargs.get('client_pk')
-        )
+        client_pk = self.kwargs.get('client_pk')
         user = self.request.user
+        if not _accessible_clients_qs(user).filter(pk=client_pk).exists():
+            return ClientDocument.objects.none()
+        qs = ClientDocument.objects.filter(client_id=client_pk)
 
         # Masquer les CONTRAT aux rôles non autorisés
         if not user.roles.filter(
@@ -162,9 +201,31 @@ class ClientDocumentViewSet(viewsets.ModelViewSet):
             qs = qs.exclude(file_type=ClientDocument.FileType.CONTRAT)
         return qs
 
+    def _check_write_scope(self, file_type):
+        user = self.request.user
+        is_admin_or_finance = user.roles.filter(
+            name__in=[*ADMIN_ROLES, ROLE_DIRECTEUR_FINANCIER]
+        ).exists()
+        if is_admin_or_finance:
+            return
+        is_commercial = user.roles.filter(name=ROLE_COMMERCIAL).exists()
+        if is_commercial and file_type == ClientDocument.FileType.DEVIS:
+            return
+        raise PermissionDenied(
+            "Les commerciaux ne peuvent ajouter que des documents de type DEVIS."
+        )
+
     def perform_create(self, serializer):
-        client = get_object_or_404(Client, pk=self.kwargs.get('client_pk'))
+        client_pk = self.kwargs.get('client_pk')
+        if not _accessible_clients_qs(self.request.user).filter(pk=client_pk).exists():
+            raise PermissionDenied("Vous n'avez pas accès à ce client.")
+        self._check_write_scope(serializer.validated_data.get('file_type'))
+        client = get_object_or_404(Client, pk=client_pk)
         serializer.save(client=client, uploaded_by=self.request.user)
+
+    def perform_update(self, serializer):
+        self._check_write_scope(serializer.instance.file_type)
+        serializer.save()
 
 
 # ---------------------------------------------------------------------------
@@ -417,6 +478,22 @@ class SignatureWebhookView(APIView):
     authentication_classes = []
 
     def post(self, request):
+        secret = getattr(settings, 'SIGNATURE_WEBHOOK_SECRET', '')
+        if not secret:
+            return Response(
+                {'detail': 'Webhook non configuré.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        signature_header = request.META.get('HTTP_X_SIGNATURE', '')
+        expected = hmac.new(
+            secret.encode(), request.body, hashlib.sha256
+        ).hexdigest()
+        if not signature_header or not hmac.compare_digest(signature_header, expected):
+            return Response(
+                {'detail': 'Signature invalide.'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
         envelope_id = request.data.get('envelope_id')
         sig_status = request.data.get('status')
 
