@@ -19,3 +19,11 @@ whitenoise
 django-filter
 django-redis
 Pillow
+pytest
+pytest-django
+pytest-cov
+factory-boy
+weasyprint
+google-api-python-client
+google-auth
+flake8

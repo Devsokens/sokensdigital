@@ -3,7 +3,6 @@ from rest_framework import authentication
 from rest_framework import exceptions
 from django.contrib.auth import get_user_model
 
-from core.firestore_client import get_profile_role
 from core.models import hash_email
 
 User = get_user_model()
@@ -60,11 +59,6 @@ class FirebaseAuthentication(authentication.BaseAuthentication):
                 user = User.objects.create(email=email, firebase_uid=uid, is_active=True)
         except Exception:
             raise exceptions.AuthenticationFailed('Could not retrieve user.')
-
-        # Transient, not persisted — read fresh from Firestore on every
-        # request so a role change there takes effect immediately, instead
-        # of caching a stale value in Postgres. See core.permissions.has_role.
-        user.firestore_role = get_profile_role(uid)
 
         return (user, decoded_token)
 

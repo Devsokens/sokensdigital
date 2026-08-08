@@ -98,6 +98,24 @@ class Department(LoggedModel):
     def __str__(self):
         return self.name
 
+class Role(LoggedModel):
+    name = models.CharField(max_length=255, unique=True)
+    description = models.TextField(blank=True, null=True)
+    permissions = models.JSONField(default=dict)
+
+    class Meta(LoggedModel.Meta):
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['name']),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        if not isinstance(self.permissions, dict):
+            raise ValidationError({'permissions': 'Permissions must be a valid JSON object.'})
+        super().clean()
+
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
@@ -130,7 +148,7 @@ class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
     firebase_uid = models.CharField(max_length=128, unique=True, null=True, blank=True)
     first_name = models.CharField(max_length=255, blank=True)
     last_name = models.CharField(max_length=255, blank=True)
-    phone = encrypt(models.CharField(max_length=50, blank=True, null=True))
+    phone = models.CharField(max_length=50, blank=True, null=True)  # TODO: encrypt in production
     avatar_url = models.URLField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
@@ -138,9 +156,7 @@ class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
     last_login = models.DateTimeField(blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # No `roles` field — application role lives in Firestore
-    # (profiles/{uid}.role), fetched per-request by FirebaseAuthentication
-    # and read via core.permissions.has_role(). See core/firestore_client.py.
+    roles = models.ManyToManyField(Role, blank=True)
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
 
     objects = UserManager()
@@ -198,3 +214,32 @@ class Session(LoggedModel):
         super().clean()
         if self.expires_at and self.expires_at <= timezone.now():
             raise ValidationError({'expires_at': "La date d'expiration doit être dans le futur."})
+
+class Notification(LoggedModel):
+    class NotificationType(models.TextChoices):
+        TASK_ASSIGNED = 'TASK_ASSIGNED', 'Task Assigned'
+        TASK_COMPLETED = 'TASK_COMPLETED', 'Task Completed'
+        PROJECT_STATUS = 'PROJECT_STATUS', 'Project Status'
+        TICKET_UPDATE = 'TICKET_UPDATE', 'Ticket Update'
+        LEAVE_REQUEST = 'LEAVE_REQUEST', 'Leave Request'
+        DOCUMENT_EXPIRY = 'DOCUMENT_EXPIRY', 'Document Expiry'
+        ADMIN_RECORD = 'ADMIN_RECORD', 'Admin Record'
+        BUDGET_ALERT = 'BUDGET_ALERT', 'Budget Alert'
+        FOLLOW_UP = 'FOLLOW_UP', 'Follow Up'
+        GENERAL = 'GENERAL', 'General'
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    notification_type = models.CharField(max_length=50, choices=NotificationType.choices)
+    is_read = models.BooleanField(default=False)
+    entity_type = models.CharField(max_length=100, blank=True)
+    entity_id = models.CharField(max_length=255, blank=True)
+    link = models.CharField(max_length=500, blank=True)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-created_at']
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['user', 'is_read']),
+            models.Index(fields=['notification_type']),
+        ]
