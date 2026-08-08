@@ -31,7 +31,7 @@ pipeline {
 
         stage('Lint') {
             steps {
-                bat 'docker compose -f %COMPOSE_FILE% run --rm test flake8 technique/ administration/ core/'
+                bat 'docker compose -f %COMPOSE_FILE% run --rm test flake8 technique/ administration/ core/ messaging/'
             }
         }
 
@@ -45,6 +45,7 @@ pipeline {
             when {
                 anyOf {
                     branch 'Herbert_technique'
+                    branch 'taiger_technique'
                     branch 'main'
                     branch 'develop'
                 }
@@ -58,6 +59,7 @@ pipeline {
             when {
                 anyOf {
                     branch 'Herbert-_administration'
+                    branch 'taiger_technique'
                     branch 'main'
                     branch 'develop'
                 }
@@ -67,15 +69,31 @@ pipeline {
             }
         }
 
-        stage('Tests — Core (branches partagées uniquement)') {
+        stage('Tests — Messagerie') {
             when {
                 anyOf {
+                    branch 'taiger_technique'
                     branch 'main'
                     branch 'develop'
                 }
             }
             steps {
-                bat 'docker compose -f %COMPOSE_FILE% run --rm test pytest core/tests/ --junitxml=reports/junit-core.xml -v'
+                bat 'docker compose -f %COMPOSE_FILE% run --rm test pytest messaging/tests/ --cov=messaging --cov-report=xml:reports/coverage-messaging.xml --cov-report=html:htmlcov-messaging --junitxml=reports/junit-messaging.xml -v'
+            }
+        }
+
+        stage('Tests — Core (branches partagées uniquement)') {
+            when {
+                anyOf {
+                    branch 'taiger_technique'
+                    branch 'main'
+                    branch 'develop'
+                }
+            }
+            steps {
+                // core/tests.py est un fichier, pas un dossier — 'core/tests/'
+                // (avec slash) ne matchait aucun test, bug pré-existant.
+                bat 'docker compose -f %COMPOSE_FILE% run --rm test pytest core/tests.py --junitxml=reports/junit-core.xml -v'
             }
         }
     }
@@ -103,6 +121,15 @@ pipeline {
                             reportDir: 'backend/htmlcov-administration',
                             reportFiles: 'index.html',
                             reportName: 'Couverture — Administration',
+                            keepAll: true,
+                            alwaysLinkToLastBuild: true
+                        ])
+                    }
+                    if (fileExists('backend/htmlcov-messaging/index.html')) {
+                        publishHTML(target: [
+                            reportDir: 'backend/htmlcov-messaging',
+                            reportFiles: 'index.html',
+                            reportName: 'Couverture — Messagerie',
                             keepAll: true,
                             alwaysLinkToLastBuild: true
                         ])

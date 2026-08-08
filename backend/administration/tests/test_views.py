@@ -11,7 +11,7 @@ from core.constants import (
     ROLE_DIRECTEUR_FINANCIER,
 )
 from .factories import (
-    ClientFactory, UserFactory, ClientDocumentFactory, ClientInteractionFactory,
+    ClientFactory, UserFactory, ContactFactory, ClientDocumentFactory, ClientInteractionFactory,
     EmployeeDocumentFactory, LeaveRequestFactory, CompanyAssetFactory,
     AdministrativeRecordFactory, ContractGeneratorFactory
 )
@@ -175,7 +175,7 @@ class ClientRBACTests(APITestCase):
             'company_name': 'New Co', 'siret': '99999999999999', 'status': 'PROSPECT',
         })
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['assigned_to'], str(self.commercial.id))
+        self.assertEqual(str(response.data['assigned_to']), str(self.commercial.id))
 
     def test_client_interaction_forbidden_on_inaccessible_client(self):
         """Un Commercial ne peut pas créer d'interaction sur le client d'un autre."""
@@ -208,3 +208,76 @@ class ClientRBACTests(APITestCase):
             'name': 'Doc', 'file_path': '/x', 'file_type': 'DEVIS',
         })
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_client_document_name_encrypted_at_rest(self):
+        """Le nom stocké n'est pas la chaîne en clair en base (colonne chiffrée)."""
+        from django.db import connection
+        from administration.models import ClientDocument
+        self.client.force_authenticate(user=self.commercial)
+        url = reverse('client-documents-list', kwargs={'client_pk': self.my_client.pk})
+        response = self.client.post(url, {
+            'name': 'Devis Secret', 'file_path': '/x', 'file_type': 'DEVIS',
+        })
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # Requête brute plutôt que l'ORM (qui déchiffrerait `name` via le
+        # descripteur du champ) — pas de filtre sur id : sur SQLite un
+        # UUIDField se stocke en hex sans tirets, différent de la
+        # représentation str() renvoyée par l'API ; un seul document créé
+        # dans ce test, donc pas d'ambiguïté à trier par le plus récent.
+        table = ClientDocument._meta.db_table
+        with connection.cursor() as cursor:
+            cursor.execute(f"SELECT name FROM {table} ORDER BY created_at DESC LIMIT 1")
+            raw_name = cursor.fetchone()[0]
+        self.assertNotEqual(raw_name, 'Devis Secret')
+
+
+class ContactRBACTests(APITestCase):
+    def setUp(self):
+        self.commercial_role = Role.objects.create(name=ROLE_COMMERCIAL)
+        self.commercial = UserFactory()
+        self.commercial.roles.add(self.commercial_role)
+        self.other_commercial = UserFactory()
+        self.other_commercial.roles.add(self.commercial_role)
+        self.my_client = ClientFactory(assigned_to=self.commercial)
+
+    def test_contact_create_scoped_to_accessible_client(self):
+        self.client.force_authenticate(user=self.commercial)
+        url = reverse('client-contacts-list', kwargs={'client_pk': self.my_client.pk})
+        response = self.client.post(url, {
+            'first_name': 'Marie', 'last_name': 'Curie', 'email': 'm@c.com',
+        })
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_contact_create_inaccessible_client_forbidden(self):
+        other_client = ClientFactory(assigned_to=self.other_commercial)
+        self.client.force_authenticate(user=self.commercial)
+        url = reverse('client-contacts-list', kwargs={'client_pk': other_client.pk})
+        response = self.client.post(url, {'first_name': 'Marie', 'last_name': 'Curie'})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class PayrollValidationViewTests(APITestCase):
+    def setUp(self):
+        self.admin_role = Role.objects.create(name=ROLE_ADMIN)
+        self.admin = UserFactory()
+        self.admin.roles.add(self.admin_role)
+        self.plain = UserFactory()
+
+    def test_non_admin_forbidden(self):
+        self.client.force_authenticate(user=self.plain)
+        url = reverse('payroll-validate')
+        response = self.client.post(url, {'period_month': 1, 'period_year': 2026}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_missing_period_returns_400(self):
+        self.client.force_authenticate(user=self.admin)
+        url = reverse('payroll-validate')
+        response = self.client.post(url, {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_admin_triggers_import_no_payslips(self):
+        self.client.force_authenticate(user=self.admin)
+        url = reverse('payroll-validate')
+        response = self.client.post(url, {'period_month': 1, 'period_year': 2026}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['imported_count'], 0)

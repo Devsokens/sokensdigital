@@ -25,6 +25,24 @@ def _user_has_any_role(user, *role_names):
     return user.roles.filter(name__in=role_names).exists()
 
 
+def has_role(user, *role_names):
+    """
+    Alias public de ``_user_has_any_role``, conservé pour compatibilité —
+    ``core.views``, ``finance.views``, ``hr.views``, ``marketing.views`` et
+    ``projects.views`` importent tous ``has_role`` depuis ce module. Avant
+    la fusion RBAC (voir historique du merge), le rôle vivait dans
+    Firestore et cette fonction interrogeait ``core.firestore_client``
+    avec des noms de rôle en SNAKE_CASE (``'SUPER_ADMIN'``) ; le RBAC est
+    maintenant côté Django (``user.roles``, ``core.constants``, noms en
+    français — ``'Super-Administrateur'``). Signature identique, mais tout
+    appelant qui passe encore l'ancien nom SNAKE_CASE ne matchera plus
+    aucun rôle réel — à corriger appelant par appelant (déjà fait pour
+    core/hr/projects dans ce pass ; finance/marketing restent sur les
+    anciens noms, hors périmètre de ce pass, voir rapport final).
+    """
+    return _user_has_any_role(user, *role_names)
+
+
 # ---------------------------------------------------------------------------
 # Permissions de niveau vue (has_permission)
 # ---------------------------------------------------------------------------

@@ -2,7 +2,21 @@ from unittest.mock import MagicMock, patch
 
 from rest_framework.test import APIClient, APITestCase
 
-from core.models import AuditLog, Department, User
+from core.models import AuditLog, Department, Role, User
+from core.constants import (
+    ROLE_SUPER_ADMIN, ROLE_RH_MANAGER, ROLE_DEVELOPER, ROLE_COMMERCIAL,
+)
+
+
+def _give_role(user, name):
+    """Legacy tests set user.firestore_role (dynamic attribute, read by the
+    old Firestore-backed auth flow). RBAC is Django-side now (user.roles,
+    core.permissions.has_role) — this helper does the equivalent via a
+    real Role row instead."""
+    role, _ = Role.objects.get_or_create(name=name)
+    user.roles.add(role)
+    return role
+
 
 
 class MeViewTests(APITestCase):
@@ -65,10 +79,10 @@ class ProvisionUserViewTests(APITestCase):
     def setUp(self):
         self.department = Department.objects.create(name='Technique', color='#22d3ee')
         self.rh_user = User.objects.create(email='rh@sokensdigital.com', first_name='RH')
-        self.rh_user.firestore_role = 'RESPONSABLE_RH'
+        _give_role(self.rh_user, ROLE_RH_MANAGER)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_rh = APIClient()
         self.client_rh.force_authenticate(user=self.rh_user)
@@ -138,7 +152,7 @@ class ProvisionUserViewTests(APITestCase):
     def test_super_admin_can_provision_super_admin(self, mock_create_user, mock_create_profile):
         mock_create_user.return_value = MagicMock(uid='firebase-uid-789')
         super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
-        super_admin.firestore_role = 'SUPER_ADMIN'
+        _give_role(super_admin, ROLE_SUPER_ADMIN)
         client = APIClient()
         client.force_authenticate(user=super_admin)
 
@@ -150,10 +164,10 @@ class SetUserRoleViewTests(APITestCase):
     def setUp(self):
         self.department = Department.objects.create(name='Finance', color='#22d3ee')
         self.super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
-        self.super_admin.firestore_role = 'SUPER_ADMIN'
+        _give_role(self.super_admin, ROLE_SUPER_ADMIN)
 
         self.rh_user = User.objects.create(email='rh@sokensdigital.com', first_name='RH')
-        self.rh_user.firestore_role = 'RESPONSABLE_RH'
+        _give_role(self.rh_user, ROLE_RH_MANAGER)
 
         self.employee = User.objects.create(
             email='employee@sokensdigital.com', first_name='Employee', firebase_uid='firebase-uid-existing',
@@ -199,7 +213,7 @@ class SetUserRoleViewTests(APITestCase):
 class DepartmentViewSetTests(APITestCase):
     def setUp(self):
         self.super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
-        self.super_admin.firestore_role = 'SUPER_ADMIN'
+        _give_role(self.super_admin, ROLE_SUPER_ADMIN)
 
         self.client_super_admin = APIClient()
         self.client_super_admin.force_authenticate(user=self.super_admin)
@@ -219,10 +233,10 @@ class DepartmentViewSetTests(APITestCase):
 class AuditLogViewSetTests(APITestCase):
     def setUp(self):
         self.super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
-        self.super_admin.firestore_role = 'SUPER_ADMIN'
+        _give_role(self.super_admin, ROLE_SUPER_ADMIN)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         Department.objects.create(name='À supprimer').delete(user=self.super_admin)
 
@@ -248,10 +262,10 @@ class UserListViewTests(APITestCase):
         User.objects.create(email='someone@sokensdigital.com', first_name='Someone')
 
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, 'RESPONSABLE_MARKETING')
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
     def test_marketing_can_list_users(self):
         client = APIClient()
@@ -272,16 +286,16 @@ class GlobalSearchTests(APITestCase):
         from projects.models import Project
 
         self.marketing_user = User.objects.create(email='searchmkt@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, 'RESPONSABLE_MARKETING')
 
         self.commercial_a = User.objects.create(email='searchcom-a@sokensdigital.com', first_name='CommercialA')
-        self.commercial_a.firestore_role = 'COMMERCIAL'
+        _give_role(self.commercial_a, ROLE_COMMERCIAL)
 
         self.commercial_b = User.objects.create(email='searchcom-b@sokensdigital.com', first_name='CommercialB')
-        self.commercial_b.firestore_role = 'COMMERCIAL'
+        _give_role(self.commercial_b, ROLE_COMMERCIAL)
 
         self.outsider = User.objects.create(email='searchdev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.lead_a = Lead.objects.create(
             first_name='Zelda', last_name='Fitzgerald', email='zelda@example.com',

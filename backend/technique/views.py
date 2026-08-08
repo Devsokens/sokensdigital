@@ -92,6 +92,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         if is_dev_only:
             serializer.validated_data.pop('budget', None)
             serializer.validated_data.pop('cost_rate', None)
+        instance._audit_user = user
         serializer.save()
 
     @action(detail=True, methods=['post'], url_path='change-status')
@@ -113,17 +114,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
             )
 
         with transaction.atomic():
-            old_status = project.status
             project.status = new_status
+            # Lu par le signal post_save (technique/signals.py) pour logger
+            # le bon acteur — sans ça il retomberait sur project_manager,
+            # même si c'est un Admin qui a fait le changement. L'AuditLog
+            # lui-même est écrit une seule fois, par le signal.
+            project._audit_user = request.user
             project.save()
-
-            AuditLog.objects.log_action(
-                user=request.user,
-                action=f'STATUS_CHANGE:{old_status}->{new_status}',
-                entity_type='Project',
-                entity_id=str(project.pk),
-                details={'old_status': old_status, 'new_status': new_status},
-            )
 
         return Response({'status': project.status})
 
@@ -147,6 +144,21 @@ class ProjectViewSet(viewsets.ModelViewSet):
         else:
             project.members.remove(*users)
             return Response({'status': 'members removed'})
+
+
+def _with_injected_fields(request, **fields):
+    """
+    Copie de ``request.data`` avec des clés injectées — utilisé sur les
+    routes nested pour que le FK parent (project/task/user) soit présent
+    dès la VALIDATION du serializer, pas seulement au moment de
+    ``.save()``. Nécessaire car les ``validate()`` qui vérifient ce FK
+    (ex. date fin phase <= date fin projet, plafond 24h/jour TimeEntry)
+    ne voient que les clés réellement soumises ; l'injecter seulement
+    dans ``perform_create``/``.save()`` arrive trop tard pour ces checks.
+    """
+    data = request.data.copy()
+    data.update(fields)
+    return data
 
 
 class ProjectPhaseViewSet(viewsets.ModelViewSet):
@@ -181,9 +193,17 @@ class ProjectPhaseViewSet(viewsets.ModelViewSet):
             if not project or project.project_manager_id != user.pk:
                 raise PermissionDenied("Vous ne gérez pas ce projet.")
 
-    def perform_create(self, serializer):
+    def create(self, request, *args, **kwargs):
         self._check_project_manager_scope()
-        serializer.save(project_id=self.kwargs['project_pk'])
+        data = _with_injected_fields(request, project=self.kwargs['project_pk'])
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def perform_create(self, serializer):
+        serializer.save()
 
     def perform_update(self, serializer):
         """Bloque le passage à TERMINE sans document LIVRABLE."""
@@ -213,6 +233,14 @@ class ProjectDocumentViewSet(viewsets.ModelViewSet):
             return [permissions.IsAuthenticated(), (IsAdmin | IsProjectManager)()]
         return [permissions.IsAuthenticated()]
 
+    def create(self, request, *args, **kwargs):
+        data = _with_injected_fields(request, project=self.kwargs['project_pk'])
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
     def perform_create(self, serializer):
         user = self.request.user
         is_management = user.roles.filter(
@@ -232,10 +260,7 @@ class ProjectDocumentViewSet(viewsets.ModelViewSet):
                     "Vous ne pouvez ajouter un document que sur une phase "
                     "liée à une de vos tâches."
                 )
-        serializer.save(
-            uploaded_by=self.request.user,
-            project_id=self.kwargs['project_pk'],
-        )
+        serializer.save(uploaded_by=user)
 
 
 class TaskViewSet(viewsets.ModelViewSet):
@@ -263,15 +288,28 @@ class TaskViewSet(viewsets.ModelViewSet):
         ).exists()
         if is_member_or_manager:
             return qs
-        return qs.none()
+        # Un développeur assigné à une tâche doit pouvoir y accéder même
+        # s'il n'a pas (encore) été ajouté formellement à Project.members —
+        # l'assignation d'une tâche est en soi une forme d'affectation au
+        # projet (cahier des charges 3.3 : "projets auxquels il est
+        # explicitement affecté").
+        return qs.filter(assigned_to=user)
 
     def get_permissions(self):
         if self.action in ['create', 'destroy']:
             return [permissions.IsAuthenticated(), (IsAdmin | IsProjectManager)()]
         return [permissions.IsAuthenticated()]
 
+    def create(self, request, *args, **kwargs):
+        data = _with_injected_fields(request, project=self.kwargs['project_pk'])
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
     def perform_create(self, serializer):
-        serializer.save(project_id=self.kwargs['project_pk'])
+        serializer.save()
 
     def perform_update(self, serializer):
         user = self.request.user
@@ -326,11 +364,18 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
             return [permissions.IsAuthenticated(), IsOwner()]
         return [permissions.IsAuthenticated()]
 
-    def perform_create(self, serializer):
-        instance = serializer.save(
-            user=self.request.user,
-            task_id=self.kwargs['task_pk'],
+    def create(self, request, *args, **kwargs):
+        data = _with_injected_fields(
+            request, task=self.kwargs['task_pk'], user=request.user.pk,
         )
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def perform_create(self, serializer):
+        serializer.save()
         # Recalcul actual_hours géré par le signal post_save
 
     def perform_destroy(self, instance):

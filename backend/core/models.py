@@ -148,7 +148,7 @@ class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
     firebase_uid = models.CharField(max_length=128, unique=True, null=True, blank=True)
     first_name = models.CharField(max_length=255, blank=True)
     last_name = models.CharField(max_length=255, blank=True)
-    phone = models.CharField(max_length=50, blank=True, null=True)  # TODO: encrypt in production
+    phone = encrypt(models.CharField(max_length=50, blank=True, null=True))
     avatar_url = models.URLField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)

@@ -2,9 +2,15 @@ from rest_framework import serializers
 from django.utils import timezone
 from datetime import timedelta
 from .models import (
-    Client, ClientInteraction, ClientDocument, EmployeeDocument,
+    Client, Contact, ClientInteraction, ClientDocument, EmployeeDocument,
     LeaveRequest, CompanyAsset, AdministrativeRecord, ContractGenerator
 )
+
+class ContactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Contact
+        fields = '__all__'
+        read_only_fields = ['client']
 
 class ClientListSerializer(serializers.ModelSerializer):
     class Meta:

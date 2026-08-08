@@ -2,24 +2,28 @@ from unittest.mock import patch
 
 from rest_framework.test import APIClient, APITestCase
 
-from core.models import User
+from core.models import Role, User
+from core.constants import ROLE_PROJECT_MANAGER, ROLE_DEVELOPER
+
+
+def _give_role(user, name):
+    role, _ = Role.objects.get_or_create(name=name)
+    user.roles.add(role)
+    return role
+
 from projects.models import Project, ProjectMember
 
 
 class ProjectViewSetTests(APITestCase):
     def setUp(self):
-        # firestore_role is never persisted (see core.permissions.has_role)
-        # — force_authenticate hands the ViewSet this exact instance, so
-        # setting the attribute here is equivalent to what
-        # FirebaseAuthentication would stash from a real Firestore read.
         self.chef = User.objects.create(email='chef@sokensdigital.com', first_name='Chef')
-        self.chef.firestore_role = 'CHEF_DE_PROJET'
+        _give_role(self.chef, ROLE_PROJECT_MANAGER)
 
         self.dev = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.dev.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.dev, ROLE_DEVELOPER)
 
         self.outsider = User.objects.create(email='outsider@sokensdigital.com', first_name='Outsider')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_chef = APIClient()
         self.client_chef.force_authenticate(user=self.chef)
@@ -110,16 +114,16 @@ class ProjectViewSetTests(APITestCase):
 class TimesheetTests(APITestCase):
     def setUp(self):
         self.chef = User.objects.create(email='chef@sokensdigital.com', first_name='Chef')
-        self.chef.firestore_role = 'CHEF_DE_PROJET'
+        _give_role(self.chef, ROLE_PROJECT_MANAGER)
 
         self.dev = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.dev.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.dev, ROLE_DEVELOPER)
 
         self.other_dev = User.objects.create(email='dev2@sokensdigital.com', first_name='Dev2')
-        self.other_dev.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.other_dev, ROLE_DEVELOPER)
 
         self.outsider = User.objects.create(email='outsider@sokensdigital.com', first_name='Outsider')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.project = Project.objects.create(name='Refonte site vitrine', lead_project_manager=self.chef)
         ProjectMember.objects.create(project=self.project, user=self.dev)

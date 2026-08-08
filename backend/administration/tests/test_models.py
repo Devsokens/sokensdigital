@@ -6,7 +6,7 @@ from administration.models import (
     Client, LeaveRequest, AdministrativeRecord, ContractGenerator, ClientInteraction
 )
 from .factories import (
-    UserFactory, ClientFactory, LeaveRequestFactory,
+    UserFactory, ClientFactory, ContactFactory, LeaveRequestFactory,
     AdministrativeRecordFactory, ContractGeneratorFactory, ClientInteractionFactory
 )
 
@@ -53,3 +53,14 @@ class ClientInteractionTest(TestCase):
         interaction.created_at = timezone.now() - timedelta(hours=25)
         interaction.save()
         self.assertTrue(interaction.is_locked)
+
+    def test_contact_must_belong_to_same_client(self):
+        client_a = ClientFactory()
+        client_b = ClientFactory()
+        contact_b = ContactFactory(client=client_b)
+        interaction = ClientInteraction(
+            client=client_a, contact=contact_b, user=UserFactory(),
+            interaction_type='CALL', subject='x', notes='x',
+        )
+        with self.assertRaises(ValidationError):
+            interaction.clean()

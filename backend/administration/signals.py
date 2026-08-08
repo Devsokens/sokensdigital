@@ -1,6 +1,6 @@
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
-from core.models import AuditLog, Notification
+from core.models import AuditLog, Notification, User
 from .models import Client, CompanyAsset, AdministrativeRecord, LeaveRequest
 
 @receiver(pre_save, sender=Client)
@@ -34,8 +34,25 @@ def asset_holder_change(sender, instance, **kwargs):
 
 @receiver(post_save, sender=AdministrativeRecord)
 def admin_record_public_notification(sender, instance, created, **kwargs):
-    if instance.is_public_internally:
-        pass
+    """
+    Notification globale à la création d'un registre public. Ne se
+    redéclenche pas sur les sauvegardes suivantes (ex. finalize()) —
+    seule la création initiale en is_public_internally=True notifie,
+    pour éviter de renotifier toute l'entreprise à chaque modification.
+    """
+    if created and instance.is_public_internally:
+        active_user_ids = User.objects.filter(is_active=True).values_list('id', flat=True)
+        Notification.objects.bulk_create([
+            Notification(
+                user_id=user_id,
+                title=f'Nouveau document administratif — {instance.title}',
+                message=f'"{instance.title}" a été publié au registre administratif.',
+                notification_type=Notification.NotificationType.ADMIN_RECORD,
+                entity_type='AdministrativeRecord',
+                entity_id=str(instance.pk),
+            )
+            for user_id in active_user_ids
+        ])
 
 @receiver(pre_save, sender=LeaveRequest)
 def leave_request_status_notification(sender, instance, **kwargs):

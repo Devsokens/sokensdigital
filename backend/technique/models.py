@@ -95,6 +95,15 @@ class ProjectPhase(LoggedModel):
         if self.end_date and self.project and self.project.end_date:
             if self.end_date > self.project.end_date:
                 raise ValidationError({'end_date': 'Phase end_date cannot be after project end_date.'})
+        # Défense en profondeur : la vue bloque déjà ce cas (ProjectPhaseViewSet.
+        # perform_update), mais le modèle doit aussi refuser un TERMINE sans
+        # LIVRABLE pour tout appelant qui contourne la vue (admin Django,
+        # shell, script, autre app).
+        if self.status == PhaseStatus.TERMINE and self.pk:
+            if not self.documents.filter(document_type=DocumentType.LIVRABLE).exists():
+                raise ValidationError({
+                    'status': 'Impossible de terminer une phase sans document de type LIVRABLE.',
+                })
 
     def save(self, *args, **kwargs):
         self.clean()
@@ -148,6 +157,18 @@ class TimeEntry(LoggedModel):
     def clean(self):
         if self.date and self.date > timezone.now().date():
             raise ValidationError({'date': 'Date cannot be in the future.'})
+        # Défense en profondeur : plafond 24h/jour déjà vérifié côté
+        # serializer (TimeEntrySerializer.validate), reproduit ici pour
+        # bloquer aussi un .save() direct (admin Django, shell, script).
+        if self.user_id and self.date and self.hours is not None:
+            qs = TimeEntry.objects.filter(user_id=self.user_id, date=self.date)
+            if self.pk:
+                qs = qs.exclude(pk=self.pk)
+            total = qs.aggregate(total=models.Sum('hours'))['total'] or 0
+            if total + self.hours > 24:
+                raise ValidationError({
+                    'hours': 'Total hours for a user on a given date cannot exceed 24 hours.',
+                })
 
     def save(self, *args, **kwargs):
         self.clean()

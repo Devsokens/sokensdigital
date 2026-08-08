@@ -2,6 +2,7 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django_cryptography.fields import encrypt
 import re
 from django.utils import timezone
 from datetime import timedelta
@@ -45,6 +46,19 @@ class Client(LoggedModel):
     def __str__(self):
         return self.company_name
 
+class Contact(LoggedModel):
+    """Interlocuteur chez un client — cahier des charges §4.5 "Contacts"."""
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='contacts')
+    first_name = models.CharField(max_length=255)
+    last_name = models.CharField(max_length=255)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=50, blank=True)
+    role = models.CharField(max_length=255, blank=True)
+    is_primary = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} ({self.client.company_name})"
+
 class ClientInteraction(LoggedModel):
     class InteractionType(models.TextChoices):
         CALL = 'CALL', _('Appel')
@@ -53,12 +67,27 @@ class ClientInteraction(LoggedModel):
         OTHER = 'OTHER', _('Autre')
 
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='interactions')
+    contact = models.ForeignKey(
+        Contact, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='interactions',
+    )
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='client_interactions')
     interaction_type = models.CharField(max_length=20, choices=InteractionType.choices)
     subject = models.CharField(max_length=255)
     notes = models.TextField()
     follow_up_date = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        super().clean()
+        # Un contact référencé doit appartenir au même client que
+        # l'interaction — sinon incohérence silencieuse en base.
+        if self.contact_id and self.client_id and self.contact.client_id != self.client_id:
+            raise ValidationError({'contact': "Ce contact n'appartient pas à ce client."})
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
 
     @property
     def is_locked(self):
@@ -72,7 +101,10 @@ class ClientDocument(LoggedModel):
         AUTRE_JURIDIQUE = 'AUTRE_JURIDIQUE', _('Autre juridique')
 
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='documents')
-    name = models.CharField(max_length=255)
+    # Chiffré au repos (AES via django-cryptography) — un nom de fichier
+    # ("Licenciement_Untel.pdf", "NDA_ClientX.pdf"...) peut à lui seul
+    # révéler des informations sensibles indépendamment du flag is_sensitive.
+    name = encrypt(models.CharField(max_length=255))
     file_path = models.CharField(max_length=500)
     file_type = models.CharField(max_length=20, choices=FileType.choices)
     uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='uploaded_client_docs')
@@ -88,7 +120,8 @@ class EmployeeDocument(LoggedModel):
         AUTRE = 'AUTRE', _('Autre')
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='employee_documents')
-    document_name = models.CharField(max_length=255)
+    # Chiffré au repos — dossier RH, même logique que ClientDocument.name.
+    document_name = encrypt(models.CharField(max_length=255))
     file_path = models.CharField(max_length=500)
     document_type = models.CharField(max_length=20, choices=DocumentType.choices)
     expiry_date = models.DateField(null=True, blank=True)

@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from core.permissions import has_role
+from core.constants import ROLE_RH_MANAGER
 from hr.models import EmployeeProfile
 from hr.serializers import (
     ContractSerializer,
@@ -12,7 +13,7 @@ from hr.serializers import (
     PayslipSerializer,
 )
 
-HR_MANAGER_ROLES = ('RESPONSABLE_RH',)
+HR_MANAGER_ROLES = (ROLE_RH_MANAGER,)
 
 
 class IsHRManagerOrOwnReadOnly(permissions.BasePermission):

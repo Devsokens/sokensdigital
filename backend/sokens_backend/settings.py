@@ -33,17 +33,27 @@ def _env_list(name, default=''):
     return [item.strip() for item in raw.split(',') if item.strip()]
 
 
+_INSECURE_SECRET_KEY_FALLBACK = 'django-insecure-pr8^&i!kn23(a_^#jk*8%=&eu4fu27g46+setd+21k)#4tmx0k'
+
 # SECURITY WARNING: keep the secret key used in production secret!
 # The fallback below is only ever used for local development / Docker build
 # steps (e.g. collectstatic) and must be overridden via the SECRET_KEY env
 # var in any real deployment.
-SECRET_KEY = os.environ.get(
-    'SECRET_KEY',
-    'django-insecure-pr8^&i!kn23(a_^#jk*8%=&eu4fu27g46+setd+21k)#4tmx0k',
-)
+SECRET_KEY = os.environ.get('SECRET_KEY', _INSECURE_SECRET_KEY_FALLBACK)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = _env_bool('DEBUG', default=False)
+
+# Refuse to boot with the checked-in fallback key once DEBUG is off — a
+# stolen/leaked SECRET_KEY lets an attacker forge session cookies, password
+# reset tokens and the `signed_cookies` session backend. Failing loudly at
+# startup is strictly better than silently running production on a key
+# that's sitting in git history for anyone to read.
+if not DEBUG and SECRET_KEY == _INSECURE_SECRET_KEY_FALLBACK:
+    raise RuntimeError(
+        'SECRET_KEY env var is not set (or still the insecure dev default) '
+        'while DEBUG=False. Refusing to start — set a real SECRET_KEY.'
+    )
 
 ALLOWED_HOSTS = _env_list('ALLOWED_HOSTS', default='localhost,127.0.0.1')
 
@@ -74,6 +84,7 @@ INSTALLED_APPS = [
     'finance',
     'technique',
     'administration',
+    'messaging',
 ]
 
 AUTH_USER_MODEL = 'core.User'
@@ -94,9 +105,12 @@ MIDDLEWARE = [
 
 # In local development it's convenient to allow every origin. In any real
 # deployment, set CORS_ALLOWED_ORIGINS (comma-separated) instead — e.g. the
-# Vercel/Render URL of the Next.js frontend.
+# Vercel/Render URL of the Next.js frontend. CORS_ALLOW_ALL_ORIGINS is tied
+# to DEBUG so a misconfigured prod deploy (forgot to set CORS_ALLOWED_ORIGINS)
+# fails closed (no origin allowed) rather than open (every origin allowed).
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOWED_ORIGINS = _env_list('CORS_ALLOWED_ORIGINS')
+CORS_ALLOW_CREDENTIALS = True
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -113,7 +127,45 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 25,
+    # Global abuse-prevention floor. Individual public/sensitive views
+    # (webhooks, public devis/contact forms, auth-adjacent endpoints) layer
+    # a tighter scoped throttle on top — see core.throttles.
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.environ.get('THROTTLE_RATE_ANON', '100/hour'),
+        'user': os.environ.get('THROTTLE_RATE_USER', '2000/hour'),
+        'public_write': os.environ.get('THROTTLE_RATE_PUBLIC_WRITE', '10/hour'),
+        'webhook': os.environ.get('THROTTLE_RATE_WEBHOOK', '60/min'),
+    },
 }
+
+# ---------------------------------------------------------------------------
+# Durcissement sécurité — actif uniquement quand DEBUG=False (prod/staging).
+# Rien de ceci ne gêne le développement local (DEBUG=True par défaut).
+# ---------------------------------------------------------------------------
+if not DEBUG:
+    # Render (et la plupart des PaaS) terminent TLS au niveau du proxy et
+    # relaient en HTTP en interne — sans ce header, Django croit que la
+    # requête est en clair et boucle sur SECURE_SSL_REDIRECT.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    # HSTS : force HTTPS côté navigateur pour toute visite future, même si
+    # l'utilisateur tape http:// ou suit un vieux lien. 1 an, sous-domaines
+    # inclus — valeur standard pour un premier déploiement conforme aux
+    # exigences de preload sans s'y inscrire tout de suite (SECURE_HSTS_PRELOAD
+    # est un engagement à sens unique difficile à annuler, laissé à False).
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = False
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = 'same-origin'
+    X_FRAME_OPTIONS = 'DENY'
 
 SPECTACULAR_SETTINGS = {
     'TITLE': "Soken's Digital API",
@@ -147,7 +199,36 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
-CELERY_BEAT_SCHEDULE = {}
+CELERY_BEAT_SCHEDULE = {
+    'technique-check-budget-alerts': {
+        'task': 'technique.tasks.check_budget_alerts',
+        'schedule': 3600.0,  # toutes les heures
+    },
+    'technique-interaction-follow-up-reminders': {
+        'task': 'administration.tasks.follow_up_reminders',
+        'schedule': 3600.0,
+    },
+    'administration-document-expiry-check': {
+        'task': 'administration.tasks.document_expiry',
+        'schedule': 86400.0,  # une fois par jour
+    },
+}
+
+# Email — utilisé par technique.tasks.send_ticket_resolution_email et les
+# alertes d'expiration de documents RH. EMAIL_BACKEND par défaut = console
+# (affiche l'email dans les logs, aucun envoi réel) tant que EMAIL_HOST
+# n'est pas configuré — évite un crash au démarrage/dans les tests si SMTP
+# n'est pas disponible, tout en gardant le code d'envoi actif.
+if os.environ.get('EMAIL_HOST'):
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = os.environ.get('EMAIL_HOST')
+    EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+    EMAIL_USE_TLS = _env_bool('EMAIL_USE_TLS', default=True)
+    EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+    EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@sokensdigital.com')
 
 ROOT_URLCONF = 'sokens_backend.urls'
 
@@ -236,11 +317,15 @@ STORAGES = {
 # rate limiting — see marketing/ratelimit.py).
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 
-# `manage.py test` shouldn't depend on a live Redis (not always running
-# locally, e.g. outside docker-compose) — fall back to an in-memory cache
-# so cache-dependent code (rate limiting, dashboard TTLs) is still
-# exercised by tests without requiring external infra.
-if 'test' in sys.argv:
+# Tests shouldn't depend on a live Redis (not always running locally, e.g.
+# outside docker-compose) — fall back to an in-memory cache so
+# cache-dependent code (rate limiting via DRF throttle classes, dashboard
+# TTLs) is still exercised by tests without requiring external infra.
+# `'test' in sys.argv` only catches `manage.py test` — pytest (this repo's
+# actual test runner, see backend/pytest.ini) never puts 'test' in argv,
+# so PYTEST_CURRENT_TEST (set by pytest for the duration of every test) is
+# the check that actually matters here.
+if 'test' in sys.argv or 'PYTEST_CURRENT_TEST' in os.environ or 'pytest' in sys.modules:
     CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
 else:
     CACHES = {

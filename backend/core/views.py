@@ -9,6 +9,10 @@ from rest_framework.views import APIView
 from core.firestore_client import create_profile, invalidate_role_cache, update_profile_fields, upsert_chat_room
 from core.models import AuditLog, Department, User, hash_email
 from core.permissions import has_role
+from core.constants import (
+    ROLE_SUPER_ADMIN, ROLE_RH_MANAGER, ROLE_COMMERCIAL,
+    ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER,
+)
 from core.serializers import (
     AuditLogSerializer,
     DepartmentSerializer,
@@ -69,7 +73,7 @@ class IsSuperAdmin(permissions.BasePermission):
     screen for anyone else to use it from yet either."""
 
     def has_permission(self, request, view):
-        return has_role(request.user, 'SUPER_ADMIN')
+        return has_role(request.user, ROLE_SUPER_ADMIN)
 
 
 @extend_schema_view(
@@ -99,7 +103,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
 class IsSuperAdminOrRH(permissions.BasePermission):
     def has_permission(self, request, view):
-        return has_role(request.user, 'RESPONSABLE_RH')
+        return has_role(request.user, ROLE_SUPER_ADMIN, ROLE_RH_MANAGER)
 
 
 class CanListUsers(permissions.BasePermission):
@@ -108,7 +112,11 @@ class CanListUsers(permissions.BasePermission):
     who needs it to reassign leads to a Commercial (docs/backend-specifications.md §2.1)."""
 
     def has_permission(self, request, view):
-        return has_role(request.user, 'RESPONSABLE_RH', 'RESPONSABLE_MARKETING')
+        # 'RESPONSABLE_MARKETING' — pas de rôle Marketing dans core.constants
+        # (département Marketing/Communication hors périmètre de ce pass) ;
+        # laissé tel quel, ne matchera aucun Role réel tant que ce
+        # département n'a pas son propre passage RBAC.
+        return has_role(request.user, ROLE_RH_MANAGER, 'RESPONSABLE_MARKETING')
 
 
 @extend_schema_view(
@@ -157,7 +165,7 @@ class ProvisionUserView(APIView):
         # RH does the day-to-day hiring, so it can assign any operational
         # role — but only a Super-Admin can grant SUPER_ADMIN itself
         # (docs/backend-specifications.md §1.1/§1.2).
-        if data['role'] == 'SUPER_ADMIN' and not has_role(request.user, 'SUPER_ADMIN'):
+        if data['role'] == 'SUPER_ADMIN' and not has_role(request.user, ROLE_SUPER_ADMIN):
             return Response(
                 {'detail': "Seul un Super-Admin peut attribuer le rôle Super-Admin."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -292,7 +300,7 @@ def global_search(request):
     results = []
 
     # Employees — Administration & RH / RH read access.
-    if has_role(user, 'RESPONSABLE_RH', 'SUPER_ADMIN'):
+    if has_role(user, ROLE_RH_MANAGER, ROLE_SUPER_ADMIN):
         matches = User.objects.filter(
             Q(first_name__icontains=query) | Q(last_name__icontains=query)
         )[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
@@ -303,11 +311,11 @@ def global_search(request):
             })
 
     # Leads — Marketing/Commercial.
-    if has_role(user, 'RESPONSABLE_MARKETING', 'COMMERCIAL', 'SUPER_ADMIN'):
+    if has_role(user, 'RESPONSABLE_MARKETING', ROLE_COMMERCIAL, ROLE_SUPER_ADMIN):
         from marketing.models import BlogPost, Lead, Quote
 
         leads = Lead.objects.all()
-        if not has_role(user, 'RESPONSABLE_MARKETING', 'SUPER_ADMIN'):
+        if not has_role(user, 'RESPONSABLE_MARKETING', ROLE_SUPER_ADMIN):
             leads = leads.filter(assigned_to=user)
         matches = leads.filter(
             Q(first_name__icontains=query) | Q(last_name__icontains=query) | Q(company_name__icontains=query)
@@ -319,7 +327,7 @@ def global_search(request):
             })
 
         quotes = Quote.objects.select_related('lead')
-        if has_role(user, 'COMMERCIAL') and not has_role(user, 'RESPONSABLE_MARKETING', 'SUPER_ADMIN'):
+        if has_role(user, ROLE_COMMERCIAL) and not has_role(user, 'RESPONSABLE_MARKETING', ROLE_SUPER_ADMIN):
             quotes = quotes.filter(created_by=user)
         matches = quotes.filter(quote_number__icontains=query)[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
         for quote in matches:
@@ -328,7 +336,7 @@ def global_search(request):
                 'sublabel': quote.lead.company_name if quote.lead else '', 'href': '/admin/marketing/devis',
             })
 
-        if has_role(user, 'RESPONSABLE_MARKETING', 'SUPER_ADMIN'):
+        if has_role(user, 'RESPONSABLE_MARKETING', ROLE_SUPER_ADMIN):
             matches = BlogPost.objects.filter(title__icontains=query)[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
             for post in matches:
                 results.append({
@@ -340,7 +348,7 @@ def global_search(request):
     from projects.models import Project
 
     projects = Project.objects.select_related('lead_project_manager')
-    if not has_role(user, 'DIRECTEUR_FINANCIER', 'SUPER_ADMIN'):
+    if not has_role(user, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN):
         projects = projects.filter(Q(lead_project_manager=user) | Q(memberships__user=user)).distinct()
     matches = projects.filter(name__icontains=query)[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
     for project in matches:
@@ -350,11 +358,11 @@ def global_search(request):
         })
 
     # Décaissements — Chef de Projet (their own), Finance roles (all).
-    if has_role(user, 'CHEF_DE_PROJET', 'DIRECTEUR_FINANCIER', 'COMPTABLE', 'SUPER_ADMIN'):
+    if has_role(user, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, 'COMPTABLE', ROLE_SUPER_ADMIN):
         from finance.models import DisbursementRequest
 
         disbursements = DisbursementRequest.objects.select_related('project')
-        if not has_role(user, 'DIRECTEUR_FINANCIER', 'COMPTABLE', 'SUPER_ADMIN'):
+        if not has_role(user, ROLE_DIRECTEUR_FINANCIER, 'COMPTABLE', ROLE_SUPER_ADMIN):
             disbursements = disbursements.filter(
                 Q(project__lead_project_manager=user) | Q(requested_by=user)
             ).distinct()

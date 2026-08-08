@@ -2,21 +2,27 @@ from decimal import Decimal
 
 from rest_framework.test import APIClient, APITestCase
 
-from core.models import User
+from core.models import Role, User
+from core.constants import ROLE_RH_MANAGER, ROLE_DEVELOPER
 from hr.models import EmployeeProfile
+
+
+def _give_role(user, name):
+    role, _ = Role.objects.get_or_create(name=name)
+    user.roles.add(role)
+    return role
 
 
 class EmployeeProfileViewSetTests(APITestCase):
     def setUp(self):
-        # firestore_role is never persisted — see projects/tests.py comment.
         self.hr_user = User.objects.create(email='rh@sokensdigital.com', first_name='RH')
-        self.hr_user.firestore_role = 'RESPONSABLE_RH'
+        _give_role(self.hr_user, ROLE_RH_MANAGER)
 
         self.dev_user = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.dev_user.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.dev_user, ROLE_DEVELOPER)
 
         self.other_dev = User.objects.create(email='dev2@sokensdigital.com', first_name='Dev2')
-        self.other_dev.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.other_dev, ROLE_DEVELOPER)
 
         self.dev_profile = EmployeeProfile.objects.create(
             user=self.dev_user, position='Développeur Backend', gross_monthly_salary=Decimal('600000')

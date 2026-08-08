@@ -6,6 +6,7 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -23,11 +24,11 @@ from core.permissions import (
 )
 
 from .models import (
-    Client, ClientInteraction, ClientDocument, EmployeeDocument,
+    Client, Contact, ClientInteraction, ClientDocument, EmployeeDocument,
     LeaveRequest, CompanyAsset, AdministrativeRecord, ContractGenerator,
 )
 from .serializers import (
-    ClientSerializer, ClientListSerializer, ClientInteractionSerializer,
+    ClientSerializer, ClientListSerializer, ContactSerializer, ClientInteractionSerializer,
     ClientDocumentSerializer, EmployeeDocumentSerializer, LeaveRequestSerializer,
     CompanyAssetSerializer, AdministrativeRecordSerializer, ContractGeneratorSerializer,
 )
@@ -118,6 +119,28 @@ class ClientViewSet(viewsets.ModelViewSet):
             ip_address=request.META.get('REMOTE_ADDR'),
         )
         return Response({'status': 'archived'})
+
+
+# ---------------------------------------------------------------------------
+# CRM — Contacts
+# ---------------------------------------------------------------------------
+
+class ContactViewSet(viewsets.ModelViewSet):
+    """Interlocuteurs d'un client (nested sous /clients/{id}/contacts/)."""
+    serializer_class = ContactSerializer
+
+    def get_queryset(self):
+        client_pk = self.kwargs.get('client_pk')
+        if not _accessible_clients_qs(self.request.user).filter(pk=client_pk).exists():
+            return Contact.objects.none()
+        return Contact.objects.filter(client_id=client_pk)
+
+    def perform_create(self, serializer):
+        client_pk = self.kwargs.get('client_pk')
+        if not _accessible_clients_qs(self.request.user).filter(pk=client_pk).exists():
+            raise PermissionDenied("Vous n'avez pas accès à ce client.")
+        client = get_object_or_404(Client, pk=client_pk)
+        serializer.save(client=client)
 
 
 # ---------------------------------------------------------------------------
@@ -254,6 +277,69 @@ class EmployeeDocumentViewSet(viewsets.ModelViewSet):
             return qs
         # Tout autre utilisateur : seulement ses propres documents
         return qs.filter(user=user)
+
+
+class PayrollValidationView(APIView):
+    """
+    Passerelle externe (cahier des charges §2 — "Validation du Module Paie").
+
+    La paie est produite par le module RH externe (``hr.Payslip``), hors
+    périmètre du département Administration. Ce point de contact est la
+    seule responsabilité d'Administration dans ce flux : sur déclenchement
+    d'un membre du pôle, importer en masse les bulletins d'une période
+    (déjà générés côté RH) dans ``EmployeeDocument`` (point 2.5), pour
+    centraliser l'accès collaborateur au même endroit que ses autres
+    documents RH.
+
+    N'implémente PAS la génération du PDF ni son chiffrement — ``hr.Payslip.
+    file_url`` est déjà produit par le module externe ; seul le nom stocké
+    dans ``EmployeeDocument`` est chiffré (AES, cf. modèle), cohérent avec
+    le reste du dossier RH.
+    """
+    permission_classes = [permissions.IsAuthenticated, (IsAdmin | IsRHManager)]
+
+    def post(self, request):
+        from hr.models import Payslip
+
+        month = request.data.get('period_month')
+        year = request.data.get('period_year')
+        if not month or not year:
+            return Response(
+                {'detail': 'period_month et period_year requis.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payslips = Payslip.objects.filter(
+            period_month=month, period_year=year,
+        ).select_related('employee__user')
+
+        created = []
+        for payslip in payslips:
+            target_user = payslip.employee.user
+            exists = EmployeeDocument.objects.filter(
+                user=target_user,
+                document_type=EmployeeDocument.DocumentType.FICHE_PAIE,
+                file_path=payslip.file_url,
+            ).exists()
+            if exists:
+                continue
+            doc = EmployeeDocument.objects.create(
+                user=target_user,
+                document_name=f'Fiche de paie {month}/{year}',
+                file_path=payslip.file_url,
+                document_type=EmployeeDocument.DocumentType.FICHE_PAIE,
+            )
+            created.append(str(doc.pk))
+
+        AuditLog.objects.log_action(
+            user=request.user,
+            action='PAYROLL_VALIDATION_IMPORT',
+            entity_type='EmployeeDocument',
+            entity_id=f'{year}-{month}',
+            details={'period_month': month, 'period_year': year, 'imported': len(created)},
+            ip_address=request.META.get('REMOTE_ADDR'),
+        )
+        return Response({'status': 'validated', 'imported_count': len(created)})
 
 
 # ---------------------------------------------------------------------------
@@ -476,6 +562,8 @@ class SignatureWebhookView(APIView):
     """
     permission_classes = []
     authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'webhook'
 
     def post(self, request):
         secret = getattr(settings, 'SIGNATURE_WEBHOOK_SECRET', '')

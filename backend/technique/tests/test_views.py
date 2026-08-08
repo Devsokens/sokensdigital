@@ -83,16 +83,28 @@ class ViewTests(APITestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_project_manage_members_non_manager_forbidden(self):
-        """Un ChefProjet qui ne gère pas ce projet ne peut pas gérer ses membres."""
+        """Un ChefProjet qui ne gère pas ce projet ne peut pas gérer ses membres —
+        404 et non 403 : il n'est ni manager ni membre, donc hors de son
+        queryset (get_queryset le filtre avant même d'atteindre l'action)."""
         other_pm = UserFactory()
         other_pm.roles.add(self.pm_role)
         self.client.force_authenticate(user=other_pm)
         url = reverse('project-manage-members', kwargs={'pk': self.project.pk})
         response = self.client.post(url, {'user_ids': [str(self.dev.id)]}, format='json')
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     def test_project_manage_members_dev_forbidden(self):
-        """Un Développeur ne peut pas gérer les membres d'un projet."""
+        """Un Développeur ne peut pas gérer les membres d'un projet — 404 s'il
+        n'est pas membre du projet (hors queryset)."""
+        self.client.force_authenticate(user=self.dev)
+        url = reverse('project-manage-members', kwargs={'pk': self.project.pk})
+        response = self.client.post(url, {'user_ids': [str(self.dev.id)]}, format='json')
+        self.assertEqual(response.status_code, 404)
+
+    def test_project_manage_members_dev_member_forbidden(self):
+        """Un Développeur MEMBRE du projet ne peut pas non plus gérer ses
+        membres (rôle insuffisant, pas un problème de visibilité)."""
+        self.project.members.add(self.dev)
         self.client.force_authenticate(user=self.dev)
         url = reverse('project-manage-members', kwargs={'pk': self.project.pk})
         response = self.client.post(url, {'user_ids': [str(self.dev.id)]}, format='json')
@@ -148,9 +160,21 @@ class ViewTests(APITestCase):
     # --- Tests RBAC ajoutés (pass 1) ---
 
     def test_project_update_pm_not_manager_forbidden(self):
-        """Un Chef de Projet qui ne gère pas ce projet ne peut pas le modifier."""
+        """Un Chef de Projet qui ne gère pas ce projet ne peut pas le modifier —
+        404 : hors de son queryset (ni manager, ni membre)."""
         other_pm = UserFactory()
         other_pm.roles.add(self.pm_role)
+        self.client.force_authenticate(user=other_pm)
+        url = reverse('project-detail', kwargs={'pk': self.project.pk})
+        response = self.client.patch(url, {'name': 'Hacked'})
+        self.assertEqual(response.status_code, 404)
+
+    def test_project_update_pm_member_but_not_manager_forbidden(self):
+        """Un Chef de Projet MEMBRE (mais pas manager) du projet ne peut pas
+        le modifier non plus — 403, refus explicite dans perform_update."""
+        other_pm = UserFactory()
+        other_pm.roles.add(self.pm_role)
+        self.project.members.add(other_pm)
         self.client.force_authenticate(user=other_pm)
         url = reverse('project-detail', kwargs={'pk': self.project.pk})
         response = self.client.patch(url, {'name': 'Hacked'})

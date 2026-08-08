@@ -2,7 +2,7 @@ import factory
 from factory.django import DjangoModelFactory
 from core.models import User
 from administration.models import (
-    Client, ClientInteraction, ClientDocument, EmployeeDocument,
+    Client, Contact, ClientInteraction, ClientDocument, EmployeeDocument,
     LeaveRequest, CompanyAsset, AdministrativeRecord, ContractGenerator
 )
 from django.utils import timezone
@@ -19,6 +19,13 @@ class ClientFactory(DjangoModelFactory):
     company_name = factory.Sequence(lambda n: f"Company {n}")
     siret = factory.Sequence(lambda n: f"{n:014d}")
     status = Client.Status.PROSPECT
+
+class ContactFactory(DjangoModelFactory):
+    class Meta:
+        model = Contact
+    client = factory.SubFactory(ClientFactory)
+    first_name = "Jean"
+    last_name = "Dupont"
 
 class ClientInteractionFactory(DjangoModelFactory):
     class Meta:

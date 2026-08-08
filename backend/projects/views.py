@@ -6,11 +6,12 @@ from rest_framework.response import Response
 
 from core.firestore_client import set_chat_room_members, upsert_chat_room
 from core.permissions import has_role
+from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER
 from projects.models import Project, ProjectMember, Timesheet
 from projects.serializers import ProjectMemberSerializer, ProjectSerializer, TimesheetSerializer
 
-MANAGER_ROLES = ('CHEF_DE_PROJET',)
-WIDE_READ_ROLES = ('DIRECTEUR_FINANCIER',)
+MANAGER_ROLES = (ROLE_PROJECT_MANAGER,)
+WIDE_READ_ROLES = (ROLE_DIRECTEUR_FINANCIER,)
 
 
 class IsProjectManagerOrReadOnly(permissions.BasePermission):
@@ -29,7 +30,7 @@ class IsProjectManagerOrReadOnly(permissions.BasePermission):
                 or obj.memberships.filter(user=request.user).exists()
                 or has_role(request.user, *WIDE_READ_ROLES)
             )
-        return obj.lead_project_manager_id == request.user.id or has_role(request.user, 'SUPER_ADMIN')
+        return obj.lead_project_manager_id == request.user.id or has_role(request.user, ROLE_SUPER_ADMIN)
 
 
 @extend_schema_view(
@@ -87,7 +88,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='members')
     def add_member(self, request, pk=None):
         project = self.get_object()
-        if not (project.lead_project_manager_id == request.user.id or has_role(request.user, 'SUPER_ADMIN')):
+        if not (project.lead_project_manager_id == request.user.id or has_role(request.user, ROLE_SUPER_ADMIN)):
             return Response(status=status.HTTP_403_FORBIDDEN)
         serializer = ProjectMemberSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -99,7 +100,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['delete'], url_path=r'members/(?P<membership_id>[^/.]+)')
     def remove_member(self, request, pk=None, membership_id=None):
         project = self.get_object()
-        if not (project.lead_project_manager_id == request.user.id or has_role(request.user, 'SUPER_ADMIN')):
+        if not (project.lead_project_manager_id == request.user.id or has_role(request.user, ROLE_SUPER_ADMIN)):
             return Response(status=status.HTTP_403_FORBIDDEN)
         membership = ProjectMember.objects.filter(id=membership_id, project=project).first()
         if not membership:
@@ -111,7 +112,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def _is_lead_or_admin(self, request, project):
-        return project.lead_project_manager_id == request.user.id or has_role(request.user, 'SUPER_ADMIN')
+        return project.lead_project_manager_id == request.user.id or has_role(request.user, ROLE_SUPER_ADMIN)
 
     def _is_project_member(self, request, project):
         return (

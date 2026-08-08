@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.db import transaction
 from django.db.models import Sum
 
+from core.celery_utils import safe_dispatch
 from core.models import AuditLog, Notification
 from .models import Project, Task, TimeEntry, Ticket, ProjectStatus
 
@@ -45,9 +46,11 @@ def project_status_changed(sender, instance, created, **kwargs):
 
     old_status = getattr(instance, '_old_status', None)
     if old_status and old_status != instance.status:
-        # AuditLog
+        # AuditLog — utilise l'utilisateur ayant réellement déclenché le
+        # changement (posé par la vue avant .save()) ; fallback sur le PM
+        # si le changement vient d'ailleurs (admin Django, script, etc.).
         AuditLog.objects.log_action(
-            user=instance.project_manager,
+            user=getattr(instance, '_audit_user', None) or instance.project_manager,
             action=f'STATUS_CHANGE:{old_status}->{instance.status}',
             entity_type='Project',
             entity_id=str(instance.pk),
@@ -182,16 +185,14 @@ def ticket_track_old_status(sender, instance, **kwargs):
 def ticket_resolved_handler(sender, instance, created, **kwargs):
     """
     Quand un ticket passe à RESOLVED :
-    - Programme la fermeture auto après 48h (Celery)
-    - Placeholder pour l'email de confirmation client
+    - Envoie l'email de confirmation au client
+    - Programme la fermeture auto après 48h (Celery), sauf réponse entre-temps
     """
     if created:
         return
 
     old_status = getattr(instance, '_old_status', None)
     if old_status and old_status != instance.status and instance.status == 'RESOLVED':
-        from .tasks import auto_close_ticket
-        auto_close_ticket.apply_async(
-            (str(instance.pk),),
-            countdown=48 * 3600,  # 48 heures
-        )
+        from .tasks import auto_close_ticket, send_ticket_resolution_email
+        safe_dispatch(send_ticket_resolution_email, (str(instance.pk),))
+        safe_dispatch(auto_close_ticket, (str(instance.pk),), countdown=48 * 3600)

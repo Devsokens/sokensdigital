@@ -32,4 +32,5 @@ urlpatterns = [
     path('api/v1/public/', include(marketing_public_urlpatterns)),
     path('api/administration/', include('administration.urls')),
     path('api/technique/', include('technique.urls')),
+    path('api/messaging/', include('messaging.urls')),
 ]
