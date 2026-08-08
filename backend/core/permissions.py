@@ -87,6 +87,20 @@ class IsRHManager(permissions.BasePermission):
         return _user_has_role(request.user, 'Responsable RH')
 
 
+class IsConsultant(permissions.BasePermission):
+    """Accès pour Consultant."""
+
+    def has_permission(self, request, view):
+        return _user_has_role(request.user, 'Consultant')
+
+
+class IsSupportClient(permissions.BasePermission):
+    """Accès pour Support Client."""
+
+    def has_permission(self, request, view):
+        return _user_has_role(request.user, 'Support Client')
+
+
 class IsAdminOrReadOnly(permissions.BasePermission):
     """Admin/Super-Admin en écriture, tout utilisateur authentifié en lecture."""
 
