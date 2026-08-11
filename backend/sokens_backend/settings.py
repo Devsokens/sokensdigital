@@ -63,6 +63,29 @@ _render_host = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if _render_host and _render_host not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(_render_host)
 
+# Django's own default logging config only wires the console handler when
+# DEBUG=True, so unhandled 500s were vanishing silently in production (no
+# ADMINS/email backend configured either) — nothing in Render's logs to
+# debug from. This makes every unhandled request exception print its full
+# traceback to stdout regardless of DEBUG, which is what platform log tools
+# (Render, etc.) capture.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+}
+
 
 # Application definition
 
