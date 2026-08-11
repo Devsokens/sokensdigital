@@ -7,8 +7,11 @@ from rest_framework.response import Response
 from core.firestore_client import set_chat_room_members, upsert_chat_room
 from core.permissions import has_role
 from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER
-from projects.models import Project, ProjectMember, Timesheet
-from projects.serializers import ProjectMemberSerializer, ProjectSerializer, TimesheetSerializer
+from projects.models import Project, ProjectMember, ProjectTask, ProjectTaskComment, Timesheet
+from projects.serializers import (
+    ProjectMemberSerializer, ProjectSerializer, ProjectTaskCommentSerializer, ProjectTaskSerializer,
+    TimesheetSerializer,
+)
 
 MANAGER_ROLES = (ROLE_PROJECT_MANAGER,)
 WIDE_READ_ROLES = (ROLE_DIRECTEUR_FINANCIER,)
@@ -49,10 +52,18 @@ class ProjectViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return Project.objects.none()
         user = self.request.user
-        qs = Project.objects.select_related('lead_project_manager').prefetch_related('memberships__user')
+        qs = Project.objects.select_related('lead_project_manager').prefetch_related(
+            'memberships__user', 'pinned_by', 'tasks',
+        )
         if has_role(user, *WIDE_READ_ROLES):
-            return qs
-        return qs.filter(Q(lead_project_manager=user) | Q(memberships__user=user)).distinct()
+            qs = qs
+        else:
+            qs = qs.filter(Q(lead_project_manager=user) | Q(memberships__user=user)).distinct()
+
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(name__icontains=search)
+        return qs
 
     def perform_create(self, serializer):
         lead = serializer.validated_data.get('lead_project_manager') or self.request.user
@@ -176,3 +187,100 @@ class ProjectViewSet(viewsets.ModelViewSet):
         timesheet.status = new_status
         timesheet.save(update_fields=['status'])
         return Response(TimesheetSerializer(timesheet).data)
+
+    @extend_schema(
+        tags=['Technique & Projets'],
+        summary='Toggle the requesting user\'s personal pin on a project',
+        request=None,
+        responses={200: {'type': 'object', 'properties': {'is_pinned': {'type': 'boolean'}}}},
+    )
+    @action(detail=True, methods=['post'], url_path='pin', permission_classes=[permissions.IsAuthenticated])
+    def toggle_pin(self, request, pk=None):
+        project = self.get_object()
+        if project.pinned_by.filter(id=request.user.id).exists():
+            project.pinned_by.remove(request.user)
+            pinned = False
+        else:
+            project.pinned_by.add(request.user)
+            pinned = True
+        return Response({'is_pinned': pinned})
+
+    @extend_schema(
+        tags=['Technique & Projets'],
+        summary='List / add checklist tasks for a project',
+        description='Any project member can view and add checklist tasks.',
+        request=ProjectTaskSerializer,
+        responses={200: ProjectTaskSerializer(many=True), 201: ProjectTaskSerializer},
+    )
+    @action(detail=True, methods=['get', 'post'], url_path='tasks', permission_classes=[permissions.IsAuthenticated])
+    def tasks(self, request, pk=None):
+        project = self.get_object()
+        if not self._is_project_member(request, project):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        if request.method == 'POST':
+            serializer = ProjectTaskSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(project=project)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        qs = project.tasks.prefetch_related('assignees')
+        return Response(ProjectTaskSerializer(qs, many=True).data)
+
+    @extend_schema(
+        tags=['Technique & Projets'],
+        summary='Update or delete a checklist task',
+        description='Any project member can toggle/edit or delete a checklist task.',
+        request=ProjectTaskSerializer,
+        responses={200: ProjectTaskSerializer},
+    )
+    @action(
+        detail=True, methods=['patch', 'delete'], url_path=r'tasks/(?P<task_id>[^/.]+)',
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def task_detail(self, request, pk=None, task_id=None):
+        project = self.get_object()
+        if not self._is_project_member(request, project):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        task = project.tasks.filter(id=task_id).first()
+        if not task:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'DELETE':
+            task.delete(user=request.user)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        serializer = ProjectTaskSerializer(task, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @extend_schema(
+        tags=['Technique & Projets'],
+        summary='List / add comments on a checklist task',
+        description='Any project member can view and post comments on a task.',
+        request=ProjectTaskCommentSerializer,
+        responses={200: ProjectTaskCommentSerializer(many=True), 201: ProjectTaskCommentSerializer},
+    )
+    @action(
+        detail=True, methods=['get', 'post'], url_path=r'tasks/(?P<task_id>[^/.]+)/comments',
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def task_comments(self, request, pk=None, task_id=None):
+        project = self.get_object()
+        if not self._is_project_member(request, project):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        task = project.tasks.filter(id=task_id).first()
+        if not task:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'POST':
+            serializer = ProjectTaskCommentSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(task=task, author=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        qs = task.comments.select_related('author')
+        return Response(ProjectTaskCommentSerializer(qs, many=True).data)

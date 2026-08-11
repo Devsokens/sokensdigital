@@ -212,3 +212,156 @@ class TimesheetTests(APITestCase):
             {'date': '2026-07-20', 'hours': '3'}, format='json',
         )
         self.assertEqual(response.status_code, 400)
+
+
+class ProjectPinTests(APITestCase):
+    def setUp(self):
+        self.chef = User.objects.create(email='chef@sokensdigital.com', first_name='Chef')
+        _give_role(self.chef, ROLE_PROJECT_MANAGER)
+
+        self.dev = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
+        _give_role(self.dev, ROLE_DEVELOPER)
+
+        self.outsider = User.objects.create(email='outsider@sokensdigital.com', first_name='Outsider')
+        _give_role(self.outsider, ROLE_DEVELOPER)
+
+        self.project = Project.objects.create(name='Refonte site vitrine', lead_project_manager=self.chef)
+        ProjectMember.objects.create(project=self.project, user=self.dev)
+
+        self.client_chef = APIClient()
+        self.client_chef.force_authenticate(user=self.chef)
+
+        self.client_dev = APIClient()
+        self.client_dev.force_authenticate(user=self.dev)
+
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def test_member_can_pin_and_unpin(self):
+        response = self.client_dev.post(f'/api/v1/projects/{self.project.id}/pin/')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['is_pinned'])
+        self.assertTrue(self.project.pinned_by.filter(id=self.dev.id).exists())
+
+        response = self.client_dev.post(f'/api/v1/projects/{self.project.id}/pin/')
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()['is_pinned'])
+        self.assertFalse(self.project.pinned_by.filter(id=self.dev.id).exists())
+
+    def test_pin_is_per_user(self):
+        self.client_chef.post(f'/api/v1/projects/{self.project.id}/pin/')
+        list_for_dev = self.client_dev.get('/api/v1/projects/').json()['results']
+        dev_view = next(p for p in list_for_dev if p['id'] == str(self.project.id))
+        self.assertFalse(dev_view['is_pinned'])
+
+    def test_non_member_cannot_pin(self):
+        response = self.client_outsider.post(f'/api/v1/projects/{self.project.id}/pin/')
+        self.assertEqual(response.status_code, 404)
+
+
+class ProjectTaskTests(APITestCase):
+    def setUp(self):
+        self.chef = User.objects.create(email='chef@sokensdigital.com', first_name='Chef')
+        _give_role(self.chef, ROLE_PROJECT_MANAGER)
+
+        self.dev = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
+        _give_role(self.dev, ROLE_DEVELOPER)
+
+        self.outsider = User.objects.create(email='outsider@sokensdigital.com', first_name='Outsider')
+        _give_role(self.outsider, ROLE_DEVELOPER)
+
+        self.project = Project.objects.create(name='Refonte site vitrine', lead_project_manager=self.chef)
+        ProjectMember.objects.create(project=self.project, user=self.dev)
+
+        self.client_chef = APIClient()
+        self.client_chef.force_authenticate(user=self.chef)
+
+        self.client_dev = APIClient()
+        self.client_dev.force_authenticate(user=self.dev)
+
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def test_member_can_add_and_list_tasks(self):
+        response = self.client_dev.post(
+            f'/api/v1/projects/{self.project.id}/tasks/',
+            {'title': 'Maquettes', 'due_date': '2026-08-20', 'assignee_ids': [str(self.dev.id)]},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['status'], 'TODO')
+        self.assertEqual(response.json()['due_date'], '2026-08-20')
+        self.assertEqual(response.json()['assignees'][0]['id'], str(self.dev.id))
+
+        response = self.client_chef.get(f'/api/v1/projects/{self.project.id}/tasks/')
+        self.assertEqual(len(response.json()), 1)
+
+    def test_non_member_cannot_add_task(self):
+        response = self.client_outsider.post(
+            f'/api/v1/projects/{self.project.id}/tasks/', {'title': 'Interdit'}, format='json',
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_member_can_move_task_across_statuses(self):
+        from projects.models import ProjectTask
+        task = ProjectTask.objects.create(project=self.project, title='Maquettes')
+
+        response = self.client_dev.patch(
+            f'/api/v1/projects/{self.project.id}/tasks/{task.id}/',
+            {'status': 'IN_REVIEW', 'progress': 80}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        task.refresh_from_db()
+        self.assertEqual(task.status, 'IN_REVIEW')
+        self.assertEqual(task.progress, 80)
+
+    def test_progress_out_of_range_rejected(self):
+        from projects.models import ProjectTask
+        task = ProjectTask.objects.create(project=self.project, title='Maquettes')
+
+        response = self.client_dev.patch(
+            f'/api/v1/projects/{self.project.id}/tasks/{task.id}/', {'progress': 150}, format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_member_can_delete_task(self):
+        from projects.models import ProjectTask
+        task = ProjectTask.objects.create(project=self.project, title='Maquettes')
+
+        response = self.client_chef.delete(f'/api/v1/projects/{self.project.id}/tasks/{task.id}/')
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(ProjectTask.objects.filter(id=task.id).exists())
+
+    def test_project_list_reports_tasks_progress(self):
+        from projects.models import ProjectTask
+        ProjectTask.objects.create(project=self.project, title='Fait', status='DONE')
+        ProjectTask.objects.create(project=self.project, title='Pas fait', status='TODO')
+
+        results = self.client_chef.get('/api/v1/projects/').json()['results']
+        entry = next(p for p in results if p['id'] == str(self.project.id))
+        self.assertEqual(entry['tasks_total'], 2)
+        self.assertEqual(entry['tasks_done'], 1)
+
+    def test_member_can_post_and_list_comments(self):
+        from projects.models import ProjectTask
+        task = ProjectTask.objects.create(project=self.project, title='Maquettes')
+
+        response = self.client_dev.post(
+            f'/api/v1/projects/{self.project.id}/tasks/{task.id}/comments/',
+            {'body': 'Ça avance bien'}, format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['author']['id'], str(self.dev.id))
+
+        response = self.client_chef.get(f'/api/v1/projects/{self.project.id}/tasks/{task.id}/comments/')
+        self.assertEqual(len(response.json()), 1)
+
+    def test_non_member_cannot_post_comment(self):
+        from projects.models import ProjectTask
+        task = ProjectTask.objects.create(project=self.project, title='Maquettes')
+
+        response = self.client_outsider.post(
+            f'/api/v1/projects/{self.project.id}/tasks/{task.id}/comments/',
+            {'body': 'Interdit'}, format='json',
+        )
+        self.assertEqual(response.status_code, 404)
