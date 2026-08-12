@@ -115,6 +115,9 @@ class Timesheet(LoggedModel):
         REJETE = 'REJETE', 'Rejeté'
 
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='timesheets')
+    task = models.ForeignKey(
+        ProjectTask, on_delete=models.SET_NULL, null=True, blank=True, related_name='timesheets',
+    )
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='timesheets')
     date = models.DateField()
     hours = models.DecimalField(max_digits=4, decimal_places=2)
@@ -128,7 +131,11 @@ class Timesheet(LoggedModel):
             models.Index(fields=['user', 'date']),
         ]
         constraints = [
-            models.UniqueConstraint(fields=['project', 'user', 'date'], name='unique_timesheet_per_day'),
+            # NULL task values don't collide under a unique constraint (SQL
+            # NULL <> NULL), so entries with no task attributed can still
+            # stack per (project, user, date) — only same-task duplicates
+            # for the same day are rejected.
+            models.UniqueConstraint(fields=['project', 'task', 'user', 'date'], name='unique_timesheet_per_task_per_day'),
         ]
 
     def __str__(self):

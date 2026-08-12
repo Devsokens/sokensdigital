@@ -1,8 +1,12 @@
+from datetime import date, timedelta
+
 from django.db.models import Q
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from django.utils import timezone
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from core.firestore_client import set_chat_room_members, upsert_chat_room
 from core.permissions import has_role
@@ -10,7 +14,7 @@ from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEU
 from projects.models import Project, ProjectMember, ProjectTask, ProjectTaskComment, Timesheet
 from projects.serializers import (
     ProjectMemberSerializer, ProjectSerializer, ProjectTaskCommentSerializer, ProjectTaskSerializer,
-    TimesheetSerializer,
+    ProjectUserBriefSerializer, TimesheetSerializer,
 )
 
 MANAGER_ROLES = (ROLE_PROJECT_MANAGER,)
@@ -145,19 +149,20 @@ class ProjectViewSet(viewsets.ModelViewSet):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         if request.method == 'POST':
-            serializer = TimesheetSerializer(data=request.data)
+            serializer = TimesheetSerializer(data=request.data, context={'project': project})
             serializer.is_valid(raise_exception=True)
             if Timesheet.objects.filter(
-                project=project, user=request.user, date=serializer.validated_data['date']
+                project=project, user=request.user,
+                date=serializer.validated_data['date'], task=serializer.validated_data.get('task'),
             ).exists():
                 return Response(
-                    {'detail': 'Une feuille de temps existe déjà pour cette date sur ce projet.'},
+                    {'detail': 'Une feuille de temps existe déjà pour cette date sur cette tâche.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             serializer.save(project=project, user=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-        qs = Timesheet.objects.filter(project=project).select_related('user')
+        qs = Timesheet.objects.filter(project=project).select_related('user', 'task')
         if not self._is_lead_or_admin(request, project):
             qs = qs.filter(user=request.user)
         return Response(TimesheetSerializer(qs, many=True).data)
@@ -284,3 +289,151 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
         qs = task.comments.select_related('author')
         return Response(ProjectTaskCommentSerializer(qs, many=True).data)
+
+
+def _visible_projects_for(user):
+    """Projects a user can see team-wide timesheet data for: everything
+    they lead, or every project for wide-read / Super-Admin roles."""
+    if has_role(user, *WIDE_READ_ROLES, ROLE_SUPER_ADMIN):
+        return Project.objects.all()
+    return Project.objects.filter(lead_project_manager=user)
+
+
+def _week_start(value):
+    """Monday of the week containing `value` (an ISO date string), or of
+    the current week if `value` is missing/invalid."""
+    if value:
+        try:
+            d = date.fromisoformat(value)
+        except ValueError:
+            d = timezone.now().date()
+    else:
+        d = timezone.now().date()
+    return d - timedelta(days=d.weekday())
+
+
+@extend_schema(
+    tags=['Technique & Projets'],
+    summary='Weekly team timesheet grid',
+    description=(
+        'Per-member, per-task, per-day hours for one week, across every project the '
+        'requester leads (or every project for wide-read roles). Read-only overview '
+        'used by the Team Timesheet screen.'
+    ),
+    parameters=[OpenApiParameter('week_start', str, description='Monday of the target week (YYYY-MM-DD). Defaults to the current week.')],
+)
+class TeamTimesheetView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        projects = _visible_projects_for(request.user)
+        week_start = _week_start(request.query_params.get('week_start'))
+        days = [week_start + timedelta(days=i) for i in range(7)]
+
+        entries = (
+            Timesheet.objects.filter(project__in=projects, date__range=(days[0], days[-1]))
+            .select_related('user', 'task', 'project')
+            .order_by('user__first_name', 'user__last_name', 'date')
+        )
+
+        members = {}
+        day_status_counts = {}
+        for entry in entries:
+            u = entry.user
+            member = members.setdefault(u.id, {
+                'user': ProjectUserBriefSerializer(u).data,
+                'daily_totals': {d.isoformat(): 0 for d in days},
+                'tasks': {},
+            })
+            key = (entry.project_id, entry.task_id)
+            task_row = member['tasks'].setdefault(key, {
+                'project_name': entry.project.name,
+                'task_title': entry.task.title if entry.task else None,
+                'daily_hours': {d.isoformat(): 0 for d in days},
+                'total': 0,
+            })
+            iso = entry.date.isoformat()
+            task_row['daily_hours'][iso] += entry.hours
+            task_row['total'] += entry.hours
+            member['daily_totals'][iso] += entry.hours
+
+            counts = day_status_counts.setdefault(u.id, {}).setdefault(iso, {'SOUMIS': 0, 'VALIDE': 0, 'REJETE': 0})
+            counts[entry.status] += 1
+
+        results = []
+        for user_id, member in members.items():
+            daily_status = {}
+            week_has_rejected = week_has_pending = week_has_entries = False
+            for d in days:
+                iso = d.isoformat()
+                counts = day_status_counts.get(user_id, {}).get(iso)
+                if not counts or sum(counts.values()) == 0:
+                    daily_status[iso] = None
+                    continue
+                week_has_entries = True
+                if counts['REJETE'] > 0:
+                    daily_status[iso] = 'REJETE'
+                    week_has_rejected = True
+                elif counts['SOUMIS'] > 0:
+                    daily_status[iso] = 'SOUMIS'
+                    week_has_pending = True
+                else:
+                    daily_status[iso] = 'VALIDE'
+
+            if week_has_rejected:
+                week_status = 'REJECTED'
+            elif week_has_pending:
+                week_status = 'PARTIAL'
+            elif week_has_entries:
+                week_status = 'APPROVED'
+            else:
+                week_status = 'PARTIAL'
+
+            results.append({
+                'user': member['user'],
+                'week_status': week_status,
+                'daily_totals': member['daily_totals'],
+                'daily_status': daily_status,
+                'week_total': sum(member['daily_totals'].values()),
+                'tasks': list(member['tasks'].values()),
+            })
+
+        return Response({
+            'week_start': days[0].isoformat(),
+            'days': [d.isoformat() for d in days],
+            'members': results,
+        })
+
+
+@extend_schema(
+    tags=['Technique & Projets'],
+    summary="Approve or reject a member's submitted hours for one day",
+    description=(
+        'Bulk-updates every SOUMIS entry for that user/date, across projects the '
+        'requester can see, in one call — mirrors approving a whole day in the grid.'
+    ),
+    request={'application/json': {'type': 'object', 'properties': {
+        'user_id': {'type': 'string'}, 'date': {'type': 'string', 'format': 'date'},
+        'status': {'type': 'string', 'enum': ['VALIDE', 'REJETE']},
+    }}},
+    responses={200: {'type': 'object', 'properties': {'updated': {'type': 'integer'}}}},
+)
+class TeamTimesheetDayActionView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user_id = request.data.get('user_id')
+        date_str = request.data.get('date')
+        new_status = request.data.get('status')
+        if not user_id or not date_str:
+            return Response({'detail': 'user_id et date sont requis.'}, status=status.HTTP_400_BAD_REQUEST)
+        if new_status not in (Timesheet.Status.VALIDE, Timesheet.Status.REJETE):
+            return Response({'detail': 'status doit être VALIDE ou REJETE.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        projects = _visible_projects_for(request.user)
+        updated = Timesheet.objects.filter(
+            project__in=projects, user_id=user_id, date=date_str, status=Timesheet.Status.SOUMIS,
+        ).update(status=new_status)
+        if updated == 0:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response({'updated': updated})

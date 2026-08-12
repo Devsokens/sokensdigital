@@ -365,3 +365,96 @@ class ProjectTaskTests(APITestCase):
             {'body': 'Interdit'}, format='json',
         )
         self.assertEqual(response.status_code, 404)
+
+
+class TeamTimesheetTests(APITestCase):
+    def setUp(self):
+        from datetime import date, timedelta
+        from projects.models import ProjectTask, Timesheet
+
+        self.chef = User.objects.create(email='chef@sokensdigital.com', first_name='Chef')
+        _give_role(self.chef, ROLE_PROJECT_MANAGER)
+
+        self.dev = User.objects.create(email='dev@sokensdigital.com', first_name='Dev', last_name='Un')
+        _give_role(self.dev, ROLE_DEVELOPER)
+
+        self.outsider = User.objects.create(email='outsider@sokensdigital.com', first_name='Outsider')
+        _give_role(self.outsider, ROLE_DEVELOPER)
+
+        self.project = Project.objects.create(name='Refonte site vitrine', lead_project_manager=self.chef)
+        ProjectMember.objects.create(project=self.project, user=self.dev)
+        self.task = ProjectTask.objects.create(project=self.project, title='Maquettes')
+
+        self.monday = date.today() - timedelta(days=date.today().weekday())
+        self.tue = self.monday + timedelta(days=1)
+
+        self.entry_soumis = Timesheet.objects.create(
+            project=self.project, task=self.task, user=self.dev, date=self.monday, hours='3.50',
+        )
+        self.entry_valide = Timesheet.objects.create(
+            project=self.project, task=None, user=self.dev, date=self.tue, hours='4.00', status='VALIDE',
+        )
+
+        self.client_chef = APIClient()
+        self.client_chef.force_authenticate(user=self.chef)
+
+        self.client_dev = APIClient()
+        self.client_dev.force_authenticate(user=self.dev)
+
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def test_lead_sees_team_week(self):
+        response = self.client_chef.get(f'/api/v1/projects/timesheets/team/?week_start={self.monday.isoformat()}')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['week_start'], self.monday.isoformat())
+        self.assertEqual(len(data['days']), 7)
+
+        member = next(m for m in data['members'] if m['user']['id'] == str(self.dev.id))
+        self.assertEqual(member['week_status'], 'PARTIAL')  # one SOUMIS, one VALIDE
+        self.assertEqual(float(member['week_total']), 7.5)
+        self.assertEqual(member['daily_status'][self.monday.isoformat()], 'SOUMIS')
+        self.assertEqual(member['daily_status'][self.tue.isoformat()], 'VALIDE')
+        self.assertEqual(len(member['tasks']), 2)  # one row for the task, one for task=None
+
+    def test_non_lead_sees_no_team_data(self):
+        response = self.client_dev.get('/api/v1/projects/timesheets/team/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['members'], [])
+
+    def test_lead_can_approve_day(self):
+        response = self.client_chef.post(
+            '/api/v1/projects/timesheets/team/day-status/',
+            {'user_id': str(self.dev.id), 'date': self.monday.isoformat(), 'status': 'VALIDE'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.entry_soumis.refresh_from_db()
+        self.assertEqual(self.entry_soumis.status, 'VALIDE')
+
+    def test_non_lead_cannot_approve_day(self):
+        response = self.client_outsider.post(
+            '/api/v1/projects/timesheets/team/day-status/',
+            {'user_id': str(self.dev.id), 'date': self.monday.isoformat(), 'status': 'VALIDE'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_duplicate_entry_same_task_same_day_rejected(self):
+        response = self.client_dev.post(
+            f'/api/v1/projects/{self.project.id}/timesheets/',
+            {'date': self.monday.isoformat(), 'hours': '2', 'task_id': str(self.task.id)},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_second_task_same_day_allowed(self):
+        from projects.models import ProjectTask
+        other_task = ProjectTask.objects.create(project=self.project, title='Développement')
+        response = self.client_dev.post(
+            f'/api/v1/projects/{self.project.id}/timesheets/',
+            {'date': self.monday.isoformat(), 'hours': '2', 'task_id': str(other_task.id)},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201)

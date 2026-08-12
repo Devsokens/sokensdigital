@@ -101,13 +101,27 @@ class ProjectSerializer(serializers.ModelSerializer):
 
 class TimesheetSerializer(serializers.ModelSerializer):
     user = ProjectUserBriefSerializer(read_only=True)
+    task_id = serializers.PrimaryKeyRelatedField(
+        source='task', queryset=ProjectTask.objects.all(), write_only=True, required=False, allow_null=True,
+    )
+    task_title = serializers.CharField(source='task.title', read_only=True, default=None)
+    project_name = serializers.CharField(source='project.name', read_only=True)
 
     class Meta:
         model = Timesheet
-        fields = ['id', 'project', 'user', 'date', 'hours', 'description', 'status', 'created_at']
+        fields = [
+            'id', 'project', 'project_name', 'task_id', 'task_title', 'user',
+            'date', 'hours', 'description', 'status', 'created_at',
+        ]
         read_only_fields = ['project', 'user', 'status']
 
     def validate_hours(self, value):
         if not (0 < value <= 24):
             raise serializers.ValidationError("Le nombre d'heures doit être compris entre 0 et 24.")
         return value
+
+    def validate_task_id(self, task):
+        project = self.context.get('project') or getattr(self.instance, 'project', None)
+        if task and project and task.project_id != project.id:
+            raise serializers.ValidationError("Cette tâche n'appartient pas à ce projet.")
+        return task
