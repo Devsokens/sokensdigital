@@ -3,7 +3,8 @@ from decimal import Decimal
 
 from rest_framework.test import APIClient, APITestCase
 
-from core.models import User
+from core.constants import ROLE_COMPTABLE, ROLE_DEVELOPER, ROLE_DIRECTEUR_FINANCIER, ROLE_PROJECT_MANAGER
+from core.models import Role, User
 from finance.models import (
     Account,
     AccountingPeriod,
@@ -18,19 +19,25 @@ from finance.models import (
 from projects.models import Project
 
 
+def _give_role(user, name):
+    role, _ = Role.objects.get_or_create(name=name)
+    user.roles.add(role)
+    return role
+
+
 class DisbursementRequestViewSetTests(APITestCase):
     def setUp(self):
         self.chef_a = User.objects.create(email='chef-a@sokensdigital.com', first_name='ChefA')
-        self.chef_a.firestore_role = 'CHEF_DE_PROJET'
+        _give_role(self.chef_a, ROLE_PROJECT_MANAGER)
 
         self.chef_b = User.objects.create(email='chef-b@sokensdigital.com', first_name='ChefB')
-        self.chef_b.firestore_role = 'CHEF_DE_PROJET'
+        _give_role(self.chef_b, ROLE_PROJECT_MANAGER)
 
         self.cfo = User.objects.create(email='cfo@sokensdigital.com', first_name='CFO')
-        self.cfo.firestore_role = 'DIRECTEUR_FINANCIER'
+        _give_role(self.cfo, ROLE_DIRECTEUR_FINANCIER)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.project_a = Project.objects.create(name='Projet A', lead_project_manager=self.chef_a)
         self.project_b = Project.objects.create(name='Projet B', lead_project_manager=self.chef_b)
@@ -110,7 +117,7 @@ class DisbursementRequestViewSetTests(APITestCase):
 
     def test_cfo_can_approve_then_comptable_can_execute(self):
         self.comptable = User.objects.create(email='comptable@sokensdigital.com', first_name='Comptable')
-        self.comptable.firestore_role = 'COMPTABLE'
+        _give_role(self.comptable, ROLE_COMPTABLE)
         client_comptable = APIClient()
         client_comptable.force_authenticate(user=self.comptable)
 
@@ -141,7 +148,7 @@ class DisbursementRequestViewSetTests(APITestCase):
 
     def test_cannot_execute_before_approval(self):
         self.comptable = User.objects.create(email='comptable2@sokensdigital.com', first_name='Comptable')
-        self.comptable.firestore_role = 'COMPTABLE'
+        _give_role(self.comptable, ROLE_COMPTABLE)
         client_comptable = APIClient()
         client_comptable.force_authenticate(user=self.comptable)
 
@@ -155,9 +162,9 @@ class DisbursementRequestViewSetTests(APITestCase):
 class AccountingPeriodViewSetTests(APITestCase):
     def setUp(self):
         self.cfo = User.objects.create(email='cfo2@sokensdigital.com', first_name='CFO')
-        self.cfo.firestore_role = 'DIRECTEUR_FINANCIER'
+        _give_role(self.cfo, ROLE_DIRECTEUR_FINANCIER)
         self.comptable = User.objects.create(email='comptable3@sokensdigital.com', first_name='Comptable')
-        self.comptable.firestore_role = 'COMPTABLE'
+        _give_role(self.comptable, ROLE_COMPTABLE)
 
         self.client_cfo = APIClient()
         self.client_cfo.force_authenticate(user=self.cfo)
@@ -191,9 +198,9 @@ class AccountingPeriodViewSetTests(APITestCase):
 class JournalEntryViewSetTests(APITestCase):
     def setUp(self):
         self.comptable = User.objects.create(email='comptable4@sokensdigital.com', first_name='Comptable')
-        self.comptable.firestore_role = 'COMPTABLE'
+        _give_role(self.comptable, ROLE_COMPTABLE)
         self.outsider = User.objects.create(email='dev2@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_comptable = APIClient()
         self.client_comptable.force_authenticate(user=self.comptable)
@@ -242,7 +249,7 @@ class JournalEntryViewSetTests(APITestCase):
 class InvoiceViewSetTests(APITestCase):
     def setUp(self):
         self.comptable = User.objects.create(email='comptable5@sokensdigital.com', first_name='Comptable')
-        self.comptable.firestore_role = 'COMPTABLE'
+        _give_role(self.comptable, ROLE_COMPTABLE)
         self.client_comptable = APIClient()
         self.client_comptable.force_authenticate(user=self.comptable)
 
@@ -279,7 +286,7 @@ class InvoiceViewSetTests(APITestCase):
 class BankReconciliationTests(APITestCase):
     def setUp(self):
         self.comptable = User.objects.create(email='comptable6@sokensdigital.com', first_name='Comptable')
-        self.comptable.firestore_role = 'COMPTABLE'
+        _give_role(self.comptable, ROLE_COMPTABLE)
         self.client_comptable = APIClient()
         self.client_comptable.force_authenticate(user=self.comptable)
 
@@ -322,9 +329,9 @@ class BankReconciliationTests(APITestCase):
 class TaxDeclarationViewSetTests(APITestCase):
     def setUp(self):
         self.cfo = User.objects.create(email='cfo3@sokensdigital.com', first_name='CFO')
-        self.cfo.firestore_role = 'DIRECTEUR_FINANCIER'
+        _give_role(self.cfo, ROLE_DIRECTEUR_FINANCIER)
         self.comptable = User.objects.create(email='comptable7@sokensdigital.com', first_name='Comptable')
-        self.comptable.firestore_role = 'COMPTABLE'
+        _give_role(self.comptable, ROLE_COMPTABLE)
 
         self.client_cfo = APIClient()
         self.client_cfo.force_authenticate(user=self.cfo)
@@ -361,11 +368,11 @@ class TaxDeclarationViewSetTests(APITestCase):
 class FecExportAndDashboardTests(APITestCase):
     def setUp(self):
         self.cfo = User.objects.create(email='cfo4@sokensdigital.com', first_name='CFO')
-        self.cfo.firestore_role = 'DIRECTEUR_FINANCIER'
+        _give_role(self.cfo, ROLE_DIRECTEUR_FINANCIER)
         self.comptable = User.objects.create(email='comptable8@sokensdigital.com', first_name='Comptable')
-        self.comptable.firestore_role = 'COMPTABLE'
+        _give_role(self.comptable, ROLE_COMPTABLE)
         self.outsider = User.objects.create(email='dev3@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_cfo = APIClient()
         self.client_cfo.force_authenticate(user=self.cfo)

@@ -93,7 +93,7 @@ export function AddEmployeeSheet({ onCreated }: { onCreated: () => void }) {
     >
       <SheetTrigger
         render={
-          <Button className="gap-1.5 rounded-full px-4">
+          <Button data-tour="module-rh-employes" className="gap-1.5 rounded-full px-4">
             <Plus className="size-4" /> Ajouter un employé
           </Button>
         }

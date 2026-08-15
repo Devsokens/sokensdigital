@@ -11,6 +11,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.constants import ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_MARKETING, ROLE_COMMERCIAL, ROLE_PROJECT_MANAGER
 from core.permissions import has_role
 from core.storage import upload_image, upload_video
 from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject, SiteSettings, SocialPost
@@ -31,9 +32,9 @@ from marketing.serializers import (
     SocialPostSerializer,
 )
 
-MARKETING_ROLES = ('RESPONSABLE_MARKETING',)
-COMMERCIAL_ROLES = ('COMMERCIAL',)
-CHEF_DE_PROJET_ROLES = ('CHEF_DE_PROJET',)
+MARKETING_ROLES = (ROLE_RESPONSABLE_MARKETING,)
+COMMERCIAL_ROLES = (ROLE_COMMERCIAL,)
+CHEF_DE_PROJET_ROLES = (ROLE_PROJECT_MANAGER,)
 
 PUBLIC_LEAD_RATE_LIMIT = 3  # per IP
 PUBLIC_LEAD_RATE_WINDOW = 60  # seconds
@@ -444,11 +445,11 @@ class IsCommercialOwnerOrReadCollaborator(permissions.BasePermission):
 
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
-            return has_role(request.user, *COMMERCIAL_ROLES, *CHEF_DE_PROJET_ROLES)
-        return has_role(request.user, *COMMERCIAL_ROLES)
+            return has_role(request.user, *COMMERCIAL_ROLES, *CHEF_DE_PROJET_ROLES, ROLE_SUPER_ADMIN)
+        return has_role(request.user, *COMMERCIAL_ROLES, ROLE_SUPER_ADMIN)
 
     def has_object_permission(self, request, view, obj):
-        if getattr(request.user, 'firestore_role', None) == 'SUPER_ADMIN':
+        if has_role(request.user, ROLE_SUPER_ADMIN):
             return True
         if has_role(request.user, *CHEF_DE_PROJET_ROLES) and not has_role(request.user, *COMMERCIAL_ROLES):
             return request.method in permissions.SAFE_METHODS
@@ -471,7 +472,7 @@ class QuoteViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return Quote.objects.none()
         qs = Quote.objects.select_related('created_by', 'lead').prefetch_related('lines')
-        if has_role(self.request.user, *COMMERCIAL_ROLES) and not has_role(self.request.user, 'SUPER_ADMIN'):
+        if has_role(self.request.user, *COMMERCIAL_ROLES) and not has_role(self.request.user, ROLE_SUPER_ADMIN):
             return qs.filter(created_by=self.request.user)
         return qs
 
@@ -499,7 +500,7 @@ class QuoteViewSet(viewsets.ModelViewSet):
     def send(self, request, pk=None):
         quote = self.get_object()
         if not has_role(request.user, *COMMERCIAL_ROLES) or quote.created_by_id != request.user.id:
-            if not has_role(request.user, 'SUPER_ADMIN'):
+            if not has_role(request.user, ROLE_SUPER_ADMIN):
                 return Response(status=status.HTTP_403_FORBIDDEN)
         if quote.status != Quote.Status.BROUILLON:
             return Response({'detail': 'Seul un devis en brouillon peut être envoyé.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -518,7 +519,7 @@ class QuoteViewSet(viewsets.ModelViewSet):
     def clone(self, request, pk=None):
         original = self.get_object()
         if not has_role(request.user, *COMMERCIAL_ROLES) or original.created_by_id != request.user.id:
-            if not has_role(request.user, 'SUPER_ADMIN'):
+            if not has_role(request.user, ROLE_SUPER_ADMIN):
                 return Response(status=status.HTTP_403_FORBIDDEN)
         new_quote = Quote.objects.create(
             lead=original.lead,
@@ -616,11 +617,11 @@ class PublicQuoteTrackView(generics.RetrieveAPIView):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def marketing_dashboard(request):
-    if not has_role(request.user, 'RESPONSABLE_MARKETING', 'COMMERCIAL', 'CHEF_DE_PROJET'):
+    if not has_role(request.user, ROLE_RESPONSABLE_MARKETING, ROLE_COMMERCIAL, ROLE_PROJECT_MANAGER):
         return Response(status=status.HTTP_403_FORBIDDEN)
 
     leads = Lead.objects.all()
-    if not has_role(request.user, 'RESPONSABLE_MARKETING'):
+    if not has_role(request.user, ROLE_RESPONSABLE_MARKETING):
         leads = leads.filter(assigned_to=request.user)
 
     # "Pipeline pondéré" = Sum(estimated_value * qualification_score / 100)
@@ -666,7 +667,7 @@ def marketing_dashboard(request):
     ]
 
     social_posts = SocialPost.objects.all()
-    if not has_role(request.user, 'RESPONSABLE_MARKETING'):
+    if not has_role(request.user, ROLE_RESPONSABLE_MARKETING):
         social_posts = social_posts.filter(author=request.user)
     social_by_status = {
         row['status']: row['count'] for row in social_posts.values('status').annotate(count=Count('id')).order_by()

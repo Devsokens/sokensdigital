@@ -66,7 +66,8 @@ Super-Administrateur avant que quiconque puisse utiliser l'admin :
 from core.models import Role
 for name in ['Super-Administrateur', 'Administrateur', 'Chef de Projet',
              'Développeur', 'Directeur Financier', 'Commercial',
-             'Responsable RH', 'Consultant', 'Support Client']:
+             'Responsable RH', 'Consultant', 'Support Client',
+             'Comptable', 'Responsable Marketing']:
     Role.objects.get_or_create(name=name)
 ```
 (Envisager une commande `manage.py` dédiée / une migration de données si
@@ -75,12 +76,13 @@ ce bootstrap doit être répétable en CI ou sur un futur environnement.)
 ## 4. Tests — statut vérifié (voir rapport §5)
 
 ```
-pytest technique/ administration/ core/ messaging/ projects/ hr/
+pytest technique/ administration/ core/ messaging/ projects/ hr/ finance/ marketing/
 ```
-Doit passer intégralement (vérifié : exit 0). `finance/` et `marketing/`
-échouent actuellement (RBAC non migré, hors périmètre — voir rapport §6),
-**ne pas bloquer un déploiement dessus tant que ces départements ne sont
-pas repris**, mais ne pas non plus les considérer prêts pour la prod.
+Doit passer intégralement (vérifié : exit 0, y compris `finance/` et
+`marketing/` — RBAC migré vers les noms de rôles français lors d'un pass
+ultérieur : `ROLE_COMPTABLE`/`ROLE_RESPONSABLE_MARKETING` ajoutés à
+`core/constants.py`, littéraux SNAKE_CASE remplacés dans `finance/views.py`,
+`marketing/views.py` et `core/views.py`).
 
 ## 5. CI — Jenkinsfile
 
@@ -98,8 +100,6 @@ cette branche).
 - Firestore Security Rules pour le module Messagerie — texte fourni dans
   le cahier des charges, pas déployé (accès console Firebase requis).
 - Cloud Functions Firebase (mentions → FCM) — idem.
-- RBAC Finance/Marketing — cassé, non corrigé (hors périmètre explicite
-  de ce pass, voir rapport §6 pour le détail exact du fix nécessaire).
 - Tests de charge / audit de pénétration externe (cahier des charges
   §5.5 les mentionne comme exigence annuelle — aucun outillage mis en
   place ici).

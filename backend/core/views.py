@@ -1,7 +1,9 @@
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -9,9 +11,11 @@ from rest_framework.views import APIView
 from core.firestore_client import create_profile, invalidate_role_cache, update_profile_fields, upsert_chat_room
 from core.models import AuditLog, Department, User, hash_email
 from core.permissions import has_role
+from core.storage import upload_avatar, upload_file
 from core.constants import (
     ROLE_SUPER_ADMIN, ROLE_RH_MANAGER, ROLE_COMMERCIAL,
     ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER,
+    ROLE_COMPTABLE, ROLE_RESPONSABLE_MARKETING,
 )
 from core.serializers import (
     AuditLogSerializer,
@@ -67,6 +71,62 @@ class MeView(APIView):
         return Response(UserSerializer(request.user).data)
 
 
+@extend_schema(
+    tags=['Authentification'],
+    summary='Upload my avatar photo',
+    description='Any authenticated user. Resizes/recompresses and uploads to Cloudinary '
+    '(core.storage) — kept off Supabase, which is already over its free-tier egress quota — '
+    'returns its public URL. Caller still has to save that URL onto their profile '
+    '(PATCH /auth/me/ and the Firestore profile doc).',
+    request={'multipart/form-data': {'type': 'object', 'properties': {'file': {'type': 'string', 'format': 'binary'}}}},
+    responses={201: {'type': 'object', 'properties': {'url': {'type': 'string'}}}},
+)
+class AvatarUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'detail': 'Aucun fichier fourni.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            url = upload_avatar(file)
+        except ValidationError as exc:
+            return Response({'detail': exc.message}, status=status.HTTP_400_BAD_REQUEST)
+        except RuntimeError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({'url': url}, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(
+    tags=['Système'],
+    summary='Upload a chat attachment',
+    description='Any authenticated user — messaging rooms live in Firestore, which has '
+    'no server-side view of room membership, so this mirrors the old storage.rules trust '
+    'level (any signed-in user). Uploads to Cloudinary (core.storage) — kept off '
+    'Supabase, already over its free-tier egress quota — returns its public URL. Caller '
+    "still has to attach it to the Firestore message (see lib/firebase/chat's "
+    'sendMessage). 20 Mo max, any file type.',
+    request={'multipart/form-data': {'type': 'object', 'properties': {'file': {'type': 'string', 'format': 'binary'}}}},
+    responses={201: {'type': 'object', 'properties': {'url': {'type': 'string'}}}},
+)
+class ChatAttachmentUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'detail': 'Aucun fichier fourni.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            url = upload_file(file, folder='chat-attachments')
+        except ValidationError as exc:
+            return Response({'detail': exc.message}, status=status.HTTP_400_BAD_REQUEST)
+        except RuntimeError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({'url': url}, status=status.HTTP_201_CREATED)
+
+
 class IsSuperAdmin(permissions.BasePermission):
     """Département Administration/RH §1.1 — "Seul rôle autorisé à ...
     modifier les départements". Everything here is Super-Admin-only,
@@ -113,11 +173,7 @@ class CanListUsers(permissions.BasePermission):
     who needs it to reassign leads to a Commercial (docs/backend-specifications.md §2.1)."""
 
     def has_permission(self, request, view):
-        # 'RESPONSABLE_MARKETING' — pas de rôle Marketing dans core.constants
-        # (département Marketing/Communication hors périmètre de ce pass) ;
-        # laissé tel quel, ne matchera aucun Role réel tant que ce
-        # département n'a pas son propre passage RBAC.
-        return has_role(request.user, ROLE_RH_MANAGER, 'RESPONSABLE_MARKETING')
+        return has_role(request.user, ROLE_RH_MANAGER, ROLE_RESPONSABLE_MARKETING)
 
 
 @extend_schema_view(
@@ -312,11 +368,11 @@ def global_search(request):
             })
 
     # Leads — Marketing/Commercial.
-    if has_role(user, 'RESPONSABLE_MARKETING', ROLE_COMMERCIAL, ROLE_SUPER_ADMIN):
+    if has_role(user, ROLE_RESPONSABLE_MARKETING, ROLE_COMMERCIAL, ROLE_SUPER_ADMIN):
         from marketing.models import BlogPost, Lead, Quote
 
         leads = Lead.objects.all()
-        if not has_role(user, 'RESPONSABLE_MARKETING', ROLE_SUPER_ADMIN):
+        if not has_role(user, ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN):
             leads = leads.filter(assigned_to=user)
         matches = leads.filter(
             Q(first_name__icontains=query) | Q(last_name__icontains=query) | Q(company_name__icontains=query)
@@ -328,7 +384,7 @@ def global_search(request):
             })
 
         quotes = Quote.objects.select_related('lead')
-        if has_role(user, ROLE_COMMERCIAL) and not has_role(user, 'RESPONSABLE_MARKETING', ROLE_SUPER_ADMIN):
+        if has_role(user, ROLE_COMMERCIAL) and not has_role(user, ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN):
             quotes = quotes.filter(created_by=user)
         matches = quotes.filter(quote_number__icontains=query)[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
         for quote in matches:
@@ -337,7 +393,7 @@ def global_search(request):
                 'sublabel': quote.lead.company_name if quote.lead else '', 'href': '/admin/marketing/devis',
             })
 
-        if has_role(user, 'RESPONSABLE_MARKETING', ROLE_SUPER_ADMIN):
+        if has_role(user, ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN):
             matches = BlogPost.objects.filter(title__icontains=query)[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
             for post in matches:
                 results.append({
@@ -359,11 +415,11 @@ def global_search(request):
         })
 
     # Décaissements — Chef de Projet (their own), Finance roles (all).
-    if has_role(user, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, 'COMPTABLE', ROLE_SUPER_ADMIN):
+    if has_role(user, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE, ROLE_SUPER_ADMIN):
         from finance.models import DisbursementRequest
 
         disbursements = DisbursementRequest.objects.select_related('project')
-        if not has_role(user, ROLE_DIRECTEUR_FINANCIER, 'COMPTABLE', ROLE_SUPER_ADMIN):
+        if not has_role(user, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE, ROLE_SUPER_ADMIN):
             disbursements = disbursements.filter(
                 Q(project__lead_project_manager=user) | Q(requested_by=user)
             ).distinct()

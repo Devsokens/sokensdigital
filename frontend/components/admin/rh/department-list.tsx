@@ -53,7 +53,11 @@ export function DepartmentList() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-neutral-900">Départements</h1>
-        <Button onClick={() => setShowForm((v) => !v)} className="gap-1.5 rounded-full px-4">
+        <Button
+          data-tour="module-rh-departements"
+          onClick={() => setShowForm((v) => !v)}
+          className="gap-1.5 rounded-full px-4"
+        >
           <Plus className="size-4" /> Nouveau département
         </Button>
       </div>

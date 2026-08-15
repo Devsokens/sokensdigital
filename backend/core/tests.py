@@ -1,10 +1,14 @@
+import io
 from unittest.mock import MagicMock, patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
 from rest_framework.test import APIClient, APITestCase
 
 from core.models import AuditLog, Department, Role, User
 from core.constants import (
     ROLE_SUPER_ADMIN, ROLE_RH_MANAGER, ROLE_DEVELOPER, ROLE_COMMERCIAL,
+    ROLE_RESPONSABLE_MARKETING,
 )
 
 
@@ -262,7 +266,7 @@ class UserListViewTests(APITestCase):
         User.objects.create(email='someone@sokensdigital.com', first_name='Someone')
 
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, 'RESPONSABLE_MARKETING')
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
         _give_role(self.outsider, ROLE_DEVELOPER)
@@ -286,7 +290,7 @@ class GlobalSearchTests(APITestCase):
         from projects.models import Project
 
         self.marketing_user = User.objects.create(email='searchmkt@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, 'RESPONSABLE_MARKETING')
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
 
         self.commercial_a = User.objects.create(email='searchcom-a@sokensdigital.com', first_name='CommercialA')
         _give_role(self.commercial_a, ROLE_COMMERCIAL)
@@ -417,3 +421,79 @@ class GetProfileRoleCacheTests(APITestCase):
             role = get_profile_role('uid-4')
 
         self.assertEqual(role, 'COMMERCIAL')
+
+
+class AvatarUploadViewTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create(email='avatar@sokensdigital.com', first_name='Ada')
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def image_file(self, size=None):
+        if size is not None:
+            content = b'\x00' * size
+        else:
+            buffer = io.BytesIO()
+            Image.new('RGB', (10, 10), color='blue').save(buffer, format='PNG')
+            content = buffer.getvalue()
+        return SimpleUploadedFile('avatar.png', content, content_type='image/png')
+
+    def test_unauthenticated_request_is_rejected(self):
+        response = APIClient().post('/api/v1/uploads/avatar/', {'file': self.image_file()}, format='multipart')
+        self.assertEqual(response.status_code, 401)
+
+    def test_no_file_rejected(self):
+        response = self.client.post('/api/v1/uploads/avatar/', {}, format='multipart')
+        self.assertEqual(response.status_code, 400)
+
+    def test_oversized_file_rejected(self):
+        response = self.client.post(
+            '/api/v1/uploads/avatar/', {'file': self.image_file(size=6 * 1024 * 1024)}, format='multipart',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    @patch.dict('os.environ', {
+        'CLOUDINARY_CLOUD_NAME': 'test-cloud', 'CLOUDINARY_API_KEY': 'test-key', 'CLOUDINARY_API_SECRET': 'test-secret',
+    })
+    @patch('core.storage.cloudinary.uploader.upload')
+    def test_authenticated_user_can_upload_avatar(self, mock_upload):
+        mock_upload.return_value = {'secure_url': 'https://res.cloudinary.com/test-cloud/image/upload/v1/avatars/abc.jpg'}
+        response = self.client.post('/api/v1/uploads/avatar/', {'file': self.image_file()}, format='multipart')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['url'], 'https://res.cloudinary.com/test-cloud/image/upload/v1/avatars/abc.jpg')
+        self.assertEqual(mock_upload.call_args.kwargs['folder'], 'avatars')
+
+
+class ChatAttachmentUploadViewTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create(email='attach@sokensdigital.com', first_name='Ada')
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def any_file(self, size=100, content_type='application/pdf', name='doc.pdf'):
+        return SimpleUploadedFile(name, b'\x00' * size, content_type=content_type)
+
+    def test_unauthenticated_request_is_rejected(self):
+        response = APIClient().post('/api/v1/uploads/chat-attachment/', {'file': self.any_file()}, format='multipart')
+        self.assertEqual(response.status_code, 401)
+
+    def test_no_file_rejected(self):
+        response = self.client.post('/api/v1/uploads/chat-attachment/', {}, format='multipart')
+        self.assertEqual(response.status_code, 400)
+
+    def test_oversized_file_rejected(self):
+        response = self.client.post(
+            '/api/v1/uploads/chat-attachment/', {'file': self.any_file(size=21 * 1024 * 1024)}, format='multipart',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    @patch.dict('os.environ', {
+        'CLOUDINARY_CLOUD_NAME': 'test-cloud', 'CLOUDINARY_API_KEY': 'test-key', 'CLOUDINARY_API_SECRET': 'test-secret',
+    })
+    @patch('core.storage.cloudinary.uploader.upload')
+    def test_authenticated_user_can_upload_any_file_type(self, mock_upload):
+        mock_upload.return_value = {'secure_url': 'https://res.cloudinary.com/test-cloud/raw/upload/v1/chat-attachments/abc.pdf'}
+        response = self.client.post('/api/v1/uploads/chat-attachment/', {'file': self.any_file()}, format='multipart')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['url'], 'https://res.cloudinary.com/test-cloud/raw/upload/v1/chat-attachments/abc.pdf')
+        self.assertEqual(mock_upload.call_args.kwargs['folder'], 'chat-attachments')

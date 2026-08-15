@@ -60,7 +60,7 @@ export function Invoices() {
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger
             render={
-              <Button className="gap-1.5 rounded-full px-4">
+              <Button data-tour="module-finance-facturation" className="gap-1.5 rounded-full px-4">
                 <Plus className="size-4" /> Nouvelle facture
               </Button>
             }

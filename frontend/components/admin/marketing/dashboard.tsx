@@ -156,13 +156,15 @@ export function MarketingDashboardView() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Pipeline pondéré"
-          value={`${formatCurrency(data.weighted_pipeline)} €`}
-          sublabel="Leads actifs × score de qualification"
-          icon={TrendingUp}
-          accent="#06b6d4"
-        />
+        <div data-tour="module-marketing-dashboard">
+          <StatCard
+            label="Pipeline pondéré"
+            value={`${formatCurrency(data.weighted_pipeline)} €`}
+            sublabel="Leads actifs × score de qualification"
+            icon={TrendingUp}
+            accent="#06b6d4"
+          />
+        </div>
         <StatCard
           label="Leads au total"
           value={String(data.total_leads)}

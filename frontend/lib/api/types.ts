@@ -289,10 +289,18 @@ export interface MarketingDashboard {
 }
 
 export type ProjectStatus = "EN_COURS" | "EN_PAUSE" | "TERMINE" | "ANNULE";
+export type ProjectPriority = "BASSE" | "MOYENNE" | "HAUTE";
+
+export interface ProjectUserBrief {
+  id: string;
+  first_name: string;
+  last_name: string;
+  avatar_url: string | null;
+}
 
 export interface ProjectMember {
   id: string;
-  user: UserBrief;
+  user: ProjectUserBrief;
   created_at: string;
 }
 
@@ -300,11 +308,39 @@ export interface Project {
   id: string;
   name: string;
   status: ProjectStatus;
-  lead_project_manager: UserBrief | null;
+  priority: ProjectPriority;
+  category: string;
+  lead_project_manager: ProjectUserBrief | null;
   members: ProjectMember[];
   start_date: string | null;
   end_date: string | null;
   budget: string | null;
+  created_at: string;
+  is_archived: boolean;
+  is_locked: boolean;
+  is_pinned: boolean;
+  tasks_total: number;
+  tasks_done: number;
+}
+
+export type ProjectTaskStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
+
+export interface ProjectTask {
+  id: string;
+  title: string;
+  status: ProjectTaskStatus;
+  due_date: string | null;
+  progress: number;
+  assignees: ProjectUserBrief[];
+  comments_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectTaskComment {
+  id: string;
+  body: string;
+  author: ProjectUserBrief | null;
   created_at: string;
 }
 
@@ -313,12 +349,39 @@ export type TimesheetStatus = "SOUMIS" | "VALIDE" | "REJETE";
 export interface Timesheet {
   id: string;
   project: string;
-  user: UserBrief;
+  project_name: string;
+  task_title: string | null;
+  user: ProjectUserBrief;
   date: string;
   hours: string;
   description: string;
   status: TimesheetStatus;
   created_at: string;
+}
+
+export type TeamTimesheetDayStatus = "SOUMIS" | "VALIDE" | "REJETE" | null;
+export type TeamTimesheetWeekStatus = "APPROVED" | "PARTIAL" | "REJECTED";
+
+export interface TeamTimesheetTaskRow {
+  project_name: string;
+  task_title: string | null;
+  daily_hours: Record<string, number>;
+  total: number;
+}
+
+export interface TeamTimesheetMember {
+  user: ProjectUserBrief;
+  week_status: TeamTimesheetWeekStatus;
+  daily_totals: Record<string, number>;
+  daily_status: Record<string, TeamTimesheetDayStatus>;
+  week_total: number;
+  tasks: TeamTimesheetTaskRow[];
+}
+
+export interface TeamTimesheetResponse {
+  week_start: string;
+  days: string[];
+  members: TeamTimesheetMember[];
 }
 
 export type DisbursementStatus = "EN_ATTENTE_N1" | "EN_ATTENTE_N2" | "APPROUVE" | "REJETE" | "EXECUTE";

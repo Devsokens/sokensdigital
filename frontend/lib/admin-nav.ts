@@ -11,7 +11,6 @@ import {
   Clock,
   Banknote,
   FolderKanban,
-  UserRound,
   MessageSquare,
   Lock,
   BookOpen,
@@ -42,7 +41,6 @@ export const ADMIN_SECTIONS: NavSection[] = [
     items: [
       { label: "Tableau de bord", href: "/admin", icon: LayoutDashboard },
       { label: "Messagerie", href: "/admin/messagerie", icon: MessageSquare },
-      { label: "Mon profil", href: "/profil", icon: UserRound },
     ],
   },
   {
@@ -84,6 +82,28 @@ export const ADMIN_SECTIONS: NavSection[] = [
     ],
   },
 ];
+
+/** One representative icon per section — used by the header's department
+ * switcher and the mobile bottom nav, which both need a single glyph per
+ * department rather than the per-item icons above. */
+export const SECTION_ICONS: Record<string, LucideIcon> = {
+  "Général": LayoutDashboard,
+  "Administration & RH": Users,
+  "Marketing & Commercial": Target,
+  "Technique": FolderKanban,
+  "Finance & Comptabilité": PieChart,
+};
+
+/** Short, single-word labels for the mobile bottom nav — the full section
+ * titles ("Administration & RH", "Finance & Comptabilité"...) don't fit
+ * under a 5-column icon row without truncating illegibly. */
+export const SECTION_SHORT_LABELS: Record<string, string> = {
+  "Général": "Accueil",
+  "Administration & RH": "RH",
+  "Marketing & Commercial": "Marketing",
+  "Technique": "Technique",
+  "Finance & Comptabilité": "Finance",
+};
 
 /** Longest-prefix match — /admin/rh/departements should resolve to the
  * "Départements" item, not fall through to a shorter, unrelated prefix. */

@@ -63,3 +63,43 @@ export async function uploadVideo(file: File): Promise<string> {
   const data = (await response.json()) as { url: string };
   return data.url;
 }
+
+async function uploadToEndpoint(path: string, file: File): Promise<string> {
+  const user = auth.currentUser;
+  const token = user ? await user.getIdToken() : null;
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let detail = `Échec de l'upload (${response.status})`;
+    try {
+      const body = await response.json();
+      if (body.detail) detail = body.detail;
+    } catch {
+      // no JSON body
+    }
+    throw new Error(detail);
+  }
+
+  const data = (await response.json()) as { url: string };
+  return data.url;
+}
+
+/** Any authenticated user — used by the profile sheet's avatar picker.
+ * Resized/recompressed server-side, 5 Mo max (core.storage). */
+export function uploadAvatar(file: File): Promise<string> {
+  return uploadToEndpoint("/api/v1/uploads/avatar/", file);
+}
+
+/** Any authenticated user — used by the messaging composer's attach
+ * button. No type restriction, 20 Mo max (core.storage). */
+export function uploadChatFile(file: File): Promise<string> {
+  return uploadToEndpoint("/api/v1/uploads/chat-attachment/", file);
+}

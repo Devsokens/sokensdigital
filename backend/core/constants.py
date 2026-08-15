@@ -18,6 +18,8 @@ ROLE_COMMERCIAL = 'Commercial'
 ROLE_RH_MANAGER = 'Responsable RH'
 ROLE_CONSULTANT = 'Consultant'
 ROLE_SUPPORT_CLIENT = 'Support Client'
+ROLE_COMPTABLE = 'Comptable'
+ROLE_RESPONSABLE_MARKETING = 'Responsable Marketing'
 
 # Groupes pratiques pour les filtres de queryset
 ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN]

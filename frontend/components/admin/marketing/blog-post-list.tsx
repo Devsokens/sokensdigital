@@ -113,7 +113,7 @@ export function BlogPostList() {
           >
             <SheetTrigger
               render={
-                <Button className="gap-1.5 rounded-full px-4">
+                <Button data-tour="module-marketing-blog" className="gap-1.5 rounded-full px-4">
                   <Plus className="size-4" /> Nouvel article
                 </Button>
               }

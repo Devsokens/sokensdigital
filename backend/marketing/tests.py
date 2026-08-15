@@ -10,8 +10,18 @@ from rest_framework.test import APIClient, APITestCase
 
 from decimal import Decimal
 
-from core.models import User
+from core.constants import (
+    ROLE_COMMERCIAL, ROLE_DEVELOPER, ROLE_PROJECT_MANAGER,
+    ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN,
+)
+from core.models import Role, User
 from marketing.models import BlogPost, Lead, PageSection, Quote, ShowcaseProject, SocialPost
+
+
+def _give_role(user, name):
+    role, _ = Role.objects.get_or_create(name=name)
+    user.roles.add(role)
+    return role
 
 
 class PublicLeadCreateTests(APITestCase):
@@ -86,16 +96,16 @@ class LeadViewSetTests(APITestCase):
     def setUp(self):
         cache.clear()
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
 
         self.commercial_a = User.objects.create(email='commercial-a@sokensdigital.com', first_name='CommercialA')
-        self.commercial_a.firestore_role = 'COMMERCIAL'
+        _give_role(self.commercial_a, ROLE_COMMERCIAL)
 
         self.commercial_b = User.objects.create(email='commercial-b@sokensdigital.com', first_name='CommercialB')
-        self.commercial_b.firestore_role = 'COMMERCIAL'
+        _give_role(self.commercial_b, ROLE_COMMERCIAL)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.lead_a = Lead.objects.create(
             first_name='Ada', last_name='Lovelace', email='ada@example.com',
@@ -156,10 +166,10 @@ class LeadViewSetTests(APITestCase):
 class BlogPostViewSetTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_marketing = APIClient()
         self.client_marketing.force_authenticate(user=self.marketing_user)
@@ -223,10 +233,10 @@ class BlogPostViewSetTests(APITestCase):
 class ShowcaseProjectViewSetTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_marketing = APIClient()
         self.client_marketing.force_authenticate(user=self.marketing_user)
@@ -304,13 +314,13 @@ class ShowcaseProjectViewSetTests(APITestCase):
 class SocialPostViewSetTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
 
         self.commercial = User.objects.create(email='commercial@sokensdigital.com', first_name='Commercial')
-        self.commercial.firestore_role = 'COMMERCIAL'
+        _give_role(self.commercial, ROLE_COMMERCIAL)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_marketing = APIClient()
         self.client_marketing.force_authenticate(user=self.marketing_user)
@@ -401,13 +411,13 @@ class SocialPostViewSetTests(APITestCase):
 class MarketingDashboardTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
 
         self.commercial = User.objects.create(email='commercial@sokensdigital.com', first_name='Commercial')
-        self.commercial.firestore_role = 'COMMERCIAL'
+        _give_role(self.commercial, ROLE_COMMERCIAL)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         Lead.objects.create(
             first_name='Ada', last_name='Lovelace', email='ada@example.com', source='SITE_WEB',
@@ -465,19 +475,19 @@ class MarketingDashboardTests(APITestCase):
 class QuoteViewSetTests(APITestCase):
     def setUp(self):
         self.commercial_a = User.objects.create(email='commercial-a@sokensdigital.com', first_name='CommercialA')
-        self.commercial_a.firestore_role = 'COMMERCIAL'
+        _give_role(self.commercial_a, ROLE_COMMERCIAL)
 
         self.commercial_b = User.objects.create(email='commercial-b@sokensdigital.com', first_name='CommercialB')
-        self.commercial_b.firestore_role = 'COMMERCIAL'
+        _give_role(self.commercial_b, ROLE_COMMERCIAL)
 
         self.chef_projet = User.objects.create(email='chef@sokensdigital.com', first_name='Chef')
-        self.chef_projet.firestore_role = 'CHEF_DE_PROJET'
+        _give_role(self.chef_projet, ROLE_PROJECT_MANAGER)
 
         self.super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
-        self.super_admin.firestore_role = 'SUPER_ADMIN'
+        _give_role(self.super_admin, ROLE_SUPER_ADMIN)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_a = APIClient()
         self.client_a.force_authenticate(user=self.commercial_a)
@@ -633,11 +643,11 @@ class QuoteViewSetTests(APITestCase):
 class QuoteSettingsViewTests(APITestCase):
     def setUp(self):
         self.commercial = User.objects.create(email='devis-commercial@sokensdigital.com', first_name='Commercial')
-        self.commercial.firestore_role = 'COMMERCIAL'
+        _give_role(self.commercial, ROLE_COMMERCIAL)
         self.chef_projet = User.objects.create(email='devis-chef@sokensdigital.com', first_name='Chef')
-        self.chef_projet.firestore_role = 'CHEF_DE_PROJET'
+        _give_role(self.chef_projet, ROLE_PROJECT_MANAGER)
         self.outsider = User.objects.create(email='devis-dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_commercial = APIClient()
         self.client_commercial.force_authenticate(user=self.commercial)
@@ -678,10 +688,10 @@ class QuoteSettingsViewTests(APITestCase):
 class PageSectionViewSetTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='marketing2@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
 
         self.outsider = User.objects.create(email='dev4@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_marketing = APIClient()
         self.client_marketing.force_authenticate(user=self.marketing_user)
@@ -768,9 +778,9 @@ class PageSectionViewSetTests(APITestCase):
 class ImageUploadViewTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='uploadmkt@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
         self.outsider = User.objects.create(email='uploaddev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_marketing = APIClient()
         self.client_marketing.force_authenticate(user=self.marketing_user)
@@ -845,9 +855,9 @@ class ImageUploadViewTests(APITestCase):
 class VideoUploadViewTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='uploadvidmkt@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
         self.outsider = User.objects.create(email='uploadviddev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_marketing = APIClient()
         self.client_marketing.force_authenticate(user=self.marketing_user)
@@ -897,9 +907,9 @@ class VideoUploadViewTests(APITestCase):
 class SiteSettingsViewTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='chrome-mkt@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
         self.outsider = User.objects.create(email='chrome-dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_marketing = APIClient()
         self.client_marketing.force_authenticate(user=self.marketing_user)

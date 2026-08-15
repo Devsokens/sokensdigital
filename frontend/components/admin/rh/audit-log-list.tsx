@@ -27,7 +27,7 @@ export function AuditLogList() {
   return (
     <div>
       <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Audit Log</h1>
-      <p className="mb-6 text-sm text-neutral-500">
+      <p data-tour="module-rh-audit" className="mb-6 text-sm text-neutral-500">
         Journal immuable — alimenté automatiquement à chaque suppression d&apos;un enregistrement. Lecture seule.
       </p>
 

@@ -113,8 +113,8 @@ export function UserRoleList() {
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100">
-            {rows.map((row) => (
-              <tr key={row.djangoId}>
+            {rows.map((row, index) => (
+              <tr key={row.djangoId} data-tour={index === 0 ? "module-rh-utilisateurs" : undefined}>
                 <td className="px-4 py-3 text-neutral-900">{row.name || "—"}</td>
                 <td className="px-4 py-3 text-neutral-500">{row.email}</td>
                 <td className="px-4 py-3">

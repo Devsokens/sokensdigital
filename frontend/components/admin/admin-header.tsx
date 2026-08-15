@@ -3,13 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Bell, ChevronRight, Home, Loader2, LogOut, Search, UserRound } from "lucide-react";
+import { Bell, ChevronRight, HelpCircle, Home, Loader2, LogOut, PanelLeft, Search, UserRound } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/lib/auth/auth-context";
 import { signOutUser } from "@/lib/firebase/auth";
 import { ROLE_LABELS } from "@/lib/firebase/types";
 import { ADMIN_SECTIONS, findNavMatch, type NavItem } from "@/lib/admin-nav";
 import { globalSearch, type SearchResult } from "@/lib/api/search";
+import { useOnboardingTour } from "@/lib/admin/onboarding-tour";
+import { useProfileModal } from "@/lib/admin/profile-modal-context";
 
 function initials(firstName?: string, lastName?: string) {
   return `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "?";
@@ -99,7 +101,7 @@ function QuickSearch() {
   const hasResults = pageResults.length > 0 || contentResults.length > 0;
 
   return (
-    <div className="relative w-full max-w-md">
+    <div data-tour="search" className="relative w-full max-w-md">
       <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3.5 py-2 transition-colors focus-within:border-primary/40 focus-within:bg-white">
         <Search className="size-4 shrink-0 text-neutral-400" />
         <input
@@ -171,21 +173,47 @@ function QuickSearch() {
   );
 }
 
-export function AdminHeader() {
+export function AdminHeader({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const pathname = usePathname();
   const { profile } = useAuth();
+  const { start } = useOnboardingTour();
+  const { openProfileModal } = useProfileModal();
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-neutral-200 bg-white px-6 lg:pl-8">
-      <Breadcrumb pathname={pathname} />
+      <div className="flex items-center gap-3">
+        {onToggleSidebar && (
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            aria-label="Replier / déplier le menu"
+            className="hidden size-8 items-center justify-center rounded-lg text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 lg:flex"
+          >
+            <PanelLeft className="size-4" />
+          </button>
+        )}
+        <Breadcrumb pathname={pathname} />
+      </div>
 
       <div className="flex flex-1 justify-center">
         <QuickSearch />
       </div>
 
       <div className="flex items-center gap-2">
+        <button
+          onClick={start}
+          aria-label="Revoir la visite guidée"
+          title="Revoir la visite guidée"
+          className="flex size-9 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+        >
+          <HelpCircle className="size-[1.1rem]" />
+        </button>
+
         <Popover>
-          <PopoverTrigger className="relative flex size-9 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900">
+          <PopoverTrigger
+            data-tour="notifications"
+            className="relative flex size-9 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+          >
             <Bell className="size-[1.1rem]" />
           </PopoverTrigger>
           <PopoverContent className="w-80">
@@ -201,9 +229,17 @@ export function AdminHeader() {
         </Popover>
 
         <Popover>
-          <PopoverTrigger className="flex items-center gap-2 rounded-full py-1 pr-2.5 pl-1 transition-colors hover:bg-neutral-100">
-            <span className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-              {initials(profile?.firstName, profile?.lastName)}
+          <PopoverTrigger
+            data-tour="profile"
+            className="flex items-center gap-2 rounded-full py-1 pr-2.5 pl-1 transition-colors hover:bg-neutral-100"
+          >
+            <span className="flex size-7 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-xs font-semibold text-primary">
+              {profile?.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- Firebase Storage URL, not a local/optimizable asset
+                <img src={profile.avatarUrl} alt="" className="size-full object-cover" />
+              ) : (
+                initials(profile?.firstName, profile?.lastName)
+              )}
             </span>
             <span className="hidden text-left sm:block">
               <span className="block text-xs font-medium text-neutral-900">{profile?.firstName}</span>
@@ -219,12 +255,13 @@ export function AdminHeader() {
               </p>
             </div>
             <div className="p-1.5">
-              <Link
-                href="/profil"
-                className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-neutral-700 transition-colors hover:bg-neutral-100"
+              <button
+                type="button"
+                onClick={openProfileModal}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-neutral-700 transition-colors hover:bg-neutral-100"
               >
                 <UserRound className="size-4 text-neutral-400" /> Mon profil
-              </Link>
+              </button>
               <button
                 onClick={() => signOutUser()}
                 className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"

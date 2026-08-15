@@ -7,6 +7,7 @@ from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 
+from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE
 from core.permissions import has_role
 from finance.models import (
     Account,
@@ -30,10 +31,10 @@ from finance.serializers import (
     TaxDeclarationSerializer,
 )
 
-CHEF_DE_PROJET_ROLES = ('CHEF_DE_PROJET',)
-DIRECTEUR_FINANCIER_ROLES = ('DIRECTEUR_FINANCIER',)
-COMPTABLE_ROLES = ('COMPTABLE',)
-FINANCE_READ_ROLES = ('DIRECTEUR_FINANCIER', 'COMPTABLE')
+CHEF_DE_PROJET_ROLES = (ROLE_PROJECT_MANAGER,)
+DIRECTEUR_FINANCIER_ROLES = (ROLE_DIRECTEUR_FINANCIER,)
+COMPTABLE_ROLES = (ROLE_COMPTABLE,)
+FINANCE_READ_ROLES = (ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE)
 
 
 class CanInitiateDisbursement(permissions.BasePermission):
@@ -88,7 +89,7 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
     )
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def approve(self, request, pk=None):
-        if not has_role(request.user, *DIRECTEUR_FINANCIER_ROLES, 'SUPER_ADMIN'):
+        if not has_role(request.user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN):
             return Response(status=status.HTTP_403_FORBIDDEN)
         disbursement = self.get_object()
         decision = request.data.get('decision')
@@ -110,7 +111,7 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
     )
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def execute(self, request, pk=None):
-        if not has_role(request.user, *COMPTABLE_ROLES, 'SUPER_ADMIN'):
+        if not has_role(request.user, *COMPTABLE_ROLES, ROLE_SUPER_ADMIN):
             return Response(status=status.HTTP_403_FORBIDDEN)
         disbursement = self.get_object()
         if disbursement.status != DisbursementRequest.Status.APPROUVE:
@@ -129,8 +130,8 @@ class IsDirecteurFinancierOrSuperAdmin(permissions.BasePermission):
 
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
-            return has_role(request.user, *FINANCE_READ_ROLES, 'SUPER_ADMIN')
-        return has_role(request.user, *DIRECTEUR_FINANCIER_ROLES, 'SUPER_ADMIN')
+            return has_role(request.user, *FINANCE_READ_ROLES, ROLE_SUPER_ADMIN)
+        return has_role(request.user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN)
 
 
 @extend_schema_view(
@@ -166,7 +167,7 @@ class AccountingPeriodViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, 
 
 class IsFinanceRole(permissions.BasePermission):
     def has_permission(self, request, view):
-        return has_role(request.user, *FINANCE_READ_ROLES, 'SUPER_ADMIN')
+        return has_role(request.user, *FINANCE_READ_ROLES, ROLE_SUPER_ADMIN)
 
 
 @extend_schema_view(
@@ -206,7 +207,7 @@ class JournalEntryViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixi
         return super().get_queryset()
 
     def create(self, request, *args, **kwargs):
-        if not has_role(request.user, *COMPTABLE_ROLES, 'SUPER_ADMIN'):
+        if not has_role(request.user, *COMPTABLE_ROLES, ROLE_SUPER_ADMIN):
             return Response(status=status.HTTP_403_FORBIDDEN)
         return super().create(request, *args, **kwargs)
 
@@ -244,7 +245,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     )
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def validate(self, request, pk=None):
-        if not has_role(request.user, *COMPTABLE_ROLES, 'SUPER_ADMIN'):
+        if not has_role(request.user, *COMPTABLE_ROLES, ROLE_SUPER_ADMIN):
             return Response(status=status.HTTP_403_FORBIDDEN)
         invoice = self.get_object()
         if invoice.status != Invoice.Status.BROUILLON:
@@ -293,7 +294,7 @@ class BankStatementImportViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
     permission_classes = [IsFinanceRole]
 
     def create(self, request, *args, **kwargs):
-        if not has_role(request.user, *COMPTABLE_ROLES, 'SUPER_ADMIN'):
+        if not has_role(request.user, *COMPTABLE_ROLES, ROLE_SUPER_ADMIN):
             return Response(status=status.HTTP_403_FORBIDDEN)
         return super().create(request, *args, **kwargs)
 
@@ -325,7 +326,7 @@ class BankStatementImportViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
     )
     @action(detail=True, methods=['post'], url_path=r'transactions/(?P<transaction_id>[^/.]+)/match', permission_classes=[IsFinanceRole])
     def match(self, request, pk=None, transaction_id=None):
-        if not has_role(request.user, *COMPTABLE_ROLES, 'SUPER_ADMIN'):
+        if not has_role(request.user, *COMPTABLE_ROLES, ROLE_SUPER_ADMIN):
             return Response(status=status.HTTP_403_FORBIDDEN)
         transaction_row = BankTransaction.objects.filter(id=transaction_id, statement_import_id=pk).first()
         if not transaction_row:
@@ -363,7 +364,7 @@ class TaxDeclarationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, vi
     )
     @action(detail=False, methods=['post'], permission_classes=[IsFinanceRole])
     def generate(self, request):
-        if not has_role(request.user, *COMPTABLE_ROLES, 'SUPER_ADMIN'):
+        if not has_role(request.user, *COMPTABLE_ROLES, ROLE_SUPER_ADMIN):
             return Response(status=status.HTTP_403_FORBIDDEN)
         period = AccountingPeriod.objects.filter(id=request.data.get('period_id')).first()
         if not period:
@@ -393,7 +394,7 @@ class TaxDeclarationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, vi
     )
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def validate(self, request, pk=None):
-        if not has_role(request.user, *DIRECTEUR_FINANCIER_ROLES, 'SUPER_ADMIN'):
+        if not has_role(request.user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN):
             return Response(status=status.HTTP_403_FORBIDDEN)
         declaration = self.get_object()
         if declaration.status != TaxDeclaration.Status.BROUILLON:
@@ -415,7 +416,7 @@ class TaxDeclarationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, vi
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def fec_export(request, period_id):
-    if not has_role(request.user, *FINANCE_READ_ROLES, 'SUPER_ADMIN'):
+    if not has_role(request.user, *FINANCE_READ_ROLES, ROLE_SUPER_ADMIN):
         return Response(status=status.HTTP_403_FORBIDDEN)
     period = AccountingPeriod.objects.filter(id=period_id).first()
     if not period:
@@ -450,7 +451,7 @@ def fec_export(request, period_id):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def finance_dashboard(request):
-    if not has_role(request.user, *DIRECTEUR_FINANCIER_ROLES, 'SUPER_ADMIN'):
+    if not has_role(request.user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN):
         return Response(status=status.HTTP_403_FORBIDDEN)
 
     bank_lines = TransactionLine.objects.filter(account__code='512')
