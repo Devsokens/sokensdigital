@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Pencil } from "lucide-react";
-import { listDepartments } from "@/lib/api/hr";
+import { Loader2, MoreHorizontal } from "lucide-react";
+import { listDepartments, deleteDepartment } from "@/lib/api/hr";
 import type { Department } from "@/lib/api/types";
 import { DepartmentFormModal } from "@/components/admin/rh/department-form-modal";
+import { ConfirmModal } from "@/components/admin/confirm-modal";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 
 const DEFAULT_COLOR = "#22d3ee";
 
@@ -77,19 +79,48 @@ export function DepartmentList() {
                 <div className="flex shrink-0 items-center gap-1.5">
                   <span className="size-6 rounded-lg" style={{ backgroundColor: color }} />
                   <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-                    <DepartmentFormModal
-                      department={d}
-                      onSaved={load}
-                      trigger={
-                        <button
-                          type="button"
-                          aria-label="Modifier le département"
-                          className="flex size-6 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
-                        >
-                          <Pencil className="size-3.5" />
-                        </button>
-                      }
-                    />
+                    <Popover>
+                      <PopoverTrigger
+                        render={
+                          <button
+                            type="button"
+                            aria-label="Actions du département"
+                            className="flex size-6 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+                          >
+                            <MoreHorizontal className="size-3.5" />
+                          </button>
+                        }
+                      />
+                      <PopoverContent className="w-40 p-1" align="end">
+                        <DepartmentFormModal
+                          department={d}
+                          onSaved={load}
+                          trigger={
+                            <button
+                              type="button"
+                              className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50"
+                            >
+                              Modifier
+                            </button>
+                          }
+                        />
+                        <ConfirmModal
+                          title="Supprimer le département"
+                          description={`Supprimer définitivement « ${d.name} » ? Cette action est irréversible.`}
+                          disabled={memberCount > 0}
+                          disabledReason={`Ce département compte ${memberCount} employé${memberCount !== 1 ? "s" : ""} — retire-les d'abord avant de le supprimer.`}
+                          onConfirm={async () => { await deleteDepartment(d.id); load(); }}
+                          trigger={
+                            <button
+                              type="button"
+                              className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-destructive hover:bg-destructive/5"
+                            >
+                              Supprimer
+                            </button>
+                          }
+                        />
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </div>
               </div>

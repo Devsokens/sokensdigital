@@ -287,6 +287,25 @@ class DepartmentViewSetTests(APITestCase):
         self.assertEqual(row['member_count'], 2)
         self.assertEqual(len(row['members']), 2)
 
+    def test_cannot_delete_department_with_members(self):
+        department = Department.objects.create(name='Technique', color='#22d3ee')
+        member = User.objects.create(email='member@sokensdigital.com', first_name='Ada', department=department)
+
+        response = self.client_super_admin.delete(f'/api/v1/departments/{department.id}/')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(Department.objects.filter(id=department.id).exists())
+        member.refresh_from_db()
+        self.assertEqual(member.department_id, department.id)
+
+    def test_can_delete_department_without_members(self):
+        department = Department.objects.create(name='Technique', color='#22d3ee')
+
+        response = self.client_super_admin.delete(f'/api/v1/departments/{department.id}/')
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Department.objects.filter(id=department.id).exists())
+
 
 class AuditLogViewSetTests(APITestCase):
     def setUp(self):

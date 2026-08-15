@@ -2,13 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2, MoreHorizontal, Network, Search, Table2 } from "lucide-react";
+import { Loader2, MoreHorizontal, Search } from "lucide-react";
 import { listEmployees, updateEmployee } from "@/lib/api/hr";
 import type { EmployeeProfile } from "@/lib/api/types";
 import { ApiError } from "@/lib/api/client";
 import { AddEmployeeSheet } from "@/components/admin/rh/add-employee-sheet";
 import { EmployeeQuickEditModal } from "@/components/admin/rh/employee-quick-edit-modal";
-import { EmployeeOrgChart } from "@/components/admin/rh/employee-org-chart";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { formatFcfa } from "@/lib/format-currency";
@@ -40,7 +39,6 @@ export function EmployeeList() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"tous" | "actifs" | "inactifs">("tous");
-  const [view, setView] = useState<"liste" | "organigramme">("liste");
 
   async function load() {
     try {
@@ -128,35 +126,8 @@ export function EmployeeList() {
             </button>
           ))}
         </div>
-        <div className="flex gap-1 rounded-lg border border-neutral-200 bg-white p-1">
-          <button
-            type="button"
-            onClick={() => setView("liste")}
-            title="Vue liste"
-            className={cn(
-              "flex size-8 items-center justify-center rounded-md transition-colors",
-              view === "liste" ? "bg-neutral-900 text-white" : "text-neutral-500 hover:bg-neutral-50"
-            )}
-          >
-            <Table2 className="size-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setView("organigramme")}
-            title="Organigramme"
-            className={cn(
-              "flex size-8 items-center justify-center rounded-md transition-colors",
-              view === "organigramme" ? "bg-neutral-900 text-white" : "text-neutral-500 hover:bg-neutral-50"
-            )}
-          >
-            <Network className="size-4" />
-          </button>
-        </div>
       </div>
 
-      {view === "organigramme" ? (
-        <EmployeeOrgChart employees={filtered} />
-      ) : (
       <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-left text-[11px] font-semibold tracking-wide text-neutral-500 uppercase">
@@ -271,7 +242,6 @@ export function EmployeeList() {
           </tbody>
         </table>
       </div>
-      )}
     </div>
   );
 }

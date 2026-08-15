@@ -183,6 +183,16 @@ class DepartmentViewSet(viewsets.ModelViewSet):
             'departmentId': str(department.id),
         })
 
+    def destroy(self, request, *args, **kwargs):
+        department = self.get_object()
+        member_count = department.user_set.count()
+        if member_count:
+            return Response(
+                {'detail': f"Impossible de supprimer un département avec des employés ({member_count})."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
+
 
 class IsSuperAdminOrRH(permissions.BasePermission):
     def has_permission(self, request, view):

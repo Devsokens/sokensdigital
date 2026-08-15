@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2, Mail } from "lucide-react";
-import { getDepartment, listEmployees } from "@/lib/api/hr";
+import { getDepartment, listEmployees, deleteDepartment } from "@/lib/api/hr";
 import type { Department, EmployeeProfile, UserBrief } from "@/lib/api/types";
 import { DepartmentFormModal } from "@/components/admin/rh/department-form-modal";
+import { ConfirmModal } from "@/components/admin/confirm-modal";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_COLOR = "#22d3ee";
@@ -15,6 +17,7 @@ function initials(firstName: string, lastName: string) {
 }
 
 export function DepartmentDetail({ id }: { id: string }) {
+  const router = useRouter();
   const [department, setDepartment] = useState<Department | null>(null);
   const [employees, setEmployees] = useState<EmployeeProfile[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -72,11 +75,25 @@ export function DepartmentDetail({ id }: { id: string }) {
               </p>
             </div>
           </div>
-          <DepartmentFormModal department={department} onSaved={load} trigger={
-            <button type="button" className="rounded-full border border-neutral-200 px-4 py-2 text-xs font-semibold text-neutral-600 hover:border-primary/40 hover:text-primary">
-              Modifier
-            </button>
-          } />
+          <div className="flex shrink-0 items-center gap-2">
+            <DepartmentFormModal department={department} onSaved={load} trigger={
+              <button type="button" className="rounded-full border border-neutral-200 px-4 py-2 text-xs font-semibold text-neutral-600 hover:border-primary/40 hover:text-primary">
+                Modifier
+              </button>
+            } />
+            <ConfirmModal
+              title="Supprimer le département"
+              description={`Supprimer définitivement « ${department.name} » ? Cette action est irréversible.`}
+              disabled={members.length > 0}
+              disabledReason={`Ce département compte ${members.length} employé${members.length !== 1 ? "s" : ""} — retire-les d'abord avant de le supprimer.`}
+              onConfirm={async () => { await deleteDepartment(department.id); router.push("/admin/rh/departements"); }}
+              trigger={
+                <button type="button" className="rounded-full border border-neutral-200 px-4 py-2 text-xs font-semibold text-destructive hover:border-destructive/40">
+                  Supprimer
+                </button>
+              }
+            />
+          </div>
         </div>
         {department.description && (
           <p className="mt-4 max-w-2xl text-sm text-neutral-600">{department.description}</p>

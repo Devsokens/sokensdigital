@@ -93,6 +93,10 @@ export function updateDepartment(id: string, data: Partial<{ name: string; descr
   });
 }
 
+export function deleteDepartment(id: string) {
+  return apiFetch<void>(`/api/v1/departments/${id}/`, { method: "DELETE" });
+}
+
 export function listUsers() {
   return apiFetch<Paginated<UserBrief>>("/api/v1/users/");
 }

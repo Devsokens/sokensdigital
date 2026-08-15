@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Modal, ModalTrigger, ModalContent, ModalClose } from "@/components/ui/modal";
+import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/sheet";
 import { listDepartments, listRoles, setUserRole, updateRolePermissions } from "@/lib/api/hr";
 import type { Department, Role } from "@/lib/api/types";
 import { ROLE_LABELS, ROLES_BY_DEPARTMENT, DJANGO_ROLE_TO_APP_ROLE, type AppRole } from "@/lib/firebase/types";
@@ -117,9 +117,9 @@ export function UserEditModal({
   }
 
   return (
-    <Modal open={open} onOpenChange={setOpen}>
-      <ModalTrigger render={trigger} />
-      <ModalContent title={`Modifier — ${user.name || user.email}`} className="max-w-3xl">
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger render={trigger} />
+      <SheetContent title={`Modifier — ${user.name || user.email}`} className="max-w-2xl">
         {loading ? (
           <div className="flex justify-center py-16">
             <Loader2 className="size-6 animate-spin text-neutral-400" />
@@ -287,7 +287,7 @@ export function UserEditModal({
                     Retour
                   </button>
                 ) : (
-                  <ModalClose render={<button type="button" className="rounded-full border border-neutral-200 px-4 py-1.5 text-xs font-semibold text-neutral-600 hover:border-neutral-300">Annuler</button>} />
+                  <SheetClose render={<button type="button" className="rounded-full border border-neutral-200 px-4 py-1.5 text-xs font-semibold text-neutral-600 hover:border-neutral-300">Annuler</button>} />
                 )}
 
                 {step < STEPS.length - 1 ? (
@@ -303,7 +303,7 @@ export function UserEditModal({
             </div>
           </div>
         )}
-      </ModalContent>
-    </Modal>
+      </SheetContent>
+    </Sheet>
   );
 }
