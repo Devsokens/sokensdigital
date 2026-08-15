@@ -60,8 +60,13 @@ export function EmployeeDetail({ id }: { id: string }) {
       </Link>
 
       <div className="flex items-center gap-5 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <span className="flex size-16 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-xl font-semibold text-neutral-600">
-          {initials(employee.user.first_name, employee.user.last_name)}
+        <span className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-100 text-xl font-semibold text-neutral-600">
+          {employee.user.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element -- Cloudinary URL, not a local/optimizable asset
+            <img src={employee.user.avatar_url} alt="" className="size-full object-cover" />
+          ) : (
+            initials(employee.user.first_name, employee.user.last_name)
+          )}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2.5">

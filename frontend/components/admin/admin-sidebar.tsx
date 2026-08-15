@@ -19,7 +19,15 @@ export function AdminSidebar({ collapsed = false }: { collapsed?: boolean }) {
   // Same department the DepartmentRail highlights, derived from the URL —
   // the two can never disagree about which department is "current",
   // regardless of how the user got to this page.
-  const activeSection = findNavMatch(pathname)?.section.title ?? null;
+  const match = findNavMatch(pathname);
+  const activeSection = match?.section.title ?? null;
+  // The single best-matching item's href (longest-prefix match across ALL
+  // sections) — NOT recomputed per-item below, because a naive per-item
+  // `pathname.startsWith(item.href + "/")` check lights up every sibling
+  // whose href happens to be a prefix of another (e.g. "Employés"
+  // /admin/rh is a prefix of "Départements" /admin/rh/departements, so
+  // both used to show active at once).
+  const activeItemHref = match?.item.href ?? null;
   const visibleSections = activeSection
     ? ADMIN_SECTIONS.filter((section) => section.title === activeSection)
     : ADMIN_SECTIONS;
@@ -59,7 +67,7 @@ export function AdminSidebar({ collapsed = false }: { collapsed?: boolean }) {
             )}
             <div className="space-y-0.5">
               {section.items.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const isActive = item.href === activeItemHref;
                 const Icon = item.icon;
                 return (
                   <Link

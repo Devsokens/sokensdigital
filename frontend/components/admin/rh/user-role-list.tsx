@@ -16,6 +16,7 @@ interface MergedUser {
   lastName: string;
   name: string;
   email: string;
+  avatarUrl: string | null;
   role: AppRole | null;
   departmentId: string | null;
 }
@@ -53,6 +54,7 @@ export function UserRoleList() {
           lastName: u.last_name,
           name: `${u.first_name} ${u.last_name}`.trim(),
           email: u.email,
+          avatarUrl: profile?.avatarUrl ?? u.avatar_url ?? null,
           role: profile?.role ?? null,
           departmentId: profile?.departmentId ?? null,
         };
@@ -163,8 +165,13 @@ export function UserRoleList() {
               <tr key={row.djangoId} data-tour={index === 0 ? "module-rh-utilisateurs" : undefined}>
                 <td className="px-5 py-3.5">
                   <span className="flex items-center gap-3">
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-semibold text-neutral-600">
-                      {initials(row.name || row.email)}
+                    <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-100 text-[11px] font-semibold text-neutral-600">
+                      {row.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- Cloudinary URL, not a local/optimizable asset
+                        <img src={row.avatarUrl} alt="" className="size-full object-cover" />
+                      ) : (
+                        initials(row.name || row.email)
+                      )}
                     </span>
                     <span>
                       <span className="block font-medium text-neutral-900">{row.name || "—"}</span>

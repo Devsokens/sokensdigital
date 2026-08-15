@@ -112,9 +112,14 @@ export function DepartmentList() {
                     <span
                       key={m.id}
                       title={`${m.first_name} ${m.last_name}`}
-                      className="flex size-7 items-center justify-center rounded-full border-2 border-white bg-neutral-100 text-[10.5px] font-semibold text-neutral-600 -ml-2 first:ml-0"
+                      className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-neutral-100 text-[10.5px] font-semibold text-neutral-600 -ml-2 first:ml-0"
                     >
-                      {initials(m.first_name, m.last_name)}
+                      {m.avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- Cloudinary URL, not a local/optimizable asset
+                        <img src={m.avatar_url} alt="" className="size-full object-cover" />
+                      ) : (
+                        initials(m.first_name, m.last_name)
+                      )}
                     </span>
                   ))}
                   {overflow > 0 && (

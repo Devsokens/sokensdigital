@@ -151,8 +151,13 @@ export function EmployeeList() {
                 <tr key={e.id} className={cn("transition-colors hover:bg-neutral-50", !isActive && "opacity-60")}>
                   <td className="px-5 py-3.5">
                     <Link href={`/admin/rh/${e.id}`} className="flex items-center gap-3">
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-xs font-semibold text-neutral-600">
-                        {initials(e.user.first_name, e.user.last_name)}
+                      <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-100 text-xs font-semibold text-neutral-600">
+                        {e.user.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- Cloudinary URL, not a local/optimizable asset
+                          <img src={e.user.avatar_url} alt="" className="size-full object-cover" />
+                        ) : (
+                          initials(e.user.first_name, e.user.last_name)
+                        )}
                       </span>
                       <span>
                         <span className="block font-medium text-neutral-900">
