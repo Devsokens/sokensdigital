@@ -7,6 +7,12 @@ import { listDepartments, createDepartment } from "@/lib/api/hr";
 import type { Department } from "@/lib/api/types";
 import { inputClass, labelClass, cardClass } from "@/components/admin/form-styles";
 
+const DEFAULT_COLOR = "#22d3ee";
+
+function initials(firstName: string, lastName: string) {
+  return `${firstName[0] ?? ""}${lastName[0] ?? ""}`.toUpperCase() || "?";
+}
+
 export function DepartmentList() {
   const [departments, setDepartments] = useState<Department[] | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -51,8 +57,13 @@ export function DepartmentList() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-neutral-900">Départements</h1>
+      <div className="mb-6 flex items-end justify-between gap-6">
+        <div>
+          <h1 className="text-2xl font-semibold text-neutral-900">Départements</h1>
+          <p className="mt-1.5 text-sm text-neutral-500">
+            La couleur d&apos;un département sert de repère dans les salons, les projets et les timesheets.
+          </p>
+        </div>
         <Button
           data-tour="module-rh-departements"
           onClick={() => setShowForm((v) => !v)}
@@ -74,18 +85,58 @@ export function DepartmentList() {
         </form>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {departments.map((d) => (
-          <div key={d.id} className={cardClass}>
-            <div className="flex items-center gap-2">
-              <span
-                className="size-2.5 rounded-full"
-                style={{ backgroundColor: d.color ?? "#22d3ee" }}
-              />
-              <span className="text-sm font-medium text-neutral-900">{d.name}</span>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {departments.map((d) => {
+          const color = d.color ?? DEFAULT_COLOR;
+          // member_count/members are absent from older API responses (e.g.
+          // a not-yet-redeployed backend) — degrade gracefully to "no
+          // preview" instead of crashing the whole list.
+          const members = d.members ?? [];
+          const memberCount = d.member_count ?? members.length;
+          const overflow = memberCount - members.length;
+          return (
+            <div key={d.id} className="relative overflow-hidden rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+              <span className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: color }} />
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-neutral-900">{d.name}</p>
+                  <p className="mt-1 text-xs text-neutral-500">
+                    {memberCount} membre{memberCount !== 1 ? "s" : ""}
+                  </p>
+                </div>
+                <span className="size-6 shrink-0 rounded-lg" style={{ backgroundColor: color }} />
+              </div>
+              {members.length > 0 && (
+                <div className="mt-4 flex">
+                  {members.map((m) => (
+                    <span
+                      key={m.id}
+                      title={`${m.first_name} ${m.last_name}`}
+                      className="flex size-7 items-center justify-center rounded-full border-2 border-white bg-neutral-100 text-[10.5px] font-semibold text-neutral-600 -ml-2 first:ml-0"
+                    >
+                      {initials(m.first_name, m.last_name)}
+                    </span>
+                  ))}
+                  {overflow > 0 && (
+                    <span className="-ml-2 flex size-7 items-center justify-center rounded-full border-2 border-white bg-neutral-50 text-[10.5px] font-semibold text-neutral-400">
+                      +{overflow}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
+
+        <button
+          type="button"
+          onClick={() => setShowForm(true)}
+          className="flex min-h-[150px] flex-col items-center justify-center gap-2.5 rounded-2xl border-[1.5px] border-dashed border-neutral-200 text-neutral-400 transition-colors hover:border-primary/40 hover:text-primary"
+        >
+          <Plus className="size-5" />
+          <span className="text-sm font-semibold">Créer un département</span>
+        </button>
+
         {departments.length === 0 && (
           <p className="text-sm text-neutral-400">Aucun département pour l&apos;instant.</p>
         )}

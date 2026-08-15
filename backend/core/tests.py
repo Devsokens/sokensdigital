@@ -271,6 +271,21 @@ class DepartmentViewSetTests(APITestCase):
             'departmentId': department_id,
         })
 
+    def test_list_includes_member_count_and_preview(self):
+        department = Department.objects.create(name='Technique', color='#22d3ee')
+        member_a = User.objects.create(email='a@sokensdigital.com', first_name='Ada', last_name='A')
+        member_a.department = department
+        member_a.save(update_fields=['department'])
+        member_b = User.objects.create(email='b@sokensdigital.com', first_name='Bob', last_name='B')
+        member_b.department = department
+        member_b.save(update_fields=['department'])
+
+        response = self.client_super_admin.get('/api/v1/departments/')
+        self.assertEqual(response.status_code, 200)
+        row = next(r for r in response.json()['results'] if r['id'] == str(department.id))
+        self.assertEqual(row['member_count'], 2)
+        self.assertEqual(len(row['members']), 2)
+
 
 class AuditLogViewSetTests(APITestCase):
     def setUp(self):

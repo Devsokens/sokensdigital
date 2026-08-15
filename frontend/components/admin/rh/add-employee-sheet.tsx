@@ -23,10 +23,28 @@ const EMPTY_FORM = {
   grossMonthlySalary: "",
 };
 
-export function AddEmployeeSheet({ onCreated }: { onCreated: () => void }) {
+export function AddEmployeeSheet({
+  onCreated,
+  trigger,
+  initialIdentity,
+}: {
+  onCreated: () => void;
+  /** Replaces the default "Ajouter un employé" button — e.g. a
+   * "Provisionner" CTA next to an already-existing, not-yet-provisioned
+   * Django user row in Utilisateurs & Rôles. */
+  trigger?: React.ReactElement;
+  /** Pre-fills step 1 (Identité) — skips retyping name/email already known
+   * from the Django user row being provisioned. */
+  initialIdentity?: { firstName: string; lastName: string; email: string };
+}) {
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState(0);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [step, setStep] = useState(initialIdentity ? 1 : 0);
+  const [form, setForm] = useState(() => ({
+    ...EMPTY_FORM,
+    firstName: initialIdentity?.firstName ?? "",
+    lastName: initialIdentity?.lastName ?? "",
+    email: initialIdentity?.email ?? "",
+  }));
   const [departments, setDepartments] = useState<Department[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -36,8 +54,13 @@ export function AddEmployeeSheet({ onCreated }: { onCreated: () => void }) {
   }, [open]);
 
   function reset() {
-    setForm(EMPTY_FORM);
-    setStep(0);
+    setForm({
+      ...EMPTY_FORM,
+      firstName: initialIdentity?.firstName ?? "",
+      lastName: initialIdentity?.lastName ?? "",
+      email: initialIdentity?.email ?? "",
+    });
+    setStep(initialIdentity ? 1 : 0);
     setError(null);
   }
 
@@ -93,9 +116,11 @@ export function AddEmployeeSheet({ onCreated }: { onCreated: () => void }) {
     >
       <SheetTrigger
         render={
-          <Button data-tour="module-rh-employes" className="gap-1.5 rounded-full px-4">
-            <Plus className="size-4" /> Ajouter un employé
-          </Button>
+          trigger ?? (
+            <Button data-tour="module-rh-employes" className="gap-1.5 rounded-full px-4">
+              <Plus className="size-4" /> Ajouter un employé
+            </Button>
+          )
         }
       />
       <SheetContent title="Ajouter un employé">

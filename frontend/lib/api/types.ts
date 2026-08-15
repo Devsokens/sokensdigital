@@ -16,6 +16,8 @@ export interface Department {
   id: string;
   name: string;
   color: string | null;
+  member_count?: number;
+  members?: UserBrief[];
 }
 
 export type ContractType = "CDI" | "CDD" | "STAGE" | "FREELANCE";

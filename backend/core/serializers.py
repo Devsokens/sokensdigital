@@ -7,10 +7,27 @@ from core.constants import (
 from core.models import AuditLog, Department, User
 
 
+MEMBER_PREVIEW_LIMIT = 4
+
+
 class DepartmentSerializer(serializers.ModelSerializer):
+    """member_count/members power the avatar-stack card on the
+    Départements screen (RH) — members is capped at MEMBER_PREVIEW_LIMIT,
+    the frontend renders "+N" for the rest using member_count."""
+
+    member_count = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
+
     class Meta:
         model = Department
-        fields = ['id', 'name', 'color']
+        fields = ['id', 'name', 'color', 'member_count', 'members']
+
+    def get_member_count(self, obj):
+        return obj.user_set.count()
+
+    def get_members(self, obj):
+        members = obj.user_set.order_by('first_name', 'last_name')[:MEMBER_PREVIEW_LIMIT]
+        return UserBriefSerializer(members, many=True).data
 
 
 class UserBriefSerializer(serializers.ModelSerializer):

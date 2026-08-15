@@ -1,20 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Check } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, Check, ShieldCheck, Search } from "lucide-react";
 import { listUsers, listDepartments, setUserRole } from "@/lib/api/hr";
 import { listProfiles } from "@/lib/firebase/profile";
 import type { Department, UserBrief } from "@/lib/api/types";
 import type { Profile } from "@/lib/firebase/types";
 import { ROLE_LABELS, type AppRole } from "@/lib/firebase/types";
 import { inputClass } from "@/components/admin/form-styles";
+import { AddEmployeeSheet } from "@/components/admin/rh/add-employee-sheet";
 
 interface MergedUser {
   djangoId: string;
+  firstName: string;
+  lastName: string;
   name: string;
   email: string;
   role: AppRole | null;
   departmentId: string | null;
+}
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/);
+  return `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase() || "?";
 }
 
 export function UserRoleList() {
@@ -23,6 +31,7 @@ export function UserRoleList() {
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   async function load() {
     try {
@@ -40,6 +49,8 @@ export function UserRoleList() {
         const profile = profileByEmail.get(u.email.toLowerCase());
         return {
           djangoId: u.id,
+          firstName: u.first_name,
+          lastName: u.last_name,
           name: `${u.first_name} ${u.last_name}`.trim(),
           email: u.email,
           role: profile?.role ?? null,
@@ -85,6 +96,15 @@ export function UserRoleList() {
     }
   }
 
+  const filtered = useMemo(() => {
+    if (!rows) return [];
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => `${r.name} ${r.email}`.toLowerCase().includes(q));
+  }, [rows, search]);
+
+  const unprovisionedCount = rows?.filter((r) => !r.role).length ?? 0;
+
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!rows) {
     return (
@@ -96,57 +116,110 @@ export function UserRoleList() {
 
   return (
     <div>
-      <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Utilisateurs & Rôles</h1>
-      <p className="mb-6 text-sm text-neutral-500">
-        Réservé au Super-Admin — le rôle et le département déterminent ce que chaque personne peut voir et faire.
-      </p>
+      <div className="mb-6 flex items-start gap-3">
+        <div className="flex-1">
+          <h1 className="text-2xl font-semibold text-neutral-900">Utilisateurs &amp; Rôles</h1>
+          <p className="mt-1.5 max-w-xl text-sm text-neutral-500">
+            Le rôle et le département déterminent ce que chaque personne peut voir et faire. Toute modification est
+            enregistrée dans l&apos;Audit Log.
+          </p>
+        </div>
+        <span className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3.5 py-1.5 text-xs font-semibold text-primary">
+          <ShieldCheck className="size-3.5" /> Réservé au Super-Admin
+        </span>
+      </div>
 
-      <div className="overflow-hidden rounded-xl border border-neutral-200 shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+        <div className="flex items-center gap-3 border-b border-neutral-100 px-5 py-3.5">
+          <div className="flex max-w-[320px] flex-1 items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2">
+            <Search className="size-3.5 shrink-0 text-neutral-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher un utilisateur"
+              className="w-full min-w-0 border-0 bg-transparent text-sm text-neutral-700 outline-none placeholder:text-neutral-400"
+            />
+          </div>
+          <span className="flex-1" />
+          {unprovisionedCount > 0 && (
+            <span className="flex items-center gap-1.5 text-xs text-neutral-500">
+              <span className="size-1.5 rounded-full bg-destructive" />
+              {unprovisionedCount} compte{unprovisionedCount !== 1 ? "s" : ""} non provisionné{unprovisionedCount !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+
         <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
+          <thead className="bg-neutral-50 text-left text-[11px] font-semibold tracking-wide text-neutral-500 uppercase">
             <tr>
-              <th className="px-4 py-3 font-medium">Nom</th>
-              <th className="px-4 py-3 font-medium">Email</th>
-              <th className="px-4 py-3 font-medium">Rôle</th>
-              <th className="px-4 py-3 font-medium">Département</th>
-              <th className="w-8 px-4 py-3" />
+              <th className="px-5 py-3">Utilisateur</th>
+              <th className="px-5 py-3">Rôle</th>
+              <th className="px-5 py-3">Département</th>
+              <th className="w-9 px-5 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100">
-            {rows.map((row, index) => (
+            {filtered.map((row, index) => (
               <tr key={row.djangoId} data-tour={index === 0 ? "module-rh-utilisateurs" : undefined}>
-                <td className="px-4 py-3 text-neutral-900">{row.name || "—"}</td>
-                <td className="px-4 py-3 text-neutral-500">{row.email}</td>
-                <td className="px-4 py-3">
-                  {row.role ? (
-                    <select
-                      value={row.role}
-                      onChange={(e) => handleRoleChange(row, e.target.value as AppRole)}
-                      disabled={savingId === row.djangoId}
-                      className={`${inputClass} py-1.5`}
-                    >
-                      {Object.entries(ROLE_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className="text-xs text-neutral-400">Pas encore provisionné (Firestore)</span>
-                  )}
+                <td className="px-5 py-3.5">
+                  <span className="flex items-center gap-3">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[11px] font-semibold text-neutral-600">
+                      {initials(row.name || row.email)}
+                    </span>
+                    <span>
+                      <span className="block font-medium text-neutral-900">{row.name || "—"}</span>
+                      <span className="block text-xs text-neutral-400">{row.email}</span>
+                    </span>
+                  </span>
                 </td>
-                <td className="px-4 py-3">
-                  <select
-                    value={row.departmentId ?? ""}
-                    onChange={(e) => handleDepartmentChange(row, e.target.value)}
-                    disabled={savingId === row.djangoId || !row.role}
-                    className={`${inputClass} py-1.5`}
-                  >
-                    <option value="">— Aucun —</option>
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
-                    ))}
-                  </select>
-                </td>
-                <td className="px-4 py-3">
+                {row.role ? (
+                  <>
+                    <td className="px-5 py-3.5">
+                      <select
+                        value={row.role}
+                        onChange={(e) => handleRoleChange(row, e.target.value as AppRole)}
+                        disabled={savingId === row.djangoId}
+                        className={`${inputClass} rounded-full py-1.5 text-xs font-semibold`}
+                      >
+                        {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <select
+                        value={row.departmentId ?? ""}
+                        onChange={(e) => handleDepartmentChange(row, e.target.value)}
+                        disabled={savingId === row.djangoId}
+                        className={`${inputClass} rounded-full py-1.5 text-xs`}
+                      >
+                        <option value="">— Aucun —</option>
+                        {departments.map((d) => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                      </select>
+                    </td>
+                  </>
+                ) : (
+                  <td className="px-5 py-3.5" colSpan={2}>
+                    <span className="flex items-center gap-3 rounded-lg border border-dashed border-neutral-200 px-3.5 py-2">
+                      <span className="flex-1 text-xs text-neutral-500">Pas encore provisionné dans Firestore</span>
+                      <AddEmployeeSheet
+                        onCreated={load}
+                        initialIdentity={{ firstName: row.firstName, lastName: row.lastName, email: row.email }}
+                        trigger={
+                          <button
+                            type="button"
+                            className="rounded-full bg-neutral-900 px-3 py-1 text-xs font-semibold text-white hover:bg-neutral-700"
+                          >
+                            Provisionner
+                          </button>
+                        }
+                      />
+                    </span>
+                  </td>
+                )}
+                <td className="px-5 py-3.5">
                   {savingId === row.djangoId && <Loader2 className="size-4 animate-spin text-neutral-400" />}
                   {savedId === row.djangoId && savingId !== row.djangoId && (
                     <Check className="size-4 text-primary" />
@@ -154,10 +227,10 @@ export function UserRoleList() {
                 </td>
               </tr>
             ))}
-            {rows.length === 0 && (
+            {filtered.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-neutral-400">
-                  Aucun utilisateur pour l&apos;instant.
+                <td colSpan={4} className="px-4 py-8 text-center text-neutral-400">
+                  {rows.length === 0 ? "Aucun utilisateur pour l'instant." : "Aucun résultat."}
                 </td>
               </tr>
             )}

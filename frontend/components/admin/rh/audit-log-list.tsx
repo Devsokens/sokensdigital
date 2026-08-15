@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { listAuditLogs } from "@/lib/api/hr";
 import type { AuditLogEntry } from "@/lib/api/types";
 
@@ -31,44 +31,36 @@ export function AuditLogList() {
         Journal immuable — alimenté automatiquement à chaque suppression d&apos;un enregistrement. Lecture seule.
       </p>
 
-      <div className="overflow-hidden rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
-            <tr>
-              <th className="px-4 py-3 font-medium">Date</th>
-              <th className="px-4 py-3 font-medium">Auteur</th>
-              <th className="px-4 py-3 font-medium">Action</th>
-              <th className="px-4 py-3 font-medium">Ressource</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-100">
-            {logs.map((log) => (
-              <tr key={log.id}>
-                <td className="px-4 py-3 whitespace-nowrap text-neutral-500">
-                  {new Date(log.created_at).toLocaleString("fr-FR")}
-                </td>
-                <td className="px-4 py-3 text-neutral-900">
-                  {log.user ? `${log.user.first_name} ${log.user.last_name}` : "Système"}
-                </td>
-                <td className="px-4 py-3">
-                  <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">
-                    {log.action}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-neutral-500">
-                  {log.entity_type} <span className="text-neutral-300">#{log.entity_id.slice(0, 8)}</span>
-                </td>
-              </tr>
-            ))}
-            {logs.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-neutral-400">
-                  Aucune entrée pour l&apos;instant.
-                </td>
-              </tr>
+      <div className="rounded-xl border border-neutral-200 bg-white px-6 py-2 shadow-sm">
+        {logs.map((log, index) => (
+          <div key={log.id} className="relative flex gap-4 py-4">
+            {index < logs.length - 1 && (
+              <span className="absolute left-[15px] top-11 bottom-0 w-px bg-neutral-100" />
             )}
-          </tbody>
-        </table>
+            <span className="w-24 shrink-0 pt-1.5 font-mono text-xs text-neutral-400">
+              {new Date(log.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}{" "}
+              {new Date(log.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+            <span className="flex size-[30px] shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+              <Trash2 className="size-3.5" />
+            </span>
+            <div className="min-w-0 flex-1 pt-0.5">
+              <p className="text-sm text-neutral-900">
+                <strong className="font-semibold">
+                  {log.user ? `${log.user.first_name} ${log.user.last_name}` : "Système"}
+                </strong>{" "}
+                a supprimé un <strong className="font-semibold">{log.entity_type}</strong>
+              </p>
+              <p className="mt-0.5 font-mono text-xs text-neutral-400">#{log.entity_id.slice(0, 8)}</p>
+            </div>
+            <span className="h-fit shrink-0 rounded-md bg-destructive/10 px-2 py-0.5 text-[11px] font-bold text-destructive">
+              DELETE
+            </span>
+          </div>
+        ))}
+        {logs.length === 0 && (
+          <p className="py-8 text-center text-neutral-400">Aucune entrée pour l&apos;instant.</p>
+        )}
       </div>
     </div>
   );

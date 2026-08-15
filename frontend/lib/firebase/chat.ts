@@ -33,12 +33,25 @@ export function subscribeToRooms(
 
   const unsubscribers: Unsubscribe[] = [];
 
+  // Named onError handlers — without one, the Firebase SDK swallows the
+  // failing query into a single generic "Uncaught Error in snapshot
+  // listener" with no indication of *which* of the 4 queries below it
+  // came from, which made a real permission-denied bug impossible to
+  // localize from the browser console alone.
+  function onError(label: string) {
+    return (err: Error) => console.error(`[chat] subscribeToRooms(${label}) failed:`, err);
+  }
+
   const companyQuery = query(collection(db, "chatRooms"), where("roomType", "==", "COMPANY"));
   unsubscribers.push(
-    onSnapshot(companyQuery, (snapshot) => {
-      applySnapshot(rooms, "COMPANY", snapshot);
-      emit();
-    })
+    onSnapshot(
+      companyQuery,
+      (snapshot) => {
+        applySnapshot(rooms, "COMPANY", snapshot);
+        emit();
+      },
+      onError("COMPANY")
+    )
   );
 
   if (departmentId) {
@@ -48,10 +61,14 @@ export function subscribeToRooms(
       where("departmentId", "==", departmentId)
     );
     unsubscribers.push(
-      onSnapshot(departmentQuery, (snapshot) => {
-        applySnapshot(rooms, "DEPARTMENT", snapshot);
-        emit();
-      })
+      onSnapshot(
+        departmentQuery,
+        (snapshot) => {
+          applySnapshot(rooms, "DEPARTMENT", snapshot);
+          emit();
+        },
+        onError("DEPARTMENT")
+      )
     );
   }
 
@@ -61,10 +78,14 @@ export function subscribeToRooms(
     where("memberUids", "array-contains", uid)
   );
   unsubscribers.push(
-    onSnapshot(projectQuery, (snapshot) => {
-      applySnapshot(rooms, "PROJECT", snapshot);
-      emit();
-    })
+    onSnapshot(
+      projectQuery,
+      (snapshot) => {
+        applySnapshot(rooms, "PROJECT", snapshot);
+        emit();
+      },
+      onError("PROJECT")
+    )
   );
 
   const directQuery = query(
@@ -73,10 +94,14 @@ export function subscribeToRooms(
     where("memberUids", "array-contains", uid)
   );
   unsubscribers.push(
-    onSnapshot(directQuery, (snapshot) => {
-      applySnapshot(rooms, "DIRECT", snapshot);
-      emit();
-    })
+    onSnapshot(
+      directQuery,
+      (snapshot) => {
+        applySnapshot(rooms, "DIRECT", snapshot);
+        emit();
+      },
+      onError("DIRECT")
+    )
   );
 
   return () => unsubscribers.forEach((unsub) => unsub());
@@ -132,11 +157,15 @@ export function subscribeToMessages(
     collection(db, "chatRooms", roomId, "messages"),
     orderBy("createdAt", "asc")
   );
-  return onSnapshot(messagesQuery, (snapshot) => {
-    onChange(
-      snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ChatMessage, "id">) }))
-    );
-  });
+  return onSnapshot(
+    messagesQuery,
+    (snapshot) => {
+      onChange(
+        snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ChatMessage, "id">) }))
+      );
+    },
+    (err) => console.error(`[chat] subscribeToMessages(${roomId}) failed:`, err)
+  );
 }
 
 export async function sendMessage(
