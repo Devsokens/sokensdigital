@@ -6,6 +6,7 @@ import type {
   EmployeeProfile,
   Paginated,
   Payslip,
+  Role,
   UserBrief,
 } from "@/lib/api/types";
 
@@ -34,6 +35,7 @@ export function provisionUser(data: {
   password: string;
   first_name: string;
   last_name: string;
+  avatar_url?: string;
   role: string;
   department_id?: string;
 }) {
@@ -73,9 +75,20 @@ export function listDepartments() {
   return apiFetch<Paginated<Department>>("/api/v1/departments/");
 }
 
-export function createDepartment(data: { name: string; color?: string }) {
+export function getDepartment(id: string) {
+  return apiFetch<Department>(`/api/v1/departments/${id}/`);
+}
+
+export function createDepartment(data: { name: string; description?: string; color?: string }) {
   return apiFetch<Department>("/api/v1/departments/", {
     method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateDepartment(id: string, data: Partial<{ name: string; description: string; color: string }>) {
+  return apiFetch<Department>(`/api/v1/departments/${id}/`, {
+    method: "PATCH",
     body: JSON.stringify(data),
   });
 }
@@ -93,4 +106,15 @@ export function setUserRole(userId: string, data: { role: string; department_id?
 
 export function listAuditLogs() {
   return apiFetch<Paginated<AuditLogEntry>>("/api/v1/audit-logs/");
+}
+
+export function listRoles() {
+  return apiFetch<Paginated<Role>>("/api/v1/roles/");
+}
+
+export function updateRolePermissions(roleId: string, permissions: Record<string, string[]>) {
+  return apiFetch<Role>(`/api/v1/roles/${roleId}/`, {
+    method: "PATCH",
+    body: JSON.stringify({ permissions }),
+  });
 }

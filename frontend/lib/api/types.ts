@@ -11,14 +11,23 @@ export interface UserBrief {
   last_name: string;
   email: string;
   avatar_url: string | null;
+  department_name: string | null;
 }
 
 export interface Department {
   id: string;
   name: string;
+  description: string | null;
   color: string | null;
   member_count?: number;
   members?: UserBrief[];
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  description: string | null;
+  permissions: Record<string, string[]>;
 }
 
 export type ContractType = "CDI" | "CDD" | "STAGE" | "FREELANCE";

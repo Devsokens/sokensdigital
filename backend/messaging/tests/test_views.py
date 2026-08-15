@@ -16,7 +16,9 @@ from messaging.models import ChannelMetadata
 @patch('messaging.views.upsert_chat_room')
 class ChannelViewSetTests(APITestCase):
     def setUp(self):
-        self.admin_role = Role.objects.create(name=ROLE_ADMIN)
+        # get_or_create, not create — core.migrations.0003_seed_role_permissions
+        # pre-seeds every role name on a fresh test DB.
+        self.admin_role, _ = Role.objects.get_or_create(name=ROLE_ADMIN)
         self.admin = UserFactory()
         self.admin.roles.add(self.admin_role)
         self.user = UserFactory()

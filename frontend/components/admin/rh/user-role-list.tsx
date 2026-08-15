@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Check, ShieldCheck, Search } from "lucide-react";
-import { listUsers, listDepartments, setUserRole } from "@/lib/api/hr";
+import { Loader2, MoreHorizontal, ShieldCheck, Search } from "lucide-react";
+import { listUsers, listDepartments } from "@/lib/api/hr";
 import { listProfiles } from "@/lib/firebase/profile";
 import type { Department, UserBrief } from "@/lib/api/types";
 import type { Profile } from "@/lib/firebase/types";
 import { ROLE_LABELS, type AppRole } from "@/lib/firebase/types";
-import { inputClass } from "@/components/admin/form-styles";
 import { AddEmployeeSheet } from "@/components/admin/rh/add-employee-sheet";
+import { UserEditModal } from "@/components/admin/rh/user-edit-modal";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 
 interface MergedUser {
   djangoId: string;
@@ -30,8 +31,6 @@ export function UserRoleList() {
   const [rows, setRows] = useState<MergedUser[] | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const [savedId, setSavedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   async function load() {
@@ -69,34 +68,10 @@ export function UserRoleList() {
     load();
   }, []);
 
-  async function handleRoleChange(row: MergedUser, role: AppRole) {
-    setSavingId(row.djangoId);
-    setSavedId(null);
-    try {
-      await setUserRole(row.djangoId, { role, department_id: row.departmentId ?? undefined });
-      setRows((prev) => prev && prev.map((r) => (r.djangoId === row.djangoId ? { ...r, role } : r)));
-      setSavedId(row.djangoId);
-    } catch {
-      setError(`Impossible de changer le rôle de ${row.name}.`);
-    } finally {
-      setSavingId(null);
-    }
-  }
-
-  async function handleDepartmentChange(row: MergedUser, departmentId: string) {
-    if (!row.role) return;
-    setSavingId(row.djangoId);
-    setSavedId(null);
-    try {
-      await setUserRole(row.djangoId, { role: row.role, department_id: departmentId || undefined });
-      setRows((prev) => prev && prev.map((r) => (r.djangoId === row.djangoId ? { ...r, departmentId } : r)));
-      setSavedId(row.djangoId);
-    } catch {
-      setError(`Impossible de changer le département de ${row.name}.`);
-    } finally {
-      setSavingId(null);
-    }
-  }
+  const departmentNameById = useMemo(
+    () => new Map(departments.map((d) => [d.id, d.name])),
+    [departments]
+  );
 
   const filtered = useMemo(() => {
     if (!rows) return [];
@@ -179,57 +154,59 @@ export function UserRoleList() {
                     </span>
                   </span>
                 </td>
-                {row.role ? (
-                  <>
-                    <td className="px-5 py-3.5">
-                      <select
-                        value={row.role}
-                        onChange={(e) => handleRoleChange(row, e.target.value as AppRole)}
-                        disabled={savingId === row.djangoId}
-                        className={`${inputClass} rounded-full py-1.5 text-xs font-semibold`}
-                      >
-                        {Object.entries(ROLE_LABELS).map(([value, label]) => (
-                          <option key={value} value={value}>{label}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <select
-                        value={row.departmentId ?? ""}
-                        onChange={(e) => handleDepartmentChange(row, e.target.value)}
-                        disabled={savingId === row.djangoId}
-                        className={`${inputClass} rounded-full py-1.5 text-xs`}
-                      >
-                        <option value="">— Aucun —</option>
-                        {departments.map((d) => (
-                          <option key={d.id} value={d.id}>{d.name}</option>
-                        ))}
-                      </select>
-                    </td>
-                  </>
-                ) : (
-                  <td className="px-5 py-3.5" colSpan={2}>
-                    <span className="flex items-center gap-3 rounded-lg border border-dashed border-neutral-200 px-3.5 py-2">
-                      <span className="flex-1 text-xs text-neutral-500">Pas encore provisionné dans Firestore</span>
-                      <AddEmployeeSheet
-                        onCreated={load}
-                        initialIdentity={{ firstName: row.firstName, lastName: row.lastName, email: row.email }}
-                        trigger={
+                <td className="px-5 py-3.5">
+                  {row.role ? (
+                    <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">
+                      {ROLE_LABELS[row.role]}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-neutral-400">—</span>
+                  )}
+                </td>
+                <td className="px-5 py-3.5 text-neutral-500">
+                  {row.departmentId ? departmentNameById.get(row.departmentId) ?? "—" : "—"}
+                </td>
+                <td className="px-5 py-3.5">
+                  {row.role ? (
+                    <Popover>
+                      <PopoverTrigger
+                        render={
                           <button
                             type="button"
-                            className="rounded-full bg-neutral-900 px-3 py-1 text-xs font-semibold text-white hover:bg-neutral-700"
+                            className="flex size-7 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
                           >
-                            Provisionner
+                            <MoreHorizontal className="size-4" />
                           </button>
                         }
                       />
-                    </span>
-                  </td>
-                )}
-                <td className="px-5 py-3.5">
-                  {savingId === row.djangoId && <Loader2 className="size-4 animate-spin text-neutral-400" />}
-                  {savedId === row.djangoId && savingId !== row.djangoId && (
-                    <Check className="size-4 text-primary" />
+                      <PopoverContent className="w-40 p-1" align="end">
+                        <UserEditModal
+                          user={row}
+                          onSaved={load}
+                          trigger={
+                            <button
+                              type="button"
+                              className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50"
+                            >
+                              Modifier l&apos;utilisateur
+                            </button>
+                          }
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  ) : (
+                    <AddEmployeeSheet
+                      onCreated={load}
+                      initialIdentity={{ firstName: row.firstName, lastName: row.lastName, email: row.email }}
+                      trigger={
+                        <button
+                          type="button"
+                          className="rounded-full bg-neutral-900 px-3 py-1 text-xs font-semibold text-white hover:bg-neutral-700"
+                        >
+                          Provisionner
+                        </button>
+                      }
+                    />
                   )}
                 </td>
               </tr>

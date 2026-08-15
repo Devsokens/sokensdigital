@@ -8,6 +8,7 @@ from core.views import (
     DepartmentViewSet,
     MeView,
     ProvisionUserView,
+    RoleViewSet,
     SetUserRoleView,
     UserListView,
     global_search,
@@ -18,6 +19,7 @@ router = DefaultRouter()
 router.register('departments', DepartmentViewSet, basename='department')
 router.register('users', UserListView, basename='user')
 router.register('audit-logs', AuditLogViewSet, basename='audit-log')
+router.register('roles', RoleViewSet, basename='role')
 
 # Feature endpoints get added here as they're built, one at a time.
 urlpatterns = [

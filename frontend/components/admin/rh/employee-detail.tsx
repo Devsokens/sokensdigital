@@ -8,6 +8,7 @@ import { getEmployee, addContract, addPayslip, updateEmployee } from "@/lib/api/
 import type { EmployeeProfile } from "@/lib/api/types";
 import { inputClass, labelClass, readOnlyInputClass, cardClass } from "@/components/admin/form-styles";
 import { cn } from "@/lib/utils";
+import { formatFcfa } from "@/lib/format-currency";
 
 const TABS = [
   { key: "poste", label: "Poste & rémunération" },
@@ -87,7 +88,7 @@ export function EmployeeDetail({ id }: { id: string }) {
             <span>{employee.user.email}</span>
             {employee.hire_date && <span>Depuis le {new Date(employee.hire_date).toLocaleDateString("fr-FR")}</span>}
             {employee.gross_monthly_salary && (
-              <span>{Number(employee.gross_monthly_salary).toLocaleString("fr-FR")} € brut / mois</span>
+              <span>{formatFcfa(employee.gross_monthly_salary)} brut / mois</span>
             )}
           </div>
         </div>
@@ -203,7 +204,7 @@ function SalaryForm({ employee, onSaved }: { employee: EmployeeProfile; onSaved:
         <label className="block">
           <span className={labelClass}>Coût horaire (calculé)</span>
           <input
-            value={employee.base_hourly_cost ? `${Number(employee.base_hourly_cost).toFixed(2).replace(".", ",")} €` : "—"}
+            value={formatFcfa(employee.base_hourly_cost)}
             disabled
             className={`${readOnlyInputClass} font-mono`}
           />

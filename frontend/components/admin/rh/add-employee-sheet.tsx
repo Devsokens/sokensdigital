@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Plus, ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, Plus, ChevronLeft, ChevronRight, Check, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/sheet";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { provisionUser, createEmployee, listDepartments } from "@/lib/api/hr";
+import { uploadAvatar } from "@/lib/api/upload";
 import type { Department } from "@/lib/api/types";
 import { ROLE_LABELS, type AppRole } from "@/lib/firebase/types";
 
@@ -15,6 +16,7 @@ const EMPTY_FORM = {
   firstName: "",
   lastName: "",
   email: "",
+  avatarUrl: "" as string | null,
   password: "",
   role: "" as AppRole | "",
   departmentId: "",
@@ -22,6 +24,10 @@ const EMPTY_FORM = {
   hireDate: "",
   grossMonthlySalary: "",
 };
+
+function initials(firstName: string, lastName: string) {
+  return `${firstName[0] ?? ""}${lastName[0] ?? ""}`.toUpperCase() || "?";
+}
 
 export function AddEmployeeSheet({
   onCreated,
@@ -48,6 +54,8 @@ export function AddEmployeeSheet({
   const [departments, setDepartments] = useState<Department[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) listDepartments().then((d) => setDepartments(d.results)).catch(() => setDepartments([]));
@@ -68,6 +76,20 @@ export function AddEmployeeSheet({
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      set("avatarUrl", await uploadAvatar(file));
+    } catch {
+      setError("Impossible de charger cette photo. Réessayez.");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
   function canAdvance(): boolean {
     if (step === 0) return Boolean(form.firstName && form.lastName && form.email);
     if (step === 1) return Boolean(form.password.length >= 8 && form.role);
@@ -85,6 +107,7 @@ export function AddEmployeeSheet({
         password: form.password,
         first_name: form.firstName,
         last_name: form.lastName,
+        avatar_url: form.avatarUrl || undefined,
         role: form.role as AppRole,
         department_id: form.departmentId || undefined,
       });
@@ -153,6 +176,34 @@ export function AddEmployeeSheet({
 
           {step === 0 && (
             <div className="space-y-4">
+              <div className="flex justify-center pb-1">
+                <div className="relative">
+                  <span className="flex size-20 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-xl font-semibold text-primary">
+                    {form.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- Cloudinary URL, not a local/optimizable asset
+                      <img src={form.avatarUrl} alt="" className="size-full object-cover" />
+                    ) : (
+                      initials(form.firstName, form.lastName)
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingPhoto}
+                    aria-label="Ajouter une photo de profil"
+                    className="absolute -bottom-1 -right-1 flex size-7 items-center justify-center rounded-full bg-neutral-900 text-white shadow-sm transition-colors hover:bg-neutral-700 disabled:opacity-50"
+                  >
+                    {uploadingPhoto ? <Loader2 className="size-3.5 animate-spin" /> : <Camera className="size-3.5" />}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoChange}
+                    className="hidden"
+                  />
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <label className="block">
                   <span className={labelClass}>Prénom</span>

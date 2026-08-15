@@ -119,6 +119,7 @@ class ProvisionUserViewTests(APITestCase):
             'email': 'new.employee@sokensdigital.com',
             'firstName': 'New',
             'lastName': 'Employee',
+            'avatarUrl': None,
             'role': 'DEVELOPPEUR',
             'departmentId': str(self.department.id),
         })
@@ -558,3 +559,42 @@ class ChatAttachmentUploadViewTests(APITestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()['url'], 'https://res.cloudinary.com/test-cloud/raw/upload/v1/chat-attachments/abc.pdf')
         self.assertEqual(mock_upload.call_args.kwargs['folder'], 'chat-attachments')
+
+
+class RoleViewSetTests(APITestCase):
+    def setUp(self):
+        self.super_admin = User.objects.create(email='super-role@sokensdigital.com', first_name='Super')
+        _give_role(self.super_admin, ROLE_SUPER_ADMIN)
+        self.outsider = User.objects.create(email='dev-role@sokensdigital.com', first_name='Dev')
+        _give_role(self.outsider, ROLE_DEVELOPER)
+
+        self.client_super_admin = APIClient()
+        self.client_super_admin.force_authenticate(user=self.super_admin)
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def test_super_admin_can_list_roles(self):
+        response = self.client_super_admin.get('/api/v1/roles/')
+        self.assertEqual(response.status_code, 200)
+        names = [r['name'] for r in response.json()['results']]
+        self.assertIn('Développeur', names)
+
+    def test_outsider_forbidden(self):
+        response = self.client_outsider.get('/api/v1/roles/')
+        self.assertEqual(response.status_code, 403)
+
+    def test_super_admin_can_update_permissions(self):
+        role = Role.objects.get(name='Développeur')
+        response = self.client_super_admin.patch(
+            f'/api/v1/roles/{role.id}/', {'permissions': {'projets': ['voir']}}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        role.refresh_from_db()
+        self.assertEqual(role.permissions, {'projets': ['voir']})
+
+    def test_invalid_permissions_shape_rejected(self):
+        role = Role.objects.get(name='Développeur')
+        response = self.client_super_admin.patch(
+            f'/api/v1/roles/{role.id}/', {'permissions': {'projets': 'voir'}}, format='json',
+        )
+        self.assertEqual(response.status_code, 400)

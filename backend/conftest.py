@@ -13,45 +13,58 @@ def department(db):
 
 @pytest.fixture
 def admin_department(db):
-    """Département Administration par défaut."""
-    return Department.objects.create(name='Administration', description='Département Administration')
+    """Département Administration par défaut — get_or_create, not create:
+    core.migrations.0002_seed_default_departments already seeds a
+    department named 'Administration' on a fresh test DB."""
+    dept, _ = Department.objects.get_or_create(name='Administration', defaults={'description': 'Département Administration'})
+    return dept
 
 
 # ---- Rôles ----
+# get_or_create everywhere below, not create — core.migrations.0003_seed_role_permissions
+# pre-seeds every role name on a fresh test DB, so a plain create() collides
+# on the unique `name` constraint.
 
 @pytest.fixture
 def role_super_admin(db):
-    return Role.objects.create(name='Super-Administrateur', description='Super Admin')
+    role, _ = Role.objects.get_or_create(name='Super-Administrateur', defaults={'description': 'Super Admin'})
+    return role
 
 
 @pytest.fixture
 def role_admin(db):
-    return Role.objects.create(name='Administrateur', description='Admin')
+    role, _ = Role.objects.get_or_create(name='Administrateur', defaults={'description': 'Admin'})
+    return role
 
 
 @pytest.fixture
 def role_project_manager(db):
-    return Role.objects.create(name='Chef de Projet', description='PM')
+    role, _ = Role.objects.get_or_create(name='Chef de Projet', defaults={'description': 'PM'})
+    return role
 
 
 @pytest.fixture
 def role_developer(db):
-    return Role.objects.create(name='Développeur', description='Dev')
+    role, _ = Role.objects.get_or_create(name='Développeur', defaults={'description': 'Dev'})
+    return role
 
 
 @pytest.fixture
 def role_directeur_financier(db):
-    return Role.objects.create(name='Directeur Financier', description='DF')
+    role, _ = Role.objects.get_or_create(name='Directeur Financier', defaults={'description': 'DF'})
+    return role
 
 
 @pytest.fixture
 def role_commercial(db):
-    return Role.objects.create(name='Commercial', description='Commercial')
+    role, _ = Role.objects.get_or_create(name='Commercial', defaults={'description': 'Commercial'})
+    return role
 
 
 @pytest.fixture
 def role_rh_manager(db):
-    return Role.objects.create(name='Responsable RH', description='RH')
+    role, _ = Role.objects.get_or_create(name='Responsable RH', defaults={'description': 'RH'})
+    return role
 
 
 # ---- Utilisateurs avec rôles ----

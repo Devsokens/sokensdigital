@@ -46,6 +46,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
   {
     title: "Administration & RH",
     items: [
+      { label: "Tableau de bord", href: "/admin/rh/dashboard", icon: LayoutDashboard },
       { label: "Employés", href: "/admin/rh", icon: Users },
       { label: "Départements", href: "/admin/rh/departements", icon: Building2 },
       { label: "Utilisateurs & Rôles", href: "/admin/rh/utilisateurs", icon: UserCog },

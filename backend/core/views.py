@@ -1,7 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
-from rest_framework import permissions, status, viewsets
+from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -20,9 +20,11 @@ from core.constants import (
 from core.serializers import (
     APP_ROLE_TO_DJANGO_ROLE,
     AuditLogSerializer,
+    DepartmentDetailSerializer,
     DepartmentSerializer,
     MeUpdateSerializer,
     ProvisionUserSerializer,
+    RoleSerializer,
     SetUserRoleSerializer,
     UserBriefSerializer,
     UserSerializer,
@@ -165,6 +167,11 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     serializer_class = DepartmentSerializer
     permission_classes = [IsSuperAdmin]
 
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return DepartmentDetailSerializer
+        return DepartmentSerializer
+
     def perform_create(self, serializer):
         department = serializer.save()
         # Mirrors into Firestore's chat system — firestore.rules only lets
@@ -259,11 +266,14 @@ class ProvisionUserView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        avatar_url = data.get('avatar_url') or None
+
         try:
             create_profile(firebase_user.uid, {
                 'email': data['email'],
                 'firstName': data['first_name'],
                 'lastName': data['last_name'],
+                'avatarUrl': avatar_url,
                 'role': data['role'],
                 'departmentId': str(department.id) if department else None,
             })
@@ -272,7 +282,8 @@ class ProvisionUserView(APIView):
             if django_user:
                 django_user.firebase_uid = firebase_user.uid
                 django_user.department = department
-                django_user.save(update_fields=['firebase_uid', 'department'])
+                django_user.avatar_url = avatar_url
+                django_user.save(update_fields=['firebase_uid', 'department', 'avatar_url'])
             else:
                 django_user = User.objects.create_user(
                     email=data['email'],
@@ -281,7 +292,8 @@ class ProvisionUserView(APIView):
                 )
                 django_user.firebase_uid = firebase_user.uid
                 django_user.department = department
-                django_user.save(update_fields=['firebase_uid', 'department'])
+                django_user.avatar_url = avatar_url
+                django_user.save(update_fields=['firebase_uid', 'department', 'avatar_url'])
             _sync_django_role(django_user, data['role'])
         except Exception:
             # Roll back the Firebase account so a failed provisioning attempt
@@ -347,6 +359,23 @@ class SetUserRoleView(APIView):
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AuditLog.objects.select_related('user').order_by('-created_at')
     serializer_class = AuditLogSerializer
+    permission_classes = [IsSuperAdmin]
+
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=['Administration & RH'],
+        summary='List roles and their module/action permissions',
+        description="Read side of the Utilisateurs & Rôles permission editor. Doesn't "
+        'gate the actual API (that stays on has_role() by role name) — this is the '
+        "declarative view of what each role is meant to grant, editable from the UI.",
+    ),
+    retrieve=extend_schema(tags=['Administration & RH'], summary='Get a role'),
+    partial_update=extend_schema(tags=['Administration & RH'], summary="Update a role's module/action permissions"),
+)
+class RoleViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    queryset = Role.objects.all().order_by('name')
+    serializer_class = RoleSerializer
     permission_classes = [IsSuperAdmin]
 
 

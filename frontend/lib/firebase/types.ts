@@ -21,6 +21,35 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   AUTRE: "Autre",
 };
 
+/** The Firestore profile's `role` (SNAKE_CASE, above) and the Django
+ * Role.name a colleague is actually granted (French — see
+ * backend/core/serializers.py's APP_ROLE_TO_DJANGO_ROLE) are two labels
+ * for the same role. This is the frontend mirror, needed wherever a UI
+ * flow starts from the Django Role list (module permission editor) and
+ * ends by calling setUserRole(), which expects the SNAKE_CASE form. */
+export const DJANGO_ROLE_TO_APP_ROLE: Record<string, AppRole> = {
+  "Super-Administrateur": "SUPER_ADMIN",
+  "Responsable Marketing": "RESPONSABLE_MARKETING",
+  "Responsable RH": "RESPONSABLE_RH",
+  "Commercial": "COMMERCIAL",
+  "Chef de Projet": "CHEF_DE_PROJET",
+  "Développeur": "DEVELOPPEUR",
+  "Comptable": "COMPTABLE",
+  "Directeur Financier": "DIRECTEUR_FINANCIER",
+};
+
+/** Cahier des charges §4.11 — which roles belong to which of the four
+ * seeded departments (see backend/core/migrations/0002_seed_default_departments.py),
+ * for the Utilisateurs & Rôles "département → rôle" cascading picker.
+ * "Administrateur" and "Support Client" aren't in APP_ROLE_CHOICES (no
+ * Firestore-side equivalent yet), so they're left out of this UI flow. */
+export const ROLES_BY_DEPARTMENT: Record<string, AppRole[]> = {
+  "Administration": ["SUPER_ADMIN", "RESPONSABLE_RH"],
+  "Comptabilité / Fiscalité": ["DIRECTEUR_FINANCIER", "COMPTABLE"],
+  "Techniques": ["CHEF_DE_PROJET", "DEVELOPPEUR"],
+  "Marketing / Communication": ["RESPONSABLE_MARKETING", "COMMERCIAL"],
+};
+
 export type ProjectStatus = "ACTIF" | "TERMINE" | "ARCHIVE";
 
 export type RoomType = "COMPANY" | "DEPARTMENT" | "PROJECT" | "DIRECT";

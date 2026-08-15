@@ -2,13 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2, MoreHorizontal, Search } from "lucide-react";
+import { Loader2, MoreHorizontal, Network, Search, Table2 } from "lucide-react";
 import { listEmployees, updateEmployee } from "@/lib/api/hr";
 import type { EmployeeProfile } from "@/lib/api/types";
 import { ApiError } from "@/lib/api/client";
 import { AddEmployeeSheet } from "@/components/admin/rh/add-employee-sheet";
+import { EmployeeQuickEditModal } from "@/components/admin/rh/employee-quick-edit-modal";
+import { EmployeeOrgChart } from "@/components/admin/rh/employee-org-chart";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { formatFcfa } from "@/lib/format-currency";
 
 const CONTRACT_LABELS: Record<string, string> = {
   CDI: "CDI",
@@ -31,16 +34,13 @@ function formatDate(value: string | null) {
   return new Date(value).toLocaleDateString("fr-FR");
 }
 
-function formatCost(value: string | null) {
-  if (!value) return "—";
-  return `${Number(value).toFixed(2).replace(".", ",")} €`;
-}
 
 export function EmployeeList() {
   const [employees, setEmployees] = useState<EmployeeProfile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"tous" | "actifs" | "inactifs">("tous");
+  const [view, setView] = useState<"liste" | "organigramme">("liste");
 
   async function load() {
     try {
@@ -128,8 +128,35 @@ export function EmployeeList() {
             </button>
           ))}
         </div>
+        <div className="flex gap-1 rounded-lg border border-neutral-200 bg-white p-1">
+          <button
+            type="button"
+            onClick={() => setView("liste")}
+            title="Vue liste"
+            className={cn(
+              "flex size-8 items-center justify-center rounded-md transition-colors",
+              view === "liste" ? "bg-neutral-900 text-white" : "text-neutral-500 hover:bg-neutral-50"
+            )}
+          >
+            <Table2 className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("organigramme")}
+            title="Organigramme"
+            className={cn(
+              "flex size-8 items-center justify-center rounded-md transition-colors",
+              view === "organigramme" ? "bg-neutral-900 text-white" : "text-neutral-500 hover:bg-neutral-50"
+            )}
+          >
+            <Network className="size-4" />
+          </button>
+        </div>
       </div>
 
+      {view === "organigramme" ? (
+        <EmployeeOrgChart employees={filtered} />
+      ) : (
       <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-left text-[11px] font-semibold tracking-wide text-neutral-500 uppercase">
@@ -178,7 +205,7 @@ export function EmployeeList() {
                     )}
                   </td>
                   <td className="px-5 py-3.5 text-neutral-500">{formatDate(e.hire_date)}</td>
-                  <td className="px-5 py-3.5 text-right font-mono text-neutral-600">{formatCost(e.base_hourly_cost)}</td>
+                  <td className="px-5 py-3.5 text-right font-mono text-neutral-600">{formatFcfa(e.base_hourly_cost)}</td>
                   <td className="px-5 py-3.5">
                     <span
                       className={cn(
@@ -209,6 +236,18 @@ export function EmployeeList() {
                         >
                           Voir la fiche
                         </Link>
+                        <EmployeeQuickEditModal
+                          employee={e}
+                          onSaved={load}
+                          trigger={
+                            <button
+                              type="button"
+                              className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50"
+                            >
+                              Modifier
+                            </button>
+                          }
+                        />
                         <button
                           type="button"
                           onClick={() => toggleStatus(e)}
@@ -232,6 +271,7 @@ export function EmployeeList() {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
