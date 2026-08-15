@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.firestore_client import create_profile, invalidate_role_cache, update_profile_fields, upsert_chat_room
-from core.models import AuditLog, Department, User, hash_email
+from core.models import AuditLog, Department, Role, User, hash_email
 from core.permissions import has_role
 from core.storage import upload_avatar, upload_file
 from core.constants import (
@@ -18,6 +18,7 @@ from core.constants import (
     ROLE_COMPTABLE, ROLE_RESPONSABLE_MARKETING,
 )
 from core.serializers import (
+    APP_ROLE_TO_DJANGO_ROLE,
     AuditLogSerializer,
     DepartmentSerializer,
     MeUpdateSerializer,
@@ -26,6 +27,20 @@ from core.serializers import (
     UserBriefSerializer,
     UserSerializer,
 )
+
+
+def _sync_django_role(django_user, app_role):
+    """Mirrors the Firestore-facing app role onto the Django-side RBAC
+    table (core.permissions.has_role reads user.roles, not Firestore —
+    see core.serializers.APP_ROLE_TO_DJANGO_ROLE for why this mapping
+    exists). Replaces the user's roles entirely — a person has exactly one
+    app role at a time, same as the Firestore profile field."""
+    role_name = APP_ROLE_TO_DJANGO_ROLE.get(app_role)
+    if role_name:
+        role, _ = Role.objects.get_or_create(name=role_name)
+        django_user.roles.set([role])
+    else:
+        django_user.roles.clear()
 
 
 @extend_schema(
@@ -265,6 +280,7 @@ class ProvisionUserView(APIView):
                 django_user.firebase_uid = firebase_user.uid
                 django_user.department = department
                 django_user.save(update_fields=['firebase_uid', 'department'])
+            _sync_django_role(django_user, data['role'])
         except Exception:
             # Roll back the Firebase account so a failed provisioning attempt
             # doesn't leave an orphaned Auth user with no profile/Django row.
@@ -311,6 +327,7 @@ class SetUserRoleView(APIView):
         invalidate_role_cache(django_user.firebase_uid)
         django_user.department = department
         django_user.save(update_fields=['department'])
+        _sync_django_role(django_user, data['role'])
 
         return Response(UserSerializer(django_user).data)
 

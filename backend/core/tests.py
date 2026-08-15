@@ -8,7 +8,7 @@ from rest_framework.test import APIClient, APITestCase
 from core.models import AuditLog, Department, Role, User
 from core.constants import (
     ROLE_SUPER_ADMIN, ROLE_RH_MANAGER, ROLE_DEVELOPER, ROLE_COMMERCIAL,
-    ROLE_RESPONSABLE_MARKETING,
+    ROLE_PROJECT_MANAGER, ROLE_RESPONSABLE_MARKETING, ROLE_COMPTABLE,
 )
 
 
@@ -163,6 +163,34 @@ class ProvisionUserViewTests(APITestCase):
         response = client.post('/api/v1/users/provision/', self.payload(role='SUPER_ADMIN'), format='json')
         self.assertEqual(response.status_code, 201)
 
+    @patch('core.views.create_profile')
+    @patch('firebase_admin.auth.create_user')
+    def test_provisioning_grants_the_matching_django_role(self, mock_create_user, mock_create_profile):
+        """Regression test: has_role() checks user.roles (Django), not the
+        Firestore profile — a provisioned account with no Django role gets
+        403'd on every permission-gated endpoint despite Firestore saying
+        it has one. See core.serializers.APP_ROLE_TO_DJANGO_ROLE."""
+        mock_create_user.return_value = MagicMock(uid='firebase-uid-role-sync')
+
+        response = self.client_rh.post(
+            '/api/v1/users/provision/', self.payload(role='CHEF_DE_PROJET'), format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user = User.objects.get(firebase_uid='firebase-uid-role-sync')
+        self.assertEqual(list(user.roles.values_list('name', flat=True)), [ROLE_PROJECT_MANAGER])
+
+    @patch('core.views.create_profile')
+    @patch('firebase_admin.auth.create_user')
+    def test_provisioning_with_autre_grants_no_django_role(self, mock_create_user, mock_create_profile):
+        mock_create_user.return_value = MagicMock(uid='firebase-uid-autre')
+
+        response = self.client_rh.post('/api/v1/users/provision/', self.payload(role='AUTRE'), format='json')
+
+        self.assertEqual(response.status_code, 201)
+        user = User.objects.get(firebase_uid='firebase-uid-autre')
+        self.assertEqual(list(user.roles.values_list('name', flat=True)), [])
+
 
 class SetUserRoleViewTests(APITestCase):
     def setUp(self):
@@ -197,6 +225,16 @@ class SetUserRoleViewTests(APITestCase):
         })
         self.employee.refresh_from_db()
         self.assertEqual(self.employee.department_id, self.department.id)
+        self.assertEqual(list(self.employee.roles.values_list('name', flat=True)), [ROLE_COMPTABLE])
+
+    @patch('core.views.update_profile_fields')
+    def test_changing_role_replaces_the_previous_django_role(self, mock_update):
+        _give_role(self.employee, ROLE_DEVELOPER)
+        self.client_super_admin.patch(
+            f'/api/v1/users/{self.employee.id}/role/', {'role': 'COMPTABLE'}, format='json',
+        )
+        self.employee.refresh_from_db()
+        self.assertEqual(list(self.employee.roles.values_list('name', flat=True)), [ROLE_COMPTABLE])
 
     @patch('core.views.update_profile_fields')
     def test_rh_cannot_change_role(self, mock_update):

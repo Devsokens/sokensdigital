@@ -1,5 +1,9 @@
 from rest_framework import serializers
 
+from core.constants import (
+    ROLE_COMMERCIAL, ROLE_COMPTABLE, ROLE_DEVELOPER, ROLE_DIRECTEUR_FINANCIER,
+    ROLE_PROJECT_MANAGER, ROLE_RESPONSABLE_MARKETING, ROLE_RH_MANAGER, ROLE_SUPER_ADMIN,
+)
 from core.models import AuditLog, Department, User
 
 
@@ -60,6 +64,22 @@ APP_ROLE_CHOICES = [
     'SUPER_ADMIN', 'RESPONSABLE_MARKETING', 'RESPONSABLE_RH', 'COMMERCIAL',
     'CHEF_DE_PROJET', 'DEVELOPPEUR', 'COMPTABLE', 'DIRECTEUR_FINANCIER', 'AUTRE',
 ]
+
+# Maps the SNAKE_CASE role stored in the Firestore profile (APP_ROLE_CHOICES
+# above — legacy naming from before the RBAC migration) to the French Role
+# name actually checked by core.permissions.has_role() on the Django side.
+# 'AUTRE' has no Django-side equivalent — an employee with that value gets
+# no elevated permissions, same as before this mapping existed.
+APP_ROLE_TO_DJANGO_ROLE = {
+    'SUPER_ADMIN': ROLE_SUPER_ADMIN,
+    'RESPONSABLE_MARKETING': ROLE_RESPONSABLE_MARKETING,
+    'RESPONSABLE_RH': ROLE_RH_MANAGER,
+    'COMMERCIAL': ROLE_COMMERCIAL,
+    'CHEF_DE_PROJET': ROLE_PROJECT_MANAGER,
+    'DEVELOPPEUR': ROLE_DEVELOPER,
+    'COMPTABLE': ROLE_COMPTABLE,
+    'DIRECTEUR_FINANCIER': ROLE_DIRECTEUR_FINANCIER,
+}
 
 
 class ProvisionUserSerializer(serializers.Serializer):
