@@ -330,6 +330,14 @@ class UserListViewTests(APITestCase):
         response = client.get('/api/v1/users/')
         self.assertEqual(response.status_code, 200)
 
+    def test_super_admin_can_list_users(self):
+        super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
+        _give_role(super_admin, ROLE_SUPER_ADMIN)
+        client = APIClient()
+        client.force_authenticate(user=super_admin)
+        response = client.get('/api/v1/users/')
+        self.assertEqual(response.status_code, 200)
+
     def test_outsider_forbidden(self):
         client = APIClient()
         client.force_authenticate(user=self.outsider)

@@ -185,10 +185,12 @@ class IsSuperAdminOrRH(permissions.BasePermission):
 class CanListUsers(permissions.BasePermission):
     """Broader than IsSuperAdminOrRH: read-only (name/email only, no salary
     or other sensitive data), so it's also safe for Responsable Marketing —
-    who needs it to reassign leads to a Commercial (docs/backend-specifications.md §2.1)."""
+    who needs it to reassign leads to a Commercial (docs/backend-specifications.md §2.1).
+    Super-Admin included too — "accès complet à l'ensemble du système"
+    (cahier des charges §4.8) means never narrower than every other role."""
 
     def has_permission(self, request, view):
-        return has_role(request.user, ROLE_RH_MANAGER, ROLE_RESPONSABLE_MARKETING)
+        return has_role(request.user, ROLE_SUPER_ADMIN, ROLE_RH_MANAGER, ROLE_RESPONSABLE_MARKETING)
 
 
 @extend_schema_view(
