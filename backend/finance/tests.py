@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from rest_framework.test import APIClient, APITestCase
 
-from core.constants import ROLE_COMPTABLE, ROLE_DEVELOPER, ROLE_DIRECTEUR_FINANCIER, ROLE_PROJECT_MANAGER
+from core.constants import ROLE_COMPTABLE, ROLE_DEVELOPER, ROLE_DIRECTEUR_FINANCIER, ROLE_PROJECT_MANAGER, ROLE_SUPER_ADMIN
 from core.models import Role, User
 from finance.models import (
     Account,
@@ -110,6 +110,23 @@ class DisbursementRequestViewSetTests(APITestCase):
         )
         response = self.client_cfo.get('/api/v1/finance/disbursement-requests/')
         self.assertEqual(response.json()['count'], 2)
+
+    def test_super_admin_sees_all_requests(self):
+        """Regression: CanInitiateDisbursement.has_permission/get_queryset
+        used to omit ROLE_SUPER_ADMIN entirely, 403'ing a Super-Admin on an
+        endpoint whose own docstring promised them full access."""
+        super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
+        _give_role(super_admin, ROLE_SUPER_ADMIN)
+        client = APIClient()
+        client.force_authenticate(user=super_admin)
+
+        DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=1000,
+            beneficiary='X', reason='Y',
+        )
+        response = client.get('/api/v1/finance/disbursement-requests/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['count'], 1)
 
     def test_cfo_cannot_create_request(self):
         response = self.client_cfo.post('/api/v1/finance/disbursement-requests/', self.payload(), format='json')

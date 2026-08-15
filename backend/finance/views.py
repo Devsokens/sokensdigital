@@ -45,8 +45,8 @@ class CanInitiateDisbursement(permissions.BasePermission):
 
     def has_permission(self, request, view):
         if request.method == 'POST':
-            return has_role(request.user, *CHEF_DE_PROJET_ROLES)
-        return has_role(request.user, *CHEF_DE_PROJET_ROLES, *FINANCE_READ_ROLES)
+            return has_role(request.user, *CHEF_DE_PROJET_ROLES, ROLE_SUPER_ADMIN)
+        return has_role(request.user, *CHEF_DE_PROJET_ROLES, *FINANCE_READ_ROLES, ROLE_SUPER_ADMIN)
 
 
 @extend_schema_view(
@@ -66,7 +66,7 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
         if getattr(self, 'swagger_fake_view', False):
             return DisbursementRequest.objects.none()
         qs = DisbursementRequest.objects.select_related('project', 'requested_by', 'decided_by', 'executed_by')
-        if has_role(self.request.user, *FINANCE_READ_ROLES):
+        if has_role(self.request.user, *FINANCE_READ_ROLES, ROLE_SUPER_ADMIN):
             return qs
         return qs.filter(
             Q(project__lead_project_manager=self.request.user) | Q(requested_by=self.request.user)

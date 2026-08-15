@@ -3,7 +3,7 @@ from unittest.mock import patch
 from rest_framework.test import APIClient, APITestCase
 
 from core.models import Role, User
-from core.constants import ROLE_PROJECT_MANAGER, ROLE_DEVELOPER
+from core.constants import ROLE_PROJECT_MANAGER, ROLE_DEVELOPER, ROLE_SUPER_ADMIN
 
 
 def _give_role(user, name):
@@ -45,6 +45,26 @@ class ProjectViewSetTests(APITestCase):
     def test_plain_dev_cannot_create_project(self):
         response = self.client_outsider.post('/api/v1/projects/', {'name': 'Interdit'}, format='json')
         self.assertEqual(response.status_code, 403)
+
+    def test_super_admin_can_create_project(self):
+        """Regression: IsProjectManagerOrReadOnly.has_permission used to
+        omit ROLE_SUPER_ADMIN on the POST branch, 403'ing project creation
+        for a Super-Admin despite the endpoint's own docstring promising it."""
+        super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
+        _give_role(super_admin, ROLE_SUPER_ADMIN)
+        client = APIClient()
+        client.force_authenticate(user=super_admin)
+        response = client.post('/api/v1/projects/', {'name': 'Projet Super-Admin'}, format='json')
+        self.assertEqual(response.status_code, 201)
+
+    def test_super_admin_sees_every_project_in_list(self):
+        super_admin = User.objects.create(email='super2@sokensdigital.com', first_name='Super')
+        _give_role(super_admin, ROLE_SUPER_ADMIN)
+        client = APIClient()
+        client.force_authenticate(user=super_admin)
+        response = client.get('/api/v1/projects/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['count'], 1)
 
     def test_member_sees_project_in_list_outsider_does_not(self):
         dev_ids = [p['id'] for p in self.client_dev.get('/api/v1/projects/').json()['results']]

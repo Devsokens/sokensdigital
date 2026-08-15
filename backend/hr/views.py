@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from core.permissions import has_role
-from core.constants import ROLE_RH_MANAGER
+from core.constants import ROLE_RH_MANAGER, ROLE_SUPER_ADMIN
 from hr.models import EmployeeProfile
 from hr.serializers import (
     ContractSerializer,
@@ -13,7 +13,11 @@ from hr.serializers import (
     PayslipSerializer,
 )
 
-HR_MANAGER_ROLES = (ROLE_RH_MANAGER,)
+# Every use of this tuple in this file is a straight permission gate (never
+# reused for "not X" business-logic branching), so ROLE_SUPER_ADMIN can live
+# here once instead of being repeated at each call site — cahier des
+# charges §4.8: "Super-Administrateur : accès complet à l'ensemble du système".
+HR_MANAGER_ROLES = (ROLE_SUPER_ADMIN, ROLE_RH_MANAGER)
 
 
 class IsHRManagerOrOwnReadOnly(permissions.BasePermission):

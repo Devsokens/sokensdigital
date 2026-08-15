@@ -74,10 +74,10 @@ class IsMarketingOrOwnCommercial(permissions.BasePermission):
     to them (list filtered in get_queryset; object actions checked here)."""
 
     def has_permission(self, request, view):
-        return has_role(request.user, *MARKETING_ROLES, *COMMERCIAL_ROLES)
+        return has_role(request.user, *MARKETING_ROLES, *COMMERCIAL_ROLES, ROLE_SUPER_ADMIN)
 
     def has_object_permission(self, request, view, obj):
-        if has_role(request.user, *MARKETING_ROLES):
+        if has_role(request.user, *MARKETING_ROLES, ROLE_SUPER_ADMIN):
             return True
         return obj.assigned_to_id == request.user.id
 
@@ -98,14 +98,14 @@ class LeadViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return Lead.objects.none()
         qs = Lead.objects.select_related('assigned_to')
-        if has_role(self.request.user, *MARKETING_ROLES):
+        if has_role(self.request.user, *MARKETING_ROLES, ROLE_SUPER_ADMIN):
             return qs
         return qs.filter(assigned_to=self.request.user)
 
 
 class IsMarketing(permissions.BasePermission):
     def has_permission(self, request, view):
-        return has_role(request.user, *MARKETING_ROLES)
+        return has_role(request.user, *MARKETING_ROLES, ROLE_SUPER_ADMIN)
 
 
 @extend_schema_view(
@@ -358,10 +358,10 @@ class IsMarketingOrOwnCommercialSocialPost(permissions.BasePermission):
     never edit/schedule/cancel (docs/backend-specifications.md §2.2)."""
 
     def has_permission(self, request, view):
-        return has_role(request.user, *MARKETING_ROLES, *COMMERCIAL_ROLES)
+        return has_role(request.user, *MARKETING_ROLES, *COMMERCIAL_ROLES, ROLE_SUPER_ADMIN)
 
     def has_object_permission(self, request, view, obj):
-        if has_role(request.user, *MARKETING_ROLES):
+        if has_role(request.user, *MARKETING_ROLES, ROLE_SUPER_ADMIN):
             return True
         return request.method in permissions.SAFE_METHODS and obj.author_id == request.user.id
 
@@ -392,12 +392,12 @@ class SocialPostViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return SocialPost.objects.none()
         qs = SocialPost.objects.select_related('author')
-        if has_role(self.request.user, *MARKETING_ROLES):
+        if has_role(self.request.user, *MARKETING_ROLES, ROLE_SUPER_ADMIN):
             return qs
         return qs.filter(author=self.request.user)
 
     def create(self, request, *args, **kwargs):
-        if not has_role(request.user, *MARKETING_ROLES) and request.data.get('status', SocialPost.Status.DRAFT) != SocialPost.Status.DRAFT:
+        if not has_role(request.user, *MARKETING_ROLES, ROLE_SUPER_ADMIN) and request.data.get('status', SocialPost.Status.DRAFT) != SocialPost.Status.DRAFT:
             return Response(
                 {'detail': 'Un Commercial ne peut créer que des publications en brouillon (DRAFT).'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -410,7 +410,7 @@ class SocialPostViewSet(viewsets.ModelViewSet):
     @extend_schema(tags=['Marketing & Commercial'], summary='Schedule a social post', responses={200: SocialPostSerializer})
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def schedule(self, request, pk=None):
-        if not has_role(request.user, *MARKETING_ROLES):
+        if not has_role(request.user, *MARKETING_ROLES, ROLE_SUPER_ADMIN):
             return Response(status=status.HTTP_403_FORBIDDEN)
         post = self.get_object()
         if not post.scheduled_at:
@@ -425,7 +425,7 @@ class SocialPostViewSet(viewsets.ModelViewSet):
     @extend_schema(tags=['Marketing & Commercial'], summary='Cancel a scheduled social post', responses={200: SocialPostSerializer})
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def cancel(self, request, pk=None):
-        if not has_role(request.user, *MARKETING_ROLES):
+        if not has_role(request.user, *MARKETING_ROLES, ROLE_SUPER_ADMIN):
             return Response(status=status.HTTP_403_FORBIDDEN)
         post = self.get_object()
         if post.status not in (SocialPost.Status.DRAFT, SocialPost.Status.SCHEDULED):
@@ -617,11 +617,11 @@ class PublicQuoteTrackView(generics.RetrieveAPIView):
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def marketing_dashboard(request):
-    if not has_role(request.user, ROLE_RESPONSABLE_MARKETING, ROLE_COMMERCIAL, ROLE_PROJECT_MANAGER):
+    if not has_role(request.user, ROLE_RESPONSABLE_MARKETING, ROLE_COMMERCIAL, ROLE_PROJECT_MANAGER, ROLE_SUPER_ADMIN):
         return Response(status=status.HTTP_403_FORBIDDEN)
 
     leads = Lead.objects.all()
-    if not has_role(request.user, ROLE_RESPONSABLE_MARKETING):
+    if not has_role(request.user, ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN):
         leads = leads.filter(assigned_to=request.user)
 
     # "Pipeline pondéré" = Sum(estimated_value * qualification_score / 100)
@@ -667,7 +667,7 @@ def marketing_dashboard(request):
     ]
 
     social_posts = SocialPost.objects.all()
-    if not has_role(request.user, ROLE_RESPONSABLE_MARKETING):
+    if not has_role(request.user, ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN):
         social_posts = social_posts.filter(author=request.user)
     social_by_status = {
         row['status']: row['count'] for row in social_posts.values('status').annotate(count=Count('id')).order_by()

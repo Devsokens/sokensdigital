@@ -11,25 +11,22 @@
   build réussi côté Vercel (probable souci d'assignation de domaine, voir
   onglet **Domains** du projet). En local (`npm run dev`) tout fonctionne.
   À investiguer avec accès au dashboard Vercel.
-- **Audit RBAC "Super-Admin oublié"** — plusieurs groupes de rôles définis
-  localement dans les vues (`hr/views.py::HR_MANAGER_ROLES`,
-  `marketing/views.py::MARKETING_ROLES`/`COMMERCIAL_ROLES`,
-  `finance/views.py::CHEF_DE_PROJET_ROLES` et consorts, `projects/views.py::MANAGER_ROLES`)
-  n'incluent **pas** `ROLE_SUPER_ADMIN` — certains appels l'ajoutent au cas
-  par cas (`has_role(request.user, *X_ROLES, ROLE_SUPER_ADMIN)`), d'autres
-  l'oublient, ce qui 403 un Super-Admin légitime au hasard des endpoints
-  (déjà corrigé pour `core.views.CanListUsers` — `/api/v1/users/`, trouvé
-  via un vrai bug en session). Le cahier des charges §4.8 est explicite :
-  "Super-Administrateur : accès complet à l'ensemble du système" — aucune
-  vue ne devrait jamais l'exclure. Deux façons de corriger, à trancher :
-  1. Ajouter `ROLE_SUPER_ADMIN` à chaque groupe de rôles concerné (sûr,
-     mais il faut les trouver tous un par un).
-  2. Faire porter le bypass par `has_role()`/`core.permissions` lui-même
-     (un seul endroit, plus robuste) — **mais** `has_role()` sert aussi à
-     de la logique métier hors permissions (ex. `marketing/views.py` avec
-     des `not has_role(request.user, *COMMERCIAL_ROLES)`), donc un bypass
-     global changerait aussi ce genre de branchements, pas seulement les
-     portes d'accès. À valider avant de le faire.
+- ~~**Audit RBAC "Super-Admin oublié"**~~ — **corrigé** (2026-08). Plusieurs
+  vérifications `has_role()` dans `core` (`CanListUsers`), `hr`
+  (`HR_MANAGER_ROLES`), `marketing` (`MARKETING_ROLES`, `marketing_dashboard`)
+  et `projects` (`IsProjectManagerOrReadOnly`, scoping de la liste) omettaient
+  `ROLE_SUPER_ADMIN`, 403'ant un Super-Admin légitime au hasard des endpoints
+  malgré des docstrings qui promettaient explicitement "accès complet" —
+  cahier des charges §4.8. `finance/views.py` avait déjà le bon réflexe
+  partout sauf `CanInitiateDisbursement` (la 403 sur `/finance/disbursement-requests/`
+  observée en session, désormais aussi corrigée). Fix appliqué au cas par
+  cas (ajout de `ROLE_SUPER_ADMIN` à chaque vérification concernée), pas
+  via un bypass global dans `has_role()` — ce dernier sert aussi à de la
+  logique métier hors permissions (`marketing/views.py` a des
+  `not has_role(request.user, *COMMERCIAL_ROLES)` où un bypass aurait changé
+  le comportement, pas juste l'accès). 4 tests de non-régression ajoutés
+  (`core`, `finance`, `marketing`, `projects`). `technique`/`administration`/
+  `messaging` n'utilisent pas `has_role()`, rien à corriger là.
 
 ## Améliorations prévues, non urgentes
 

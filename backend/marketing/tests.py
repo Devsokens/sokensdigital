@@ -453,6 +453,18 @@ class MarketingDashboardTests(APITestCase):
         response = self.client_outsider.get('/api/v1/marketing/dashboard/')
         self.assertEqual(response.status_code, 403)
 
+    def test_super_admin_sees_all_leads(self):
+        """Regression: marketing_dashboard() used to omit ROLE_SUPER_ADMIN
+        from its own gate and scoping, despite its docstring promising
+        Super-Admin the same unscoped view as Responsable Marketing."""
+        super_admin = User.objects.create(email='super-dash@sokensdigital.com', first_name='Super')
+        _give_role(super_admin, ROLE_SUPER_ADMIN)
+        client = APIClient()
+        client.force_authenticate(user=super_admin)
+        response = client.get('/api/v1/marketing/dashboard/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['total_leads'], 2)
+
     def test_conversion_rate_computed(self):
         Lead.objects.create(
             first_name='Alan', last_name='Turing', email='alan@example.com', source='SITE_WEB',

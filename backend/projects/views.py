@@ -27,7 +27,7 @@ class IsProjectManagerOrReadOnly(permissions.BasePermission):
 
     def has_permission(self, request, view):
         if request.method == 'POST':
-            return has_role(request.user, *MANAGER_ROLES)
+            return has_role(request.user, *MANAGER_ROLES, ROLE_SUPER_ADMIN)
         return request.user and request.user.is_authenticated
 
     def has_object_permission(self, request, view, obj):
@@ -35,7 +35,7 @@ class IsProjectManagerOrReadOnly(permissions.BasePermission):
             return (
                 obj.lead_project_manager_id == request.user.id
                 or obj.memberships.filter(user=request.user).exists()
-                or has_role(request.user, *WIDE_READ_ROLES)
+                or has_role(request.user, *WIDE_READ_ROLES, ROLE_SUPER_ADMIN)
             )
         return obj.lead_project_manager_id == request.user.id or has_role(request.user, ROLE_SUPER_ADMIN)
 
@@ -59,7 +59,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         qs = Project.objects.select_related('lead_project_manager').prefetch_related(
             'memberships__user', 'pinned_by', 'tasks',
         )
-        if has_role(user, *WIDE_READ_ROLES):
+        if has_role(user, *WIDE_READ_ROLES, ROLE_SUPER_ADMIN):
             qs = qs
         else:
             qs = qs.filter(Q(lead_project_manager=user) | Q(memberships__user=user)).distinct()
