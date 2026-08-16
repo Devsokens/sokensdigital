@@ -69,7 +69,7 @@ class ProcurementRequestViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(requested_by=self.request.user)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin()])
+    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
     def approve_rcf(self, request, pk=None):
         """RCF validation."""
         procurement = self.get_object()
@@ -83,7 +83,7 @@ class ProcurementRequestViewSet(viewsets.ModelViewSet):
 
         return Response(self.get_serializer(procurement).data)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin()])
+    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
     def reject_rcf(self, request, pk=None):
         """RCF reject."""
         procurement = self.get_object()
@@ -98,7 +98,7 @@ class ProcurementRequestViewSet(viewsets.ModelViewSet):
 
         return Response(self.get_serializer(procurement).data)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin()])
+    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
     def approve_manager(self, request, pk=None):
         """Manager (Gérant) validation."""
         procurement = self.get_object()
@@ -112,7 +112,7 @@ class ProcurementRequestViewSet(viewsets.ModelViewSet):
 
         return Response(self.get_serializer(procurement).data)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin()])
+    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
     def reject_manager(self, request, pk=None):
         """Manager reject."""
         procurement = self.get_object()
@@ -135,7 +135,12 @@ class SupplierQuoteViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['procurement', 'supplier', 'status']
 
-    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin()])
+    def get_permissions(self):
+        if self.request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
+            return [IsFinanceOrAdmin()]
+        return super().get_permissions()
+
+    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
     def validate_rcf(self, request, pk=None):
         """RCF validation."""
         quote = self.get_object()
@@ -148,7 +153,7 @@ class SupplierQuoteViewSet(viewsets.ModelViewSet):
 
         return Response(self.get_serializer(quote).data)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin()])
+    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
     def validate_manager(self, request, pk=None):
         """Manager validation."""
         quote = self.get_object()
@@ -165,7 +170,7 @@ class SupplierQuoteViewSet(viewsets.ModelViewSet):
 
         return Response(self.get_serializer(quote).data)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin()])
+    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
     def reject(self, request, pk=None):
         """Reject quote."""
         quote = self.get_object()
@@ -205,10 +210,15 @@ class SupplierInvoiceViewSet(viewsets.ModelViewSet):
     filterset_fields = ['supplier', 'procurement', 'status']
     ordering_fields = ['invoice_date', 'due_date', 'amount_ttc']
 
+    def get_permissions(self):
+        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
+            return [IsFinanceOrAdmin()]
+        return super().get_permissions()
+
     def perform_create(self, serializer):
         serializer.save(received_by=self.request.user)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsFinanceOrAdmin()])
+    @action(detail=True, methods=['post'], permission_classes=[IsFinanceOrAdmin])
     def validate(self, request, pk=None):
         """Valider facture fournisseur."""
         invoice = self.get_object()
