@@ -15,7 +15,7 @@ from core.constants import (
     ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN,
 )
 from core.models import Role, User
-from marketing.models import BlogPost, Lead, PageSection, Quote, ShowcaseProject, SocialPost
+from marketing.models import BlogPost, Lead, PageSection, Quote, ShowcaseProject, SocialPost, Specification
 
 
 def _give_role(user, name):
@@ -568,7 +568,9 @@ class QuoteViewSetTests(APITestCase):
         send_response = self.client_a.post(f'/api/v1/marketing/quotes/{quote_id}/send/')
         self.assertEqual(send_response.status_code, 400)
 
-    def test_send_locks_the_quote(self):
+    def test_owner_can_still_edit_after_sending(self):
+        """The owning department can always edit and update a quote,
+        whatever its status — no more BROUILLON-only lock."""
         create_response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
         quote_id = create_response.json()['id']
 
@@ -579,7 +581,34 @@ class QuoteViewSetTests(APITestCase):
         edit_response = self.client_a.patch(
             f'/api/v1/marketing/quotes/{quote_id}/', {'discount_amount': '100'}, format='json',
         )
-        self.assertEqual(edit_response.status_code, 400)
+        self.assertEqual(edit_response.status_code, 200)
+        self.assertEqual(edit_response.json()['discount_amount'], '100.00')
+
+    def test_marketing_can_edit_any_quote_including_other_commercials(self):
+        marketing_user = User.objects.create(email='marketing-devis@sokensdigital.com', first_name='Marketing')
+        _give_role(marketing_user, ROLE_RESPONSABLE_MARKETING)
+        client_marketing = APIClient()
+        client_marketing.force_authenticate(user=marketing_user)
+
+        create_response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
+        quote_id = create_response.json()['id']
+
+        response = client_marketing.patch(
+            f'/api/v1/marketing/quotes/{quote_id}/', {'discount_amount': '50'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_commercial_still_cannot_edit_another_commercials_quote(self):
+        create_response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
+        quote_id = create_response.json()['id']
+        response = self.client_b.patch(
+            f'/api/v1/marketing/quotes/{quote_id}/', {'discount_amount': '50'}, format='json',
+        )
+        # 404, not 403 — get_queryset() already scopes a Commercial-only
+        # user to their own quotes, so another commercial's quote is
+        # filtered out before the object-permission check even runs
+        # (same reasoning as test_commercial_cannot_access_other_commercials_quote).
+        self.assertEqual(response.status_code, 404)
 
     def test_clone_creates_new_editable_version(self):
         create_response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
@@ -648,6 +677,74 @@ class QuoteViewSetTests(APITestCase):
         line = response.json()['lines'][0]
         self.assertEqual(line['amount_label'], 'Offert')
         self.assertEqual(line['description'], "Séance d'accompagnement.")
+
+    def _accepted_quote(self):
+        create_response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
+        quote = Quote.objects.get(id=create_response.json()['id'])
+        quote.status = Quote.Status.ACCEPTE
+        quote.save(update_fields=['status'])
+        return quote
+
+    def test_convert_accepted_quote_to_invoice(self):
+        quote = self._accepted_quote()
+        response = self.client_a.post(f'/api/v1/marketing/quotes/{quote.id}/convert-to-invoice/')
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertEqual(body['quote'], str(quote.id))
+        self.assertEqual(body['amount_ht'], '6000.00')
+        self.assertTrue(body['invoice_number'].startswith('FAC-'))
+
+    def test_cannot_convert_a_draft_quote(self):
+        create_response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
+        quote_id = create_response.json()['id']
+        response = self.client_a.post(f'/api/v1/marketing/quotes/{quote_id}/convert-to-invoice/')
+        self.assertEqual(response.status_code, 400)
+
+    def test_cannot_convert_twice(self):
+        quote = self._accepted_quote()
+        self.client_a.post(f'/api/v1/marketing/quotes/{quote.id}/convert-to-invoice/')
+        response = self.client_a.post(f'/api/v1/marketing/quotes/{quote.id}/convert-to-invoice/')
+        self.assertEqual(response.status_code, 400)
+
+    def test_outsider_cannot_convert(self):
+        quote = self._accepted_quote()
+        response = self.client_outsider.post(f'/api/v1/marketing/quotes/{quote.id}/convert-to-invoice/')
+        self.assertEqual(response.status_code, 403)
+
+
+class PublicQuoteAcceptViewTests(APITestCase):
+    def setUp(self):
+        self.commercial = User.objects.create(email='commercial-accept@sokensdigital.com', first_name='Commercial')
+        _give_role(self.commercial, ROLE_COMMERCIAL)
+        self.quote = Quote.objects.create(
+            created_by=self.commercial, client_name='Client X', status=Quote.Status.ENVOYE,
+        )
+
+    def test_accept_sets_signed_at_and_ip(self):
+        anon = APIClient()
+        response = anon.post(
+            f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/',
+            REMOTE_ADDR='203.0.113.5',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'ACCEPTE')
+        self.quote.refresh_from_db()
+        self.assertIsNotNone(self.quote.signed_at)
+        self.assertEqual(self.quote.accepted_ip, '203.0.113.5')
+
+    def test_cannot_accept_a_draft_quote(self):
+        self.quote.status = Quote.Status.BROUILLON
+        self.quote.save(update_fields=['status'])
+        anon = APIClient()
+        response = anon.post(f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/')
+        self.assertEqual(response.status_code, 400)
+
+    def test_accepting_twice_is_idempotent(self):
+        anon = APIClient()
+        anon.post(f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/')
+        response = anon.post(f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'ACCEPTE')
 
 
 class QuoteSettingsViewTests(APITestCase):
@@ -1218,3 +1315,87 @@ class SocialMediaCredentialsViewTests(APITestCase):
     def test_unauthenticated_forbidden(self):
         response = APIClient().get('/api/v1/marketing/social-media-credentials/')
         self.assertIn(response.status_code, (401, 403))
+
+
+class SpecificationViewSetTests(APITestCase):
+    def setUp(self):
+        self.marketing_user = User.objects.create(email='marketing-spec@sokensdigital.com', first_name='Marketing')
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+
+        self.chef_projet = User.objects.create(email='chef-spec@sokensdigital.com', first_name='Chef')
+        _give_role(self.chef_projet, ROLE_PROJECT_MANAGER)
+
+        self.developer = User.objects.create(email='dev-spec@sokensdigital.com', first_name='Dev')
+        _give_role(self.developer, ROLE_DEVELOPER)
+
+        self.outsider = User.objects.create(email='outsider-spec@sokensdigital.com', first_name='Outsider')
+        _give_role(self.outsider, ROLE_COMMERCIAL)
+
+        self.client_marketing = APIClient()
+        self.client_marketing.force_authenticate(user=self.marketing_user)
+        self.client_chef = APIClient()
+        self.client_chef.force_authenticate(user=self.chef_projet)
+        self.client_dev = APIClient()
+        self.client_dev.force_authenticate(user=self.developer)
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def payload(self, **overrides):
+        data = {
+            'spec_type': 'FONCTIONNEL',
+            'title': 'Espace client',
+            'lines': [
+                {'interface_name': "Page d'accueil", 'objective': "Présenter l'offre en un coup d'œil."},
+            ],
+        }
+        data.update(overrides)
+        return data
+
+    def test_marketing_can_create_functional_spec(self):
+        response = self.client_marketing.post('/api/v1/marketing/specifications/', self.payload(), format='json')
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertTrue(body['spec_number'].startswith('CDF-'))
+        self.assertEqual(body['status'], 'BROUILLON')
+        self.assertEqual(len(body['lines']), 1)
+
+    def test_technical_spec_gets_different_prefix(self):
+        response = self.client_dev.post(
+            '/api/v1/marketing/specifications/', self.payload(spec_type='TECHNIQUE'), format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.json()['spec_number'].startswith('CDT-'))
+
+    def test_chef_de_projet_can_create_and_edit(self):
+        create_response = self.client_chef.post('/api/v1/marketing/specifications/', self.payload(), format='json')
+        self.assertEqual(create_response.status_code, 201)
+        spec_id = create_response.json()['id']
+        edit_response = self.client_chef.patch(
+            f'/api/v1/marketing/specifications/{spec_id}/', {'title': 'Espace client v2'}, format='json',
+        )
+        self.assertEqual(edit_response.status_code, 200)
+        self.assertEqual(edit_response.json()['title'], 'Espace client v2')
+
+    def test_any_editor_can_edit_anothers_spec(self):
+        """Collaborative document — no per-owner restriction, unlike Quote."""
+        create_response = self.client_marketing.post('/api/v1/marketing/specifications/', self.payload(), format='json')
+        spec_id = create_response.json()['id']
+        response = self.client_dev.patch(
+            f'/api/v1/marketing/specifications/{spec_id}/', {'status': 'FINALISE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'FINALISE')
+
+    def test_outsider_forbidden(self):
+        response = self.client_outsider.post('/api/v1/marketing/specifications/', self.payload(), format='json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_unauthenticated_forbidden(self):
+        response = APIClient().get('/api/v1/marketing/specifications/')
+        self.assertIn(response.status_code, (401, 403))
+
+    def test_list_uses_lightweight_serializer(self):
+        Specification.objects.create(spec_type='FONCTIONNEL', title='Test', created_by=self.marketing_user)
+        response = self.client_marketing.get('/api/v1/marketing/specifications/')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('lines', response.json()['results'][0])

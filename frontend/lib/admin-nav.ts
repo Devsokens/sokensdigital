@@ -20,6 +20,7 @@ import {
   PieChart,
   Settings,
   Contact2,
+  ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 
@@ -69,6 +70,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
       { label: "Plan Éditorial", href: "/admin/marketing/plan-editorial", icon: CalendarClock, moduleKey: "plan-editorial" },
       { label: "Tunnel commercial", href: "/admin/marketing/leads", icon: Target, moduleKey: "leads" },
       { label: "Devis", href: "/admin/marketing/devis", icon: FileText, moduleKey: "devis" },
+      { label: "Cahier des charges", href: "/admin/marketing/cahier-des-charges", icon: ClipboardList, moduleKey: "cahier-des-charges" },
     ],
   },
   {
@@ -77,6 +79,8 @@ export const ADMIN_SECTIONS: NavSection[] = [
       { label: "Gestion de projet", href: "/admin/technique/projets", icon: FolderKanban, moduleKey: "projets" },
       { label: "Timesheets", href: "/admin/technique/timesheets", icon: Clock, moduleKey: "timesheets" },
       { label: "Décaissements", href: "/admin/technique/decaissements", icon: Banknote, moduleKey: "decaissements" },
+      { label: "Devis", href: "/admin/marketing/devis", icon: FileText, moduleKey: "devis" },
+      { label: "Cahier des charges", href: "/admin/marketing/cahier-des-charges", icon: ClipboardList, moduleKey: "cahier-des-charges" },
     ],
   },
   {

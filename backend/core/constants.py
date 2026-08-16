@@ -60,6 +60,7 @@ MODULES = [
     ('projets', 'Gestion de projet', 'Technique'),
     ('timesheets', 'Timesheets', 'Technique'),
     ('decaissements', 'Décaissements', 'Technique'),
+    ('cahier-des-charges', 'Cahier des charges', 'Technique'),
     ('finance-dashboard', 'Analytique', 'Finance & Comptabilité'),
     ('cloture', 'Clôture comptable', 'Finance & Comptabilité'),
     ('grand-livre', 'Grand Livre', 'Finance & Comptabilité'),
@@ -116,12 +117,14 @@ DEFAULT_ROLE_PERMISSIONS = {
         # _accessible_clients_qs scope un Chef de Projet non-Admin aux
         # clients liés à ses propres projets — lecture seule.
         _read_only('clients'),
+        _full('cahier-des-charges'),
     ),
     ROLE_DEVELOPER: _merge(
         _read_only('dashboard'),
         {'messagerie': ['voir', 'creer']},
         {'projets': ['voir', 'modifier']},
         {'timesheets': ['voir', 'creer']},
+        _full('cahier-des-charges'),
     ),
     ROLE_DIRECTEUR_FINANCIER: _merge(
         _read_only('dashboard'),
@@ -139,7 +142,7 @@ DEFAULT_ROLE_PERMISSIONS = {
     ROLE_RESPONSABLE_MARKETING: _merge(
         _read_only('dashboard', 'marketing-dashboard'),
         {'messagerie': ['voir', 'creer']},
-        _full('contenu', 'plan-editorial', 'leads', 'devis'),
+        _full('contenu', 'plan-editorial', 'leads', 'devis', 'cahier-des-charges'),
     ),
     ROLE_COMMERCIAL: _merge(
         _read_only('dashboard'),

@@ -34,6 +34,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
   { key: "projets", label: "Gestion de projet", section: "Technique" },
   { key: "timesheets", label: "Timesheets", section: "Technique" },
   { key: "decaissements", label: "Décaissements", section: "Technique" },
+  { key: "cahier-des-charges", label: "Cahier des charges", section: "Technique" },
   { key: "finance-dashboard", label: "Analytique", section: "Finance & Comptabilité" },
   { key: "cloture", label: "Clôture comptable", section: "Finance & Comptabilité" },
   { key: "grand-livre", label: "Grand Livre", section: "Finance & Comptabilité" },

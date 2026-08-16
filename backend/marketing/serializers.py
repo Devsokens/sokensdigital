@@ -4,7 +4,7 @@ from core.models import User
 from core.serializers import UserBriefSerializer
 from marketing.models import (
     BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject,
-    SiteSettings, SocialMediaCredentials, SocialPost,
+    SiteSettings, SocialMediaCredentials, SocialPost, Specification, SpecificationLine,
 )
 
 
@@ -115,9 +115,10 @@ class QuoteLineSerializer(serializers.ModelSerializer):
 
 class QuoteSerializer(serializers.ModelSerializer):
     """Lines are nested and fully replaced on update (delete-then-recreate)
-    — quotes are small documents, not worth a diffing PATCH. Only reachable
-    at all while status=BROUILLON; the view enforces that lock, not this
-    serializer (docs/backend-specifications.md §7.2)."""
+    — quotes are small documents, not worth a diffing PATCH. No status
+    lock: the owning department (Commercial owner/Responsable Marketing/
+    Super-Admin, see IsCommercialOwnerOrReadCollaborator) can edit and
+    update a quote whatever its status (docs/backend-specifications.md §7.2)."""
 
     created_by = UserBriefSerializer(read_only=True)
     lines = QuoteLineSerializer(many=True, required=False)
@@ -128,12 +129,12 @@ class QuoteSerializer(serializers.ModelSerializer):
             'id', 'quote_number', 'lead', 'created_by', 'client_name', 'intro_message',
             'subject', 'description', 'project_duration', 'payment_terms', 'issue_date',
             'expiry_date', 'status', 'discount_amount', 'total_ht', 'total_ttc',
-            'tracking_token', 'opened_at', 'signed_at', 'parent_quote', 'version',
-            'lines', 'created_at',
+            'tracking_token', 'sent_at', 'opened_at', 'signed_at', 'parent_quote', 'version',
+            'document_color', 'lines', 'created_at', 'updated_at',
         ]
         read_only_fields = [
             'quote_number', 'status', 'total_ht', 'total_ttc', 'tracking_token',
-            'opened_at', 'signed_at', 'parent_quote', 'version',
+            'sent_at', 'opened_at', 'signed_at', 'parent_quote', 'version', 'updated_at',
         ]
 
     def create(self, validated_data):
@@ -155,6 +156,57 @@ class QuoteSerializer(serializers.ModelSerializer):
             instance.lines.all().delete()
             for line_data in lines_data:
                 QuoteLine.objects.create(quote=instance, **line_data)
+        instance.refresh_from_db()
+        return instance
+
+
+class SpecificationLineSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SpecificationLine
+        fields = ['id', 'interface_name', 'objective']
+
+
+class SpecificationListSerializer(serializers.ModelSerializer):
+    created_by = UserBriefSerializer(read_only=True)
+
+    class Meta:
+        model = Specification
+        fields = ['id', 'spec_number', 'spec_type', 'title', 'status', 'created_by', 'created_at', 'updated_at']
+
+
+class SpecificationSerializer(serializers.ModelSerializer):
+    """Same lines-fully-replaced-on-update convention as QuoteSerializer —
+    no status lock either, this is a collaborative internal document."""
+
+    created_by = UserBriefSerializer(read_only=True)
+    lines = SpecificationLineSerializer(many=True, required=False)
+
+    class Meta:
+        model = Specification
+        fields = [
+            'id', 'spec_number', 'spec_type', 'title', 'client_name', 'intro_message',
+            'description', 'document_color', 'status', 'created_by', 'lines',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['spec_number', 'created_by', 'updated_at']
+
+    def create(self, validated_data):
+        lines_data = validated_data.pop('lines', [])
+        spec = Specification.objects.create(**validated_data)
+        for line_data in lines_data:
+            SpecificationLine.objects.create(specification=spec, **line_data)
+        spec.refresh_from_db()
+        return spec
+
+    def update(self, instance, validated_data):
+        lines_data = validated_data.pop('lines', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if lines_data is not None:
+            instance.lines.all().delete()
+            for line_data in lines_data:
+                SpecificationLine.objects.create(specification=instance, **line_data)
         instance.refresh_from_db()
         return instance
 
@@ -234,20 +286,24 @@ class QuoteTrackSerializer(serializers.ModelSerializer):
     (created_by, tracking_token itself) leak into the response."""
 
     lines = QuoteLineSerializer(many=True, read_only=True)
+    company_stamp_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Quote
         fields = [
             'quote_number', 'client_name', 'intro_message', 'subject', 'description',
             'project_duration', 'payment_terms', 'issue_date', 'expiry_date', 'status',
-            'discount_amount', 'total_ht', 'total_ttc', 'lines',
+            'discount_amount', 'total_ht', 'total_ttc', 'lines', 'signed_at', 'company_stamp_url',
         ]
+
+    def get_company_stamp_url(self, obj) -> str:
+        return QuoteSettings.load().company_stamp_url
 
 
 class QuoteSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuoteSettings
         fields = [
-            'company_address', 'company_phone', 'company_email',
+            'company_address', 'company_phone', 'company_email', 'company_stamp_url',
             'payment_methods', 'default_payment_terms', 'footer_note',
         ]

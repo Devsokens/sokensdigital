@@ -329,6 +329,27 @@ export interface QuotePaymentTerm {
   percentage: number;
 }
 
+/** What the public tracking/acceptance page gets — QuoteTrackSerializer,
+ * no internal identifiers (created_by, tracking_token itself). */
+export interface PublicQuote {
+  quote_number: string;
+  client_name: string;
+  intro_message: string;
+  subject: string;
+  description: string;
+  project_duration: string;
+  payment_terms: QuotePaymentTerm[];
+  issue_date: string;
+  expiry_date: string | null;
+  status: QuoteStatus;
+  discount_amount: string;
+  total_ht: string;
+  total_ttc: string;
+  lines: QuoteLine[];
+  signed_at: string | null;
+  company_stamp_url: string;
+}
+
 export interface Quote {
   id: string;
   quote_number: string;
@@ -347,18 +368,52 @@ export interface Quote {
   total_ht: string;
   total_ttc: string;
   tracking_token: string;
+  sent_at: string | null;
   opened_at: string | null;
   signed_at: string | null;
   parent_quote: string | null;
   version: number;
+  document_color: string;
   lines: QuoteLine[];
   created_at: string;
+  updated_at: string;
+}
+
+export type SpecType = "FONCTIONNEL" | "TECHNIQUE";
+export type SpecStatus = "BROUILLON" | "FINALISE";
+
+export interface SpecificationLine {
+  id: string;
+  interface_name: string;
+  objective: string;
+}
+
+/** List endpoint returns SpecificationListSerializer (no lines) — the
+ * shape is a strict subset of the full Specification below. */
+export interface SpecificationListItem {
+  id: string;
+  spec_number: string;
+  spec_type: SpecType;
+  title: string;
+  status: SpecStatus;
+  created_by: UserBrief | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Specification extends SpecificationListItem {
+  client_name: string;
+  intro_message: string;
+  description: string;
+  document_color: string;
+  lines: SpecificationLine[];
 }
 
 export interface QuoteSettings {
   company_address: string;
   company_phone: string;
   company_email: string;
+  company_stamp_url: string;
   payment_methods: { label: string }[];
   default_payment_terms: QuotePaymentTerm[];
   footer_note: string;

@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db.models import Count, F, Max, Sum
+from django.shortcuts import get_object_or_404
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
@@ -11,12 +12,15 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.constants import ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_MARKETING, ROLE_COMMERCIAL, ROLE_PROJECT_MANAGER
+from core.constants import (
+    ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_MARKETING, ROLE_COMMERCIAL, ROLE_PROJECT_MANAGER,
+    ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER, ROLE_DEVELOPER,
+)
 from core.permissions import has_role
 from core.storage import upload_image, upload_video
 from marketing.models import (
     BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject,
-    SiteSettings, SocialMediaCredentials, SocialPost,
+    SiteSettings, SocialMediaCredentials, SocialPost, Specification,
 )
 from marketing.ratelimit import get_client_ip, is_rate_limited
 from marketing.serializers import (
@@ -34,11 +38,18 @@ from marketing.serializers import (
     SiteSettingsSerializer,
     SocialMediaCredentialsSerializer,
     SocialPostSerializer,
+    SpecificationListSerializer,
+    SpecificationSerializer,
 )
 
 MARKETING_ROLES = (ROLE_RESPONSABLE_MARKETING,)
 COMMERCIAL_ROLES = (ROLE_COMMERCIAL,)
+FINANCE_CONVERT_ROLES = (ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER)
 CHEF_DE_PROJET_ROLES = (ROLE_PROJECT_MANAGER,)
+# Cahier des charges is a shared Technique + Marketing document — every
+# role from both departments (plus Super-Admin) can read/write any of
+# them, no per-owner restriction (collaborative internal doc, unlike Quote).
+SPECIFICATION_ROLES = (ROLE_RESPONSABLE_MARKETING, ROLE_PROJECT_MANAGER, ROLE_DEVELOPER, ROLE_SUPER_ADMIN)
 
 PUBLIC_LEAD_RATE_LIMIT = 3  # per IP
 PUBLIC_LEAD_RATE_WINDOW = 60  # seconds
@@ -481,17 +492,21 @@ class SocialPostViewSet(viewsets.ModelViewSet):
 
 
 class IsCommercialOwnerOrReadCollaborator(permissions.BasePermission):
-    """Super-Admin: full access. Commercial: full access, but only on
-    quotes they created. Chef de Projet: read-only on everything (technical
-    feasibility collaboration, docs/backend-specifications.md §3.1)."""
+    """Super-Admin: full access, any quote, any status — "toujours modifier
+    et mettre à jour" (the department with editing rights). Responsable
+    Marketing: same — full write access on any quote, not just their own
+    (Marketing owns the Devis module at the department level, per the nav
+    structure). Commercial: full access, but only on quotes they created.
+    Chef de Projet: read-only on everything (technical feasibility
+    collaboration, docs/backend-specifications.md §3.1)."""
 
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
-            return has_role(request.user, *COMMERCIAL_ROLES, *CHEF_DE_PROJET_ROLES, ROLE_SUPER_ADMIN)
-        return has_role(request.user, *COMMERCIAL_ROLES, ROLE_SUPER_ADMIN)
+            return has_role(request.user, *COMMERCIAL_ROLES, *MARKETING_ROLES, *CHEF_DE_PROJET_ROLES, ROLE_SUPER_ADMIN)
+        return has_role(request.user, *COMMERCIAL_ROLES, *MARKETING_ROLES, ROLE_SUPER_ADMIN)
 
     def has_object_permission(self, request, view, obj):
-        if has_role(request.user, ROLE_SUPER_ADMIN):
+        if has_role(request.user, ROLE_SUPER_ADMIN, *MARKETING_ROLES):
             return True
         if has_role(request.user, *CHEF_DE_PROJET_ROLES) and not has_role(request.user, *COMMERCIAL_ROLES):
             return request.method in permissions.SAFE_METHODS
@@ -502,7 +517,7 @@ class IsCommercialOwnerOrReadCollaborator(permissions.BasePermission):
     list=extend_schema(tags=['Marketing & Commercial'], summary='List quotes', description='Commercial sees their own; Chef de Projet sees everything read-only; Super-Admin sees everything.'),
     create=extend_schema(tags=['Marketing & Commercial'], summary='Create a draft quote'),
     retrieve=extend_schema(tags=['Marketing & Commercial'], summary='Get a quote'),
-    update=extend_schema(tags=['Marketing & Commercial'], summary='Update a quote', description='BROUILLON only — locked once ENVOYE/ACCEPTE/REFUSE, use /clone/ instead.'),
+    update=extend_schema(tags=['Marketing & Commercial'], summary='Update a quote', description="No status lock — the owning department (Commercial owner/Responsable Marketing/Super-Admin) can always edit and update a quote, whatever its status."),
     partial_update=extend_schema(tags=['Marketing & Commercial'], summary='Partially update a quote'),
     destroy=extend_schema(tags=['Marketing & Commercial'], summary='Delete a quote'),
 )
@@ -514,21 +529,15 @@ class QuoteViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return Quote.objects.none()
         qs = Quote.objects.select_related('created_by', 'lead').prefetch_related('lines')
-        if has_role(self.request.user, *COMMERCIAL_ROLES) and not has_role(self.request.user, ROLE_SUPER_ADMIN):
+        if (
+            has_role(self.request.user, *COMMERCIAL_ROLES)
+            and not has_role(self.request.user, ROLE_SUPER_ADMIN, *MARKETING_ROLES)
+        ):
             return qs.filter(created_by=self.request.user)
         return qs
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
-
-    def update(self, request, *args, **kwargs):
-        quote = self.get_object()
-        if quote.is_locked:
-            return Response(
-                {'detail': "Ce devis a déjà été envoyé — utilise /clone/ pour créer une nouvelle version."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        return super().update(request, *args, **kwargs)
 
     @extend_schema(
         tags=['Marketing & Commercial'],
@@ -549,7 +558,8 @@ class QuoteViewSet(viewsets.ModelViewSet):
         if not quote.lines.exists():
             return Response({'detail': 'Impossible d\'envoyer un devis sans ligne de prestation.'}, status=status.HTTP_400_BAD_REQUEST)
         quote.status = Quote.Status.ENVOYE
-        quote.save(update_fields=['status'])
+        quote.sent_at = timezone.now()
+        quote.save(update_fields=['status', 'sent_at'])
         return Response(QuoteSerializer(quote).data)
 
     @extend_schema(
@@ -584,6 +594,75 @@ class QuoteViewSet(viewsets.ModelViewSet):
             )
         new_quote.refresh_from_db()
         return Response(QuoteSerializer(new_quote).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        tags=['Marketing & Commercial'],
+        summary='Convert an accepted quote into an invoice (§4.7)',
+        description='Commercial (owner)/Responsable Marketing/Comptable/Directeur Financier/Super-Admin. '
+        'Quote must be ACCEPTE. Lines are collapsed into a single amount_ht (finance.Invoice has no '
+        'line-item model of its own) — the quote itself remains the itemized record.',
+    )
+    @action(detail=True, methods=['post'], url_path='convert-to-invoice', permission_classes=[permissions.IsAuthenticated])
+    def convert_to_invoice(self, request, pk=None):
+        from finance.models import Invoice
+        from finance.serializers import InvoiceSerializer
+
+        quote = self.get_object()
+        allowed = (
+            has_role(request.user, ROLE_SUPER_ADMIN, *MARKETING_ROLES, *FINANCE_CONVERT_ROLES)
+            or (has_role(request.user, *COMMERCIAL_ROLES) and quote.created_by_id == request.user.id)
+        )
+        if not allowed:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        if quote.status != Quote.Status.ACCEPTE:
+            return Response({'detail': 'Seul un devis accepté peut être converti en facture.'}, status=status.HTTP_400_BAD_REQUEST)
+        if quote.invoices.exists():
+            return Response({'detail': 'Ce devis a déjà été converti en facture.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        invoice = Invoice.objects.create(
+            client_name=quote.client_name,
+            quote=quote,
+            amount_ht=quote.total_ht,
+            issue_date=timezone.now().date(),
+            due_date=quote.expiry_date,
+            created_by=request.user,
+        )
+        return Response(InvoiceSerializer(invoice).data, status=status.HTTP_201_CREATED)
+
+
+class IsSpecificationEditor(permissions.BasePermission):
+    """Any Technique/Marketing role (or Super-Admin) — see SPECIFICATION_ROLES.
+    No per-owner restriction: a cahier des charges is a shared, collaborative
+    internal document, not one person's commercial pipeline item."""
+
+    def has_permission(self, request, view):
+        return has_role(request.user, *SPECIFICATION_ROLES)
+
+
+@extend_schema_view(
+    list=extend_schema(tags=['Marketing & Commercial'], summary='List cahiers des charges'),
+    create=extend_schema(tags=['Marketing & Commercial'], summary='Create a cahier des charges'),
+    retrieve=extend_schema(tags=['Marketing & Commercial'], summary='Get a cahier des charges'),
+    update=extend_schema(tags=['Marketing & Commercial'], summary='Update a cahier des charges'),
+    partial_update=extend_schema(tags=['Marketing & Commercial'], summary='Partially update a cahier des charges'),
+    destroy=extend_schema(tags=['Marketing & Commercial'], summary='Delete a cahier des charges'),
+)
+class SpecificationViewSet(viewsets.ModelViewSet):
+    """Cahier des charges (fonctionnel/technique) — internal document
+    shared by Technique and Marketing, no commercial workflow (cahier des
+    charges §4.7 scope note: decided as a simple internal document, not
+    the same send/accept circuit as Quote)."""
+
+    queryset = Specification.objects.select_related('created_by').prefetch_related('lines')
+    permission_classes = [IsSpecificationEditor]
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return SpecificationListSerializer
+        return SpecificationSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
 
 
 @extend_schema(
@@ -634,6 +713,33 @@ class PublicQuoteTrackView(generics.RetrieveAPIView):
             instance.opened_at = timezone.now()
             instance.save(update_fields=['opened_at'])
         return Response(self.get_serializer(instance).data)
+
+
+@extend_schema(
+    tags=['Marketing & Commercial'],
+    summary='Accept a quote from its public tracking page (§4.7)',
+    description="No auth — the tracking_token is the credential, same as the GET above. MVP e-signature: "
+    "an explicit checkbox acceptance recorded with a timestamp (signed_at) and the requester's IP "
+    "(accepted_ip) as proof, not a third-party e-signature provider.",
+    responses={200: QuoteTrackSerializer},
+)
+class PublicQuoteAcceptView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request, tracking_token):
+        quote = get_object_or_404(Quote.objects.prefetch_related('lines'), tracking_token=tracking_token)
+        if quote.status == Quote.Status.ACCEPTE:
+            return Response(QuoteTrackSerializer(quote).data)
+        if quote.status != Quote.Status.ENVOYE:
+            return Response(
+                {'detail': "Seul un devis envoyé peut être accepté."}, status=status.HTTP_400_BAD_REQUEST,
+            )
+        quote.status = Quote.Status.ACCEPTE
+        quote.signed_at = timezone.now()
+        quote.accepted_ip = get_client_ip(request)
+        quote.save(update_fields=['status', 'signed_at', 'accepted_ip'])
+        return Response(QuoteTrackSerializer(quote).data)
 
 
 @extend_schema(

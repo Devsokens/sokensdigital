@@ -10,6 +10,7 @@ from marketing.views import (
     PublicBlogListView,
     PublicLeadCreateView,
     PublicPageSectionListView,
+    PublicQuoteAcceptView,
     PublicQuoteTrackView,
     PublicShowcaseProjectDetailView,
     PublicShowcaseProjectListView,
@@ -20,6 +21,7 @@ from marketing.views import (
     SiteSettingsView,
     SocialMediaCredentialsView,
     SocialPostViewSet,
+    SpecificationViewSet,
     VideoUploadView,
     marketing_dashboard,
 )
@@ -31,6 +33,7 @@ router.register('cms/page-sections', PageSectionViewSet, basename='page-section'
 router.register('cms/showcase-projects', ShowcaseProjectViewSet, basename='showcase-project')
 router.register('social-posts', SocialPostViewSet, basename='social-post')
 router.register('quotes', QuoteViewSet, basename='quote')
+router.register('specifications', SpecificationViewSet, basename='specification')
 
 urlpatterns = [
     path('dashboard/', marketing_dashboard, name='marketing-dashboard'),
@@ -49,5 +52,6 @@ public_urlpatterns = [
     path('showcase-projects/', PublicShowcaseProjectListView.as_view(), name='public-showcase-project-list'),
     path('showcase-projects/<slug:slug>/', PublicShowcaseProjectDetailView.as_view(), name='public-showcase-project-detail'),
     path('quotes/track/<uuid:tracking_token>/', PublicQuoteTrackView.as_view(), name='public-quote-track'),
+    path('quotes/track/<uuid:tracking_token>/accept/', PublicQuoteAcceptView.as_view(), name='public-quote-accept'),
     path('site-settings/', PublicSiteSettingsView.as_view(), name='public-site-settings'),
 ]

@@ -204,6 +204,11 @@ class Invoice(LoggedModel):
 
     invoice_number = models.CharField(max_length=20, unique=True, editable=False)
     client_name = models.CharField(max_length=255)
+    # Cahier des charges §4.7 "Conversion — devis -> facture en un clic".
+    # Nullable: invoices created directly (not from a quote) stay valid.
+    quote = models.ForeignKey(
+        'marketing.Quote', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices',
+    )
     issue_date = models.DateField(default=timezone.now)
     due_date = models.DateField(null=True, blank=True)
     amount_ht = models.DecimalField(max_digits=12, decimal_places=2)

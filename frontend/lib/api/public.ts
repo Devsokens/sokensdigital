@@ -1,4 +1,4 @@
-import type { PageSection, SitePage, SiteSettings } from "@/lib/api/types";
+import type { PageSection, PublicQuote, SitePage, SiteSettings } from "@/lib/api/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
@@ -86,4 +86,21 @@ export async function createLead(data: LeadPublicInput): Promise<void> {
     }
     throw new Error("Impossible d'envoyer la demande. Réessaie dans un instant.");
   }
+}
+
+/** Client-side call — the quote acceptance page runs entirely in the
+ * browser, no Firebase auth (the tracking_token itself is the
+ * credential, cahier des charges §4.7 "portail de validation client"). */
+export async function getPublicQuote(token: string): Promise<PublicQuote> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/public/quotes/track/${token}/`);
+  if (!response.ok) throw new Error("Ce devis est introuvable ou le lien a expiré.");
+  return response.json();
+}
+
+export async function acceptPublicQuote(token: string): Promise<PublicQuote> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/public/quotes/track/${token}/accept/`, {
+    method: "POST",
+  });
+  if (!response.ok) throw new Error("Impossible d'accepter ce devis pour l'instant.");
+  return response.json();
 }
