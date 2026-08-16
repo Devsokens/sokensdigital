@@ -1,14 +1,17 @@
 from decimal import Decimal
 
+from django.db import models
 from django.db.models import Q, Sum
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from rest_framework import mixins, permissions, status, viewsets
+from rest_framework import mixins, permissions, status, viewsets, serializers
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 
 from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE
 from core.permissions import has_role
+from decimal import Decimal as D
+from django.utils import timezone
 from finance.models import (
     Account,
     AccountingPeriod,
@@ -17,6 +20,8 @@ from finance.models import (
     DisbursementRequest,
     Invoice,
     JournalEntry,
+    Payment,
+    PaymentReceipt,
     TaxDeclaration,
     TransactionLine,
 )
@@ -28,6 +33,8 @@ from finance.serializers import (
     DisbursementRequestSerializer,
     InvoiceSerializer,
     JournalEntrySerializer,
+    PaymentSerializer,
+    PaymentReceiptSerializer,
     TaxDeclarationSerializer,
 )
 
@@ -375,6 +382,91 @@ class BankStatementImportViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
         transaction_row.status = BankTransaction.Status.LETTRE
         transaction_row.save(update_fields=['matched_line', 'status'])
         return Response(BankTransactionSerializer(transaction_row).data)
+
+
+class PaymentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """Versements partiels d'une facture (workflow paiements 20-30%-...-100%)."""
+
+    serializer_class = PaymentSerializer
+    permission_classes = [IsFinanceRole]
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Payment.objects.none()
+        invoice_id = self.kwargs.get('invoice_id')
+        qs = Payment.objects.filter(invoice_id=invoice_id).select_related('invoice', 'received_by')
+        return qs.prefetch_related('receipt', 'attachments')
+
+    def perform_create(self, serializer):
+        invoice_id = self.kwargs.get('invoice_id')
+        try:
+            invoice = Invoice.objects.get(id=invoice_id)
+        except Invoice.DoesNotExist:
+            raise serializers.ValidationError('Invoice not found')
+
+        payment = serializer.save(invoice=invoice)
+
+    @extend_schema(
+        tags=['Finance & Comptabilité'],
+        summary='Mark a payment as received',
+        description='Change payment status PENDING → RECEIVED, auto-create receipt, check if fully paid',
+        responses={200: PaymentSerializer},
+    )
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def receive(self, request, pk=None, **kwargs):
+        """Marquer versement reçu + auto-créer reçu."""
+        if not has_role(request.user, *COMPTABLE_ROLES, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        payment = self.get_object()
+        if payment.status != Payment.Status.PENDING:
+            return Response({'detail': 'Payment must be PENDING'}, status=status.HTTP_400_BAD_REQUEST)
+
+        payment.status = Payment.Status.RECEIVED
+        payment.received_by = request.user
+        payment.received_at = timezone.now()
+        payment.save()
+
+        # Auto-créer receipt
+        PaymentReceipt.objects.create(payment=payment, issued_by=request.user)
+
+        # Vérifier si facture 100% payée
+        total_paid = payment.invoice.payments.filter(
+            status=Payment.Status.RECEIVED
+        ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
+
+        if total_paid >= payment.invoice.amount_ttc:
+            payment.invoice.status = Invoice.Status.VALIDEE
+            payment.invoice.validated_by = request.user
+            payment.invoice.validated_at = timezone.now()
+            payment.invoice.save()
+
+            # Enregistrement comptable (via signal ou task)
+            from core.notifications import notify
+            notify(
+                user=request.user,
+                title='Facture complètement payée',
+                message=f'{payment.invoice.invoice_number}: Prêt pour enregistrement comptable',
+                notification_type='INVOICE_FULLY_PAID',
+                link=f'/admin/finance/facturation/{payment.invoice.id}/',
+            )
+
+        return Response(PaymentSerializer(payment).data)
+
+
+class PaymentReceiptViewSet(mixins.RetrieveModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
+    """Reçus de versement — lecture seule (créés auto par Payment.receive action)."""
+
+    serializer_class = PaymentReceiptSerializer
+    permission_classes = [IsFinanceRole]
+
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return PaymentReceipt.objects.none()
+        invoice_id = self.kwargs.get('invoice_id')
+        return PaymentReceipt.objects.filter(
+            payment__invoice_id=invoice_id
+        ).select_related('payment', 'issued_by')
 
 
 @extend_schema_view(

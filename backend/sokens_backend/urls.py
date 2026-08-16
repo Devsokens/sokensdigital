@@ -29,6 +29,8 @@ urlpatterns = [
     path('api/v1/hr/', include('hr.urls')),
     path('api/v1/marketing/', include('marketing.urls')),
     path('api/v1/finance/', include('finance.urls')),
+    path('api/v1/procurement/', include('procurement.urls')),
+    path('api/v1/treasury/', include('treasury.urls')),
     path('api/v1/public/', include(marketing_public_urlpatterns)),
     path('api/administration/', include('administration.urls')),
     path('api/technique/', include('technique.urls')),

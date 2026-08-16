@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demande de Décaissement</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1cm;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            font-size: 11px;
+            color: #333;
+            background: white;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #333;
+            padding-bottom: 12px;
+            margin-bottom: 15px;
+        }
+
+        .company-info {
+            text-align: center;
+        }
+
+        .company-info h1 {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .company-info p {
+            font-size: 9px;
+            margin: 2px 0;
+        }
+
+        .title {
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            margin: 15px 0;
+            text-decoration: underline;
+            border: 2px solid #333;
+            padding: 10px;
+            background-color: #f5f5f5;
+        }
+
+        .section {
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+
+        .section-title {
+            font-weight: bold;
+            font-size: 11px;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 5px;
+        }
+
+        .form-row {
+            display: flex;
+            margin-bottom: 10px;
+            gap: 20px;
+        }
+
+        .form-group {
+            flex: 1;
+        }
+
+        .form-group-full {
+            flex: 2;
+        }
+
+        .label {
+            font-weight: bold;
+            font-size: 10px;
+            margin-bottom: 3px;
+        }
+
+        .value-line {
+            border-bottom: 1px solid #333;
+            padding: 5px 0;
+            min-height: 20px;
+            font-size: 11px;
+        }
+
+        .info-box {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 8px;
+            margin: 8px 0;
+            font-size: 10px;
+            line-height: 1.5;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+
+        th {
+            background-color: #e0e0e0;
+            border: 1px solid #333;
+            padding: 8px;
+            font-weight: bold;
+            text-align: left;
+            font-size: 10px;
+        }
+
+        td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            font-size: 10px;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .amount {
+            width: 100px;
+        }
+
+        .total-row {
+            background-color: #f0f0f0;
+            font-weight: bold;
+            border-top: 2px solid #333;
+        }
+
+        .decision-box {
+            border: 2px solid #333;
+            padding: 10px;
+            margin: 10px 0;
+            text-align: center;
+            background-color: #fafafa;
+        }
+
+        .decision-label {
+            font-weight: bold;
+            margin-right: 20px;
+        }
+
+        .decision-checkbox {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 1px solid #333;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+
+        .signatures-section {
+            margin: 20px 0;
+        }
+
+        .signature-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .signature-block {
+            flex: 1;
+            text-align: center;
+            margin-right: 15px;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+
+        .signature-title {
+            font-weight: bold;
+            font-size: 10px;
+            margin-bottom: 8px;
+        }
+
+        .signature-line {
+            border-bottom: 1px solid #333;
+            height: 50px;
+            margin-bottom: 5px;
+        }
+
+        .signature-label {
+            font-size: 9px;
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 8px;
+            margin-top: 15px;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-weight: bold;
+            font-size: 10px;
+        }
+
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffc107;
+        }
+
+        .status-approved {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #28a745;
+        }
+
+        .status-rejected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="company-info">
+            <h1>SOKENS DIGITAL</h1>
+            <p>Société Koweïtienne d'Electronique Numérique Services</p>
+            <p>{{ company_address }}</p>
+        </div>
+    </div>
+
+    <div class="title">DEMANDE DE DÉCAISSEMENT</div>
+
+    <div class="section">
+        <div class="section-title">1. INFORMATIONS GÉNÉRALES</div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <div class="label">Date de la demande :</div>
+                <div class="value-line">{{ disbursement.created_at|date:"d/m/Y" }}</div>
+            </div>
+            <div class="form-group">
+                <div class="label">N° de demande :</div>
+                <div class="value-line">{{ disbursement.id }}</div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <div class="label">Demandeur :</div>
+                <div class="value-line">{{ disbursement.requested_by.get_full_name }}</div>
+            </div>
+            <div class="form-group">
+                <div class="label">Département :</div>
+                <div class="value-line">
+                    {% if disbursement.project %}
+                        {{ disbursement.project.name }}
+                    {% else %}
+                        Général
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">2. DÉTAILS DU DÉCAISSEMENT</div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <div class="label">Bénéficiaire :</div>
+                <div class="value-line">{{ disbursement.beneficiary }}</div>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <div class="label">Motif de la dépense :</div>
+                <div class="value-line" style="min-height: 40px;">{{ disbursement.reason }}</div>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Libellé</th>
+                    <th class="amount text-right">Montant (FCFA)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>{{ disbursement.reason }}</td>
+                    <td class="amount text-right">{{ disbursement.amount|floatformat:2 }}</td>
+                </tr>
+                <tr class="total-row">
+                    <td><strong>MONTANT TOTAL</strong></td>
+                    <td class="amount text-right"><strong>{{ disbursement.amount|floatformat:2 }}</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">3. STATUT ET APPROBATIONS</div>
+
+        <div class="info-box">
+            <strong>Statut actuel :</strong>
+            <span class="status-badge
+                {% if disbursement.status == 'EN_ATTENTE_N1' or disbursement.status == 'EN_ATTENTE_N2' or disbursement.status == 'EN_ATTENTE_N3' %}
+                    status-pending
+                {% elif disbursement.status == 'APPROUVE' %}
+                    status-approved
+                {% elif disbursement.status == 'REJETE' %}
+                    status-rejected
+                {% endif %}
+            ">
+                {{ disbursement.get_status_display }}
+            </span>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <div class="label">Niveau d'approbation requis :</div>
+                <div class="value-line">
+                    {% if disbursement.amount > 50000 %}
+                        N3 - Direction Générale (Montant > 50 000 FCFA)
+                    {% elif disbursement.amount >= 10000 %}
+                        N2 - Directeur Financier (Montant 10 000 - 50 000 FCFA)
+                    {% else %}
+                        N1 - Responsable Comptable (Montant < 10 000 FCFA)
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% if disbursement.rejection_reason %}
+        <div class="info-box" style="background-color: #fff3cd; border-color: #ffc107;">
+            <strong>Motif de rejet :</strong><br>
+            {{ disbursement.rejection_reason }}
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="signatures-section">
+        <div class="section-title">4. APPROBATIONS</div>
+
+        <div class="signature-row">
+            <div class="signature-block">
+                <div class="signature-title">Responsable Comptable & Financière</div>
+                <div class="signature-title">(Approbation N1)</div>
+                <div class="signature-line"></div>
+                <div class="signature-label">Signature & Date</div>
+                {% if disbursement.decided_by and 'N1' in disbursement.status %}
+                    <div style="font-size: 9px; margin-top: 5px;">Approuvé le {{ disbursement.decided_at|date:"d/m/Y" }}</div>
+                {% endif %}
+            </div>
+
+            <div class="signature-block">
+                <div class="signature-title">Directeur Financier</div>
+                <div class="signature-title">(Approbation N2)</div>
+                <div class="signature-line"></div>
+                <div class="signature-label">Signature & Date</div>
+            </div>
+
+            <div class="signature-block">
+                <div class="signature-title">Gérant / Direction Générale</div>
+                <div class="signature-title">(Approbation N3)</div>
+                <div class="signature-line"></div>
+                <div class="signature-label">Signature & Date</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Document généré le {{ now|date:"d/m/Y à H:i" }} | Système de gestion financière SOKENS</p>
+        <p>Pour signature électronique ou archivage : consulter le département Financier</p>
+    </div>
+</body>
+</html>

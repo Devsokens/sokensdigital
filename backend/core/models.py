@@ -243,3 +243,53 @@ class Notification(LoggedModel):
             models.Index(fields=['user', 'is_read']),
             models.Index(fields=['notification_type']),
         ]
+
+
+class DocumentAttachment(LoggedModel):
+    """Pièces justificatives génériques — factures, reçus, chèques, virements, etc.
+
+    Utilisé pour Finance (Payment → chèque/bordereau/attestation) et autres modules.
+    """
+
+    DOCUMENT_TYPES = [
+        ('CHEQUE', 'Chèque'),
+        ('BORDEREAU', 'Bordereau de versement'),
+        ('BANK_STATEMENT', 'Attestation de virement'),
+        ('INVOICE', 'Facture'),
+        ('RECEIPT', 'Reçu'),
+        ('QUOTE', 'Devis'),
+        ('CONTRACT', 'Contrat'),
+        ('OTHER', 'Autre'),
+    ]
+
+    # Generic foreign key: peut être lié à Payment, Invoice, etc.
+    # Utiliser content_type/object_id pour flexibilité
+    from django.contrib.contenttypes.fields import GenericForeignKey
+    from django.contrib.contenttypes.models import ContentType
+
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.CharField(max_length=255)
+    content_object = GenericForeignKey('content_type', 'object_id')
+
+    document_type = models.CharField(max_length=20, choices=DOCUMENT_TYPES)
+    file = models.FileField(upload_to='documents/%Y/%m/%d/')
+    file_name = models.CharField(max_length=255)
+    file_size = models.BigIntegerField(default=0)  # bytes
+
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='uploaded_documents')
+    notes = models.TextField(blank=True)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-created_at']
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['content_type', 'object_id']),
+            models.Index(fields=['document_type']),
+        ]
+
+    def __str__(self):
+        return f'{self.file_name} ({self.get_document_type_display()})'
+
+    def save(self, *args, **kwargs):
+        if self.file:
+            self.file_size = self.file.size
+        super().save(*args, **kwargs)

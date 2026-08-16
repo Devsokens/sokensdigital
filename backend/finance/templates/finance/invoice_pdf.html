@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facture {{ invoice.invoice_number }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            color: #333;
+            line-height: 1.6;
+            padding: 20mm;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+            border-bottom: 2px solid #2c5aa0;
+            padding-bottom: 20px;
+        }
+
+        .company-info h1 {
+            color: #2c5aa0;
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .company-info p {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .invoice-meta {
+            text-align: right;
+        }
+
+        .invoice-meta p {
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        .invoice-meta .label {
+            font-weight: bold;
+            color: #2c5aa0;
+        }
+
+        .parties {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+        }
+
+        .party {
+            width: 45%;
+        }
+
+        .party h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #2c5aa0;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .party p {
+            font-size: 11px;
+            margin-bottom: 3px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        table thead {
+            background-color: #f5f5f5;
+            border-top: 2px solid #2c5aa0;
+            border-bottom: 2px solid #2c5aa0;
+        }
+
+        table th {
+            padding: 10px;
+            text-align: left;
+            font-weight: bold;
+            color: #2c5aa0;
+            font-size: 12px;
+        }
+
+        table td {
+            padding: 8px 10px;
+            font-size: 11px;
+            border-bottom: 1px solid #eee;
+        }
+
+        table tr:last-child td {
+            border-bottom: 2px solid #2c5aa0;
+        }
+
+        .amount-column {
+            text-align: right;
+        }
+
+        .totals {
+            width: 40%;
+            margin-left: auto;
+            margin-bottom: 30px;
+        }
+
+        .totals table {
+            margin: 0;
+        }
+
+        .totals table td {
+            padding: 8px 10px;
+            font-size: 11px;
+        }
+
+        .totals .label {
+            font-weight: bold;
+            text-align: left;
+        }
+
+        .totals .total-ttc {
+            background-color: #2c5aa0;
+            color: white;
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        .notes {
+            background-color: #f9f9f9;
+            border-left: 3px solid #2c5aa0;
+            padding: 10px;
+            margin-bottom: 20px;
+            font-size: 11px;
+        }
+
+        .footer {
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+            font-size: 10px;
+            color: #666;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .footer p {
+            margin-bottom: 3px;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .status.brouillon {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+
+        .status.validee {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="company-info">
+            <h1>Sokens Digital</h1>
+            <p>Agence numérique</p>
+            <p>Email: contact@sokensdigital.com</p>
+        </div>
+
+        <div class="invoice-meta">
+            <p><span class="label">FACTURE</span></p>
+            <p><span class="label">N°:</span> {{ invoice.invoice_number }}</p>
+            <p><span class="label">Émise le:</span> {{ issue_date }}</p>
+            <p><span class="label">À payer avant:</span> {{ due_date }}</p>
+            <p><span class="status {% if invoice.status == 'BROUILLON' %}brouillon{% else %}validee{% endif %}">{{ invoice.get_status_display }}</span></p>
+        </div>
+    </div>
+
+    <div class="parties">
+        <div class="party">
+            <h3>Entreprise</h3>
+            <p>Sokens Digital</p>
+            <p>Capitale: FCFA</p>
+            <p>Email: contact@sokensdigital.com</p>
+        </div>
+
+        <div class="party">
+            <h3>Facturation</h3>
+            <p>{{ client_display }}</p>
+            {% if invoice.client %}
+                {% if invoice.client.email %}<p>{{ invoice.client.email }}</p>{% endif %}
+                {% if invoice.client.phone %}<p>{{ invoice.client.phone }}</p>{% endif %}
+                {% if invoice.client.address %}<p>{{ invoice.client.address }}</p>{% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 50%">Description</th>
+                <th style="width: 15%" class="amount-column">Montant HT</th>
+                <th style="width: 15%" class="amount-column">TVA ({{ invoice.vat_rate }}%)</th>
+                <th style="width: 20%" class="amount-column">Montant TTC</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Prestations de service</td>
+                <td class="amount-column">{{ invoice.amount_ht|floatformat:2 }} FCFA</td>
+                <td class="amount-column">{{ vat_amount|floatformat:2 }} FCFA</td>
+                <td class="amount-column"><strong>{{ invoice.amount_ttc|floatformat:2 }} FCFA</strong></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="totals">
+        <table>
+            <tr>
+                <td class="label">Montant HT:</td>
+                <td class="amount-column">{{ invoice.amount_ht|floatformat:2 }} FCFA</td>
+            </tr>
+            <tr>
+                <td class="label">TVA ({{ invoice.vat_rate }}%):</td>
+                <td class="amount-column">{{ vat_amount|floatformat:2 }} FCFA</td>
+            </tr>
+            <tr class="total-ttc">
+                <td class="label">MONTANT TTC:</td>
+                <td class="amount-column">{{ invoice.amount_ttc|floatformat:2 }} FCFA</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="notes">
+        <strong>Conditions de paiement:</strong> Paiement à réception. En cas de non-paiement à la date d'échéance, des intérêts de retard seront appliqués conformément à la loi.
+    </div>
+
+    <div class="footer">
+        <p>Généré le {{ generated_at }}</p>
+        <p>Cette facture a été générée automatiquement et ne requiert pas de signature.</p>
+        <p>Sokens Digital — Plateforme de gestion</p>
+    </div>
+</body>
+</html>
