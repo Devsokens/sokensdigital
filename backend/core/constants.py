@@ -46,6 +46,7 @@ MODULE_ACTIONS = ['voir', 'creer', 'modifier', 'supprimer']
 MODULES = [
     ('dashboard', 'Tableau de bord', 'Général'),
     ('messagerie', 'Messagerie', 'Général'),
+    ('rh-dashboard', 'Tableau de bord RH', 'Administration & RH'),
     ('employes', 'Employés', 'Administration & RH'),
     ('departements', 'Départements', 'Administration & RH'),
     ('utilisateurs', 'Utilisateurs & Rôles', 'Administration & RH'),
@@ -96,10 +97,12 @@ DEFAULT_ROLE_PERMISSIONS = {
         _read_only('utilisateurs', 'audit-log'),
     ),
     ROLE_RH_MANAGER: _merge(
-        _read_only('dashboard'),
+        _read_only('dashboard', 'rh-dashboard'),
         {'messagerie': ['voir', 'creer']},
         _full('employes'),
-        _read_only('departements'),
+        # NOT departements — DepartmentViewSet is Super-Admin-only on the
+        # backend (core.views.IsSuperAdmin), so declaring read access here
+        # would show a nav item that 403s the moment it's opened.
         {'utilisateurs': ['voir', 'creer']},
     ),
     ROLE_PROJECT_MANAGER: _merge(

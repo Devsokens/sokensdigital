@@ -58,7 +58,13 @@ service cloud.firestore {
 
     // ChatRooms & Nested Sub-Collections Rules
     match /chatRooms/{roomId} {
+      // `resource == null` covers a get() on a room that doesn't exist yet —
+      // getOrCreateDirectRoom() reads before writing to decide whether to
+      // create a new DM, and without this branch `resource.data` on a null
+      // resource throws inside the rule, which Firestore reports back to
+      // the client as permission-denied instead of a clean "not found".
       allow read: if isAuth() && (
+        resource == null ||
         resource.data.roomType == 'COMPANY' ||
         (resource.data.roomType == 'DEPARTMENT' && resource.data.departmentId == getUserData().departmentId) ||
         (resource.data.roomType == 'PROJECT' && request.auth.uid in resource.data.memberUids) ||

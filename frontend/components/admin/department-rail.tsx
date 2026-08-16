@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ADMIN_SECTIONS, SECTION_ICONS, SECTION_SHORT_LABELS, findNavMatch } from "@/lib/admin-nav";
+import { ADMIN_SECTIONS, SECTION_ICONS, SECTION_SHORT_LABELS, findNavMatch, filterSectionsByAccess } from "@/lib/admin-nav";
+import { usePermissions } from "@/lib/admin/permissions-context";
 import { cn } from "@/lib/utils";
 
 /** Canva-style icon-only primary rail: one column, one department per row
@@ -16,7 +17,9 @@ import { cn } from "@/lib/utils";
 export function DepartmentRail() {
   const pathname = usePathname();
   const router = useRouter();
-  const activeSectionTitle = findNavMatch(pathname)?.section.title ?? null;
+  const { canAccessModule } = usePermissions();
+  const sections = filterSectionsByAccess(ADMIN_SECTIONS, canAccessModule);
+  const activeSectionTitle = findNavMatch(pathname, sections)?.section.title ?? null;
 
   return (
     <aside
@@ -32,7 +35,7 @@ export function DepartmentRail() {
       </Link>
 
       <nav className="flex flex-1 flex-col items-center gap-1.5 overflow-y-auto">
-        {ADMIN_SECTIONS.map((section) => {
+        {sections.map((section) => {
           const Icon = SECTION_ICONS[section.title];
           const isActive = activeSectionTitle === section.title;
           return (

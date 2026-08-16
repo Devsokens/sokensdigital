@@ -598,8 +598,21 @@ class RoleViewSetTests(APITestCase):
         names = [r['name'] for r in response.json()['results']]
         self.assertIn('Développeur', names)
 
-    def test_outsider_forbidden(self):
+    def test_any_authenticated_user_can_list_roles(self):
+        # The frontend nav needs to read every user's own role's
+        # permissions to decide what to show them — not just Super-Admin's.
         response = self.client_outsider.get('/api/v1/roles/')
+        self.assertEqual(response.status_code, 200)
+
+    def test_unauthenticated_forbidden(self):
+        response = APIClient().get('/api/v1/roles/')
+        self.assertEqual(response.status_code, 401)
+
+    def test_outsider_cannot_update_permissions(self):
+        role = Role.objects.get(name='Développeur')
+        response = self.client_outsider.patch(
+            f'/api/v1/roles/{role.id}/', {'permissions': {'projets': ['voir']}}, format='json',
+        )
         self.assertEqual(response.status_code, 403)
 
     def test_super_admin_can_update_permissions(self):

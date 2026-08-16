@@ -25,6 +25,11 @@ export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
+  /** Matches a key in backend/core/constants.py's MODULES and
+   * lib/admin/permission-modules.ts's PERMISSION_MODULES — used to filter
+   * this item out of the nav (and block direct URL access) for a role
+   * whose Role.permissions doesn't include it. */
+  moduleKey: string;
 }
 
 export interface NavSection {
@@ -39,47 +44,47 @@ export const ADMIN_SECTIONS: NavSection[] = [
   {
     title: "Général",
     items: [
-      { label: "Tableau de bord", href: "/admin", icon: LayoutDashboard },
-      { label: "Messagerie", href: "/admin/messagerie", icon: MessageSquare },
+      { label: "Tableau de bord", href: "/admin", icon: LayoutDashboard, moduleKey: "dashboard" },
+      { label: "Messagerie", href: "/admin/messagerie", icon: MessageSquare, moduleKey: "messagerie" },
     ],
   },
   {
     title: "Administration & RH",
     items: [
-      { label: "Tableau de bord", href: "/admin/rh/dashboard", icon: LayoutDashboard },
-      { label: "Employés", href: "/admin/rh", icon: Users },
-      { label: "Départements", href: "/admin/rh/departements", icon: Building2 },
-      { label: "Utilisateurs & Rôles", href: "/admin/rh/utilisateurs", icon: UserCog },
-      { label: "Audit Log", href: "/admin/rh/audit-log", icon: ScrollText },
+      { label: "Tableau de bord", href: "/admin/rh/dashboard", icon: LayoutDashboard, moduleKey: "rh-dashboard" },
+      { label: "Employés", href: "/admin/rh", icon: Users, moduleKey: "employes" },
+      { label: "Départements", href: "/admin/rh/departements", icon: Building2, moduleKey: "departements" },
+      { label: "Utilisateurs & Rôles", href: "/admin/rh/utilisateurs", icon: UserCog, moduleKey: "utilisateurs" },
+      { label: "Audit Log", href: "/admin/rh/audit-log", icon: ScrollText, moduleKey: "audit-log" },
     ],
   },
   {
     title: "Marketing & Commercial",
     items: [
-      { label: "Dashboard", href: "/admin/marketing/dashboard", icon: LayoutDashboard },
-      { label: "Gestion de contenu", href: "/admin/marketing/blog", icon: Newspaper },
-      { label: "Plan Éditorial", href: "/admin/marketing/plan-editorial", icon: CalendarClock },
-      { label: "Tunnel commercial", href: "/admin/marketing/leads", icon: Target },
-      { label: "Devis", href: "/admin/marketing/devis", icon: FileText },
+      { label: "Dashboard", href: "/admin/marketing/dashboard", icon: LayoutDashboard, moduleKey: "marketing-dashboard" },
+      { label: "Gestion de contenu", href: "/admin/marketing/blog", icon: Newspaper, moduleKey: "contenu" },
+      { label: "Plan Éditorial", href: "/admin/marketing/plan-editorial", icon: CalendarClock, moduleKey: "plan-editorial" },
+      { label: "Tunnel commercial", href: "/admin/marketing/leads", icon: Target, moduleKey: "leads" },
+      { label: "Devis", href: "/admin/marketing/devis", icon: FileText, moduleKey: "devis" },
     ],
   },
   {
     title: "Technique",
     items: [
-      { label: "Gestion de projet", href: "/admin/technique/projets", icon: FolderKanban },
-      { label: "Timesheets", href: "/admin/technique/timesheets", icon: Clock },
-      { label: "Décaissements", href: "/admin/technique/decaissements", icon: Banknote },
+      { label: "Gestion de projet", href: "/admin/technique/projets", icon: FolderKanban, moduleKey: "projets" },
+      { label: "Timesheets", href: "/admin/technique/timesheets", icon: Clock, moduleKey: "timesheets" },
+      { label: "Décaissements", href: "/admin/technique/decaissements", icon: Banknote, moduleKey: "decaissements" },
     ],
   },
   {
     title: "Finance & Comptabilité",
     items: [
-      { label: "Analytique", href: "/admin/finance/dashboard", icon: PieChart },
-      { label: "Clôture comptable", href: "/admin/finance/cloture", icon: Lock },
-      { label: "Grand Livre", href: "/admin/finance/grand-livre", icon: BookOpen },
-      { label: "Facturation", href: "/admin/finance/facturation", icon: Receipt },
-      { label: "Rapprochement bancaire", href: "/admin/finance/rapprochement", icon: Landmark },
-      { label: "Fiscalité (TVA)", href: "/admin/finance/tva", icon: Percent },
+      { label: "Analytique", href: "/admin/finance/dashboard", icon: PieChart, moduleKey: "finance-dashboard" },
+      { label: "Clôture comptable", href: "/admin/finance/cloture", icon: Lock, moduleKey: "cloture" },
+      { label: "Grand Livre", href: "/admin/finance/grand-livre", icon: BookOpen, moduleKey: "grand-livre" },
+      { label: "Facturation", href: "/admin/finance/facturation", icon: Receipt, moduleKey: "facturation" },
+      { label: "Rapprochement bancaire", href: "/admin/finance/rapprochement", icon: Landmark, moduleKey: "rapprochement" },
+      { label: "Fiscalité (TVA)", href: "/admin/finance/tva", icon: Percent, moduleKey: "tva" },
     ],
   },
 ];
@@ -108,9 +113,12 @@ export const SECTION_SHORT_LABELS: Record<string, string> = {
 
 /** Longest-prefix match — /admin/rh/departements should resolve to the
  * "Départements" item, not fall through to a shorter, unrelated prefix. */
-export function findNavMatch(pathname: string): { section: NavSection; item: NavItem } | null {
+export function findNavMatch(
+  pathname: string,
+  sections: NavSection[] = ADMIN_SECTIONS
+): { section: NavSection; item: NavItem } | null {
   let best: { section: NavSection; item: NavItem } | null = null;
-  for (const section of ADMIN_SECTIONS) {
+  for (const section of sections) {
     for (const item of section.items) {
       const matches = pathname === item.href || pathname.startsWith(`${item.href}/`);
       if (matches && (!best || item.href.length > best.item.href.length)) {
@@ -119,4 +127,16 @@ export function findNavMatch(pathname: string): { section: NavSection; item: Nav
     }
   }
   return best;
+}
+
+/** ADMIN_SECTIONS narrowed to what the current role can see — items whose
+ * moduleKey fails canAccess are dropped, and any section left with zero
+ * items is dropped entirely (no empty department header/rail icon). */
+export function filterSectionsByAccess(
+  sections: NavSection[],
+  canAccessModule: (moduleKey: string) => boolean
+): NavSection[] {
+  return sections
+    .map((section) => ({ ...section, items: section.items.filter((item) => canAccessModule(item.moduleKey)) }))
+    .filter((section) => section.items.length > 0);
 }

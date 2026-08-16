@@ -6,7 +6,8 @@ import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useProfileModal } from "@/lib/admin/profile-modal-context";
-import { ADMIN_SECTIONS, SECTION_ICONS, findNavMatch } from "@/lib/admin-nav";
+import { usePermissions } from "@/lib/admin/permissions-context";
+import { ADMIN_SECTIONS, SECTION_ICONS, findNavMatch, filterSectionsByAccess } from "@/lib/admin-nav";
 
 function initials(firstName?: string, lastName?: string) {
   return `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "?";
@@ -16,10 +17,12 @@ export function AdminSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const pathname = usePathname();
   const { profile } = useAuth();
   const { openProfileModal } = useProfileModal();
+  const { canAccessModule } = usePermissions();
+  const allowedSections = filterSectionsByAccess(ADMIN_SECTIONS, canAccessModule);
   // Same department the DepartmentRail highlights, derived from the URL —
   // the two can never disagree about which department is "current",
   // regardless of how the user got to this page.
-  const match = findNavMatch(pathname);
+  const match = findNavMatch(pathname, allowedSections);
   const activeSection = match?.section.title ?? null;
   // The single best-matching item's href (longest-prefix match across ALL
   // sections) — NOT recomputed per-item below, because a naive per-item
@@ -29,21 +32,21 @@ export function AdminSidebar({ collapsed = false }: { collapsed?: boolean }) {
   // both used to show active at once).
   const activeItemHref = match?.item.href ?? null;
   const visibleSections = activeSection
-    ? ADMIN_SECTIONS.filter((section) => section.title === activeSection)
-    : ADMIN_SECTIONS;
+    ? allowedSections.filter((section) => section.title === activeSection)
+    : allowedSections;
   const HeaderIcon = activeSection ? SECTION_ICONS[activeSection] : null;
   const headerMeta = activeSection
     ? `${visibleSections[0]?.items.length ?? 0} module${(visibleSections[0]?.items.length ?? 0) > 1 ? "s" : ""}`
-    : `${ADMIN_SECTIONS.length} départements`;
+    : `${allowedSections.length} départements`;
 
   return (
     <aside
       className={cn(
         "fixed inset-y-0 left-20 z-40 hidden flex-col overflow-hidden border-white/10 bg-background/95 backdrop-blur-md transition-[width] duration-200 lg:flex",
-        collapsed ? "w-0 border-r-0" : "w-64 border-r"
+        collapsed ? "w-0 border-r-0" : "w-52 border-r"
       )}
     >
-      <div className="flex w-64 shrink-0 items-center gap-2.5 px-5 py-6">
+      <div className="flex w-52 shrink-0 items-center gap-2.5 px-5 py-6">
         {HeaderIcon && (
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <HeaderIcon className="size-4" />
@@ -57,7 +60,7 @@ export function AdminSidebar({ collapsed = false }: { collapsed?: boolean }) {
         </div>
       </div>
 
-      <nav data-tour="sidebar-nav" className="w-64 shrink-0 flex-1 space-y-6 overflow-y-auto px-3 pb-6">
+      <nav data-tour="sidebar-nav" className="w-52 shrink-0 flex-1 space-y-6 overflow-y-auto px-3 pb-6">
         {visibleSections.map((section) => (
           <div key={section.title}>
             {!activeSection && (
@@ -94,7 +97,7 @@ export function AdminSidebar({ collapsed = false }: { collapsed?: boolean }) {
         <button
           type="button"
           onClick={openProfileModal}
-          className="flex w-64 shrink-0 items-center gap-2.5 border-t border-white/10 px-5 py-3.5 text-left transition-colors hover:bg-white/5"
+          className="flex w-52 shrink-0 items-center gap-2.5 border-t border-white/10 px-5 py-3.5 text-left transition-colors hover:bg-white/5"
         >
           <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-xs font-semibold text-primary">
             {profile.avatarUrl ? (

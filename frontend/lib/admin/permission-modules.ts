@@ -20,6 +20,7 @@ export interface PermissionModule {
 export const PERMISSION_MODULES: PermissionModule[] = [
   { key: "dashboard", label: "Tableau de bord", section: "Général" },
   { key: "messagerie", label: "Messagerie", section: "Général" },
+  { key: "rh-dashboard", label: "Tableau de bord RH", section: "Administration & RH" },
   { key: "employes", label: "Employés", section: "Administration & RH" },
   { key: "departements", label: "Départements", section: "Administration & RH" },
   { key: "utilisateurs", label: "Utilisateurs & Rôles", section: "Administration & RH" },

@@ -376,9 +376,12 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     list=extend_schema(
         tags=['Administration & RH'],
         summary='List roles and their module/action permissions',
-        description="Read side of the Utilisateurs & Rôles permission editor. Doesn't "
-        'gate the actual API (that stays on has_role() by role name) — this is the '
-        "declarative view of what each role is meant to grant, editable from the UI.",
+        description='Any authenticated user can read — the frontend uses this to know '
+        "which nav items/pages its own role can see (see frontend/lib/admin/use-permissions.ts). "
+        'Only Super-Admin can edit (partial_update). Note: this does NOT gate the actual '
+        'API — that stays on has_role() by role name — so it stays possible for a role to '
+        'declare more/less here than what the backend actually enforces; keep them in sync '
+        'by hand when either changes.',
     ),
     retrieve=extend_schema(tags=['Administration & RH'], summary='Get a role'),
     partial_update=extend_schema(tags=['Administration & RH'], summary="Update a role's module/action permissions"),
@@ -386,7 +389,11 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
 class RoleViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
     queryset = Role.objects.all().order_by('name')
     serializer_class = RoleSerializer
-    permission_classes = [IsSuperAdmin]
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        return [IsSuperAdmin()]
 
 
 SEARCH_RESULT_LIMIT_PER_CATEGORY = 5

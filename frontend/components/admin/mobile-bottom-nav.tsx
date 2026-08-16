@@ -4,8 +4,9 @@ import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { Plus } from "lucide-react";
-import { ADMIN_SECTIONS, SECTION_ICONS, SECTION_SHORT_LABELS, findNavMatch } from "@/lib/admin-nav";
+import { ADMIN_SECTIONS, SECTION_ICONS, SECTION_SHORT_LABELS, findNavMatch, filterSectionsByAccess } from "@/lib/admin-nav";
 import { useAuth } from "@/lib/auth/auth-context";
+import { usePermissions } from "@/lib/admin/permissions-context";
 import { ROLE_QUICK_ACTIONS, type QuickAction } from "@/lib/admin/role-quick-actions";
 import { useProfileModal } from "@/lib/admin/profile-modal-context";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,8 @@ export function MobileBottomNav() {
   const router = useRouter();
   const { profile } = useAuth();
   const { openProfileModal } = useProfileModal();
+  const { canAccessModule } = usePermissions();
+  const sections = filterSectionsByAccess(ADMIN_SECTIONS, canAccessModule);
   const [actionsOpen, setActionsOpen] = useState(false);
   // Reset during render on navigation rather than in an effect — avoids a
   // flash of the fan-out menu still open on the page it was triggered from.
@@ -51,7 +54,7 @@ export function MobileBottomNav() {
     setActionsOpen(false);
   }
 
-  const activeSectionTitle = findNavMatch(pathname)?.section.title ?? null;
+  const activeSectionTitle = findNavMatch(pathname, sections)?.section.title ?? null;
   const quickActions = ROLE_QUICK_ACTIONS[profile?.role ?? "AUTRE"];
 
   function handleQuickAction(action: QuickAction) {
@@ -85,8 +88,8 @@ export function MobileBottomNav() {
 
       <nav className="fixed inset-x-0 bottom-0 z-40 lg:hidden">
         <div className="relative border-t border-neutral-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md">
-          <div className="grid grid-cols-5">
-            {ADMIN_SECTIONS.map((section) => {
+          <div className="grid" style={{ gridTemplateColumns: `repeat(${sections.length}, minmax(0, 1fr))` }}>
+            {sections.map((section) => {
               const Icon = SECTION_ICONS[section.title];
               const isActive = activeSectionTitle === section.title;
               return (
