@@ -450,7 +450,7 @@ class SocialPostViewSet(viewsets.ModelViewSet):
         return qs.filter(author=self.request.user)
 
     def create(self, request, *args, **kwargs):
-        if not has_role(request.user, *MARKETING_ROLES, ROLE_SUPER_ADMIN) and request.data.get('status', SocialPost.Status.DRAFT) != SocialPost.Status.DRAFT:
+        if not has_role(request.user, *MARKETING_ROLES, ROLE_SUPER_ADMIN) and request.data.get('status', SocialPost.Status.BROUILLON) != SocialPost.Status.BROUILLON:
             return Response(
                 {'detail': 'Un Commercial ne peut créer que des publications en brouillon (DRAFT).'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -458,7 +458,7 @@ class SocialPostViewSet(viewsets.ModelViewSet):
         return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
-        serializer.save(author=self.request.user, status=SocialPost.Status.DRAFT)
+        serializer.save(author=self.request.user, status=SocialPost.Status.BROUILLON)
 
     @extend_schema(tags=['Marketing & Commercial'], summary='Schedule a social post', responses={200: SocialPostSerializer})
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
@@ -471,7 +471,7 @@ class SocialPostViewSet(viewsets.ModelViewSet):
                 {'detail': "Un post ne peut être programmé sans date (scheduled_at)."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        post.status = SocialPost.Status.SCHEDULED
+        post.status = SocialPost.Status.PROGRAMME
         post.save(update_fields=['status'])
         return Response(SocialPostSerializer(post).data)
 
@@ -481,12 +481,12 @@ class SocialPostViewSet(viewsets.ModelViewSet):
         if not has_role(request.user, *MARKETING_ROLES, ROLE_SUPER_ADMIN):
             return Response(status=status.HTTP_403_FORBIDDEN)
         post = self.get_object()
-        if post.status not in (SocialPost.Status.DRAFT, SocialPost.Status.SCHEDULED):
+        if post.status not in (SocialPost.Status.BROUILLON, SocialPost.Status.PROGRAMME):
             return Response(
                 {'detail': 'Seuls les posts en brouillon ou programmés peuvent être annulés.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        post.status = SocialPost.Status.CANCELLED
+        post.status = SocialPost.Status.ANNULE
         post.save(update_fields=['status'])
         return Response(SocialPostSerializer(post).data)
 
@@ -822,7 +822,7 @@ def marketing_dashboard(request):
     }
     social_by_platform = {
         row['platform']: row['count']
-        for row in social_posts.filter(status=SocialPost.Status.PUBLISHED)
+        for row in social_posts.filter(status=SocialPost.Status.PUBLIE)
         .values('platform').annotate(count=Count('id')).order_by()
     }
 

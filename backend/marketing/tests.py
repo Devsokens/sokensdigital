@@ -342,7 +342,7 @@ class SocialPostViewSetTests(APITestCase):
     def test_marketing_can_create_and_it_starts_as_draft(self):
         response = self.client_marketing.post('/api/v1/marketing/social-posts/', self.payload(), format='json')
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.json()['status'], 'DRAFT')
+        self.assertEqual(response.json()['status'], 'BROUILLON')
 
     def test_commercial_can_create_draft(self):
         response = self.client_commercial.post('/api/v1/marketing/social-posts/', self.payload(), format='json')
@@ -350,7 +350,7 @@ class SocialPostViewSetTests(APITestCase):
 
     def test_commercial_cannot_force_scheduled_status(self):
         response = self.client_commercial.post(
-            '/api/v1/marketing/social-posts/', self.payload(status='SCHEDULED'), format='json',
+            '/api/v1/marketing/social-posts/', self.payload(status='PROGRAMME'), format='json',
         )
         self.assertEqual(response.status_code, 400)
 
@@ -375,7 +375,7 @@ class SocialPostViewSetTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         response = self.client_marketing.post(f'/api/v1/marketing/social-posts/{post.id}/schedule/')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['status'], 'SCHEDULED')
+        self.assertEqual(response.json()['status'], 'PROGRAMME')
 
     def test_cannot_schedule_without_date(self):
         post = SocialPost.objects.create(title='T', content='C', platform='FACEBOOK', author=self.marketing_user)
@@ -393,11 +393,11 @@ class SocialPostViewSetTests(APITestCase):
     def test_marketing_can_cancel_scheduled_post(self):
         post = SocialPost.objects.create(
             title='T', content='C', platform='FACEBOOK', author=self.marketing_user,
-            status='SCHEDULED', scheduled_at='2026-08-01T10:00:00Z',
+            status='PROGRAMME', scheduled_at='2026-08-01T10:00:00Z',
         )
         response = self.client_marketing.post(f'/api/v1/marketing/social-posts/{post.id}/cancel/')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['status'], 'CANCELLED')
+        self.assertEqual(response.json()['status'], 'ANNULE')
 
     def test_commercial_sees_only_own_posts(self):
         own = SocialPost.objects.create(title='Mine', content='C', platform='FACEBOOK', author=self.commercial)
@@ -1219,12 +1219,12 @@ class RunScheduledPublishingTests(TestCase):
 
         post = SocialPost.objects.create(
             title='x', content='hello', platform=SocialPost.Platform.FACEBOOK,
-            status=SocialPost.Status.SCHEDULED, scheduled_at=self.past,
+            status=SocialPost.Status.PROGRAMME, scheduled_at=self.past,
         )
         results = run_scheduled_publishing()
         self.assertEqual(results, [])
         post.refresh_from_db()
-        self.assertEqual(post.status, SocialPost.Status.SCHEDULED)
+        self.assertEqual(post.status, SocialPost.Status.PROGRAMME)
 
     def test_publishes_due_facebook_posts(self):
         from marketing.publishing import run_scheduled_publishing
@@ -1232,7 +1232,7 @@ class RunScheduledPublishingTests(TestCase):
         self._facebook_credentials()
         post = SocialPost.objects.create(
             title='x', content='hello', platform=SocialPost.Platform.FACEBOOK,
-            status=SocialPost.Status.SCHEDULED, scheduled_at=self.past,
+            status=SocialPost.Status.PROGRAMME, scheduled_at=self.past,
         )
         with patch('marketing.publishing.requests.post') as mock_post:
             mock_post.return_value = _mock_response(200, {'id': '999_333'})
@@ -1240,7 +1240,7 @@ class RunScheduledPublishingTests(TestCase):
 
         self.assertEqual(len(results), 1)
         post.refresh_from_db()
-        self.assertEqual(post.status, SocialPost.Status.PUBLISHED)
+        self.assertEqual(post.status, SocialPost.Status.PUBLIE)
         self.assertEqual(post.post_url, 'https://www.facebook.com/999_333')
         self.assertIsNotNone(post.published_at)
 
@@ -1250,14 +1250,14 @@ class RunScheduledPublishingTests(TestCase):
         self._facebook_credentials()
         post = SocialPost.objects.create(
             title='x', content='hello', platform=SocialPost.Platform.FACEBOOK,
-            status=SocialPost.Status.SCHEDULED, scheduled_at=self.past,
+            status=SocialPost.Status.PROGRAMME, scheduled_at=self.past,
         )
         with patch('marketing.publishing.requests.post') as mock_post:
             mock_post.return_value = _mock_response(400, {'error': {'message': 'Invalid token'}})
             run_scheduled_publishing()
 
         post.refresh_from_db()
-        self.assertEqual(post.status, SocialPost.Status.FAILED)
+        self.assertEqual(post.status, SocialPost.Status.ECHEC)
         self.assertIn('Invalid token', post.notes)
 
     def test_ignores_posts_not_due_yet(self):
@@ -1266,13 +1266,13 @@ class RunScheduledPublishingTests(TestCase):
         self._facebook_credentials()
         post = SocialPost.objects.create(
             title='x', content='hello', platform=SocialPost.Platform.FACEBOOK,
-            status=SocialPost.Status.SCHEDULED, scheduled_at=self.future,
+            status=SocialPost.Status.PROGRAMME, scheduled_at=self.future,
         )
         with patch('marketing.publishing.requests.post') as mock_post:
             run_scheduled_publishing()
         mock_post.assert_not_called()
         post.refresh_from_db()
-        self.assertEqual(post.status, SocialPost.Status.SCHEDULED)
+        self.assertEqual(post.status, SocialPost.Status.PROGRAMME)
 
 
 class PublishScheduledPostsCommandTests(TestCase):

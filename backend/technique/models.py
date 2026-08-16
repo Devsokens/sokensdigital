@@ -28,28 +28,28 @@ class DocumentType(models.TextChoices):
 
 class TaskStatus(models.TextChoices):
     BACKLOG = 'BACKLOG', 'Backlog'
-    TODO = 'TODO', 'To Do'
-    IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
-    REVIEW = 'REVIEW', 'Review'
-    DONE = 'DONE', 'Done'
+    A_FAIRE = 'A_FAIRE', 'À faire'
+    EN_COURS = 'EN_COURS', 'En cours'
+    EN_REVISION = 'EN_REVISION', 'En révision'
+    TERMINE = 'TERMINE', 'Terminé'
 
 class TaskPriority(models.TextChoices):
-    LOW = 'LOW', 'Low'
-    MEDIUM = 'MEDIUM', 'Medium'
-    HIGH = 'HIGH', 'High'
-    CRITICAL = 'CRITICAL', 'Critical'
+    BASSE = 'BASSE', 'Basse'
+    MOYENNE = 'MOYENNE', 'Moyenne'
+    HAUTE = 'HAUTE', 'Haute'
+    CRITIQUE = 'CRITIQUE', 'Critique'
 
 class TicketStatus(models.TextChoices):
-    NEW = 'NEW', 'New'
-    ASSIGNED = 'ASSIGNED', 'Assigned'
-    RESOLVED = 'RESOLVED', 'Resolved'
-    CLOSED = 'CLOSED', 'Closed'
+    NOUVEAU = 'NOUVEAU', 'Nouveau'
+    ASSIGNE = 'ASSIGNE', 'Assigné'
+    RESOLU = 'RESOLU', 'Résolu'
+    FERME = 'FERME', 'Fermé'
 
 class TicketSeverity(models.TextChoices):
-    LOW = 'LOW', 'Low'
-    MEDIUM = 'MEDIUM', 'Medium'
-    HIGH = 'HIGH', 'High'
-    CRITICAL = 'CRITICAL', 'Critical'
+    BASSE = 'BASSE', 'Basse'
+    MOYENNE = 'MOYENNE', 'Moyenne'
+    HAUTE = 'HAUTE', 'Haute'
+    CRITIQUE = 'CRITIQUE', 'Critique'
 
 class Project(LoggedModel):
     client = models.ForeignKey('administration.Client', on_delete=models.PROTECT, related_name='projects')
@@ -131,7 +131,7 @@ class Task(LoggedModel):
     description = models.TextField(blank=True)
     assigned_to = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tasks')
     status = models.CharField(max_length=50, choices=TaskStatus.choices, default=TaskStatus.BACKLOG)
-    priority = models.CharField(max_length=50, choices=TaskPriority.choices, default=TaskPriority.MEDIUM)
+    priority = models.CharField(max_length=50, choices=TaskPriority.choices, default=TaskPriority.MOYENNE)
     estimated_hours = models.DecimalField(max_digits=7, decimal_places=2)
     actual_hours = models.DecimalField(max_digits=7, decimal_places=2, default=0)
     due_date = models.DateField()
@@ -182,8 +182,8 @@ class Ticket(LoggedModel):
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='tickets')
     title = models.CharField(max_length=255)
     description = models.TextField()
-    status = models.CharField(max_length=50, choices=TicketStatus.choices, default=TicketStatus.NEW)
-    severity = models.CharField(max_length=50, choices=TicketSeverity.choices, default=TicketSeverity.MEDIUM)
+    status = models.CharField(max_length=50, choices=TicketStatus.choices, default=TicketStatus.NOUVEAU)
+    severity = models.CharField(max_length=50, choices=TicketSeverity.choices, default=TicketSeverity.MOYENNE)
     assigned_developer = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tickets')
     updated_at = models.DateTimeField(auto_now=True)
 

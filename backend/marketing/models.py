@@ -106,11 +106,11 @@ class SocialPost(LoggedModel):
         INSTAGRAM = 'INSTAGRAM', 'Instagram'
 
     class Status(models.TextChoices):
-        DRAFT = 'DRAFT', 'Brouillon'
-        SCHEDULED = 'SCHEDULED', 'Programmé'
-        PUBLISHED = 'PUBLISHED', 'Publié'
-        FAILED = 'FAILED', 'Échec'
-        CANCELLED = 'CANCELLED', 'Annulé'
+        BROUILLON = 'BROUILLON', 'Brouillon'
+        PROGRAMME = 'PROGRAMME', 'Programmé'
+        PUBLIE = 'PUBLIE', 'Publié'
+        ECHEC = 'ECHEC', 'Échec'
+        ANNULE = 'ANNULE', 'Annulé'
 
     # Reminder windows (hours before scheduled_at) — J-3h/J-2h/J-1h.
     # `reminders_sent` below tracks which windows already notified this
@@ -126,7 +126,7 @@ class SocialPost(LoggedModel):
     additional_images = models.JSONField(default=list)
     platform = models.CharField(max_length=20, choices=Platform.choices)
     scheduled_at = models.DateTimeField(null=True, blank=True)
-    status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.BROUILLON)
     published_at = models.DateTimeField(null=True, blank=True)
     post_url = models.URLField(blank=True)
     author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='social_posts')

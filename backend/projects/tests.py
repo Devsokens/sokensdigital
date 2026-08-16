@@ -309,7 +309,7 @@ class ProjectTaskTests(APITestCase):
             format='json',
         )
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.json()['status'], 'TODO')
+        self.assertEqual(response.json()['status'], 'A_FAIRE')
         self.assertEqual(response.json()['due_date'], '2026-08-20')
         self.assertEqual(response.json()['assignees'][0]['id'], str(self.dev.id))
 
@@ -328,11 +328,11 @@ class ProjectTaskTests(APITestCase):
 
         response = self.client_dev.patch(
             f'/api/v1/projects/{self.project.id}/tasks/{task.id}/',
-            {'status': 'IN_REVIEW', 'progress': 80}, format='json',
+            {'status': 'EN_REVISION', 'progress': 80}, format='json',
         )
         self.assertEqual(response.status_code, 200)
         task.refresh_from_db()
-        self.assertEqual(task.status, 'IN_REVIEW')
+        self.assertEqual(task.status, 'EN_REVISION')
         self.assertEqual(task.progress, 80)
 
     def test_progress_out_of_range_rejected(self):
@@ -354,8 +354,8 @@ class ProjectTaskTests(APITestCase):
 
     def test_project_list_reports_tasks_progress(self):
         from projects.models import ProjectTask
-        ProjectTask.objects.create(project=self.project, title='Fait', status='DONE')
-        ProjectTask.objects.create(project=self.project, title='Pas fait', status='TODO')
+        ProjectTask.objects.create(project=self.project, title='Fait', status='TERMINE')
+        ProjectTask.objects.create(project=self.project, title='Pas fait', status='A_FAIRE')
 
         results = self.client_chef.get('/api/v1/projects/').json()['results']
         entry = next(p for p in results if p['id'] == str(self.project.id))
