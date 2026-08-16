@@ -55,7 +55,15 @@ export function LeadList() {
 
   async function load() {
     try {
-      const [leadsRes, usersRes] = await Promise.all([listLeads(), listUsers()]);
+      // listUsers() is Super-Admin/RH/Responsable Marketing only (server
+      // side) — a Commercial can view and work leads but can't reassign
+      // them, so a 403 there is expected and must not block the leads
+      // themselves from loading; it only means the assignee picker stays
+      // empty for that role.
+      const [leadsRes, usersRes] = await Promise.all([
+        listLeads(),
+        listUsers().catch(() => ({ results: [] as UserBrief[] })),
+      ]);
       setLeads(leadsRes.results);
       setUsers(usersRes.results);
     } catch {
