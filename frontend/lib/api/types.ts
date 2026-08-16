@@ -30,6 +30,74 @@ export interface Role {
   permissions: Record<string, string[]>;
 }
 
+export type ClientStatus = "PROSPECT" | "CLIENT_ACTIF" | "CLIENT_INACTIF" | "ARCHIVE";
+
+/** CRM — cahier des charges §4.5. List endpoint returns a narrower shape
+ * (ClientListSerializer, backend/administration/serializers.py:15-18);
+ * retrieve/create/update return every field (ClientSerializer, `fields =
+ * '__all__'`) — Client covers both since the narrower fields are a subset. */
+export interface Client {
+  id: string;
+  company_name: string;
+  siret: string | null;
+  sector?: string;
+  address?: string;
+  city?: string;
+  postal_code?: string;
+  country?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  status: ClientStatus;
+  rating: number | null;
+  notes?: string;
+  assigned_to: string | null;
+  created_at: string;
+}
+
+export type ContactRole = string;
+
+export interface ClientContact {
+  id: string;
+  client: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  role: string;
+  is_primary: boolean;
+}
+
+export type InteractionType = "CALL" | "EMAIL" | "MEETING" | "OTHER";
+
+export interface ClientInteractionEntry {
+  id: string;
+  client: string;
+  contact: string | null;
+  user: string | null;
+  interaction_type: InteractionType;
+  subject: string;
+  notes: string;
+  follow_up_date: string | null;
+  is_locked: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ClientDocumentType = "CONTRAT" | "DEVIS" | "FACTURE" | "AUTRE_JURIDIQUE";
+
+export interface ClientDocumentEntry {
+  id: string;
+  client: string;
+  name: string;
+  file_path: string;
+  file_type: ClientDocumentType;
+  uploaded_by: string | null;
+  is_sensitive: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export type ContractType = "CDI" | "CDD" | "STAGE" | "FREELANCE";
 export type ContractStatus = "ACTIF" | "TERMINE";
 

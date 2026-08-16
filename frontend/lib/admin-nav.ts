@@ -19,6 +19,7 @@ import {
   Percent,
   PieChart,
   Settings,
+  Contact2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -55,6 +56,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
       { label: "Tableau de bord", href: "/admin/rh/dashboard", icon: LayoutDashboard, moduleKey: "rh-dashboard" },
       { label: "Employés", href: "/admin/rh", icon: Users, moduleKey: "employes" },
       { label: "Départements", href: "/admin/rh/departements", icon: Building2, moduleKey: "departements" },
+      { label: "Clients", href: "/admin/rh/clients", icon: Contact2, moduleKey: "clients" },
       { label: "Utilisateurs & Rôles", href: "/admin/rh/utilisateurs", icon: UserCog, moduleKey: "utilisateurs" },
       { label: "Audit Log", href: "/admin/rh/audit-log", icon: ScrollText, moduleKey: "audit-log" },
     ],

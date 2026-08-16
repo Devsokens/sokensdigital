@@ -49,6 +49,7 @@ MODULES = [
     ('rh-dashboard', 'Tableau de bord RH', 'Administration & RH'),
     ('employes', 'Employés', 'Administration & RH'),
     ('departements', 'Départements', 'Administration & RH'),
+    ('clients', 'Clients', 'Administration & RH'),
     ('utilisateurs', 'Utilisateurs & Rôles', 'Administration & RH'),
     ('audit-log', 'Audit Log', 'Administration & RH'),
     ('marketing-dashboard', 'Dashboard Marketing', 'Marketing & Commercial'),
@@ -112,6 +113,9 @@ DEFAULT_ROLE_PERMISSIONS = {
         _full('projets'),
         {'timesheets': ['voir', 'creer', 'modifier']},
         {'decaissements': ['voir', 'creer']},
+        # _accessible_clients_qs scope un Chef de Projet non-Admin aux
+        # clients liés à ses propres projets — lecture seule.
+        _read_only('clients'),
     ),
     ROLE_DEVELOPER: _merge(
         _read_only('dashboard'),
@@ -142,6 +146,10 @@ DEFAULT_ROLE_PERMISSIONS = {
         {'messagerie': ['voir', 'creer']},
         {'leads': ['voir', 'creer', 'modifier']},
         {'devis': ['voir', 'creer', 'modifier']},
+        # ClientViewSet allows Commercial to create/update (core.
+        # administration.views.ClientViewSet.get_permissions) — scoped to
+        # their own assigned clients server-side (_accessible_clients_qs).
+        {'clients': ['voir', 'creer', 'modifier']},
     ),
     ROLE_CONSULTANT: _merge(
         _read_only('dashboard', 'projets'),
@@ -150,5 +158,9 @@ DEFAULT_ROLE_PERMISSIONS = {
     ROLE_SUPPORT_CLIENT: _merge(
         _read_only('dashboard'),
         {'messagerie': ['voir', 'creer']},
+        # CDC §4.8 — "accès aux tickets, base de connaissances, et fiches
+        # clients" — lecture seule, création/édition réservées à
+        # Commercial/Admin côté API.
+        _read_only('clients'),
     ),
 }

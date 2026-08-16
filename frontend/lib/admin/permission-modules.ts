@@ -23,6 +23,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
   { key: "rh-dashboard", label: "Tableau de bord RH", section: "Administration & RH" },
   { key: "employes", label: "Employés", section: "Administration & RH" },
   { key: "departements", label: "Départements", section: "Administration & RH" },
+  { key: "clients", label: "Clients", section: "Administration & RH" },
   { key: "utilisateurs", label: "Utilisateurs & Rôles", section: "Administration & RH" },
   { key: "audit-log", label: "Audit Log", section: "Administration & RH" },
   { key: "marketing-dashboard", label: "Dashboard Marketing", section: "Marketing & Commercial" },
