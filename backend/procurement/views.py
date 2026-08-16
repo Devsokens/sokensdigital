@@ -18,9 +18,8 @@ from procurement.serializers import (
 )
 from procurement.tasks import create_disbursement_request_task, post_supplier_invoice_journal_entry
 from core.constants import (
+    ROLE_COMPTABLE,
     ROLE_DIRECTEUR_FINANCIER,
-    ROLE_MANAGER_GENERAL,
-    ROLE_MANAGER_RCF,
     ROLE_SUPER_ADMIN,
 )
 from core.celery_utils import safe_dispatch
@@ -35,13 +34,19 @@ class IsFinanceOrAdmin(permissions.BasePermission):
 
 
 class IsManagerOrAdmin(permissions.BasePermission):
-    """Manager (RCF ou Gérant) ou Super Admin."""
+    """RCF (Responsable Comptable et Financière) ou Gérant.
+
+    Pas de rôle dédié "RCF"/"Gérant" dans core.constants.py — même
+    raisonnement que DisbursementRequest.Status.EN_ATTENTE_N3 (finance/
+    models.py) : Comptable/Directeur Financier tiennent lieu de RCF,
+    Super-Admin tient lieu de Gérant/Direction Générale.
+    """
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
         return (
-            request.user.has_role(ROLE_MANAGER_RCF)
-            or request.user.has_role(ROLE_MANAGER_GENERAL)
+            request.user.has_role(ROLE_COMPTABLE)
+            or request.user.has_role(ROLE_DIRECTEUR_FINANCIER)
             or request.user.has_role(ROLE_SUPER_ADMIN)
         )
 
