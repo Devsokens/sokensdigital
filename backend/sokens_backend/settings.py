@@ -108,6 +108,7 @@ INSTALLED_APPS = [
     'technique',
     'administration',
     'messaging',
+    'support',
 ]
 
 AUTH_USER_MODEL = 'core.User'

@@ -435,6 +435,45 @@ export interface MarketingDashboard {
   published_social_posts_by_platform: Record<string, number>;
 }
 
+export type FAQAudience = "PUBLIC" | "INTERNE";
+
+export interface FAQEntry {
+  id: string;
+  question: string;
+  answer: string;
+  category: string;
+  audience: FAQAudience;
+  order: number;
+  is_published: boolean;
+  updated_at: string;
+}
+
+export type TicketSenderType = "VISITEUR" | "STAFF";
+export type TicketStatus = "OUVERT" | "EN_COURS" | "FERME";
+
+export interface TicketMessage {
+  id: string;
+  sender_type: TicketSenderType;
+  author: UserBrief | null;
+  body: string;
+  created_at: string;
+}
+
+export interface SupportTicketListItem {
+  id: string;
+  visitor_name: string;
+  visitor_email: string;
+  subject: string;
+  status: TicketStatus;
+  assigned_to: UserBrief | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupportTicket extends SupportTicketListItem {
+  messages: TicketMessage[];
+}
+
 export type ProjectStatus = "EN_COURS" | "EN_PAUSE" | "TERMINE" | "ANNULE";
 export type ProjectPriority = "BASSE" | "MOYENNE" | "HAUTE";
 
