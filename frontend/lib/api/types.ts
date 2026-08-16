@@ -476,7 +476,7 @@ export interface TeamTimesheetResponse {
   members: TeamTimesheetMember[];
 }
 
-export type DisbursementStatus = "EN_ATTENTE_N1" | "EN_ATTENTE_N2" | "APPROUVE" | "REJETE" | "EXECUTE";
+export type DisbursementStatus = "EN_ATTENTE_N1" | "EN_ATTENTE_N2" | "EN_ATTENTE_N3" | "APPROUVE" | "REJETE" | "EXECUTE";
 
 export interface DisbursementRequest {
   id: string;
@@ -486,6 +486,7 @@ export interface DisbursementRequest {
   beneficiary: string;
   reason: string;
   status: DisbursementStatus;
+  rejection_reason: string;
   decided_by: UserBrief | null;
   decided_at: string | null;
   executed_by: UserBrief | null;

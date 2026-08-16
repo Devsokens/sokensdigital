@@ -37,6 +37,19 @@ COMPTABLE_ROLES = (ROLE_COMPTABLE,)
 FINANCE_READ_ROLES = (ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE)
 
 
+def _can_approve_tier(user, pending_status):
+    """A higher validation tier's role can always approve a lower tier's
+    request — Directeur Financier and Super-Admin both cover the
+    Comptable-only N1 tier, Super-Admin also covers N2 (cahier des
+    charges §4.3: N1 Comptable <10 000, N2 Directeur Financier
+    10 000-50 000, N3 direction générale >50 000)."""
+    if pending_status == DisbursementRequest.Status.EN_ATTENTE_N1:
+        return has_role(user, *COMPTABLE_ROLES, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN)
+    if pending_status == DisbursementRequest.Status.EN_ATTENTE_N2:
+        return has_role(user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN)
+    return has_role(user, ROLE_SUPER_ADMIN)  # EN_ATTENTE_N3
+
+
 class CanInitiateDisbursement(permissions.BasePermission):
     """N1 initiation: Chef de Projet, restricted in the view to projects
     they lead. N2/N3 final approval and execution are separate actions
@@ -77,30 +90,49 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
         if project and project.lead_project_manager_id != self.request.user.id:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Tu ne peux initier une demande que pour un projet que tu diriges.")
-        serializer.save(requested_by=self.request.user)
+        amount = serializer.validated_data['amount']
+        serializer.save(
+            requested_by=self.request.user,
+            status=DisbursementRequest.initial_status_for_amount(amount),
+        )
 
     @extend_schema(
         tags=['Finance & Comptabilité'],
-        summary='Give final hierarchical approval to a disbursement request (§4.1)',
-        description="Directeur Financier/Super-Admin only. Modeled as a single final "
-        "approval step (spec's \"N2/N3\") since no separate N1-approver role exists.",
-        request={'application/json': {'type': 'object', 'properties': {'decision': {'type': 'string', 'enum': ['APPROUVE', 'REJETE']}}}},
+        summary='Give validation to a disbursement request (§4.3)',
+        description="Which role can approve depends on the request's current tier "
+        "(EN_ATTENTE_N1/N2/N3, set from the amount at creation — see "
+        "DisbursementRequest.initial_status_for_amount): Comptable for N1 "
+        "(<10 000 FCFA), Directeur Financier for N2 (10 000-50 000), Super-Admin "
+        "for N3 (>50 000, standing in for the spec's \"direction générale\", no "
+        "dedicated role exists). A higher tier's role can always approve a lower "
+        "one. Rejecting requires `rejection_reason`.",
+        request={'application/json': {'type': 'object', 'properties': {
+            'decision': {'type': 'string', 'enum': ['APPROUVE', 'REJETE']},
+            'rejection_reason': {'type': 'string'},
+        }}},
         responses={200: DisbursementRequestSerializer},
     )
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def approve(self, request, pk=None):
-        if not has_role(request.user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN):
-            return Response(status=status.HTTP_403_FORBIDDEN)
         disbursement = self.get_object()
+        if disbursement.status not in DisbursementRequest.PENDING_STATUSES:
+            return Response({'detail': 'Cette demande a déjà été traitée.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not _can_approve_tier(request.user, disbursement.status):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
         decision = request.data.get('decision')
         if decision not in (DisbursementRequest.Status.APPROUVE, DisbursementRequest.Status.REJETE):
             return Response({'detail': 'decision doit être APPROUVE ou REJETE.'}, status=status.HTTP_400_BAD_REQUEST)
-        if disbursement.status not in (DisbursementRequest.Status.EN_ATTENTE_N1, DisbursementRequest.Status.EN_ATTENTE_N2):
-            return Response({'detail': 'Cette demande a déjà été traitée.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        rejection_reason = (request.data.get('rejection_reason') or '').strip()
+        if decision == DisbursementRequest.Status.REJETE and not rejection_reason:
+            return Response({'detail': 'Un motif de rejet est obligatoire.'}, status=status.HTTP_400_BAD_REQUEST)
+
         disbursement.status = decision
+        disbursement.rejection_reason = rejection_reason if decision == DisbursementRequest.Status.REJETE else ''
         disbursement.decided_by = request.user
         disbursement.decided_at = timezone.now()
-        disbursement.save(update_fields=['status', 'decided_by', 'decided_at'])
+        disbursement.save(update_fields=['status', 'rejection_reason', 'decided_by', 'decided_at'])
         return Response(DisbursementRequestSerializer(disbursement).data)
 
     @extend_schema(

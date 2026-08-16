@@ -16,19 +16,31 @@ DEFAULT_VAT_RATE = Decimal('0.18')
 
 
 class DisbursementRequest(LoggedModel):
-    """docs/backend-specifications.md §3.1/§4.1/§4.2/§6.3. Full workflow:
-    Chef de Projet initiates (N1) -> Directeur Financier/Super-Admin gives
-    final hierarchical approval (`approve` action, "validation N2/N3" in the
-    spec — modeled as a single final approval step since no separate N1
-    approver role exists) -> Comptable marks it EXECUTE once the money has
-    actually moved (`execute` action)."""
+    """docs/backend-specifications.md §3.1/§4.1/§4.2/§6.3 + cahier des
+    charges §4.3. Chef de Projet initiates; which validation tier is
+    required is decided by `amount` (see THRESHOLD_N2/THRESHOLD_N3 and
+    `initial_status_for_amount`) — under 10 000 FCFA a Comptable can give
+    final approval alone (N1), 10 000-50 000 needs the Directeur Financier
+    (N2), above 50 000 needs Super-Admin as "direction générale" (N3, no
+    dedicated role exists for that in this codebase or the spec's own
+    §4.8 role list). A higher tier can always approve a lower one (the
+    `approve` action's role check in finance/views.py is cumulative, not
+    exclusive). Comptable marks it EXECUTE once the money has actually
+    moved (`execute` action)."""
 
     class Status(models.TextChoices):
         EN_ATTENTE_N1 = 'EN_ATTENTE_N1', 'En attente (N1)'
         EN_ATTENTE_N2 = 'EN_ATTENTE_N2', 'En attente (N2)'
+        EN_ATTENTE_N3 = 'EN_ATTENTE_N3', 'En attente (N3)'
         APPROUVE = 'APPROUVE', 'Approuvé'
         REJETE = 'REJETE', 'Rejeté'
         EXECUTE = 'EXECUTE', 'Exécuté'
+
+    PENDING_STATUSES = (Status.EN_ATTENTE_N1, Status.EN_ATTENTE_N2, Status.EN_ATTENTE_N3)
+
+    # Cahier des charges §4.3 — bornes exactes.
+    THRESHOLD_N2 = Decimal('10000')
+    THRESHOLD_N3 = Decimal('50000')
 
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='disbursement_requests')
     requested_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='disbursement_requests')
@@ -36,6 +48,7 @@ class DisbursementRequest(LoggedModel):
     beneficiary = models.CharField(max_length=255)
     reason = models.TextField()
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.EN_ATTENTE_N1)
+    rejection_reason = models.TextField(blank=True)
     decided_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='decided_disbursements')
     decided_at = models.DateTimeField(null=True, blank=True)
     executed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='executed_disbursements')
@@ -56,6 +69,14 @@ class DisbursementRequest(LoggedModel):
         from django.core.exceptions import ValidationError
         if self.amount is not None and self.amount <= 0:
             raise ValidationError({'amount': 'Le montant doit être positif.'})
+
+    @classmethod
+    def initial_status_for_amount(cls, amount: Decimal) -> str:
+        if amount > cls.THRESHOLD_N3:
+            return cls.Status.EN_ATTENTE_N3
+        if amount >= cls.THRESHOLD_N2:
+            return cls.Status.EN_ATTENTE_N2
+        return cls.Status.EN_ATTENTE_N1
 
 
 class AccountingPeriod(LoggedModel):

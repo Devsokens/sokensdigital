@@ -29,11 +29,11 @@ class DisbursementRequestSerializer(serializers.ModelSerializer):
         model = DisbursementRequest
         fields = [
             'id', 'project', 'project_id', 'requested_by', 'amount',
-            'beneficiary', 'reason', 'status', 'decided_by', 'decided_at',
+            'beneficiary', 'reason', 'status', 'rejection_reason', 'decided_by', 'decided_at',
             'executed_by', 'executed_at', 'created_at',
         ]
         read_only_fields = [
-            'project', 'requested_by', 'status', 'decided_by', 'decided_at',
+            'project', 'requested_by', 'status', 'rejection_reason', 'decided_by', 'decided_at',
             'executed_by', 'executed_at',
         ]
 

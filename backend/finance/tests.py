@@ -65,9 +65,28 @@ class DisbursementRequestViewSetTests(APITestCase):
         return data
 
     def test_chef_can_initiate_for_own_project(self):
+        # 150000 > THRESHOLD_N3 (50000) -> routed straight to N3.
         response = self.client_a.post('/api/v1/finance/disbursement-requests/', self.payload(), format='json')
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['status'], 'EN_ATTENTE_N3')
+
+    def test_amount_under_10000_routes_to_n1(self):
+        response = self.client_a.post(
+            '/api/v1/finance/disbursement-requests/', self.payload(amount='5000'), format='json',
+        )
         self.assertEqual(response.json()['status'], 'EN_ATTENTE_N1')
+
+    def test_amount_between_thresholds_routes_to_n2(self):
+        response = self.client_a.post(
+            '/api/v1/finance/disbursement-requests/', self.payload(amount='25000'), format='json',
+        )
+        self.assertEqual(response.json()['status'], 'EN_ATTENTE_N2')
+
+    def test_amount_over_50000_routes_to_n3(self):
+        response = self.client_a.post(
+            '/api/v1/finance/disbursement-requests/', self.payload(amount='60000'), format='json',
+        )
+        self.assertEqual(response.json()['status'], 'EN_ATTENTE_N3')
 
     def test_chef_cannot_initiate_for_other_chefs_project(self):
         response = self.client_a.post(
@@ -174,6 +193,89 @@ class DisbursementRequestViewSetTests(APITestCase):
         )
         response = client_comptable.post(f'/api/v1/finance/disbursement-requests/{disbursement.id}/execute/')
         self.assertEqual(response.status_code, 400)
+
+    def test_comptable_can_approve_n1(self):
+        comptable = User.objects.create(email='comptable-n1@sokensdigital.com', first_name='Comptable')
+        _give_role(comptable, ROLE_COMPTABLE)
+        client_comptable = APIClient()
+        client_comptable.force_authenticate(user=comptable)
+
+        disbursement = DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=5000, beneficiary='X', reason='Y',
+            status=DisbursementRequest.Status.EN_ATTENTE_N1,
+        )
+        response = client_comptable.post(
+            f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
+            {'decision': 'APPROUVE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'APPROUVE')
+
+    def test_comptable_cannot_approve_n2(self):
+        comptable = User.objects.create(email='comptable-n2@sokensdigital.com', first_name='Comptable')
+        _give_role(comptable, ROLE_COMPTABLE)
+        client_comptable = APIClient()
+        client_comptable.force_authenticate(user=comptable)
+
+        disbursement = DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=25000, beneficiary='X', reason='Y',
+            status=DisbursementRequest.Status.EN_ATTENTE_N2,
+        )
+        response = client_comptable.post(
+            f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
+            {'decision': 'APPROUVE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_cfo_cannot_approve_n3(self):
+        disbursement = DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=60000, beneficiary='X', reason='Y',
+            status=DisbursementRequest.Status.EN_ATTENTE_N3,
+        )
+        response = self.client_cfo.post(
+            f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
+            {'decision': 'APPROUVE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_super_admin_can_approve_n3(self):
+        super_admin = User.objects.create(email='super-n3@sokensdigital.com', first_name='Super')
+        _give_role(super_admin, ROLE_SUPER_ADMIN)
+        client_super = APIClient()
+        client_super.force_authenticate(user=super_admin)
+
+        disbursement = DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=60000, beneficiary='X', reason='Y',
+            status=DisbursementRequest.Status.EN_ATTENTE_N3,
+        )
+        response = client_super.post(
+            f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
+            {'decision': 'APPROUVE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'APPROUVE')
+
+    def test_rejection_requires_reason(self):
+        disbursement = DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=1000, beneficiary='X', reason='Y',
+        )
+        response = self.client_cfo.post(
+            f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
+            {'decision': 'REJETE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_rejection_with_reason_succeeds(self):
+        disbursement = DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=1000, beneficiary='X', reason='Y',
+        )
+        response = self.client_cfo.post(
+            f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
+            {'decision': 'REJETE', 'rejection_reason': 'Budget insuffisant.'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'REJETE')
+        self.assertEqual(response.json()['rejection_reason'], 'Budget insuffisant.')
 
 
 class AccountingPeriodViewSetTests(APITestCase):
