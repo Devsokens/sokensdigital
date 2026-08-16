@@ -36,7 +36,7 @@ function linesFromQuote(quote?: Quote): QuoteLineInput[] {
   }));
 }
 
-export function QuoteEditor({ quote }: { quote?: Quote }) {
+export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { quote?: Quote; basePath?: string }) {
   const router = useRouter();
   const [clientName, setClientName] = useState(quote?.client_name ?? "");
   const [subject, setSubject] = useState(quote?.subject ?? "");
@@ -118,7 +118,7 @@ export function QuoteEditor({ quote }: { quote?: Quote }) {
     setSaving(true);
     try {
       const saved = quote ? await updateQuote(quote.id, payload) : await createQuote(payload);
-      router.push(`/admin/marketing/devis?saved=${saved.id}`);
+      router.push(`${basePath}?saved=${saved.id}`);
     } catch {
       setError(quote ? "Impossible de modifier ce devis." : "Impossible de créer le devis.");
     } finally {
@@ -148,7 +148,7 @@ export function QuoteEditor({ quote }: { quote?: Quote }) {
   return (
     <div>
       <Link
-        href="/admin/marketing/devis"
+        href={basePath}
         className="mb-5 inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-500 hover:text-neutral-800"
       >
         <ArrowLeft className="size-3.5" /> Devis
@@ -350,7 +350,7 @@ export function QuoteEditor({ quote }: { quote?: Quote }) {
           )}
 
           <div className="flex items-center justify-between pt-2">
-            <Button type="button" variant="outline" onClick={() => router.push("/admin/marketing/devis")} className="rounded-full px-4">
+            <Button type="button" variant="outline" onClick={() => router.push(basePath)} className="rounded-full px-4">
               Annuler
             </Button>
             <div className="flex items-center gap-2">

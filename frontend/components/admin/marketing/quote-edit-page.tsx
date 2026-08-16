@@ -6,7 +6,7 @@ import { getQuote } from "@/lib/api/marketing";
 import type { Quote } from "@/lib/api/types";
 import { QuoteEditor } from "@/components/admin/marketing/quote-editor";
 
-export function QuoteEditPage({ id }: { id: string }) {
+export function QuoteEditPage({ id, basePath }: { id: string; basePath?: string }) {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,5 +25,5 @@ export function QuoteEditPage({ id }: { id: string }) {
     );
   }
 
-  return <QuoteEditor quote={quote} />;
+  return <QuoteEditor quote={quote} basePath={basePath} />;
 }

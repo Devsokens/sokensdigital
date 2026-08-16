@@ -6,7 +6,7 @@ import { getSpecification } from "@/lib/api/marketing";
 import type { Specification } from "@/lib/api/types";
 import { SpecificationEditor } from "@/components/admin/marketing/specification-editor";
 
-export function SpecificationEditPage({ id }: { id: string }) {
+export function SpecificationEditPage({ id, basePath }: { id: string; basePath?: string }) {
   const [spec, setSpec] = useState<Specification | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,5 +25,5 @@ export function SpecificationEditPage({ id }: { id: string }) {
     );
   }
 
-  return <SpecificationEditor spec={spec} />;
+  return <SpecificationEditor spec={spec} basePath={basePath} />;
 }

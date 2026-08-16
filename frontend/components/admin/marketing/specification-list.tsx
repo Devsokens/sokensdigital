@@ -34,7 +34,7 @@ function formatDate(value: string | null) {
   return new Date(value).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
 
-export function SpecificationList() {
+export function SpecificationList({ basePath = "/admin/marketing/cahier-des-charges" }: { basePath?: string }) {
   const [specs, setSpecs] = useState<SpecificationListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -85,7 +85,7 @@ export function SpecificationList() {
             Document interne partagé entre Technique et Marketing — fonctionnel ou technique.
           </p>
         </div>
-        <Link href="/admin/marketing/cahier-des-charges/nouveau">
+        <Link href={`${basePath}/nouveau`}>
           <Button className="gap-1.5 rounded-full px-4">
             <Plus className="size-4" /> Nouveau cahier des charges
           </Button>
@@ -108,7 +108,7 @@ export function SpecificationList() {
             {specs.map((spec) => (
               <tr key={spec.id}>
                 <td className="px-4 py-3 text-neutral-900">
-                  <Link href={`/admin/marketing/cahier-des-charges/${spec.id}`} className="hover:text-primary hover:underline">
+                  <Link href={`${basePath}/${spec.id}`} className="hover:text-primary hover:underline">
                     {spec.spec_number}
                   </Link>
                 </td>
@@ -138,7 +138,7 @@ export function SpecificationList() {
                     />
                     <PopoverContent className="w-52 p-1" align="end">
                       <Link
-                        href={`/admin/marketing/cahier-des-charges/${spec.id}`}
+                        href={`${basePath}/${spec.id}`}
                         className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50"
                       >
                         <Pencil className="size-3.5" /> Modifier

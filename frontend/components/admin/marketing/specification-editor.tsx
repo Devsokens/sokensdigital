@@ -27,7 +27,13 @@ function linesFromSpec(spec?: Specification): SpecificationLineInput[] {
   return spec.lines.map((l) => ({ interface_name: l.interface_name, objective: l.objective }));
 }
 
-export function SpecificationEditor({ spec }: { spec?: Specification }) {
+export function SpecificationEditor({
+  spec,
+  basePath = "/admin/marketing/cahier-des-charges",
+}: {
+  spec?: Specification;
+  basePath?: string;
+}) {
   const router = useRouter();
   const [specType, setSpecType] = useState<SpecType>(spec?.spec_type ?? "FONCTIONNEL");
   const [title, setTitle] = useState(spec?.title ?? "");
@@ -83,7 +89,7 @@ export function SpecificationEditor({ spec }: { spec?: Specification }) {
     setSaving(true);
     try {
       const saved = spec ? await updateSpecification(spec.id, payload) : await createSpecification(payload);
-      router.push(`/admin/marketing/cahier-des-charges?saved=${saved.id}`);
+      router.push(`${basePath}?saved=${saved.id}`);
     } catch {
       setError(spec ? "Impossible de modifier ce cahier des charges." : "Impossible de créer le cahier des charges.");
     } finally {
@@ -104,7 +110,7 @@ export function SpecificationEditor({ spec }: { spec?: Specification }) {
   return (
     <div>
       <Link
-        href="/admin/marketing/cahier-des-charges"
+        href={basePath}
         className="mb-5 inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-500 hover:text-neutral-800"
       >
         <ArrowLeft className="size-3.5" /> Cahier des charges
@@ -219,7 +225,7 @@ export function SpecificationEditor({ spec }: { spec?: Specification }) {
           )}
 
           <div className="flex items-center justify-between pt-2">
-            <Button type="button" variant="outline" onClick={() => router.push("/admin/marketing/cahier-des-charges")} className="rounded-full px-4">
+            <Button type="button" variant="outline" onClick={() => router.push(basePath)} className="rounded-full px-4">
               Annuler
             </Button>
             <div className="flex items-center gap-2">

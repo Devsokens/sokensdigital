@@ -42,7 +42,7 @@ function formatDate(value: string | null) {
   return new Date(value).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
 
-export function QuoteList() {
+export function QuoteList({ basePath = "/admin/marketing/devis" }: { basePath?: string }) {
   const [quotes, setQuotes] = useState<Quote[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -139,7 +139,7 @@ export function QuoteList() {
           >
             <Settings className="size-4" />
           </Button>
-          <Link href="/admin/marketing/devis/nouveau">
+          <Link href={`${basePath}/nouveau`}>
             <Button data-tour="module-marketing-devis" className="gap-1.5 rounded-full px-4">
               <Plus className="size-4" /> Nouveau devis
             </Button>
@@ -169,7 +169,7 @@ export function QuoteList() {
             {quotes.map((quote) => (
               <tr key={quote.id}>
                 <td className="px-4 py-3 text-neutral-900">
-                  <Link href={`/admin/marketing/devis/${quote.id}`} className="hover:text-primary hover:underline">
+                  <Link href={`${basePath}/${quote.id}`} className="hover:text-primary hover:underline">
                     {quote.quote_number}
                   </Link>
                   {quote.version > 1 && <span className="ml-1 text-xs text-neutral-400">v{quote.version}</span>}
@@ -203,7 +203,7 @@ export function QuoteList() {
                         <Printer className="size-3.5" /> Aperçu / PDF
                       </button>
                       <Link
-                        href={`/admin/marketing/devis/${quote.id}`}
+                        href={`${basePath}/${quote.id}`}
                         className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50"
                       >
                         <Pencil className="size-3.5" /> Modifier
