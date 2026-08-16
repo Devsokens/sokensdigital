@@ -16,12 +16,17 @@ interface AuthContextValue {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  /** Re-fetches the Firestore profile doc for the current user — call after
+   * a self-edit (name, avatar) so the header/sidebar reflect it immediately
+   * instead of waiting for the next auth state change (e.g. a reload). */
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   profile: null,
   loading: true,
+  refreshProfile: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -37,8 +42,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  async function refreshProfile() {
+    if (user) setProfile(await fetchProfile(user.uid));
+  }
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading }}>
+    <AuthContext.Provider value={{ user, profile, loading, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

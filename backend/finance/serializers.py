@@ -29,11 +29,11 @@ class DisbursementRequestSerializer(serializers.ModelSerializer):
         model = DisbursementRequest
         fields = [
             'id', 'project', 'project_id', 'requested_by', 'amount',
-            'beneficiary', 'reason', 'status', 'decided_by', 'decided_at',
+            'beneficiary', 'reason', 'status', 'rejection_reason', 'decided_by', 'decided_at',
             'executed_by', 'executed_at', 'created_at',
         ]
         read_only_fields = [
-            'project', 'requested_by', 'status', 'decided_by', 'decided_at',
+            'project', 'requested_by', 'status', 'rejection_reason', 'decided_by', 'decided_at',
             'executed_by', 'executed_at',
         ]
 
@@ -119,11 +119,13 @@ class InvoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invoice
         fields = [
-            'id', 'invoice_number', 'client_name', 'issue_date', 'due_date',
+            'id', 'invoice_number', 'client_name', 'quote', 'issue_date', 'due_date',
             'amount_ht', 'vat_rate', 'amount_ttc', 'status', 'created_by',
             'validated_by', 'validated_at', 'created_at',
         ]
-        read_only_fields = ['invoice_number', 'amount_ttc', 'status', 'created_by', 'validated_by', 'validated_at']
+        read_only_fields = [
+            'invoice_number', 'quote', 'amount_ttc', 'status', 'created_by', 'validated_by', 'validated_at',
+        ]
 
     def validate_amount_ht(self, value):
         if value <= 0:

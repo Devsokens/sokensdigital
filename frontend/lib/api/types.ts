@@ -10,12 +10,92 @@ export interface UserBrief {
   first_name: string;
   last_name: string;
   email: string;
+  avatar_url: string | null;
+  department_name: string | null;
 }
 
 export interface Department {
   id: string;
   name: string;
+  description: string | null;
   color: string | null;
+  member_count?: number;
+  members?: UserBrief[];
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  description: string | null;
+  permissions: Record<string, string[]>;
+}
+
+export type ClientStatus = "PROSPECT" | "CLIENT_ACTIF" | "CLIENT_INACTIF" | "ARCHIVE";
+
+/** CRM — cahier des charges §4.5. List endpoint returns a narrower shape
+ * (ClientListSerializer, backend/administration/serializers.py:15-18);
+ * retrieve/create/update return every field (ClientSerializer, `fields =
+ * '__all__'`) — Client covers both since the narrower fields are a subset. */
+export interface Client {
+  id: string;
+  company_name: string;
+  siret: string | null;
+  sector?: string;
+  address?: string;
+  city?: string;
+  postal_code?: string;
+  country?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  status: ClientStatus;
+  rating: number | null;
+  notes?: string;
+  assigned_to: string | null;
+  created_at: string;
+}
+
+export type ContactRole = string;
+
+export interface ClientContact {
+  id: string;
+  client: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  role: string;
+  is_primary: boolean;
+}
+
+export type InteractionType = "CALL" | "EMAIL" | "MEETING" | "OTHER";
+
+export interface ClientInteractionEntry {
+  id: string;
+  client: string;
+  contact: string | null;
+  user: string | null;
+  interaction_type: InteractionType;
+  subject: string;
+  notes: string;
+  follow_up_date: string | null;
+  is_locked: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ClientDocumentType = "CONTRAT" | "DEVIS" | "FACTURE" | "AUTRE_JURIDIQUE";
+
+export interface ClientDocumentEntry {
+  id: string;
+  client: string;
+  name: string;
+  file_path: string;
+  file_type: ClientDocumentType;
+  uploaded_by: string | null;
+  is_sensitive: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export type ContractType = "CDI" | "CDD" | "STAGE" | "FREELANCE";
@@ -149,6 +229,18 @@ export interface SiteSocialLink {
   url: string;
 }
 
+export interface SocialMediaCredentials {
+  facebook_page_id: string;
+  instagram_business_account_id: string;
+  /** Never returned by the API — write-only. Present only so a PATCH
+   * payload can type-check; GET responses never populate it. */
+  facebook_access_token?: string;
+  facebook_configured: boolean;
+  instagram_configured: boolean;
+  updated_by: UserBrief | null;
+  updated_at: string;
+}
+
 export interface SiteSettings {
   logo_url: string;
   tagline: string;
@@ -200,7 +292,7 @@ export interface ShowcaseProject {
   created_at?: string;
 }
 
-export type SocialPlatform = "LINKEDIN" | "TWITTER" | "FACEBOOK" | "INSTAGRAM" | "YOUTUBE";
+export type SocialPlatform = "FACEBOOK" | "INSTAGRAM";
 export type SocialPostStatus = "DRAFT" | "SCHEDULED" | "PUBLISHED" | "FAILED" | "CANCELLED";
 
 export interface SocialPost {
@@ -237,6 +329,27 @@ export interface QuotePaymentTerm {
   percentage: number;
 }
 
+/** What the public tracking/acceptance page gets — QuoteTrackSerializer,
+ * no internal identifiers (created_by, tracking_token itself). */
+export interface PublicQuote {
+  quote_number: string;
+  client_name: string;
+  intro_message: string;
+  subject: string;
+  description: string;
+  project_duration: string;
+  payment_terms: QuotePaymentTerm[];
+  issue_date: string;
+  expiry_date: string | null;
+  status: QuoteStatus;
+  discount_amount: string;
+  total_ht: string;
+  total_ttc: string;
+  lines: QuoteLine[];
+  signed_at: string | null;
+  company_stamp_url: string;
+}
+
 export interface Quote {
   id: string;
   quote_number: string;
@@ -255,18 +368,52 @@ export interface Quote {
   total_ht: string;
   total_ttc: string;
   tracking_token: string;
+  sent_at: string | null;
   opened_at: string | null;
   signed_at: string | null;
   parent_quote: string | null;
   version: number;
+  document_color: string;
   lines: QuoteLine[];
   created_at: string;
+  updated_at: string;
+}
+
+export type SpecType = "FONCTIONNEL" | "TECHNIQUE";
+export type SpecStatus = "BROUILLON" | "FINALISE";
+
+export interface SpecificationLine {
+  id: string;
+  interface_name: string;
+  objective: string;
+}
+
+/** List endpoint returns SpecificationListSerializer (no lines) — the
+ * shape is a strict subset of the full Specification below. */
+export interface SpecificationListItem {
+  id: string;
+  spec_number: string;
+  spec_type: SpecType;
+  title: string;
+  status: SpecStatus;
+  created_by: UserBrief | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Specification extends SpecificationListItem {
+  client_name: string;
+  intro_message: string;
+  description: string;
+  document_color: string;
+  lines: SpecificationLine[];
 }
 
 export interface QuoteSettings {
   company_address: string;
   company_phone: string;
   company_email: string;
+  company_stamp_url: string;
   payment_methods: { label: string }[];
   default_payment_terms: QuotePaymentTerm[];
   footer_note: string;
@@ -289,10 +436,18 @@ export interface MarketingDashboard {
 }
 
 export type ProjectStatus = "EN_COURS" | "EN_PAUSE" | "TERMINE" | "ANNULE";
+export type ProjectPriority = "BASSE" | "MOYENNE" | "HAUTE";
+
+export interface ProjectUserBrief {
+  id: string;
+  first_name: string;
+  last_name: string;
+  avatar_url: string | null;
+}
 
 export interface ProjectMember {
   id: string;
-  user: UserBrief;
+  user: ProjectUserBrief;
   created_at: string;
 }
 
@@ -300,11 +455,39 @@ export interface Project {
   id: string;
   name: string;
   status: ProjectStatus;
-  lead_project_manager: UserBrief | null;
+  priority: ProjectPriority;
+  category: string;
+  lead_project_manager: ProjectUserBrief | null;
   members: ProjectMember[];
   start_date: string | null;
   end_date: string | null;
   budget: string | null;
+  created_at: string;
+  is_archived: boolean;
+  is_locked: boolean;
+  is_pinned: boolean;
+  tasks_total: number;
+  tasks_done: number;
+}
+
+export type ProjectTaskStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
+
+export interface ProjectTask {
+  id: string;
+  title: string;
+  status: ProjectTaskStatus;
+  due_date: string | null;
+  progress: number;
+  assignees: ProjectUserBrief[];
+  comments_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectTaskComment {
+  id: string;
+  body: string;
+  author: ProjectUserBrief | null;
   created_at: string;
 }
 
@@ -313,7 +496,9 @@ export type TimesheetStatus = "SOUMIS" | "VALIDE" | "REJETE";
 export interface Timesheet {
   id: string;
   project: string;
-  user: UserBrief;
+  project_name: string;
+  task_title: string | null;
+  user: ProjectUserBrief;
   date: string;
   hours: string;
   description: string;
@@ -321,7 +506,32 @@ export interface Timesheet {
   created_at: string;
 }
 
-export type DisbursementStatus = "EN_ATTENTE_N1" | "EN_ATTENTE_N2" | "APPROUVE" | "REJETE" | "EXECUTE";
+export type TeamTimesheetDayStatus = "SOUMIS" | "VALIDE" | "REJETE" | null;
+export type TeamTimesheetWeekStatus = "APPROVED" | "PARTIAL" | "REJECTED";
+
+export interface TeamTimesheetTaskRow {
+  project_name: string;
+  task_title: string | null;
+  daily_hours: Record<string, number>;
+  total: number;
+}
+
+export interface TeamTimesheetMember {
+  user: ProjectUserBrief;
+  week_status: TeamTimesheetWeekStatus;
+  daily_totals: Record<string, number>;
+  daily_status: Record<string, TeamTimesheetDayStatus>;
+  week_total: number;
+  tasks: TeamTimesheetTaskRow[];
+}
+
+export interface TeamTimesheetResponse {
+  week_start: string;
+  days: string[];
+  members: TeamTimesheetMember[];
+}
+
+export type DisbursementStatus = "EN_ATTENTE_N1" | "EN_ATTENTE_N2" | "EN_ATTENTE_N3" | "APPROUVE" | "REJETE" | "EXECUTE";
 
 export interface DisbursementRequest {
   id: string;
@@ -331,6 +541,7 @@ export interface DisbursementRequest {
   beneficiary: string;
   reason: string;
   status: DisbursementStatus;
+  rejection_reason: string;
   decided_by: UserBrief | null;
   decided_at: string | null;
   executed_by: UserBrief | null;

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { inputClass, labelClass, cardClass } from "@/components/admin/form-styles";
 import { getProject, updateProject, addProjectMember, removeProjectMember } from "@/lib/api/projects";
 import { listUsers } from "@/lib/api/hr";
+import { ProjectTaskBoard } from "@/components/admin/technique/project-task-board";
 import type { Project, ProjectStatus, UserBrief } from "@/lib/api/types";
 
 const STATUS_OPTIONS: ProjectStatus[] = ["EN_COURS", "EN_PAUSE", "TERMINE", "ANNULE"];
@@ -16,9 +17,12 @@ const STATUS_LABELS: Record<ProjectStatus, string> = {
   ANNULE: "Annulé",
 };
 
+type Tab = "tasks" | "settings";
+
 export function ProjectDetail({ id }: { id: string }) {
   const [project, setProject] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("tasks");
 
   async function load() {
     try {
@@ -42,16 +46,40 @@ export function ProjectDetail({ id }: { id: string }) {
   }
 
   return (
-    <div className="max-w-2xl space-y-8">
-      <div>
+    <div>
+      <div className="mb-4">
         <h1 className="text-2xl font-semibold text-neutral-900">{project.name}</h1>
         <p className="text-sm text-neutral-500">
           Dirigé par {project.lead_project_manager ? `${project.lead_project_manager.first_name} ${project.lead_project_manager.last_name}` : "—"}
         </p>
       </div>
 
-      <ProjectForm project={project} onSaved={load} />
-      <MembersSection project={project} onSaved={load} />
+      <div className="mb-5 flex items-center gap-1 border-b border-neutral-200">
+        {([
+          { key: "tasks", label: "Tâches" },
+          { key: "settings", label: "Paramètres" },
+        ] as { key: Tab; label: string }[]).map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+              tab === t.key ? "border-primary text-primary" : "border-transparent text-neutral-500 hover:text-neutral-900"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "tasks" ? (
+        <ProjectTaskBoard project={project} />
+      ) : (
+        <div className="max-w-2xl space-y-8">
+          <ProjectForm project={project} onSaved={load} />
+          <MembersSection project={project} onSaved={load} />
+        </div>
+      )}
     </div>
   );
 }

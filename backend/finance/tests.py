@@ -3,7 +3,8 @@ from decimal import Decimal
 
 from rest_framework.test import APIClient, APITestCase
 
-from core.models import User
+from core.constants import ROLE_COMPTABLE, ROLE_DEVELOPER, ROLE_DIRECTEUR_FINANCIER, ROLE_PROJECT_MANAGER, ROLE_SUPER_ADMIN
+from core.models import Role, User
 from finance.models import (
     Account,
     AccountingPeriod,
@@ -18,19 +19,25 @@ from finance.models import (
 from projects.models import Project
 
 
+def _give_role(user, name):
+    role, _ = Role.objects.get_or_create(name=name)
+    user.roles.add(role)
+    return role
+
+
 class DisbursementRequestViewSetTests(APITestCase):
     def setUp(self):
         self.chef_a = User.objects.create(email='chef-a@sokensdigital.com', first_name='ChefA')
-        self.chef_a.firestore_role = 'CHEF_DE_PROJET'
+        _give_role(self.chef_a, ROLE_PROJECT_MANAGER)
 
         self.chef_b = User.objects.create(email='chef-b@sokensdigital.com', first_name='ChefB')
-        self.chef_b.firestore_role = 'CHEF_DE_PROJET'
+        _give_role(self.chef_b, ROLE_PROJECT_MANAGER)
 
         self.cfo = User.objects.create(email='cfo@sokensdigital.com', first_name='CFO')
-        self.cfo.firestore_role = 'DIRECTEUR_FINANCIER'
+        _give_role(self.cfo, ROLE_DIRECTEUR_FINANCIER)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.project_a = Project.objects.create(name='Projet A', lead_project_manager=self.chef_a)
         self.project_b = Project.objects.create(name='Projet B', lead_project_manager=self.chef_b)
@@ -58,9 +65,28 @@ class DisbursementRequestViewSetTests(APITestCase):
         return data
 
     def test_chef_can_initiate_for_own_project(self):
+        # 150000 > THRESHOLD_N3 (50000) -> routed straight to N3.
         response = self.client_a.post('/api/v1/finance/disbursement-requests/', self.payload(), format='json')
         self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['status'], 'EN_ATTENTE_N3')
+
+    def test_amount_under_10000_routes_to_n1(self):
+        response = self.client_a.post(
+            '/api/v1/finance/disbursement-requests/', self.payload(amount='5000'), format='json',
+        )
         self.assertEqual(response.json()['status'], 'EN_ATTENTE_N1')
+
+    def test_amount_between_thresholds_routes_to_n2(self):
+        response = self.client_a.post(
+            '/api/v1/finance/disbursement-requests/', self.payload(amount='25000'), format='json',
+        )
+        self.assertEqual(response.json()['status'], 'EN_ATTENTE_N2')
+
+    def test_amount_over_50000_routes_to_n3(self):
+        response = self.client_a.post(
+            '/api/v1/finance/disbursement-requests/', self.payload(amount='60000'), format='json',
+        )
+        self.assertEqual(response.json()['status'], 'EN_ATTENTE_N3')
 
     def test_chef_cannot_initiate_for_other_chefs_project(self):
         response = self.client_a.post(
@@ -104,13 +130,30 @@ class DisbursementRequestViewSetTests(APITestCase):
         response = self.client_cfo.get('/api/v1/finance/disbursement-requests/')
         self.assertEqual(response.json()['count'], 2)
 
+    def test_super_admin_sees_all_requests(self):
+        """Regression: CanInitiateDisbursement.has_permission/get_queryset
+        used to omit ROLE_SUPER_ADMIN entirely, 403'ing a Super-Admin on an
+        endpoint whose own docstring promised them full access."""
+        super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
+        _give_role(super_admin, ROLE_SUPER_ADMIN)
+        client = APIClient()
+        client.force_authenticate(user=super_admin)
+
+        DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=1000,
+            beneficiary='X', reason='Y',
+        )
+        response = client.get('/api/v1/finance/disbursement-requests/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['count'], 1)
+
     def test_cfo_cannot_create_request(self):
         response = self.client_cfo.post('/api/v1/finance/disbursement-requests/', self.payload(), format='json')
         self.assertEqual(response.status_code, 403)
 
     def test_cfo_can_approve_then_comptable_can_execute(self):
         self.comptable = User.objects.create(email='comptable@sokensdigital.com', first_name='Comptable')
-        self.comptable.firestore_role = 'COMPTABLE'
+        _give_role(self.comptable, ROLE_COMPTABLE)
         client_comptable = APIClient()
         client_comptable.force_authenticate(user=self.comptable)
 
@@ -141,7 +184,7 @@ class DisbursementRequestViewSetTests(APITestCase):
 
     def test_cannot_execute_before_approval(self):
         self.comptable = User.objects.create(email='comptable2@sokensdigital.com', first_name='Comptable')
-        self.comptable.firestore_role = 'COMPTABLE'
+        _give_role(self.comptable, ROLE_COMPTABLE)
         client_comptable = APIClient()
         client_comptable.force_authenticate(user=self.comptable)
 
@@ -151,13 +194,96 @@ class DisbursementRequestViewSetTests(APITestCase):
         response = client_comptable.post(f'/api/v1/finance/disbursement-requests/{disbursement.id}/execute/')
         self.assertEqual(response.status_code, 400)
 
+    def test_comptable_can_approve_n1(self):
+        comptable = User.objects.create(email='comptable-n1@sokensdigital.com', first_name='Comptable')
+        _give_role(comptable, ROLE_COMPTABLE)
+        client_comptable = APIClient()
+        client_comptable.force_authenticate(user=comptable)
+
+        disbursement = DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=5000, beneficiary='X', reason='Y',
+            status=DisbursementRequest.Status.EN_ATTENTE_N1,
+        )
+        response = client_comptable.post(
+            f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
+            {'decision': 'APPROUVE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'APPROUVE')
+
+    def test_comptable_cannot_approve_n2(self):
+        comptable = User.objects.create(email='comptable-n2@sokensdigital.com', first_name='Comptable')
+        _give_role(comptable, ROLE_COMPTABLE)
+        client_comptable = APIClient()
+        client_comptable.force_authenticate(user=comptable)
+
+        disbursement = DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=25000, beneficiary='X', reason='Y',
+            status=DisbursementRequest.Status.EN_ATTENTE_N2,
+        )
+        response = client_comptable.post(
+            f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
+            {'decision': 'APPROUVE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_cfo_cannot_approve_n3(self):
+        disbursement = DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=60000, beneficiary='X', reason='Y',
+            status=DisbursementRequest.Status.EN_ATTENTE_N3,
+        )
+        response = self.client_cfo.post(
+            f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
+            {'decision': 'APPROUVE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_super_admin_can_approve_n3(self):
+        super_admin = User.objects.create(email='super-n3@sokensdigital.com', first_name='Super')
+        _give_role(super_admin, ROLE_SUPER_ADMIN)
+        client_super = APIClient()
+        client_super.force_authenticate(user=super_admin)
+
+        disbursement = DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=60000, beneficiary='X', reason='Y',
+            status=DisbursementRequest.Status.EN_ATTENTE_N3,
+        )
+        response = client_super.post(
+            f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
+            {'decision': 'APPROUVE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'APPROUVE')
+
+    def test_rejection_requires_reason(self):
+        disbursement = DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=1000, beneficiary='X', reason='Y',
+        )
+        response = self.client_cfo.post(
+            f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
+            {'decision': 'REJETE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_rejection_with_reason_succeeds(self):
+        disbursement = DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=1000, beneficiary='X', reason='Y',
+        )
+        response = self.client_cfo.post(
+            f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
+            {'decision': 'REJETE', 'rejection_reason': 'Budget insuffisant.'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'REJETE')
+        self.assertEqual(response.json()['rejection_reason'], 'Budget insuffisant.')
+
 
 class AccountingPeriodViewSetTests(APITestCase):
     def setUp(self):
         self.cfo = User.objects.create(email='cfo2@sokensdigital.com', first_name='CFO')
-        self.cfo.firestore_role = 'DIRECTEUR_FINANCIER'
+        _give_role(self.cfo, ROLE_DIRECTEUR_FINANCIER)
         self.comptable = User.objects.create(email='comptable3@sokensdigital.com', first_name='Comptable')
-        self.comptable.firestore_role = 'COMPTABLE'
+        _give_role(self.comptable, ROLE_COMPTABLE)
 
         self.client_cfo = APIClient()
         self.client_cfo.force_authenticate(user=self.cfo)
@@ -191,9 +317,9 @@ class AccountingPeriodViewSetTests(APITestCase):
 class JournalEntryViewSetTests(APITestCase):
     def setUp(self):
         self.comptable = User.objects.create(email='comptable4@sokensdigital.com', first_name='Comptable')
-        self.comptable.firestore_role = 'COMPTABLE'
+        _give_role(self.comptable, ROLE_COMPTABLE)
         self.outsider = User.objects.create(email='dev2@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_comptable = APIClient()
         self.client_comptable.force_authenticate(user=self.comptable)
@@ -242,7 +368,7 @@ class JournalEntryViewSetTests(APITestCase):
 class InvoiceViewSetTests(APITestCase):
     def setUp(self):
         self.comptable = User.objects.create(email='comptable5@sokensdigital.com', first_name='Comptable')
-        self.comptable.firestore_role = 'COMPTABLE'
+        _give_role(self.comptable, ROLE_COMPTABLE)
         self.client_comptable = APIClient()
         self.client_comptable.force_authenticate(user=self.comptable)
 
@@ -279,7 +405,7 @@ class InvoiceViewSetTests(APITestCase):
 class BankReconciliationTests(APITestCase):
     def setUp(self):
         self.comptable = User.objects.create(email='comptable6@sokensdigital.com', first_name='Comptable')
-        self.comptable.firestore_role = 'COMPTABLE'
+        _give_role(self.comptable, ROLE_COMPTABLE)
         self.client_comptable = APIClient()
         self.client_comptable.force_authenticate(user=self.comptable)
 
@@ -322,9 +448,9 @@ class BankReconciliationTests(APITestCase):
 class TaxDeclarationViewSetTests(APITestCase):
     def setUp(self):
         self.cfo = User.objects.create(email='cfo3@sokensdigital.com', first_name='CFO')
-        self.cfo.firestore_role = 'DIRECTEUR_FINANCIER'
+        _give_role(self.cfo, ROLE_DIRECTEUR_FINANCIER)
         self.comptable = User.objects.create(email='comptable7@sokensdigital.com', first_name='Comptable')
-        self.comptable.firestore_role = 'COMPTABLE'
+        _give_role(self.comptable, ROLE_COMPTABLE)
 
         self.client_cfo = APIClient()
         self.client_cfo.force_authenticate(user=self.cfo)
@@ -361,11 +487,11 @@ class TaxDeclarationViewSetTests(APITestCase):
 class FecExportAndDashboardTests(APITestCase):
     def setUp(self):
         self.cfo = User.objects.create(email='cfo4@sokensdigital.com', first_name='CFO')
-        self.cfo.firestore_role = 'DIRECTEUR_FINANCIER'
+        _give_role(self.cfo, ROLE_DIRECTEUR_FINANCIER)
         self.comptable = User.objects.create(email='comptable8@sokensdigital.com', first_name='Comptable')
-        self.comptable.firestore_role = 'COMPTABLE'
+        _give_role(self.comptable, ROLE_COMPTABLE)
         self.outsider = User.objects.create(email='dev3@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_cfo = APIClient()
         self.client_cfo.force_authenticate(user=self.cfo)

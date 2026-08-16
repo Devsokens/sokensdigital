@@ -38,7 +38,7 @@ export function FinanceDashboard() {
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className={cardClass}>
+        <div data-tour="module-finance-dashboard" className={cardClass}>
           <p className="text-xs text-neutral-500">Trésorerie brute (compte 512)</p>
           <p className="mt-1 text-2xl font-semibold text-neutral-900">{data.cash_balance} €</p>
         </div>

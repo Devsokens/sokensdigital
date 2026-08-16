@@ -16,10 +16,19 @@ from .factories import (
     AdministrativeRecordFactory, ContractGeneratorFactory
 )
 
+
+def _role(name):
+    # get_or_create, not create — core.migrations.0003_seed_role_permissions
+    # pre-seeds every role name on a fresh test DB, so a plain create()
+    # collides on the unique `name` constraint.
+    role, _ = Role.objects.get_or_create(name=name)
+    return role
+
+
 class ClientViewSetTest(APITestCase):
     def setUp(self):
-        self.super_admin_role = Role.objects.create(name=ROLE_SUPER_ADMIN)
-        self.admin_role = Role.objects.create(name=ROLE_ADMIN)
+        self.super_admin_role = _role(ROLE_SUPER_ADMIN)
+        self.admin_role = _role(ROLE_ADMIN)
         self.super_admin = UserFactory()
         self.super_admin.roles.add(self.super_admin_role)
         self.admin_user = UserFactory()
@@ -67,8 +76,8 @@ class ClientDocumentViewSetTest(APITestCase):
 
 class AdditionalViewTests(APITestCase):
     def setUp(self):
-        self.admin_role = Role.objects.create(name=ROLE_ADMIN)
-        self.rh_role = Role.objects.create(name=ROLE_RH_MANAGER)
+        self.admin_role = _role(ROLE_ADMIN)
+        self.rh_role = _role(ROLE_RH_MANAGER)
         self.admin = UserFactory()
         self.admin.roles.add(self.admin_role)
         self.rh = UserFactory()
@@ -157,8 +166,8 @@ class AdditionalViewTests(APITestCase):
 
 class ClientRBACTests(APITestCase):
     def setUp(self):
-        self.admin_role = Role.objects.create(name=ROLE_ADMIN)
-        self.commercial_role = Role.objects.create(name=ROLE_COMMERCIAL)
+        self.admin_role = _role(ROLE_ADMIN)
+        self.commercial_role = _role(ROLE_COMMERCIAL)
         self.admin = UserFactory()
         self.admin.roles.add(self.admin_role)
         self.commercial = UserFactory()
@@ -233,7 +242,7 @@ class ClientRBACTests(APITestCase):
 
 class ContactRBACTests(APITestCase):
     def setUp(self):
-        self.commercial_role = Role.objects.create(name=ROLE_COMMERCIAL)
+        self.commercial_role = _role(ROLE_COMMERCIAL)
         self.commercial = UserFactory()
         self.commercial.roles.add(self.commercial_role)
         self.other_commercial = UserFactory()
@@ -258,7 +267,7 @@ class ContactRBACTests(APITestCase):
 
 class PayrollValidationViewTests(APITestCase):
     def setUp(self):
-        self.admin_role = Role.objects.create(name=ROLE_ADMIN)
+        self.admin_role = _role(ROLE_ADMIN)
         self.admin = UserFactory()
         self.admin.roles.add(self.admin_role)
         self.plain = UserFactory()

@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { Loader2, Plus, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { inputClass, labelClass, cardClass } from "@/components/admin/form-styles";
-import { listProjects, listTimesheets, submitTimesheet, validateTimesheet } from "@/lib/api/projects";
-import type { Project, Timesheet, TimesheetStatus } from "@/lib/api/types";
+import { listProjects, listProjectTasks, listTimesheets, submitTimesheet, validateTimesheet } from "@/lib/api/projects";
+import { TeamTimesheet } from "@/components/admin/technique/team-timesheet";
+import type { Project, ProjectTask, Timesheet, TimesheetStatus } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/auth-context";
 
 const STATUS_LABELS: Record<TimesheetStatus, string> = {
@@ -23,7 +24,37 @@ const STATUS_COLORS: Record<TimesheetStatus, string> = {
 export function TimesheetList() {
   const { profile } = useAuth();
   const isChefDeProjet = profile?.role === "CHEF_DE_PROJET" || profile?.role === "SUPER_ADMIN";
+  const [tab, setTab] = useState<"team" | "mine">(isChefDeProjet ? "team" : "mine");
 
+  if (isChefDeProjet) {
+    return (
+      <div>
+        <div className="mb-5 flex items-center gap-1 border-b border-neutral-200">
+          {([
+            { key: "team", label: "Équipe" },
+            { key: "mine", label: "Ma saisie" },
+          ] as { key: "team" | "mine"; label: string }[]).map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                tab === t.key ? "border-primary text-primary" : "border-transparent text-neutral-500 hover:text-neutral-900"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {tab === "team" ? <TeamTimesheet /> : <MyTimesheetEntries isChefDeProjet={isChefDeProjet} />}
+      </div>
+    );
+  }
+
+  return <MyTimesheetEntries isChefDeProjet={isChefDeProjet} />;
+}
+
+function MyTimesheetEntries({ isChefDeProjet }: { isChefDeProjet: boolean }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [entries, setEntries] = useState<Timesheet[] | null>(null);
@@ -80,14 +111,18 @@ export function TimesheetList() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">Timesheets</h1>
+          <h1 className="text-2xl font-semibold text-neutral-900">{isChefDeProjet ? "Détail par projet" : "Timesheets"}</h1>
           <p className="text-sm text-neutral-500">
             {isChefDeProjet
-              ? "Consultation et validation des heures saisies par ton équipe."
+              ? "Consultation et validation des heures saisies, projet par projet."
               : "Saisie quotidienne de tes heures de travail."}
           </p>
         </div>
-        <Button onClick={() => setShowForm((v) => !v)} className="gap-1.5 rounded-full px-4">
+        <Button
+          data-tour="module-technique-timesheets"
+          onClick={() => setShowForm((v) => !v)}
+          className="gap-1.5 rounded-full px-4"
+        >
           <Plus className="size-4" /> Nouvelle saisie
         </Button>
       </div>
@@ -126,6 +161,7 @@ export function TimesheetList() {
               <tr>
                 {isChefDeProjet && <th className="px-4 py-3 font-medium">Collaborateur</th>}
                 <th className="px-4 py-3 font-medium">Date</th>
+                <th className="px-4 py-3 font-medium">Tâche</th>
                 <th className="px-4 py-3 font-medium">Heures</th>
                 <th className="px-4 py-3 font-medium">Description</th>
                 <th className="px-4 py-3 font-medium">Statut</th>
@@ -141,6 +177,7 @@ export function TimesheetList() {
                     </td>
                   )}
                   <td className="px-4 py-3 text-neutral-500">{entry.date}</td>
+                  <td className="px-4 py-3 text-neutral-500">{entry.task_title ?? "—"}</td>
                   <td className="px-4 py-3 text-neutral-900">{entry.hours}h</td>
                   <td className="px-4 py-3 text-neutral-500">{entry.description || "—"}</td>
                   <td className="px-4 py-3">
@@ -176,7 +213,7 @@ export function TimesheetList() {
               ))}
               {entries.length === 0 && (
                 <tr>
-                  <td colSpan={isChefDeProjet ? 6 : 5} className="px-4 py-8 text-center text-neutral-400">
+                  <td colSpan={isChefDeProjet ? 7 : 6} className="px-4 py-8 text-center text-neutral-400">
                     Aucune feuille de temps pour l&apos;instant.
                   </td>
                 </tr>
@@ -193,18 +230,25 @@ function NewEntryForm({ projectId, onSaved }: { projectId: string; onSaved: () =
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [hours, setHours] = useState("8");
   const [description, setDescription] = useState("");
+  const [taskId, setTaskId] = useState("");
+  const [tasks, setTasks] = useState<ProjectTask[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setTaskId("");
+    listProjectTasks(projectId).then(setTasks).catch(() => setTasks([]));
+  }, [projectId]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSaving(true);
     try {
-      await submitTimesheet(projectId, { date, hours, description });
+      await submitTimesheet(projectId, { date, hours, description, task_id: taskId || undefined });
       onSaved();
     } catch {
-      setError("Impossible d'enregistrer — une saisie existe peut-être déjà pour cette date sur ce projet.");
+      setError("Impossible d'enregistrer — une saisie existe peut-être déjà pour cette date sur cette tâche.");
     } finally {
       setSaving(false);
     }
@@ -226,11 +270,20 @@ function NewEntryForm({ projectId, onSaved }: { projectId: string; onSaved: () =
           <span className={labelClass}>Heures</span>
           <input type="number" step="0.5" min="0" max="24" value={hours} onChange={(e) => setHours(e.target.value)} className={inputClass} required />
         </label>
-        <label className="block sm:col-span-1">
-          <span className={labelClass}>Description</span>
-          <input value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
+        <label className="block">
+          <span className={labelClass}>Tâche (optionnel)</span>
+          <select value={taskId} onChange={(e) => setTaskId(e.target.value)} className={inputClass}>
+            <option value="">—</option>
+            {tasks.map((t) => (
+              <option key={t.id} value={t.id}>{t.title}</option>
+            ))}
+          </select>
         </label>
       </div>
+      <label className="block">
+        <span className={labelClass}>Description</span>
+        <input value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} />
+      </label>
       <Button type="submit" disabled={saving} className="rounded-full px-5">
         {saving ? <Loader2 className="size-4 animate-spin" /> : "Enregistrer"}
       </Button>

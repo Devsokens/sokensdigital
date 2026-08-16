@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
+from django_cryptography.fields import encrypt
 
 from core.models import LoggedModel, User
 
@@ -101,11 +102,8 @@ class BlogPost(LoggedModel):
 
 class SocialPost(LoggedModel):
     class Platform(models.TextChoices):
-        LINKEDIN = 'LINKEDIN', 'LinkedIn'
-        TWITTER = 'TWITTER', 'Twitter/X'
         FACEBOOK = 'FACEBOOK', 'Facebook'
         INSTAGRAM = 'INSTAGRAM', 'Instagram'
-        YOUTUBE = 'YOUTUBE', 'YouTube'
 
     class Status(models.TextChoices):
         DRAFT = 'DRAFT', 'Brouillon'
@@ -113,6 +111,14 @@ class SocialPost(LoggedModel):
         PUBLISHED = 'PUBLISHED', 'Publié'
         FAILED = 'FAILED', 'Échec'
         CANCELLED = 'CANCELLED', 'Annulé'
+
+    # Reminder windows (hours before scheduled_at) — J-3h/J-2h/J-1h.
+    # `reminders_sent` below tracks which windows already notified this
+    # post's author, so a periodic check doesn't re-notify on every run.
+    # The check itself isn't wired up yet (needs an external scheduler,
+    # since Render's free plan runs no worker/cron) — see
+    # docs/roadmap for the planned GitHub Actions trigger.
+    REMINDER_WINDOWS_HOURS = (3, 2, 1)
 
     title = models.CharField(max_length=255)
     content = models.TextField()
@@ -126,6 +132,7 @@ class SocialPost(LoggedModel):
     author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='social_posts')
     notes = models.TextField(blank=True)
     tags = models.JSONField(default=list)
+    reminders_sent = models.JSONField(default=list, blank=True)
 
     class Meta(LoggedModel.Meta):
         ordering = ['-created_at']
@@ -140,10 +147,44 @@ class SocialPost(LoggedModel):
     def clean(self):
         super().clean()
         from django.core.exceptions import ValidationError
-        if self.platform == self.Platform.TWITTER and len(self.content) > 280:
-            raise ValidationError({'content': 'Twitter/X est limité à 280 caractères.'})
-        if self.platform == self.Platform.INSTAGRAM and not self.image_path:
-            raise ValidationError({'image_path': 'Instagram nécessite une image.'})
+        if not self.image_path:
+            raise ValidationError({'image_path': f'{self.get_platform_display()} nécessite au moins une image.'})
+
+
+class SocialMediaCredentials(LoggedModel):
+    """Singleton (same convention as SiteSettings/QuoteSettings) holding the
+    Facebook/Instagram publishing credentials — configured visually from
+    Paramètres instead of Render environment variables, so rotating a
+    token doesn't require a code deploy. Instagram Business publishing
+    goes through the Facebook Graph API using the *same* Page access
+    token as Facebook (Meta's API architecture ties an IG Business account
+    to its linked Facebook Page), hence one token field for both.
+
+    Tokens are encrypted at rest (django-cryptography, same pattern as
+    core.models.User.email/phone) since anyone with DB access should not
+    be able to read a live access token in plain text."""
+
+    facebook_page_id = models.CharField(max_length=100, blank=True)
+    facebook_access_token = encrypt(models.TextField(blank=True))
+    instagram_business_account_id = models.CharField(max_length=100, blank=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return 'Identifiants réseaux sociaux'
+
+    @classmethod
+    def load(cls) -> 'SocialMediaCredentials':
+        obj = cls.objects.first()
+        return obj if obj is not None else cls.objects.create()
+
+    @property
+    def facebook_configured(self) -> bool:
+        return bool(self.facebook_page_id and self.facebook_access_token)
+
+    @property
+    def instagram_configured(self) -> bool:
+        return bool(self.instagram_business_account_id and self.facebook_access_token)
 
 
 class Quote(LoggedModel):
@@ -185,13 +226,29 @@ class Quote(LoggedModel):
     # public tracking link's authentication (docs/backend-specifications.md
     # §7.2 `/api/v1/public/quotes/track/{tracking_token}/`).
     tracking_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    # Set when the `send` action fires (ENVOYE) — the reference point for
+    # "en attente depuis N jours" reminders (see core's send_quote_and_
+    # invoice_reminders command). Quote has no generic updated_at to
+    # reuse for this.
+    sent_at = models.DateTimeField(null=True, blank=True)
     opened_at = models.DateTimeField(null=True, blank=True)
+    # Cahier des charges §4.7 "Validation Client — portail de validation
+    # client avec signature électronique". MVP: a checkbox + timestamp +
+    # IP recorded as acceptance proof (see PublicQuoteAcceptView), not a
+    # real e-signature provider (Yousign/DocuSign) — nothing in this
+    # project currently justifies that cost/integration.
     signed_at = models.DateTimeField(null=True, blank=True)
+    accepted_ip = models.GenericIPAddressField(null=True, blank=True)
     # Versioning for the /clone/ endpoint — a sent quote is read-only, a
     # new edit becomes a new Quote row (parent_quote -> original, version
     # incremented), never an in-place edit of something already sent.
     parent_quote = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='versions')
     version = models.PositiveSmallIntegerField(default=1)
+    updated_at = models.DateTimeField(auto_now=True)
+    # Accent color for the printable/preview document — picked from a
+    # fixed palette in the frontend (see COLOR_SWATCHES), stored as the
+    # hex value so quote-print-view.tsx doesn't need to know the palette.
+    document_color = models.CharField(max_length=7, default='#123f91')
 
     class Meta(LoggedModel.Meta):
         ordering = ['-created_at']
@@ -250,6 +307,69 @@ class QuoteLine(LoggedModel):
         self.total_line = (self.quantity * self.unit_price).quantize(Decimal('0.01'))
         super().save(*args, **kwargs)
         self.quote.recalculate_totals()
+
+
+class Specification(LoggedModel):
+    """Cahier des charges — fonctionnel ou technique. Deliberately simple
+    compared to Quote: an internal working document (Technique &
+    Marketing departments, collaborative — no single owner), not a
+    client-facing commercial document, so no send/accept workflow, no
+    public tracking link, no signature. Same printable document shell as
+    Quote (see frontend/components/admin/marketing/document-print-
+    primitives.tsx) but each line is an interface + its objective instead
+    of a priced prestation."""
+
+    class SpecType(models.TextChoices):
+        FONCTIONNEL = 'FONCTIONNEL', 'Fonctionnel'
+        TECHNIQUE = 'TECHNIQUE', 'Technique'
+
+    class Status(models.TextChoices):
+        BROUILLON = 'BROUILLON', 'Brouillon'
+        FINALISE = 'FINALISE', 'Finalisé'
+
+    spec_number = models.CharField(max_length=20, unique=True, editable=False)
+    spec_type = models.CharField(max_length=15, choices=SpecType.choices)
+    title = models.CharField(max_length=255)
+    # Projet/client concerné — texte libre, pas de FK (document interne,
+    # pas nécessairement rattaché à un Lead/Client commercial existant).
+    client_name = models.CharField(max_length=255, blank=True)
+    intro_message = models.TextField(blank=True)
+    description = models.TextField(blank=True)
+    document_color = models.CharField(max_length=7, default='#123f91')
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.BROUILLON)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='specifications')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-created_at']
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['spec_type']),
+            models.Index(fields=['created_by']),
+        ]
+
+    def __str__(self):
+        return f'{self.spec_number} — {self.title}'
+
+    def save(self, *args, **kwargs):
+        if not self.spec_number:
+            prefix = 'CDF' if self.spec_type == self.SpecType.FONCTIONNEL else 'CDT'
+            year = timezone.now().year
+            last = Specification.objects.filter(spec_number__startswith=f'{prefix}-{year}-').order_by('-spec_number').first()
+            seq = int(last.spec_number.split('-')[2]) + 1 if last else 1
+            self.spec_number = f'{prefix}-{year}-{seq:05d}'
+        super().save(*args, **kwargs)
+
+
+class SpecificationLine(LoggedModel):
+    specification = models.ForeignKey(Specification, on_delete=models.CASCADE, related_name='lines')
+    interface_name = models.CharField(max_length=255)  # colonne "Interface"
+    objective = models.TextField()  # colonne "Objectifs"
+
+    class Meta(LoggedModel.Meta):
+        indexes = LoggedModel.Meta.indexes
+
+    def __str__(self):
+        return self.interface_name
 
 
 class PageSection(LoggedModel):
@@ -454,6 +574,10 @@ class QuoteSettings(LoggedModel):
     payment_methods = models.JSONField(default=list, blank=True)
     default_payment_terms = models.JSONField(default=list, blank=True)
     footer_note = models.TextField(blank=True)
+    # Cahier des charges §4.7 "signature électronique" — the company's
+    # digital stamp/seal image, uploaded once here and stamped onto every
+    # devis PDF/print view and the public acceptance page once signed.
+    company_stamp_url = models.URLField(blank=True)
 
     def __str__(self):
         return 'Paramètres des devis'

@@ -1,10 +1,14 @@
+import io
 from unittest.mock import MagicMock, patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
 from rest_framework.test import APIClient, APITestCase
 
 from core.models import AuditLog, Department, Role, User
 from core.constants import (
     ROLE_SUPER_ADMIN, ROLE_RH_MANAGER, ROLE_DEVELOPER, ROLE_COMMERCIAL,
+    ROLE_PROJECT_MANAGER, ROLE_RESPONSABLE_MARKETING, ROLE_COMPTABLE,
 )
 
 
@@ -115,6 +119,7 @@ class ProvisionUserViewTests(APITestCase):
             'email': 'new.employee@sokensdigital.com',
             'firstName': 'New',
             'lastName': 'Employee',
+            'avatarUrl': None,
             'role': 'DEVELOPPEUR',
             'departmentId': str(self.department.id),
         })
@@ -159,6 +164,34 @@ class ProvisionUserViewTests(APITestCase):
         response = client.post('/api/v1/users/provision/', self.payload(role='SUPER_ADMIN'), format='json')
         self.assertEqual(response.status_code, 201)
 
+    @patch('core.views.create_profile')
+    @patch('firebase_admin.auth.create_user')
+    def test_provisioning_grants_the_matching_django_role(self, mock_create_user, mock_create_profile):
+        """Regression test: has_role() checks user.roles (Django), not the
+        Firestore profile — a provisioned account with no Django role gets
+        403'd on every permission-gated endpoint despite Firestore saying
+        it has one. See core.serializers.APP_ROLE_TO_DJANGO_ROLE."""
+        mock_create_user.return_value = MagicMock(uid='firebase-uid-role-sync')
+
+        response = self.client_rh.post(
+            '/api/v1/users/provision/', self.payload(role='CHEF_DE_PROJET'), format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user = User.objects.get(firebase_uid='firebase-uid-role-sync')
+        self.assertEqual(list(user.roles.values_list('name', flat=True)), [ROLE_PROJECT_MANAGER])
+
+    @patch('core.views.create_profile')
+    @patch('firebase_admin.auth.create_user')
+    def test_provisioning_with_autre_grants_no_django_role(self, mock_create_user, mock_create_profile):
+        mock_create_user.return_value = MagicMock(uid='firebase-uid-autre')
+
+        response = self.client_rh.post('/api/v1/users/provision/', self.payload(role='AUTRE'), format='json')
+
+        self.assertEqual(response.status_code, 201)
+        user = User.objects.get(firebase_uid='firebase-uid-autre')
+        self.assertEqual(list(user.roles.values_list('name', flat=True)), [])
+
 
 class SetUserRoleViewTests(APITestCase):
     def setUp(self):
@@ -193,6 +226,16 @@ class SetUserRoleViewTests(APITestCase):
         })
         self.employee.refresh_from_db()
         self.assertEqual(self.employee.department_id, self.department.id)
+        self.assertEqual(list(self.employee.roles.values_list('name', flat=True)), [ROLE_COMPTABLE])
+
+    @patch('core.views.update_profile_fields')
+    def test_changing_role_replaces_the_previous_django_role(self, mock_update):
+        _give_role(self.employee, ROLE_DEVELOPER)
+        self.client_super_admin.patch(
+            f'/api/v1/users/{self.employee.id}/role/', {'role': 'COMPTABLE'}, format='json',
+        )
+        self.employee.refresh_from_db()
+        self.assertEqual(list(self.employee.roles.values_list('name', flat=True)), [ROLE_COMPTABLE])
 
     @patch('core.views.update_profile_fields')
     def test_rh_cannot_change_role(self, mock_update):
@@ -229,6 +272,40 @@ class DepartmentViewSetTests(APITestCase):
             'departmentId': department_id,
         })
 
+    def test_list_includes_member_count_and_preview(self):
+        department = Department.objects.create(name='Technique', color='#22d3ee')
+        member_a = User.objects.create(email='a@sokensdigital.com', first_name='Ada', last_name='A')
+        member_a.department = department
+        member_a.save(update_fields=['department'])
+        member_b = User.objects.create(email='b@sokensdigital.com', first_name='Bob', last_name='B')
+        member_b.department = department
+        member_b.save(update_fields=['department'])
+
+        response = self.client_super_admin.get('/api/v1/departments/')
+        self.assertEqual(response.status_code, 200)
+        row = next(r for r in response.json()['results'] if r['id'] == str(department.id))
+        self.assertEqual(row['member_count'], 2)
+        self.assertEqual(len(row['members']), 2)
+
+    def test_cannot_delete_department_with_members(self):
+        department = Department.objects.create(name='Technique', color='#22d3ee')
+        member = User.objects.create(email='member@sokensdigital.com', first_name='Ada', department=department)
+
+        response = self.client_super_admin.delete(f'/api/v1/departments/{department.id}/')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(Department.objects.filter(id=department.id).exists())
+        member.refresh_from_db()
+        self.assertEqual(member.department_id, department.id)
+
+    def test_can_delete_department_without_members(self):
+        department = Department.objects.create(name='Technique', color='#22d3ee')
+
+        response = self.client_super_admin.delete(f'/api/v1/departments/{department.id}/')
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Department.objects.filter(id=department.id).exists())
+
 
 class AuditLogViewSetTests(APITestCase):
     def setUp(self):
@@ -262,7 +339,7 @@ class UserListViewTests(APITestCase):
         User.objects.create(email='someone@sokensdigital.com', first_name='Someone')
 
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, 'RESPONSABLE_MARKETING')
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
         _give_role(self.outsider, ROLE_DEVELOPER)
@@ -270,6 +347,14 @@ class UserListViewTests(APITestCase):
     def test_marketing_can_list_users(self):
         client = APIClient()
         client.force_authenticate(user=self.marketing_user)
+        response = client.get('/api/v1/users/')
+        self.assertEqual(response.status_code, 200)
+
+    def test_super_admin_can_list_users(self):
+        super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
+        _give_role(super_admin, ROLE_SUPER_ADMIN)
+        client = APIClient()
+        client.force_authenticate(user=super_admin)
         response = client.get('/api/v1/users/')
         self.assertEqual(response.status_code, 200)
 
@@ -286,7 +371,7 @@ class GlobalSearchTests(APITestCase):
         from projects.models import Project
 
         self.marketing_user = User.objects.create(email='searchmkt@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, 'RESPONSABLE_MARKETING')
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
 
         self.commercial_a = User.objects.create(email='searchcom-a@sokensdigital.com', first_name='CommercialA')
         _give_role(self.commercial_a, ROLE_COMMERCIAL)
@@ -417,3 +502,131 @@ class GetProfileRoleCacheTests(APITestCase):
             role = get_profile_role('uid-4')
 
         self.assertEqual(role, 'COMMERCIAL')
+
+
+class AvatarUploadViewTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create(email='avatar@sokensdigital.com', first_name='Ada')
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def image_file(self, size=None):
+        if size is not None:
+            content = b'\x00' * size
+        else:
+            buffer = io.BytesIO()
+            Image.new('RGB', (10, 10), color='blue').save(buffer, format='PNG')
+            content = buffer.getvalue()
+        return SimpleUploadedFile('avatar.png', content, content_type='image/png')
+
+    def test_unauthenticated_request_is_rejected(self):
+        response = APIClient().post('/api/v1/uploads/avatar/', {'file': self.image_file()}, format='multipart')
+        self.assertEqual(response.status_code, 401)
+
+    def test_no_file_rejected(self):
+        response = self.client.post('/api/v1/uploads/avatar/', {}, format='multipart')
+        self.assertEqual(response.status_code, 400)
+
+    def test_oversized_file_rejected(self):
+        response = self.client.post(
+            '/api/v1/uploads/avatar/', {'file': self.image_file(size=6 * 1024 * 1024)}, format='multipart',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    @patch.dict('os.environ', {
+        'CLOUDINARY_CLOUD_NAME': 'test-cloud', 'CLOUDINARY_API_KEY': 'test-key', 'CLOUDINARY_API_SECRET': 'test-secret',
+    })
+    @patch('core.storage.cloudinary.uploader.upload')
+    def test_authenticated_user_can_upload_avatar(self, mock_upload):
+        mock_upload.return_value = {'secure_url': 'https://res.cloudinary.com/test-cloud/image/upload/v1/avatars/abc.jpg'}
+        response = self.client.post('/api/v1/uploads/avatar/', {'file': self.image_file()}, format='multipart')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['url'], 'https://res.cloudinary.com/test-cloud/image/upload/v1/avatars/abc.jpg')
+        self.assertEqual(mock_upload.call_args.kwargs['folder'], 'avatars')
+
+
+class ChatAttachmentUploadViewTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create(email='attach@sokensdigital.com', first_name='Ada')
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def any_file(self, size=100, content_type='application/pdf', name='doc.pdf'):
+        return SimpleUploadedFile(name, b'\x00' * size, content_type=content_type)
+
+    def test_unauthenticated_request_is_rejected(self):
+        response = APIClient().post('/api/v1/uploads/chat-attachment/', {'file': self.any_file()}, format='multipart')
+        self.assertEqual(response.status_code, 401)
+
+    def test_no_file_rejected(self):
+        response = self.client.post('/api/v1/uploads/chat-attachment/', {}, format='multipart')
+        self.assertEqual(response.status_code, 400)
+
+    def test_oversized_file_rejected(self):
+        response = self.client.post(
+            '/api/v1/uploads/chat-attachment/', {'file': self.any_file(size=21 * 1024 * 1024)}, format='multipart',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    @patch.dict('os.environ', {
+        'CLOUDINARY_CLOUD_NAME': 'test-cloud', 'CLOUDINARY_API_KEY': 'test-key', 'CLOUDINARY_API_SECRET': 'test-secret',
+    })
+    @patch('core.storage.cloudinary.uploader.upload')
+    def test_authenticated_user_can_upload_any_file_type(self, mock_upload):
+        mock_upload.return_value = {'secure_url': 'https://res.cloudinary.com/test-cloud/raw/upload/v1/chat-attachments/abc.pdf'}
+        response = self.client.post('/api/v1/uploads/chat-attachment/', {'file': self.any_file()}, format='multipart')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['url'], 'https://res.cloudinary.com/test-cloud/raw/upload/v1/chat-attachments/abc.pdf')
+        self.assertEqual(mock_upload.call_args.kwargs['folder'], 'chat-attachments')
+
+
+class RoleViewSetTests(APITestCase):
+    def setUp(self):
+        self.super_admin = User.objects.create(email='super-role@sokensdigital.com', first_name='Super')
+        _give_role(self.super_admin, ROLE_SUPER_ADMIN)
+        self.outsider = User.objects.create(email='dev-role@sokensdigital.com', first_name='Dev')
+        _give_role(self.outsider, ROLE_DEVELOPER)
+
+        self.client_super_admin = APIClient()
+        self.client_super_admin.force_authenticate(user=self.super_admin)
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def test_super_admin_can_list_roles(self):
+        response = self.client_super_admin.get('/api/v1/roles/')
+        self.assertEqual(response.status_code, 200)
+        names = [r['name'] for r in response.json()['results']]
+        self.assertIn('Développeur', names)
+
+    def test_any_authenticated_user_can_list_roles(self):
+        # The frontend nav needs to read every user's own role's
+        # permissions to decide what to show them — not just Super-Admin's.
+        response = self.client_outsider.get('/api/v1/roles/')
+        self.assertEqual(response.status_code, 200)
+
+    def test_unauthenticated_forbidden(self):
+        response = APIClient().get('/api/v1/roles/')
+        self.assertEqual(response.status_code, 401)
+
+    def test_outsider_cannot_update_permissions(self):
+        role = Role.objects.get(name='Développeur')
+        response = self.client_outsider.patch(
+            f'/api/v1/roles/{role.id}/', {'permissions': {'projets': ['voir']}}, format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_super_admin_can_update_permissions(self):
+        role = Role.objects.get(name='Développeur')
+        response = self.client_super_admin.patch(
+            f'/api/v1/roles/{role.id}/', {'permissions': {'projets': ['voir']}}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        role.refresh_from_db()
+        self.assertEqual(role.permissions, {'projets': ['voir']})
+
+    def test_invalid_permissions_shape_rejected(self):
+        role = Role.objects.get(name='Développeur')
+        response = self.client_super_admin.patch(
+            f'/api/v1/roles/{role.id}/', {'permissions': {'projets': 'voir'}}, format='json',
+        )
+        self.assertEqual(response.status_code, 400)

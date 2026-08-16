@@ -27,7 +27,12 @@ service cloud.firestore {
 
     // Profiles Rules
     match /profiles/{userUid} {
-      allow read: if isAuth() && (request.auth.uid == userUid || getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_MARKETING', 'RESPONSABLE_RH']);
+      // Any signed-in colleague can read any profile — this is basic
+      // company-directory info (name/role/department), needed so the
+      // messaging module can list colleagues to start a DM with. Nothing
+      // more sensitive (salary, contracts...) lives on this doc; that stays
+      // in Django/Supabase behind its own RBAC.
+      allow read: if isAuth();
       // No client-side self-provisioning by design — accounts (Auth user +
       // this profile doc) are created by a Super-Admin/RH, either via the
       // Firebase Console directly or a future admin UI. See
@@ -53,20 +58,80 @@ service cloud.firestore {
 
     // ChatRooms & Nested Sub-Collections Rules
     match /chatRooms/{roomId} {
+      // `resource == null` covers a get() on a room that doesn't exist yet —
+      // getOrCreateDirectRoom() reads before writing to decide whether to
+      // create a new DM, and without this branch `resource.data` on a null
+      // resource throws inside the rule, which Firestore reports back to
+      // the client as permission-denied instead of a clean "not found".
       allow read: if isAuth() && (
+        resource == null ||
         resource.data.roomType == 'COMPANY' ||
         (resource.data.roomType == 'DEPARTMENT' && resource.data.departmentId == getUserData().departmentId) ||
-        (resource.data.roomType == 'PROJECT' && request.auth.uid in resource.data.memberUids)
+        (resource.data.roomType == 'PROJECT' && request.auth.uid in resource.data.memberUids) ||
+        (resource.data.roomType == 'DIRECT' && request.auth.uid in resource.data.memberUids)
       );
-      allow write: if isAuth() && getUserData().role == 'SUPER_ADMIN';
+      // COMPANY/DEPARTMENT/PROJECT rooms are pushed by the Admin SDK
+      // (bypasses rules entirely) — the only client-side creation path is a
+      // user starting a 1:1 DIRECT conversation with themself as a member.
+      allow create: if isAuth() && (
+        getUserData().role == 'SUPER_ADMIN' ||
+        (
+          request.resource.data.roomType == 'DIRECT' &&
+          request.auth.uid in request.resource.data.memberUids &&
+          request.resource.data.memberUids.size() == 2
+        )
+      );
+      allow update, delete: if isAuth() && getUserData().role == 'SUPER_ADMIN';
 
       match /messages/{messageId} {
         allow read: if isAuth(); // Validé automatiquement par l'évaluation du parent
+
+        // Mirrors the room-level read rule exactly, per roomType — a plain
+        // "not COMPANY" check let anyone who merely guessed a room id post
+        // into a DEPARTMENT/PROJECT/DIRECT room they aren't a member of.
         allow create: if isAuth() && (
-          get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType != 'COMPANY' ||
-          getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_MARKETING']
+          (
+            get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'COMPANY' &&
+            getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_MARKETING']
+          ) ||
+          (
+            get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'DEPARTMENT' &&
+            get(/databases/$(database)/documents/chatRooms/$(roomId)).data.departmentId == getUserData().departmentId
+          ) ||
+          (
+            get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'PROJECT' &&
+            request.auth.uid in get(/databases/$(database)/documents/chatRooms/$(roomId)).data.memberUids
+          ) ||
+          (
+            get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'DIRECT' &&
+            request.auth.uid in get(/databases/$(database)/documents/chatRooms/$(roomId)).data.memberUids
+          )
         );
-        allow update, delete: if false; // Les messages d'entreprise sont immuables en base
+
+        // Message content (text/author/attachment/link/thread parent) is
+        // immutable once created — an update may only ever touch the
+        // reactions/pin fields, never rewrite what was said. Reacting/
+        // pinning is restricted to the same membership check as create.
+        allow update: if isAuth() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'pinned', 'pinnedBy', 'pinnedAt']) && (
+            (
+              get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'COMPANY' &&
+              getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_MARKETING']
+            ) ||
+            (
+              get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'DEPARTMENT' &&
+              get(/databases/$(database)/documents/chatRooms/$(roomId)).data.departmentId == getUserData().departmentId
+            ) ||
+            (
+              get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'PROJECT' &&
+              request.auth.uid in get(/databases/$(database)/documents/chatRooms/$(roomId)).data.memberUids
+            ) ||
+            (
+              get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'DIRECT' &&
+              request.auth.uid in get(/databases/$(database)/documents/chatRooms/$(roomId)).data.memberUids
+            )
+          );
+        allow delete: if false;
       }
     }
 

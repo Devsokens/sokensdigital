@@ -29,10 +29,10 @@ export function createDisbursementRequest(data: {
   });
 }
 
-export function approveDisbursementRequest(id: string, decision: "APPROUVE" | "REJETE") {
+export function approveDisbursementRequest(id: string, decision: "APPROUVE" | "REJETE", rejectionReason?: string) {
   return apiFetch<DisbursementRequest>(`/api/v1/finance/disbursement-requests/${id}/approve/`, {
     method: "POST",
-    body: JSON.stringify({ decision }),
+    body: JSON.stringify({ decision, rejection_reason: rejectionReason }),
   });
 }
 

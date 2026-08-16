@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api/client";
-import type { BlogPost, Lead, MarketingDashboard, PageSection, Paginated, Quote, QuotePaymentTerm, QuoteSettings, ShowcaseProject, SitePage, SiteSettings, SocialPost } from "@/lib/api/types";
+import type { BlogPost, Lead, MarketingDashboard, PageSection, Paginated, Quote, QuotePaymentTerm, QuoteSettings, ShowcaseProject, SitePage, SiteSettings, SocialMediaCredentials, SocialPost, Specification, SpecificationListItem } from "@/lib/api/types";
 
 export interface LeadInput {
   first_name: string;
@@ -107,6 +107,17 @@ export function getMarketingDashboard() {
   return apiFetch<MarketingDashboard>("/api/v1/marketing/dashboard/");
 }
 
+export function getSocialMediaCredentials() {
+  return apiFetch<SocialMediaCredentials>("/api/v1/marketing/social-media-credentials/");
+}
+
+export function updateSocialMediaCredentials(data: Partial<SocialMediaCredentials>) {
+  return apiFetch<SocialMediaCredentials>("/api/v1/marketing/social-media-credentials/", {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
 export interface QuoteLineInput {
   service_title: string;
   description?: string;
@@ -125,6 +136,7 @@ export interface QuoteInput {
   payment_terms?: QuotePaymentTerm[];
   expiry_date?: string | null;
   discount_amount?: string;
+  document_color?: string;
   lines: QuoteLineInput[];
 }
 
@@ -162,6 +174,12 @@ export function cloneQuote(id: string) {
   return apiFetch<Quote>(`/api/v1/marketing/quotes/${id}/clone/`, { method: "POST" });
 }
 
+export function convertQuoteToInvoice(id: string) {
+  return apiFetch<{ id: string; invoice_number: string }>(`/api/v1/marketing/quotes/${id}/convert-to-invoice/`, {
+    method: "POST",
+  });
+}
+
 export function getQuoteSettings() {
   return apiFetch<QuoteSettings>("/api/v1/marketing/quote-settings/");
 }
@@ -171,6 +189,48 @@ export function updateQuoteSettings(data: Partial<QuoteSettings>) {
     method: "PATCH",
     body: JSON.stringify(data),
   });
+}
+
+export interface SpecificationLineInput {
+  interface_name: string;
+  objective: string;
+}
+
+export interface SpecificationInput {
+  spec_type: string;
+  title: string;
+  client_name?: string;
+  intro_message?: string;
+  description?: string;
+  document_color?: string;
+  status?: string;
+  lines: SpecificationLineInput[];
+}
+
+export function listSpecifications() {
+  return apiFetch<Paginated<SpecificationListItem>>("/api/v1/marketing/specifications/");
+}
+
+export function getSpecification(id: string) {
+  return apiFetch<Specification>(`/api/v1/marketing/specifications/${id}/`);
+}
+
+export function createSpecification(data: SpecificationInput) {
+  return apiFetch<Specification>("/api/v1/marketing/specifications/", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateSpecification(id: string, data: Partial<SpecificationInput>) {
+  return apiFetch<Specification>(`/api/v1/marketing/specifications/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteSpecification(id: string) {
+  return apiFetch<void>(`/api/v1/marketing/specifications/${id}/`, { method: "DELETE" });
 }
 
 export function listPageSections(page: SitePage) {

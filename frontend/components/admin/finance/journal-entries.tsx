@@ -59,7 +59,11 @@ export function JournalEntries() {
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger
             render={
-              <Button className="gap-1.5 rounded-full px-4" disabled={openPeriods.length === 0 || accounts.length === 0}>
+              <Button
+                data-tour="module-finance-grand-livre"
+                className="gap-1.5 rounded-full px-4"
+                disabled={openPeriods.length === 0 || accounts.length === 0}
+              >
                 <Plus className="size-4" /> Nouvelle écriture
               </Button>
             }

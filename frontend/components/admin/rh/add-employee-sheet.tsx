@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Plus, ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, Plus, ChevronLeft, ChevronRight, Check, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/sheet";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { provisionUser, createEmployee, listDepartments } from "@/lib/api/hr";
+import { uploadAvatar } from "@/lib/api/upload";
 import type { Department } from "@/lib/api/types";
 import { ROLE_LABELS, type AppRole } from "@/lib/firebase/types";
 
@@ -15,6 +16,7 @@ const EMPTY_FORM = {
   firstName: "",
   lastName: "",
   email: "",
+  avatarUrl: "" as string | null,
   password: "",
   role: "" as AppRole | "",
   departmentId: "",
@@ -23,26 +25,69 @@ const EMPTY_FORM = {
   grossMonthlySalary: "",
 };
 
-export function AddEmployeeSheet({ onCreated }: { onCreated: () => void }) {
+function initials(firstName: string, lastName: string) {
+  return `${firstName[0] ?? ""}${lastName[0] ?? ""}`.toUpperCase() || "?";
+}
+
+export function AddEmployeeSheet({
+  onCreated,
+  trigger,
+  initialIdentity,
+}: {
+  onCreated: () => void;
+  /** Replaces the default "Ajouter un employé" button — e.g. a
+   * "Provisionner" CTA next to an already-existing, not-yet-provisioned
+   * Django user row in Utilisateurs & Rôles. */
+  trigger?: React.ReactElement;
+  /** Pre-fills step 1 (Identité) — skips retyping name/email already known
+   * from the Django user row being provisioned. */
+  initialIdentity?: { firstName: string; lastName: string; email: string };
+}) {
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState(0);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [step, setStep] = useState(initialIdentity ? 1 : 0);
+  const [form, setForm] = useState(() => ({
+    ...EMPTY_FORM,
+    firstName: initialIdentity?.firstName ?? "",
+    lastName: initialIdentity?.lastName ?? "",
+    email: initialIdentity?.email ?? "",
+  }));
   const [departments, setDepartments] = useState<Department[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) listDepartments().then((d) => setDepartments(d.results)).catch(() => setDepartments([]));
   }, [open]);
 
   function reset() {
-    setForm(EMPTY_FORM);
-    setStep(0);
+    setForm({
+      ...EMPTY_FORM,
+      firstName: initialIdentity?.firstName ?? "",
+      lastName: initialIdentity?.lastName ?? "",
+      email: initialIdentity?.email ?? "",
+    });
+    setStep(initialIdentity ? 1 : 0);
     setError(null);
   }
 
   function set<K extends keyof typeof EMPTY_FORM>(key: K, value: (typeof EMPTY_FORM)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      set("avatarUrl", await uploadAvatar(file));
+    } catch {
+      setError("Impossible de charger cette photo. Réessayez.");
+    } finally {
+      setUploadingPhoto(false);
+    }
   }
 
   function canAdvance(): boolean {
@@ -62,6 +107,7 @@ export function AddEmployeeSheet({ onCreated }: { onCreated: () => void }) {
         password: form.password,
         first_name: form.firstName,
         last_name: form.lastName,
+        avatar_url: form.avatarUrl || undefined,
         role: form.role as AppRole,
         department_id: form.departmentId || undefined,
       });
@@ -93,9 +139,11 @@ export function AddEmployeeSheet({ onCreated }: { onCreated: () => void }) {
     >
       <SheetTrigger
         render={
-          <Button className="gap-1.5 rounded-full px-4">
-            <Plus className="size-4" /> Ajouter un employé
-          </Button>
+          trigger ?? (
+            <Button data-tour="module-rh-employes" className="gap-1.5 rounded-full px-4">
+              <Plus className="size-4" /> Ajouter un employé
+            </Button>
+          )
         }
       />
       <SheetContent title="Ajouter un employé">
@@ -128,6 +176,34 @@ export function AddEmployeeSheet({ onCreated }: { onCreated: () => void }) {
 
           {step === 0 && (
             <div className="space-y-4">
+              <div className="flex justify-center pb-1">
+                <div className="relative">
+                  <span className="flex size-20 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-xl font-semibold text-primary">
+                    {form.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- Cloudinary URL, not a local/optimizable asset
+                      <img src={form.avatarUrl} alt="" className="size-full object-cover" />
+                    ) : (
+                      initials(form.firstName, form.lastName)
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingPhoto}
+                    aria-label="Ajouter une photo de profil"
+                    className="absolute -bottom-1 -right-1 flex size-7 items-center justify-center rounded-full bg-neutral-900 text-white shadow-sm transition-colors hover:bg-neutral-700 disabled:opacity-50"
+                  >
+                    {uploadingPhoto ? <Loader2 className="size-3.5 animate-spin" /> : <Camera className="size-3.5" />}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoChange}
+                    className="hidden"
+                  />
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <label className="block">
                   <span className={labelClass}>Prénom</span>

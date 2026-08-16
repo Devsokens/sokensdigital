@@ -1,0 +1,36 @@
+// Firebase Storage owns user avatar photos and chat message attachments,
+// both uploaded client-side. Everything else the app stores (documents,
+// deliverables...) goes through Django/Supabase — see firestore.rules'
+// header comment for the same split rationale.
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isImageUnder5MB() {
+      return request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // avatars/{uid}/{fileName} — anyone signed in can view a teammate's
+    // avatar (shown on Kanban cards, timesheets...); only the owner can
+    // upload/replace their own.
+    match /avatars/{userUid}/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && request.auth.uid == userUid && isImageUnder5MB();
+    }
+
+    // chat-attachments/{roomId}/{fileName} — room-membership is enforced by
+    // firestore.rules on the message doc that references the file, not
+    // here (Storage rules can't easily cross-check Firestore membership);
+    // any signed-in user can read/upload, capped at 20MB. Acceptable for an
+    // internal tool — revisit if attachments need to be public-proof.
+    match /chat-attachments/{roomId}/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth() && request.resource.size < 20 * 1024 * 1024;
+    }
+  }
+}

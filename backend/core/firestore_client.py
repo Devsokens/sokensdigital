@@ -145,3 +145,37 @@ def set_chat_room_members(room_id: str, member_uids: list[str]) -> None:
         })
     except Exception:
         logger.exception('Could not update Firestore chat room members for %s', room_id)
+
+
+def create_notification(
+    recipient_uid: str,
+    title: str,
+    message: str,
+    notification_type: str,
+    link: str | None = None,
+) -> None:
+    """Writes a notifications/{auto-id} doc — the client-facing bell in
+    admin-header.tsx reads this collection directly via
+    onSnapshot(where recipientId == uid), matching firestore.rules (create
+    is server-only, `recipientId` is the field it checks). Swallow-and-log:
+    a missed in-app notification must never fail the caller's real work
+    (e.g. a scheduled-publishing cron run) — see core.notifications.notify()
+    for the combined in-app + email helper most callers should use instead
+    of this directly.
+    """
+    from firebase_admin import firestore
+
+    if not recipient_uid:
+        return
+    try:
+        _get_client().collection('notifications').add({
+            'recipientId': recipient_uid,
+            'title': title,
+            'message': message,
+            'type': notification_type,
+            'link': link,
+            'isRead': False,
+            'createdAt': firestore.SERVER_TIMESTAMP,
+        })
+    except Exception:
+        logger.exception('Could not create Firestore notification for uid=%s', recipient_uid)

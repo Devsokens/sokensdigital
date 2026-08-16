@@ -63,6 +63,29 @@ _render_host = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if _render_host and _render_host not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(_render_host)
 
+# Django's own default logging config only wires the console handler when
+# DEBUG=True, so unhandled 500s were vanishing silently in production (no
+# ADMINS/email backend configured either) — nothing in Render's logs to
+# debug from. This makes every unhandled request exception print its full
+# traceback to stdout regardless of DEBUG, which is what platform log tools
+# (Render, etc.) capture.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+    },
+}
+
 
 # Application definition
 
@@ -361,6 +384,19 @@ FACEBOOK_PAGE_ACCESS_TOKEN = os.environ.get('FACEBOOK_PAGE_ACCESS_TOKEN', '')
 # secret configured on the provider side (HMAC-SHA256 over the raw request
 # body, sent back in the X-Signature header).
 SIGNATURE_WEBHOOK_SECRET = os.environ.get('SIGNATURE_WEBHOOK_SECRET', '')
+
+# Gmail API (core/email_gmail.py) — used instead of SMTP because Render's
+# free plan blocks outbound SMTP ports; the Gmail API talks HTTPS instead.
+# GMAIL_REFRESH_TOKEN is obtained once via scripts/generate_gmail_refresh_
+# token.py (a local, interactive OAuth consent flow) and never expires
+# unless revoked — GMAIL_CLIENT_ID/SECRET come from the same Google Cloud
+# OAuth client (type "Desktop app") used to generate it. Blank by default;
+# core.notifications.notify(..., email=True) silently skips sending until
+# all three are set.
+GMAIL_CLIENT_ID = os.environ.get('GMAIL_CLIENT_ID', '')
+GMAIL_CLIENT_SECRET = os.environ.get('GMAIL_CLIENT_SECRET', '')
+GMAIL_REFRESH_TOKEN = os.environ.get('GMAIL_REFRESH_TOKEN', '')
+GMAIL_SENDER_EMAIL = os.environ.get('GMAIL_SENDER_EMAIL', '')
 
 # Firebase Admin SDK (server-side) credentials. Set one of:
 # - FIREBASE_SERVICE_ACCOUNT_JSON: the full service account JSON as a

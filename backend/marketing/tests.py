@@ -3,15 +3,25 @@ from unittest.mock import Mock, patch
 
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils import timezone
 from PIL import Image
 from rest_framework.test import APIClient, APITestCase
 
 from decimal import Decimal
 
-from core.models import User
-from marketing.models import BlogPost, Lead, PageSection, Quote, ShowcaseProject, SocialPost
+from core.constants import (
+    ROLE_COMMERCIAL, ROLE_DEVELOPER, ROLE_PROJECT_MANAGER,
+    ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN,
+)
+from core.models import Role, User
+from marketing.models import BlogPost, Lead, PageSection, Quote, ShowcaseProject, SocialPost, Specification
+
+
+def _give_role(user, name):
+    role, _ = Role.objects.get_or_create(name=name)
+    user.roles.add(role)
+    return role
 
 
 class PublicLeadCreateTests(APITestCase):
@@ -86,16 +96,16 @@ class LeadViewSetTests(APITestCase):
     def setUp(self):
         cache.clear()
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
 
         self.commercial_a = User.objects.create(email='commercial-a@sokensdigital.com', first_name='CommercialA')
-        self.commercial_a.firestore_role = 'COMMERCIAL'
+        _give_role(self.commercial_a, ROLE_COMMERCIAL)
 
         self.commercial_b = User.objects.create(email='commercial-b@sokensdigital.com', first_name='CommercialB')
-        self.commercial_b.firestore_role = 'COMMERCIAL'
+        _give_role(self.commercial_b, ROLE_COMMERCIAL)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.lead_a = Lead.objects.create(
             first_name='Ada', last_name='Lovelace', email='ada@example.com',
@@ -156,10 +166,10 @@ class LeadViewSetTests(APITestCase):
 class BlogPostViewSetTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_marketing = APIClient()
         self.client_marketing.force_authenticate(user=self.marketing_user)
@@ -223,10 +233,10 @@ class BlogPostViewSetTests(APITestCase):
 class ShowcaseProjectViewSetTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_marketing = APIClient()
         self.client_marketing.force_authenticate(user=self.marketing_user)
@@ -304,13 +314,13 @@ class ShowcaseProjectViewSetTests(APITestCase):
 class SocialPostViewSetTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
 
         self.commercial = User.objects.create(email='commercial@sokensdigital.com', first_name='Commercial')
-        self.commercial.firestore_role = 'COMMERCIAL'
+        _give_role(self.commercial, ROLE_COMMERCIAL)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_marketing = APIClient()
         self.client_marketing.force_authenticate(user=self.marketing_user)
@@ -322,7 +332,10 @@ class SocialPostViewSetTests(APITestCase):
         self.client_outsider.force_authenticate(user=self.outsider)
 
     def payload(self, **overrides):
-        data = {'title': 'Annonce', 'content': 'Contenu du post.', 'platform': 'LINKEDIN'}
+        data = {
+            'title': 'Annonce', 'content': 'Contenu du post.', 'platform': 'FACEBOOK',
+            'image_path': 'https://example.com/cover.jpg',
+        }
         data.update(overrides)
         return data
 
@@ -345,22 +358,17 @@ class SocialPostViewSetTests(APITestCase):
         response = self.client_outsider.post('/api/v1/marketing/social-posts/', self.payload(), format='json')
         self.assertEqual(response.status_code, 403)
 
-    def test_twitter_content_over_280_chars_rejected(self):
+    def test_post_without_image_rejected(self):
         response = self.client_marketing.post(
-            '/api/v1/marketing/social-posts/',
-            self.payload(platform='TWITTER', content='x' * 281),
-            format='json',
-        )
-        self.assertEqual(response.status_code, 400)
-
-    def test_instagram_requires_image(self):
-        response = self.client_marketing.post(
-            '/api/v1/marketing/social-posts/', self.payload(platform='INSTAGRAM'), format='json',
+            '/api/v1/marketing/social-posts/', self.payload(image_path=''), format='json',
         )
         self.assertEqual(response.status_code, 400)
 
     def test_marketing_can_schedule_post_with_date(self):
-        post = SocialPost.objects.create(title='T', content='C', platform='LINKEDIN', author=self.marketing_user)
+        post = SocialPost.objects.create(
+            title='T', content='C', platform='FACEBOOK', author=self.marketing_user,
+            image_path='https://example.com/cover.jpg',
+        )
         response = self.client_marketing.patch(
             f'/api/v1/marketing/social-posts/{post.id}/', {'scheduled_at': '2026-08-01T10:00:00Z'}, format='json',
         )
@@ -370,13 +378,13 @@ class SocialPostViewSetTests(APITestCase):
         self.assertEqual(response.json()['status'], 'SCHEDULED')
 
     def test_cannot_schedule_without_date(self):
-        post = SocialPost.objects.create(title='T', content='C', platform='LINKEDIN', author=self.marketing_user)
+        post = SocialPost.objects.create(title='T', content='C', platform='FACEBOOK', author=self.marketing_user)
         response = self.client_marketing.post(f'/api/v1/marketing/social-posts/{post.id}/schedule/')
         self.assertEqual(response.status_code, 400)
 
     def test_commercial_cannot_schedule(self):
         post = SocialPost.objects.create(
-            title='T', content='C', platform='LINKEDIN', author=self.commercial,
+            title='T', content='C', platform='FACEBOOK', author=self.commercial,
             scheduled_at='2026-08-01T10:00:00Z',
         )
         response = self.client_commercial.post(f'/api/v1/marketing/social-posts/{post.id}/schedule/')
@@ -384,7 +392,7 @@ class SocialPostViewSetTests(APITestCase):
 
     def test_marketing_can_cancel_scheduled_post(self):
         post = SocialPost.objects.create(
-            title='T', content='C', platform='LINKEDIN', author=self.marketing_user,
+            title='T', content='C', platform='FACEBOOK', author=self.marketing_user,
             status='SCHEDULED', scheduled_at='2026-08-01T10:00:00Z',
         )
         response = self.client_marketing.post(f'/api/v1/marketing/social-posts/{post.id}/cancel/')
@@ -392,8 +400,8 @@ class SocialPostViewSetTests(APITestCase):
         self.assertEqual(response.json()['status'], 'CANCELLED')
 
     def test_commercial_sees_only_own_posts(self):
-        own = SocialPost.objects.create(title='Mine', content='C', platform='LINKEDIN', author=self.commercial)
-        SocialPost.objects.create(title='Other', content='C', platform='LINKEDIN', author=self.marketing_user)
+        own = SocialPost.objects.create(title='Mine', content='C', platform='FACEBOOK', author=self.commercial)
+        SocialPost.objects.create(title='Other', content='C', platform='FACEBOOK', author=self.marketing_user)
         ids = [p['id'] for p in self.client_commercial.get('/api/v1/marketing/social-posts/').json()['results']]
         self.assertEqual(ids, [str(own.id)])
 
@@ -401,13 +409,13 @@ class SocialPostViewSetTests(APITestCase):
 class MarketingDashboardTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
 
         self.commercial = User.objects.create(email='commercial@sokensdigital.com', first_name='Commercial')
-        self.commercial.firestore_role = 'COMMERCIAL'
+        _give_role(self.commercial, ROLE_COMMERCIAL)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         Lead.objects.create(
             first_name='Ada', last_name='Lovelace', email='ada@example.com', source='SITE_WEB',
@@ -443,6 +451,18 @@ class MarketingDashboardTests(APITestCase):
         response = self.client_outsider.get('/api/v1/marketing/dashboard/')
         self.assertEqual(response.status_code, 403)
 
+    def test_super_admin_sees_all_leads(self):
+        """Regression: marketing_dashboard() used to omit ROLE_SUPER_ADMIN
+        from its own gate and scoping, despite its docstring promising
+        Super-Admin the same unscoped view as Responsable Marketing."""
+        super_admin = User.objects.create(email='super-dash@sokensdigital.com', first_name='Super')
+        _give_role(super_admin, ROLE_SUPER_ADMIN)
+        client = APIClient()
+        client.force_authenticate(user=super_admin)
+        response = client.get('/api/v1/marketing/dashboard/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['total_leads'], 2)
+
     def test_conversion_rate_computed(self):
         Lead.objects.create(
             first_name='Alan', last_name='Turing', email='alan@example.com', source='SITE_WEB',
@@ -465,19 +485,19 @@ class MarketingDashboardTests(APITestCase):
 class QuoteViewSetTests(APITestCase):
     def setUp(self):
         self.commercial_a = User.objects.create(email='commercial-a@sokensdigital.com', first_name='CommercialA')
-        self.commercial_a.firestore_role = 'COMMERCIAL'
+        _give_role(self.commercial_a, ROLE_COMMERCIAL)
 
         self.commercial_b = User.objects.create(email='commercial-b@sokensdigital.com', first_name='CommercialB')
-        self.commercial_b.firestore_role = 'COMMERCIAL'
+        _give_role(self.commercial_b, ROLE_COMMERCIAL)
 
         self.chef_projet = User.objects.create(email='chef@sokensdigital.com', first_name='Chef')
-        self.chef_projet.firestore_role = 'CHEF_DE_PROJET'
+        _give_role(self.chef_projet, ROLE_PROJECT_MANAGER)
 
         self.super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
-        self.super_admin.firestore_role = 'SUPER_ADMIN'
+        _give_role(self.super_admin, ROLE_SUPER_ADMIN)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_a = APIClient()
         self.client_a.force_authenticate(user=self.commercial_a)
@@ -548,7 +568,9 @@ class QuoteViewSetTests(APITestCase):
         send_response = self.client_a.post(f'/api/v1/marketing/quotes/{quote_id}/send/')
         self.assertEqual(send_response.status_code, 400)
 
-    def test_send_locks_the_quote(self):
+    def test_owner_can_still_edit_after_sending(self):
+        """The owning department can always edit and update a quote,
+        whatever its status — no more BROUILLON-only lock."""
         create_response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
         quote_id = create_response.json()['id']
 
@@ -559,7 +581,34 @@ class QuoteViewSetTests(APITestCase):
         edit_response = self.client_a.patch(
             f'/api/v1/marketing/quotes/{quote_id}/', {'discount_amount': '100'}, format='json',
         )
-        self.assertEqual(edit_response.status_code, 400)
+        self.assertEqual(edit_response.status_code, 200)
+        self.assertEqual(edit_response.json()['discount_amount'], '100.00')
+
+    def test_marketing_can_edit_any_quote_including_other_commercials(self):
+        marketing_user = User.objects.create(email='marketing-devis@sokensdigital.com', first_name='Marketing')
+        _give_role(marketing_user, ROLE_RESPONSABLE_MARKETING)
+        client_marketing = APIClient()
+        client_marketing.force_authenticate(user=marketing_user)
+
+        create_response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
+        quote_id = create_response.json()['id']
+
+        response = client_marketing.patch(
+            f'/api/v1/marketing/quotes/{quote_id}/', {'discount_amount': '50'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_commercial_still_cannot_edit_another_commercials_quote(self):
+        create_response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
+        quote_id = create_response.json()['id']
+        response = self.client_b.patch(
+            f'/api/v1/marketing/quotes/{quote_id}/', {'discount_amount': '50'}, format='json',
+        )
+        # 404, not 403 — get_queryset() already scopes a Commercial-only
+        # user to their own quotes, so another commercial's quote is
+        # filtered out before the object-permission check even runs
+        # (same reasoning as test_commercial_cannot_access_other_commercials_quote).
+        self.assertEqual(response.status_code, 404)
 
     def test_clone_creates_new_editable_version(self):
         create_response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
@@ -629,15 +678,83 @@ class QuoteViewSetTests(APITestCase):
         self.assertEqual(line['amount_label'], 'Offert')
         self.assertEqual(line['description'], "Séance d'accompagnement.")
 
+    def _accepted_quote(self):
+        create_response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
+        quote = Quote.objects.get(id=create_response.json()['id'])
+        quote.status = Quote.Status.ACCEPTE
+        quote.save(update_fields=['status'])
+        return quote
+
+    def test_convert_accepted_quote_to_invoice(self):
+        quote = self._accepted_quote()
+        response = self.client_a.post(f'/api/v1/marketing/quotes/{quote.id}/convert-to-invoice/')
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertEqual(body['quote'], str(quote.id))
+        self.assertEqual(body['amount_ht'], '6000.00')
+        self.assertTrue(body['invoice_number'].startswith('FAC-'))
+
+    def test_cannot_convert_a_draft_quote(self):
+        create_response = self.client_a.post('/api/v1/marketing/quotes/', self.payload(), format='json')
+        quote_id = create_response.json()['id']
+        response = self.client_a.post(f'/api/v1/marketing/quotes/{quote_id}/convert-to-invoice/')
+        self.assertEqual(response.status_code, 400)
+
+    def test_cannot_convert_twice(self):
+        quote = self._accepted_quote()
+        self.client_a.post(f'/api/v1/marketing/quotes/{quote.id}/convert-to-invoice/')
+        response = self.client_a.post(f'/api/v1/marketing/quotes/{quote.id}/convert-to-invoice/')
+        self.assertEqual(response.status_code, 400)
+
+    def test_outsider_cannot_convert(self):
+        quote = self._accepted_quote()
+        response = self.client_outsider.post(f'/api/v1/marketing/quotes/{quote.id}/convert-to-invoice/')
+        self.assertEqual(response.status_code, 403)
+
+
+class PublicQuoteAcceptViewTests(APITestCase):
+    def setUp(self):
+        self.commercial = User.objects.create(email='commercial-accept@sokensdigital.com', first_name='Commercial')
+        _give_role(self.commercial, ROLE_COMMERCIAL)
+        self.quote = Quote.objects.create(
+            created_by=self.commercial, client_name='Client X', status=Quote.Status.ENVOYE,
+        )
+
+    def test_accept_sets_signed_at_and_ip(self):
+        anon = APIClient()
+        response = anon.post(
+            f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/',
+            REMOTE_ADDR='203.0.113.5',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'ACCEPTE')
+        self.quote.refresh_from_db()
+        self.assertIsNotNone(self.quote.signed_at)
+        self.assertEqual(self.quote.accepted_ip, '203.0.113.5')
+
+    def test_cannot_accept_a_draft_quote(self):
+        self.quote.status = Quote.Status.BROUILLON
+        self.quote.save(update_fields=['status'])
+        anon = APIClient()
+        response = anon.post(f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/')
+        self.assertEqual(response.status_code, 400)
+
+    def test_accepting_twice_is_idempotent(self):
+        anon = APIClient()
+        anon.post(f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/')
+        response = anon.post(f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'ACCEPTE')
+
 
 class QuoteSettingsViewTests(APITestCase):
     def setUp(self):
         self.commercial = User.objects.create(email='devis-commercial@sokensdigital.com', first_name='Commercial')
-        self.commercial.firestore_role = 'COMMERCIAL'
+        _give_role(self.commercial, ROLE_COMMERCIAL)
         self.chef_projet = User.objects.create(email='devis-chef@sokensdigital.com', first_name='Chef')
-        self.chef_projet.firestore_role = 'CHEF_DE_PROJET'
+        _give_role(self.chef_projet, ROLE_PROJECT_MANAGER)
         self.outsider = User.objects.create(email='devis-dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_commercial = APIClient()
         self.client_commercial.force_authenticate(user=self.commercial)
@@ -678,10 +795,10 @@ class QuoteSettingsViewTests(APITestCase):
 class PageSectionViewSetTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='marketing2@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
 
         self.outsider = User.objects.create(email='dev4@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_marketing = APIClient()
         self.client_marketing.force_authenticate(user=self.marketing_user)
@@ -768,9 +885,9 @@ class PageSectionViewSetTests(APITestCase):
 class ImageUploadViewTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='uploadmkt@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
         self.outsider = User.objects.create(email='uploaddev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_marketing = APIClient()
         self.client_marketing.force_authenticate(user=self.marketing_user)
@@ -845,9 +962,9 @@ class ImageUploadViewTests(APITestCase):
 class VideoUploadViewTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='uploadvidmkt@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
         self.outsider = User.objects.create(email='uploadviddev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_marketing = APIClient()
         self.client_marketing.force_authenticate(user=self.marketing_user)
@@ -897,9 +1014,9 @@ class VideoUploadViewTests(APITestCase):
 class SiteSettingsViewTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='chrome-mkt@sokensdigital.com', first_name='Marketing')
-        self.marketing_user.firestore_role = 'RESPONSABLE_MARKETING'
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
         self.outsider = User.objects.create(email='chrome-dev@sokensdigital.com', first_name='Dev')
-        self.outsider.firestore_role = 'DEVELOPPEUR'
+        _give_role(self.outsider, ROLE_DEVELOPER)
 
         self.client_marketing = APIClient()
         self.client_marketing.force_authenticate(user=self.marketing_user)
@@ -946,19 +1063,20 @@ class SiteSettingsViewTests(APITestCase):
         self.assertIn(response.status_code, (401, 403))
 
 
-class FacebookPublishingTests(TestCase):
-    """marketing/publishing.py — Facebook is the only platform wired up so
-    far. No real Graph API calls happen here: requests.post is mocked
-    throughout, and FACEBOOK_PAGE_ID/FACEBOOK_PAGE_ACCESS_TOKEN are blank
-    by default (see settings.py) so the "not configured" path is exactly
-    what runs today, in production, until real credentials are set."""
+def _mock_response(status_code=200, json_data=None):
+    response = Mock()
+    response.status_code = status_code
+    response.json.return_value = json_data or {}
+    response.text = str(json_data)
+    return response
 
-    def _mock_response(self, status_code=200, json_data=None):
-        response = Mock()
-        response.status_code = status_code
-        response.json.return_value = json_data or {}
-        response.text = str(json_data)
-        return response
+
+class FacebookPublishingTests(TestCase):
+    """marketing/publishing.py — no real Graph API calls happen here:
+    requests.post is mocked throughout. Credentials come from
+    SocialMediaCredentials (configured via Paramètres), not settings —
+    blank by default, so the "not configured" path is exactly what runs
+    today, in production, until a Super-Admin fills in the form."""
 
     def test_raises_not_configured_when_credentials_are_blank(self):
         from marketing.publishing import PublishingNotConfiguredError, publish_to_facebook
@@ -967,13 +1085,14 @@ class FacebookPublishingTests(TestCase):
         with self.assertRaises(PublishingNotConfiguredError):
             publish_to_facebook(post)
 
-    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
     def test_text_only_post_uses_feed_endpoint(self):
+        from marketing.models import SocialMediaCredentials
         from marketing.publishing import publish_to_facebook
 
+        SocialMediaCredentials.objects.create(facebook_page_id='999', facebook_access_token='tok')
         post = SocialPost(title='x', content='Bonjour Facebook', platform=SocialPost.Platform.FACEBOOK)
         with patch('marketing.publishing.requests.post') as mock_post:
-            mock_post.return_value = self._mock_response(200, {'id': '999_111'})
+            mock_post.return_value = _mock_response(200, {'id': '999_111'})
             url = publish_to_facebook(post)
 
         called_url = mock_post.call_args.args[0]
@@ -981,16 +1100,17 @@ class FacebookPublishingTests(TestCase):
         self.assertEqual(mock_post.call_args.kwargs['data']['message'], 'Bonjour Facebook')
         self.assertEqual(url, 'https://www.facebook.com/999_111')
 
-    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
     def test_post_with_image_uses_photos_endpoint(self):
+        from marketing.models import SocialMediaCredentials
         from marketing.publishing import publish_to_facebook
 
+        SocialMediaCredentials.objects.create(facebook_page_id='999', facebook_access_token='tok')
         post = SocialPost(
             title='x', content='Regardez', platform=SocialPost.Platform.FACEBOOK,
             image_path='https://example.com/pic.jpg',
         )
         with patch('marketing.publishing.requests.post') as mock_post:
-            mock_post.return_value = self._mock_response(200, {'id': 'photo1', 'post_id': '999_222'})
+            mock_post.return_value = _mock_response(200, {'id': 'photo1', 'post_id': '999_222'})
             url = publish_to_facebook(post)
 
         called_url = mock_post.call_args.args[0]
@@ -998,15 +1118,91 @@ class FacebookPublishingTests(TestCase):
         self.assertEqual(mock_post.call_args.kwargs['data']['url'], 'https://example.com/pic.jpg')
         self.assertEqual(url, 'https://www.facebook.com/999_222')
 
-    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
     def test_api_error_raises_publishing_error(self):
+        from marketing.models import SocialMediaCredentials
         from marketing.publishing import PublishingError, publish_to_facebook
 
+        SocialMediaCredentials.objects.create(facebook_page_id='999', facebook_access_token='tok')
         post = SocialPost(title='x', content='hello', platform=SocialPost.Platform.FACEBOOK)
         with patch('marketing.publishing.requests.post') as mock_post:
-            mock_post.return_value = self._mock_response(400, {'error': {'message': 'Invalid token'}})
+            mock_post.return_value = _mock_response(400, {'error': {'message': 'Invalid token'}})
             with self.assertRaises(PublishingError):
                 publish_to_facebook(post)
+
+
+class InstagramPublishingTests(TestCase):
+    """A single image posts directly; more than one posts as a real
+    carousel (child containers, then a parent CAROUSEL container) — see
+    marketing/publishing.py::publish_to_instagram."""
+
+    def _credentials(self):
+        from marketing.models import SocialMediaCredentials
+        return SocialMediaCredentials.objects.create(
+            instagram_business_account_id='ig123', facebook_access_token='tok',
+        )
+
+    def test_raises_not_configured_when_credentials_are_blank(self):
+        from marketing.publishing import PublishingNotConfiguredError, publish_to_instagram
+
+        post = SocialPost(title='x', content='hello', platform=SocialPost.Platform.INSTAGRAM, image_path='https://example.com/a.jpg')
+        with self.assertRaises(PublishingNotConfiguredError):
+            publish_to_instagram(post)
+
+    def test_single_image_posts_directly(self):
+        from marketing.publishing import publish_to_instagram
+
+        self._credentials()
+        post = SocialPost(
+            title='x', content='Regardez', platform=SocialPost.Platform.INSTAGRAM,
+            image_path='https://example.com/a.jpg',
+        )
+        with patch('marketing.publishing.requests.post') as mock_post, \
+                patch('marketing.publishing.requests.get') as mock_get:
+            mock_post.side_effect = [
+                _mock_response(200, {'id': 'container1'}),
+                _mock_response(200, {'id': 'media1'}),
+            ]
+            mock_get.return_value = _mock_response(200, {'permalink': 'https://www.instagram.com/p/abc/'})
+            url = publish_to_instagram(post)
+
+        self.assertEqual(mock_post.call_count, 2)
+        first_call_kwargs = mock_post.call_args_list[0].kwargs
+        self.assertEqual(first_call_kwargs['data']['image_url'], 'https://example.com/a.jpg')
+        self.assertNotIn('is_carousel_item', first_call_kwargs['data'])
+        self.assertEqual(url, 'https://www.instagram.com/p/abc/')
+
+    def test_multiple_images_post_as_carousel(self):
+        from marketing.publishing import publish_to_instagram
+
+        self._credentials()
+        post = SocialPost(
+            title='x', content='Regardez', platform=SocialPost.Platform.INSTAGRAM,
+            image_path='https://example.com/a.jpg', additional_images=['https://example.com/b.jpg'],
+        )
+        with patch('marketing.publishing.requests.post') as mock_post, \
+                patch('marketing.publishing.requests.get') as mock_get:
+            mock_post.side_effect = [
+                _mock_response(200, {'id': 'child1'}),
+                _mock_response(200, {'id': 'child2'}),
+                _mock_response(200, {'id': 'carousel1'}),
+                _mock_response(200, {'id': 'media1'}),
+            ]
+            mock_get.return_value = _mock_response(200, {'permalink': 'https://www.instagram.com/p/xyz/'})
+            url = publish_to_instagram(post)
+
+        self.assertEqual(mock_post.call_count, 4)
+        carousel_call_kwargs = mock_post.call_args_list[2].kwargs
+        self.assertEqual(carousel_call_kwargs['data']['media_type'], 'CAROUSEL')
+        self.assertEqual(carousel_call_kwargs['data']['children'], 'child1,child2')
+        self.assertEqual(url, 'https://www.instagram.com/p/xyz/')
+
+    def test_requires_at_least_one_image(self):
+        from marketing.publishing import PublishingError, publish_to_instagram
+
+        self._credentials()
+        post = SocialPost(title='x', content='hello', platform=SocialPost.Platform.INSTAGRAM)
+        with self.assertRaises(PublishingError):
+            publish_to_instagram(post)
 
 
 class RunScheduledPublishingTests(TestCase):
@@ -1014,12 +1210,9 @@ class RunScheduledPublishingTests(TestCase):
         self.past = timezone.now() - timezone.timedelta(hours=1)
         self.future = timezone.now() + timezone.timedelta(hours=1)
 
-    def _mock_response(self, status_code=200, json_data=None):
-        response = Mock()
-        response.status_code = status_code
-        response.json.return_value = json_data or {}
-        response.text = str(json_data)
-        return response
+    def _facebook_credentials(self):
+        from marketing.models import SocialMediaCredentials
+        return SocialMediaCredentials.objects.create(facebook_page_id='999', facebook_access_token='tok')
 
     def test_skips_everything_when_not_configured(self):
         from marketing.publishing import run_scheduled_publishing
@@ -1033,16 +1226,16 @@ class RunScheduledPublishingTests(TestCase):
         post.refresh_from_db()
         self.assertEqual(post.status, SocialPost.Status.SCHEDULED)
 
-    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
     def test_publishes_due_facebook_posts(self):
         from marketing.publishing import run_scheduled_publishing
 
+        self._facebook_credentials()
         post = SocialPost.objects.create(
             title='x', content='hello', platform=SocialPost.Platform.FACEBOOK,
             status=SocialPost.Status.SCHEDULED, scheduled_at=self.past,
         )
         with patch('marketing.publishing.requests.post') as mock_post:
-            mock_post.return_value = self._mock_response(200, {'id': '999_333'})
+            mock_post.return_value = _mock_response(200, {'id': '999_333'})
             results = run_scheduled_publishing()
 
         self.assertEqual(len(results), 1)
@@ -1051,37 +1244,26 @@ class RunScheduledPublishingTests(TestCase):
         self.assertEqual(post.post_url, 'https://www.facebook.com/999_333')
         self.assertIsNotNone(post.published_at)
 
-    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
     def test_marks_failed_on_api_error_with_note(self):
         from marketing.publishing import run_scheduled_publishing
 
+        self._facebook_credentials()
         post = SocialPost.objects.create(
             title='x', content='hello', platform=SocialPost.Platform.FACEBOOK,
             status=SocialPost.Status.SCHEDULED, scheduled_at=self.past,
         )
         with patch('marketing.publishing.requests.post') as mock_post:
-            mock_post.return_value = self._mock_response(400, {'error': {'message': 'Invalid token'}})
+            mock_post.return_value = _mock_response(400, {'error': {'message': 'Invalid token'}})
             run_scheduled_publishing()
 
         post.refresh_from_db()
         self.assertEqual(post.status, SocialPost.Status.FAILED)
         self.assertIn('Invalid token', post.notes)
 
-    def test_ignores_platforms_without_a_publisher(self):
-        from marketing.publishing import run_scheduled_publishing
-
-        post = SocialPost.objects.create(
-            title='x', content='hello', platform=SocialPost.Platform.LINKEDIN,
-            status=SocialPost.Status.SCHEDULED, scheduled_at=self.past,
-        )
-        run_scheduled_publishing()
-        post.refresh_from_db()
-        self.assertEqual(post.status, SocialPost.Status.SCHEDULED)
-
-    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
     def test_ignores_posts_not_due_yet(self):
         from marketing.publishing import run_scheduled_publishing
 
+        self._facebook_credentials()
         post = SocialPost.objects.create(
             title='x', content='hello', platform=SocialPost.Platform.FACEBOOK,
             status=SocialPost.Status.SCHEDULED, scheduled_at=self.future,
@@ -1100,3 +1282,120 @@ class PublishScheduledPostsCommandTests(TestCase):
         out = io.StringIO()
         call_command('publish_scheduled_posts', stdout=out)
         self.assertIn('Aucune publication', out.getvalue())
+
+
+class SocialMediaCredentialsViewTests(APITestCase):
+    def setUp(self):
+        self.super_admin = User.objects.create(email='admin@sokensdigital.com', first_name='Admin')
+        _give_role(self.super_admin, ROLE_SUPER_ADMIN)
+
+        self.marketing_user = User.objects.create(email='marketing2@sokensdigital.com', first_name='Marketing')
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+
+        self.client_admin = APIClient()
+        self.client_admin.force_authenticate(user=self.super_admin)
+
+        self.client_marketing = APIClient()
+        self.client_marketing.force_authenticate(user=self.marketing_user)
+
+    def test_super_admin_can_read_and_write(self):
+        response = self.client_admin.patch(
+            '/api/v1/marketing/social-media-credentials/',
+            {'facebook_page_id': '123', 'facebook_access_token': 'secret-token'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['facebook_configured'])
+        self.assertNotIn('facebook_access_token', response.json())
+
+    def test_responsable_marketing_forbidden(self):
+        response = self.client_marketing.get('/api/v1/marketing/social-media-credentials/')
+        self.assertEqual(response.status_code, 403)
+
+    def test_unauthenticated_forbidden(self):
+        response = APIClient().get('/api/v1/marketing/social-media-credentials/')
+        self.assertIn(response.status_code, (401, 403))
+
+
+class SpecificationViewSetTests(APITestCase):
+    def setUp(self):
+        self.marketing_user = User.objects.create(email='marketing-spec@sokensdigital.com', first_name='Marketing')
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+
+        self.chef_projet = User.objects.create(email='chef-spec@sokensdigital.com', first_name='Chef')
+        _give_role(self.chef_projet, ROLE_PROJECT_MANAGER)
+
+        self.developer = User.objects.create(email='dev-spec@sokensdigital.com', first_name='Dev')
+        _give_role(self.developer, ROLE_DEVELOPER)
+
+        self.outsider = User.objects.create(email='outsider-spec@sokensdigital.com', first_name='Outsider')
+        _give_role(self.outsider, ROLE_COMMERCIAL)
+
+        self.client_marketing = APIClient()
+        self.client_marketing.force_authenticate(user=self.marketing_user)
+        self.client_chef = APIClient()
+        self.client_chef.force_authenticate(user=self.chef_projet)
+        self.client_dev = APIClient()
+        self.client_dev.force_authenticate(user=self.developer)
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    def payload(self, **overrides):
+        data = {
+            'spec_type': 'FONCTIONNEL',
+            'title': 'Espace client',
+            'lines': [
+                {'interface_name': "Page d'accueil", 'objective': "Présenter l'offre en un coup d'œil."},
+            ],
+        }
+        data.update(overrides)
+        return data
+
+    def test_marketing_can_create_functional_spec(self):
+        response = self.client_marketing.post('/api/v1/marketing/specifications/', self.payload(), format='json')
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertTrue(body['spec_number'].startswith('CDF-'))
+        self.assertEqual(body['status'], 'BROUILLON')
+        self.assertEqual(len(body['lines']), 1)
+
+    def test_technical_spec_gets_different_prefix(self):
+        response = self.client_dev.post(
+            '/api/v1/marketing/specifications/', self.payload(spec_type='TECHNIQUE'), format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.json()['spec_number'].startswith('CDT-'))
+
+    def test_chef_de_projet_can_create_and_edit(self):
+        create_response = self.client_chef.post('/api/v1/marketing/specifications/', self.payload(), format='json')
+        self.assertEqual(create_response.status_code, 201)
+        spec_id = create_response.json()['id']
+        edit_response = self.client_chef.patch(
+            f'/api/v1/marketing/specifications/{spec_id}/', {'title': 'Espace client v2'}, format='json',
+        )
+        self.assertEqual(edit_response.status_code, 200)
+        self.assertEqual(edit_response.json()['title'], 'Espace client v2')
+
+    def test_any_editor_can_edit_anothers_spec(self):
+        """Collaborative document — no per-owner restriction, unlike Quote."""
+        create_response = self.client_marketing.post('/api/v1/marketing/specifications/', self.payload(), format='json')
+        spec_id = create_response.json()['id']
+        response = self.client_dev.patch(
+            f'/api/v1/marketing/specifications/{spec_id}/', {'status': 'FINALISE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'FINALISE')
+
+    def test_outsider_forbidden(self):
+        response = self.client_outsider.post('/api/v1/marketing/specifications/', self.payload(), format='json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_unauthenticated_forbidden(self):
+        response = APIClient().get('/api/v1/marketing/specifications/')
+        self.assertIn(response.status_code, (401, 403))
+
+    def test_list_uses_lightweight_serializer(self):
+        Specification.objects.create(spec_type='FONCTIONNEL', title='Test', created_by=self.marketing_user)
+        response = self.client_marketing.get('/api/v1/marketing/specifications/')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('lines', response.json()['results'][0])

@@ -1,27 +1,48 @@
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
-from rest_framework import permissions, status, viewsets
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework import mixins, permissions, status, viewsets
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.firestore_client import create_profile, invalidate_role_cache, update_profile_fields, upsert_chat_room
-from core.models import AuditLog, Department, User, hash_email
+from core.models import AuditLog, Department, Role, User, hash_email
 from core.permissions import has_role
+from core.storage import upload_avatar, upload_file
 from core.constants import (
     ROLE_SUPER_ADMIN, ROLE_RH_MANAGER, ROLE_COMMERCIAL,
     ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER,
+    ROLE_COMPTABLE, ROLE_RESPONSABLE_MARKETING,
 )
 from core.serializers import (
+    APP_ROLE_TO_DJANGO_ROLE,
     AuditLogSerializer,
+    DepartmentDetailSerializer,
     DepartmentSerializer,
     MeUpdateSerializer,
     ProvisionUserSerializer,
+    RoleSerializer,
     SetUserRoleSerializer,
     UserBriefSerializer,
     UserSerializer,
 )
+
+
+def _sync_django_role(django_user, app_role):
+    """Mirrors the Firestore-facing app role onto the Django-side RBAC
+    table (core.permissions.has_role reads user.roles, not Firestore —
+    see core.serializers.APP_ROLE_TO_DJANGO_ROLE for why this mapping
+    exists). Replaces the user's roles entirely — a person has exactly one
+    app role at a time, same as the Firestore profile field."""
+    role_name = APP_ROLE_TO_DJANGO_ROLE.get(app_role)
+    if role_name:
+        role, _ = Role.objects.get_or_create(name=role_name)
+        django_user.roles.set([role])
+    else:
+        django_user.roles.clear()
 
 
 @extend_schema(
@@ -33,6 +54,7 @@ from core.serializers import (
 )
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@throttle_classes([])
 def health_check(request):
     return Response({'status': 'ok'})
 
@@ -66,6 +88,62 @@ class MeView(APIView):
         return Response(UserSerializer(request.user).data)
 
 
+@extend_schema(
+    tags=['Authentification'],
+    summary='Upload my avatar photo',
+    description='Any authenticated user. Resizes/recompresses and uploads to Cloudinary '
+    '(core.storage) — kept off Supabase, which is already over its free-tier egress quota — '
+    'returns its public URL. Caller still has to save that URL onto their profile '
+    '(PATCH /auth/me/ and the Firestore profile doc).',
+    request={'multipart/form-data': {'type': 'object', 'properties': {'file': {'type': 'string', 'format': 'binary'}}}},
+    responses={201: {'type': 'object', 'properties': {'url': {'type': 'string'}}}},
+)
+class AvatarUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'detail': 'Aucun fichier fourni.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            url = upload_avatar(file)
+        except ValidationError as exc:
+            return Response({'detail': exc.message}, status=status.HTTP_400_BAD_REQUEST)
+        except RuntimeError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({'url': url}, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(
+    tags=['Système'],
+    summary='Upload a chat attachment',
+    description='Any authenticated user — messaging rooms live in Firestore, which has '
+    'no server-side view of room membership, so this mirrors the old storage.rules trust '
+    'level (any signed-in user). Uploads to Cloudinary (core.storage) — kept off '
+    'Supabase, already over its free-tier egress quota — returns its public URL. Caller '
+    "still has to attach it to the Firestore message (see lib/firebase/chat's "
+    'sendMessage). 20 Mo max, any file type.',
+    request={'multipart/form-data': {'type': 'object', 'properties': {'file': {'type': 'string', 'format': 'binary'}}}},
+    responses={201: {'type': 'object', 'properties': {'url': {'type': 'string'}}}},
+)
+class ChatAttachmentUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        file = request.FILES.get('file')
+        if not file:
+            return Response({'detail': 'Aucun fichier fourni.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            url = upload_file(file, folder='chat-attachments')
+        except ValidationError as exc:
+            return Response({'detail': exc.message}, status=status.HTTP_400_BAD_REQUEST)
+        except RuntimeError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response({'url': url}, status=status.HTTP_201_CREATED)
+
+
 class IsSuperAdmin(permissions.BasePermission):
     """Département Administration/RH §1.1 — "Seul rôle autorisé à ...
     modifier les départements". Everything here is Super-Admin-only,
@@ -89,6 +167,11 @@ class DepartmentViewSet(viewsets.ModelViewSet):
     serializer_class = DepartmentSerializer
     permission_classes = [IsSuperAdmin]
 
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return DepartmentDetailSerializer
+        return DepartmentSerializer
+
     def perform_create(self, serializer):
         department = serializer.save()
         # Mirrors into Firestore's chat system — firestore.rules only lets
@@ -100,6 +183,16 @@ class DepartmentViewSet(viewsets.ModelViewSet):
             'departmentId': str(department.id),
         })
 
+    def destroy(self, request, *args, **kwargs):
+        department = self.get_object()
+        member_count = department.user_set.count()
+        if member_count:
+            return Response(
+                {'detail': f"Impossible de supprimer un département avec des employés ({member_count})."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
+
 
 class IsSuperAdminOrRH(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -109,14 +202,12 @@ class IsSuperAdminOrRH(permissions.BasePermission):
 class CanListUsers(permissions.BasePermission):
     """Broader than IsSuperAdminOrRH: read-only (name/email only, no salary
     or other sensitive data), so it's also safe for Responsable Marketing —
-    who needs it to reassign leads to a Commercial (docs/backend-specifications.md §2.1)."""
+    who needs it to reassign leads to a Commercial (docs/backend-specifications.md §2.1).
+    Super-Admin included too — "accès complet à l'ensemble du système"
+    (cahier des charges §4.8) means never narrower than every other role."""
 
     def has_permission(self, request, view):
-        # 'RESPONSABLE_MARKETING' — pas de rôle Marketing dans core.constants
-        # (département Marketing/Communication hors périmètre de ce pass) ;
-        # laissé tel quel, ne matchera aucun Role réel tant que ce
-        # département n'a pas son propre passage RBAC.
-        return has_role(request.user, ROLE_RH_MANAGER, 'RESPONSABLE_MARKETING')
+        return has_role(request.user, ROLE_SUPER_ADMIN, ROLE_RH_MANAGER, ROLE_RESPONSABLE_MARKETING)
 
 
 @extend_schema_view(
@@ -185,11 +276,14 @@ class ProvisionUserView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        avatar_url = data.get('avatar_url') or None
+
         try:
             create_profile(firebase_user.uid, {
                 'email': data['email'],
                 'firstName': data['first_name'],
                 'lastName': data['last_name'],
+                'avatarUrl': avatar_url,
                 'role': data['role'],
                 'departmentId': str(department.id) if department else None,
             })
@@ -198,7 +292,8 @@ class ProvisionUserView(APIView):
             if django_user:
                 django_user.firebase_uid = firebase_user.uid
                 django_user.department = department
-                django_user.save(update_fields=['firebase_uid', 'department'])
+                django_user.avatar_url = avatar_url
+                django_user.save(update_fields=['firebase_uid', 'department', 'avatar_url'])
             else:
                 django_user = User.objects.create_user(
                     email=data['email'],
@@ -207,7 +302,9 @@ class ProvisionUserView(APIView):
                 )
                 django_user.firebase_uid = firebase_user.uid
                 django_user.department = department
-                django_user.save(update_fields=['firebase_uid', 'department'])
+                django_user.avatar_url = avatar_url
+                django_user.save(update_fields=['firebase_uid', 'department', 'avatar_url'])
+            _sync_django_role(django_user, data['role'])
         except Exception:
             # Roll back the Firebase account so a failed provisioning attempt
             # doesn't leave an orphaned Auth user with no profile/Django row.
@@ -254,6 +351,7 @@ class SetUserRoleView(APIView):
         invalidate_role_cache(django_user.firebase_uid)
         django_user.department = department
         django_user.save(update_fields=['department'])
+        _sync_django_role(django_user, data['role'])
 
         return Response(UserSerializer(django_user).data)
 
@@ -272,6 +370,30 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AuditLog.objects.select_related('user').order_by('-created_at')
     serializer_class = AuditLogSerializer
     permission_classes = [IsSuperAdmin]
+
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=['Administration & RH'],
+        summary='List roles and their module/action permissions',
+        description='Any authenticated user can read — the frontend uses this to know '
+        "which nav items/pages its own role can see (see frontend/lib/admin/use-permissions.ts). "
+        'Only Super-Admin can edit (partial_update). Note: this does NOT gate the actual '
+        'API — that stays on has_role() by role name — so it stays possible for a role to '
+        'declare more/less here than what the backend actually enforces; keep them in sync '
+        'by hand when either changes.',
+    ),
+    retrieve=extend_schema(tags=['Administration & RH'], summary='Get a role'),
+    partial_update=extend_schema(tags=['Administration & RH'], summary="Update a role's module/action permissions"),
+)
+class RoleViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    queryset = Role.objects.all().order_by('name')
+    serializer_class = RoleSerializer
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        return [IsSuperAdmin()]
 
 
 SEARCH_RESULT_LIMIT_PER_CATEGORY = 5
@@ -311,11 +433,11 @@ def global_search(request):
             })
 
     # Leads — Marketing/Commercial.
-    if has_role(user, 'RESPONSABLE_MARKETING', ROLE_COMMERCIAL, ROLE_SUPER_ADMIN):
+    if has_role(user, ROLE_RESPONSABLE_MARKETING, ROLE_COMMERCIAL, ROLE_SUPER_ADMIN):
         from marketing.models import BlogPost, Lead, Quote
 
         leads = Lead.objects.all()
-        if not has_role(user, 'RESPONSABLE_MARKETING', ROLE_SUPER_ADMIN):
+        if not has_role(user, ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN):
             leads = leads.filter(assigned_to=user)
         matches = leads.filter(
             Q(first_name__icontains=query) | Q(last_name__icontains=query) | Q(company_name__icontains=query)
@@ -327,7 +449,7 @@ def global_search(request):
             })
 
         quotes = Quote.objects.select_related('lead')
-        if has_role(user, ROLE_COMMERCIAL) and not has_role(user, 'RESPONSABLE_MARKETING', ROLE_SUPER_ADMIN):
+        if has_role(user, ROLE_COMMERCIAL) and not has_role(user, ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN):
             quotes = quotes.filter(created_by=user)
         matches = quotes.filter(quote_number__icontains=query)[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
         for quote in matches:
@@ -336,7 +458,7 @@ def global_search(request):
                 'sublabel': quote.lead.company_name if quote.lead else '', 'href': '/admin/marketing/devis',
             })
 
-        if has_role(user, 'RESPONSABLE_MARKETING', ROLE_SUPER_ADMIN):
+        if has_role(user, ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN):
             matches = BlogPost.objects.filter(title__icontains=query)[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
             for post in matches:
                 results.append({
@@ -358,11 +480,11 @@ def global_search(request):
         })
 
     # Décaissements — Chef de Projet (their own), Finance roles (all).
-    if has_role(user, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, 'COMPTABLE', ROLE_SUPER_ADMIN):
+    if has_role(user, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE, ROLE_SUPER_ADMIN):
         from finance.models import DisbursementRequest
 
         disbursements = DisbursementRequest.objects.select_related('project')
-        if not has_role(user, ROLE_DIRECTEUR_FINANCIER, 'COMPTABLE', ROLE_SUPER_ADMIN):
+        if not has_role(user, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE, ROLE_SUPER_ADMIN):
             disbursements = disbursements.filter(
                 Q(project__lead_project_manager=user) | Q(requested_by=user)
             ).distinct()

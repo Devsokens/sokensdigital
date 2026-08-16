@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Plus, Trash2, CalendarClock, Ban, ImagePlus } from "lucide-react";
+import { Loader2, Plus, Trash2, CalendarClock, Ban, Sparkles, Hash, WrapText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/ui/tabs";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
-import { uploadImage } from "@/lib/api/upload";
+import { TagInput } from "@/components/admin/tag-input";
+import { MultiImageUploadField } from "@/components/admin/marketing/multi-image-upload-field";
 import {
   listSocialPosts,
   createSocialPost,
@@ -14,6 +15,7 @@ import {
   deleteSocialPost,
   scheduleSocialPost,
   cancelSocialPost,
+  getSocialMediaCredentials,
   type SocialPostInput,
 } from "@/lib/api/marketing";
 import type { SocialPost, SocialPostStatus, SocialPlatform } from "@/lib/api/types";
@@ -45,6 +47,16 @@ function toDatetimeLocal(iso: string | null) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** Today at 09:00, local time, in datetime-local's expected format — only
+ * ever called from an event handler (button click), never during render,
+ * so touching the current time here doesn't trip the "no impure calls
+ * during render" rule. */
+function todayAt9() {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T09:00`;
+}
+
 export function SocialPostList() {
   const { profile } = useAuth();
   const isMarketing = profile?.role === "RESPONSABLE_MARKETING" || profile?.role === "SUPER_ADMIN";
@@ -54,6 +66,7 @@ export function SocialPostList() {
   const [editing, setEditing] = useState<SocialPost | null>(null);
   const [prefillDate, setPrefillDate] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [credentialsConfigured, setCredentialsConfigured] = useState<boolean | null>(null);
 
   async function load() {
     try {
@@ -66,6 +79,11 @@ export function SocialPostList() {
 
   useEffect(() => {
     load();
+    // Super-Admin only endpoint — a 403 for anyone else just means "don't
+    // show the banner", not an error to surface.
+    getSocialMediaCredentials()
+      .then((c) => setCredentialsConfigured(c.facebook_configured || c.instagram_configured))
+      .catch(() => setCredentialsConfigured(null));
   }, []);
 
   async function handleSchedule(post: SocialPost) {
@@ -104,7 +122,7 @@ export function SocialPostList() {
 
   function openCreate(dateIso?: string) {
     setEditing(null);
-    setPrefillDate(dateIso ?? null);
+    setPrefillDate(dateIso ?? todayAt9());
     setOpen(true);
   }
 
@@ -155,7 +173,7 @@ export function SocialPostList() {
               </Button>
             }
           />
-          <SheetContent title={editing ? "Modifier la publication" : "Nouvelle publication"} className="sm:max-w-2xl">
+          <SheetContent title={editing ? "Modifier la publication" : "Nouvelle publication"} className="sm:max-w-3xl">
             <SocialPostForm
               post={editing ?? undefined}
               prefillDate={prefillDate}
@@ -171,10 +189,12 @@ export function SocialPostList() {
         </Sheet>
       </div>
 
-      <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
-        La publication automatique vers les réseaux sociaux (et les rappels J-3h/J-2h/J-1h) n&apos;est pas encore
-        connectée — aucune plateforme externe n&apos;est configurée. Cet écran gère le statut et la planification en interne.
-      </p>
+      {credentialsConfigured === false && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
+          Aucun identifiant Facebook/Instagram n&apos;est configuré — les publications programmées resteront en
+          attente jusqu&apos;à ce qu&apos;un Super-Admin les renseigne dans Paramètres &gt; Réseaux sociaux.
+        </p>
+      )}
 
       <Tabs defaultValue="calendrier">
         <TabsList>
@@ -277,54 +297,52 @@ export function SocialPostList() {
   );
 }
 
-function ImageUploadButton({ value, onChange }: { value: string; onChange: (url: string) => void }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleFile(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    setError(null);
-    try {
-      onChange(await uploadImage(file));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Échec de l'upload.");
-    } finally {
-      setUploading(false);
-      if (inputRef.current) inputRef.current.value = "";
+function ContentToolbar({ textareaRef, onInsert }: {
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  onInsert: (text: string) => void;
+}) {
+  function insert(snippet: string) {
+    const el = textareaRef.current;
+    if (!el) {
+      onInsert(snippet);
+      return;
     }
+    const start = el.selectionStart ?? el.value.length;
+    const end = el.selectionEnd ?? el.value.length;
+    const next = el.value.slice(0, start) + snippet + el.value.slice(end);
+    onInsert(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.selectionStart = el.selectionEnd = start + snippet.length;
+    });
   }
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="mb-1.5 flex items-center gap-1">
       <button
         type="button"
-        onClick={() => inputRef.current?.click()}
-        className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-neutral-300 bg-neutral-50 text-neutral-400 hover:border-primary/40"
+        onClick={() => insert("\n\n")}
+        title="Saut de paragraphe"
+        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
       >
-        {uploading ? (
-          <Loader2 className="size-4 animate-spin" />
-        ) : value ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="size-full object-cover" />
-        ) : (
-          <ImagePlus className="size-5" />
-        )}
+        <WrapText className="size-3.5" /> Paragraphe
       </button>
-      <div className="flex-1">
-        <button type="button" onClick={() => inputRef.current?.click()} className="text-xs font-medium text-primary hover:underline">
-          {value ? "Changer l'image" : "Téléverser une image"}
-        </button>
-        {value && (
-          <button type="button" onClick={() => onChange("")} className="ml-3 text-xs text-neutral-400 hover:text-destructive">
-            Retirer
-          </button>
-        )}
-        {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
-      </div>
-      <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+      <button
+        type="button"
+        onClick={() => insert("\n\n✨ ⸻ ✨\n\n")}
+        title="Séparateur"
+        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+      >
+        <Sparkles className="size-3.5" /> Séparateur
+      </button>
+      <button
+        type="button"
+        onClick={() => insert("\n\n#SokensDigital #Digital ")}
+        title="Bloc hashtags"
+        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+      >
+        <Hash className="size-3.5" /> Hashtags
+      </button>
     </div>
   );
 }
@@ -344,31 +362,34 @@ function SocialPostForm({
     title: post?.title ?? "",
     content: post?.content ?? "",
     image_path: post?.image_path ?? "",
-    platform: post?.platform ?? "LINKEDIN",
+    additional_images: post?.additional_images ?? [],
+    platform: post?.platform ?? "FACEBOOK",
     scheduled_at: post ? toDatetimeLocal(post.scheduled_at) : (prefillDate ?? ""),
     notes: post?.notes ?? "",
     tags: post?.tags ?? [],
   });
-  const [tagsText, setTagsText] = useState((post?.tags ?? []).join(", "));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
 
   function set<K extends keyof SocialPostInput>(key: K, value: SocialPostInput[K]) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  const charLimit = form.platform === "TWITTER" ? 280 : null;
+  const images = [form.image_path, ...(form.additional_images ?? [])].filter((url): url is string => Boolean(url));
+
+  function setImages(next: string[]) {
+    const [cover, ...rest] = next;
+    set("image_path", cover ?? "");
+    set("additional_images", rest);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSaving(true);
     try {
-      const payload = {
-        ...form,
-        scheduled_at: form.scheduled_at || undefined,
-        tags: tagsText.split(",").map((t) => t.trim()).filter(Boolean),
-      };
+      const payload = { ...form, scheduled_at: form.scheduled_at || undefined };
       if (post) {
         await updateSocialPost(post.id, payload);
       } else {
@@ -376,7 +397,7 @@ function SocialPostForm({
       }
       onSaved();
     } catch {
-      setError("Impossible d'enregistrer — vérifie les contraintes par plateforme (280 caractères max sur X, image obligatoire sur Instagram).");
+      setError("Impossible d'enregistrer — une image de couverture est requise pour Facebook et Instagram.");
     } finally {
       setSaving(false);
     }
@@ -393,6 +414,11 @@ function SocialPostForm({
           )}
 
           <label className="block">
+            <span className={labelClass}>Images</span>
+            <MultiImageUploadField images={images} onChange={setImages} />
+          </label>
+
+          <label className="block">
             <span className={labelClass}>Titre</span>
             <input value={form.title} onChange={(e) => set("title", e.target.value)} className={inputClass} required />
           </label>
@@ -400,31 +426,24 @@ function SocialPostForm({
           <label className="block">
             <span className={labelClass}>Plateforme</span>
             <select value={form.platform} onChange={(e) => set("platform", e.target.value)} className={inputClass}>
-              <option value="LINKEDIN">LinkedIn</option>
-              <option value="TWITTER">Twitter/X</option>
               <option value="FACEBOOK">Facebook</option>
               <option value="INSTAGRAM">Instagram</option>
-              <option value="YOUTUBE">YouTube</option>
             </select>
           </label>
 
-          <label className="block">
+          <div>
             <span className={labelClass}>
-              Contenu {charLimit && <span className="text-neutral-400">({form.content.length}/{charLimit})</span>}
+              Contenu <span className="text-neutral-400">({form.content.length} caractères)</span>
             </span>
+            <ContentToolbar textareaRef={contentRef} onInsert={(text) => set("content", text)} />
             <textarea
+              ref={contentRef}
               value={form.content}
               onChange={(e) => set("content", e.target.value)}
-              className={`${inputClass} min-h-28`}
+              className={`${inputClass} min-h-48`}
               required
-              maxLength={charLimit ?? undefined}
             />
-          </label>
-
-          <label className="block">
-            <span className={labelClass}>Image</span>
-            <ImageUploadButton value={form.image_path ?? ""} onChange={(url) => set("image_path", url)} />
-          </label>
+          </div>
 
           <label className="block">
             <span className={labelClass}>Date et heure de programmation</span>
@@ -437,8 +456,8 @@ function SocialPostForm({
           </label>
 
           <label className="block">
-            <span className={labelClass}>Tags (séparés par des virgules)</span>
-            <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} className={inputClass} />
+            <span className={labelClass}>Tags</span>
+            <TagInput value={form.tags ?? []} onChange={(tags) => set("tags", tags)} placeholder="Taper puis Entrée…" />
           </label>
 
           <label className="block">
@@ -470,7 +489,7 @@ function SocialPostForm({
             platform={form.platform as SocialPlatform}
             title={form.title}
             content={form.content}
-            imagePath={form.image_path ?? ""}
+            images={images}
           />
         </div>
       </div>
