@@ -22,7 +22,7 @@ class Migration(migrations.Migration):
                 ('amount', models.DecimalField(decimal_places=2, max_digits=12)),
                 ('payment_date', models.DateField()),
                 ('payment_method', models.CharField(choices=[('CHEQUE', 'Chèque'), ('VIREMENT', 'Virement'), ('ESPECES', 'Espèces'), ('CARTE', 'Carte bancaire'), ('AUTRE', 'Autre')], max_length=20)),
-                ('status', models.CharField(choices=[('PENDING', 'En attente'), ('RECEIVED', 'Reçu'), ('RECORDED', 'Enregistré')], default='PENDING', max_length=20)),
+                ('status', models.CharField(choices=[('EN_ATTENTE', 'En attente'), ('RECU', 'Reçu'), ('ENREGISTRE', 'Enregistré')], default='EN_ATTENTE', max_length=20)),
                 ('received_at', models.DateTimeField(blank=True, null=True)),
                 ('notes', models.TextField(blank=True)),
                 ('invoice', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='payments', to='finance.invoice')),

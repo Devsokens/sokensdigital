@@ -5,7 +5,6 @@ from procurement.models import (
     Supplier,
     ProcurementRequest,
     SupplierQuote,
-    CashVoucher,
     SupplierInvoice,
 )
 from core.models import User
@@ -72,24 +71,6 @@ class SupplierQuoteSerializer(serializers.ModelSerializer):
         return obj.amount_ht * obj.vat_rate
 
 
-class CashVoucherSerializer(serializers.ModelSerializer):
-    type_display = serializers.CharField(source='get_type_display', read_only=True)
-    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
-    reconciled_by_name = serializers.CharField(source='reconciled_by.get_full_name', read_only=True)
-
-    class Meta:
-        model = CashVoucher
-        fields = [
-            'id', 'type', 'type_display', 'voucher_number', 'date', 'amount',
-            'description', 'disbursement', 'created_by', 'created_by_name',
-            'reconciled_by', 'reconciled_by_name', 'reconciled_at', 'created_at'
-        ]
-        read_only_fields = [
-            'voucher_number', 'created_by_name', 'reconciled_by_name',
-            'type_display'
-        ]
-
-
 class SupplierInvoiceSerializer(serializers.ModelSerializer):
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
     received_by_name = serializers.CharField(source='received_by.get_full_name', read_only=True)
@@ -103,7 +84,7 @@ class SupplierInvoiceSerializer(serializers.ModelSerializer):
             'id', 'supplier', 'supplier_name', 'procurement', 'quote',
             'invoice_number', 'invoice_date', 'due_date',
             'amount_ht', 'vat_rate', 'vat_amount', 'amount_ttc',
-            'status', 'status_display', 'cash_voucher',
+            'status', 'status_display', 'cash_entry',
             'received_by', 'received_by_name', 'received_at',
             'validated_by', 'validated_by_name', 'validated_at', 'created_at'
         ]

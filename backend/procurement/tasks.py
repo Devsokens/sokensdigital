@@ -26,7 +26,7 @@ def create_disbursement_request_task(self, quote_id):
     """
     try:
         quote = get_object_or_404(SupplierQuote, id=quote_id)
-        if quote.status != SupplierQuote.Status.VALIDATED:
+        if quote.status != SupplierQuote.Status.VALIDE:
             return
 
         disbursement = DisbursementRequest.objects.create(
@@ -55,7 +55,7 @@ def post_supplier_invoice_journal_entry(self, invoice_id):
     """
     try:
         invoice = get_object_or_404(SupplierInvoice, id=invoice_id)
-        if invoice.status != SupplierInvoice.Status.VALIDATED:
+        if invoice.status != SupplierInvoice.Status.VALIDEE:
             return
 
         period = resolve_open_period_for_date(invoice.invoice_date)
@@ -90,7 +90,7 @@ def post_supplier_invoice_journal_entry(self, invoice_id):
             lines=lines,
         )
 
-        invoice.status = SupplierInvoice.Status.PAID
+        invoice.status = SupplierInvoice.Status.PAYEE
         invoice.save()
 
         logger.info(f'✓ JournalEntry créé: {journal_entry.id} pour facture {invoice_id}')

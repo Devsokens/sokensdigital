@@ -1,4 +1,7 @@
 # Generated migration — Initial treasury app (CashEntry, BankEntry, CapitalContribution)
+# CashEntry fusionne l'ancien procurement.CashVoucher (jamais déployé sous sa
+# forme d'origine) — un seul modèle "pièce de caisse" pour tout le projet,
+# cf. docs/AUDIT_LOGIQUE_METIER_TRESORERIE_2026-08.md §H3.
 
 from django.conf import settings
 from django.db import migrations, models
@@ -13,7 +16,8 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ('finance', '0007_payment_paymentreceipt'),
+        ('finance', '0008_financesettings_treasury_accounts'),
+        ('procurement', '0001_initial'),
     ]
 
     operations = [
@@ -22,8 +26,9 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('voucher_number', models.CharField(blank=True, editable=False, max_length=20, unique=True)),
                 ('type', models.CharField(choices=[('ENTREE', 'Entrée'), ('SORTIE', 'Sortie')], max_length=10)),
-                ('source', models.CharField(choices=[('CLIENT_ESPECES', 'Client paie en espèces'), ('RETRAIT_BANQUE', 'Retrait compte bancaire'), ('DEPOT_BANQUE', 'Dépôt espèces → banque'), ('DEPENSE_OPERATIONNELLE', 'Dépense opérationnelle')], max_length=30)),
+                ('source', models.CharField(choices=[('CLIENT_ESPECES', 'Client paie en espèces'), ('RETRAIT_BANQUE', 'Retrait compte bancaire'), ('DEPOT_BANQUE', 'Dépôt espèces → banque'), ('DEPENSE_OPERATIONNELLE', 'Dépense opérationnelle'), ('FOURNISSEUR_ESPECES', 'Paiement fournisseur en espèces')], max_length=30)),
                 ('amount', models.DecimalField(decimal_places=2, max_digits=12)),
                 ('date', models.DateField(default=django.utils.timezone.now)),
                 ('reference', models.CharField(blank=True, help_text='N° pièce caisse, etc.', max_length=255)),
@@ -33,6 +38,7 @@ class Migration(migrations.Migration):
                 ('disbursement', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='cash_entries', to='finance.disbursementrequest')),
                 ('payment', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='cash_entries', to='finance.payment')),
                 ('reconciled_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='reconciled_cash_entries', to=settings.AUTH_USER_MODEL)),
+                ('supplier_invoice', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='cash_entries', to='procurement.supplierinvoice')),
             ],
             options={
                 'ordering': ['-date', '-created_at'],
@@ -63,7 +69,7 @@ class Migration(migrations.Migration):
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('type', models.CharField(choices=[('ENTREE', 'Crédit'), ('SORTIE', 'Débit')], max_length=10)),
-                ('source', models.CharField(choices=[('CAPITAL_CONTRIBUTION', 'Apport capital'), ('CLIENT_CHEQUE', 'Client paie chèque'), ('CLIENT_VIREMENT', 'Client paie virement'), ('CAISSE_DEPOT', 'Dépôt espèces caisse'), ('FOURNISSEUR_CHEQUE', 'Paiement fournisseur chèque'), ('FOURNISSEUR_VIREMENT', 'Paiement fournisseur virement'), ('RETRAIT_ESPECES', 'Retrait espèces')], max_length=30)),
+                ('source', models.CharField(choices=[('APPORT_CAPITAL', 'Apport capital'), ('CLIENT_CHEQUE', 'Client paie chèque'), ('CLIENT_VIREMENT', 'Client paie virement'), ('CAISSE_DEPOT', 'Dépôt espèces caisse'), ('FOURNISSEUR_CHEQUE', 'Paiement fournisseur chèque'), ('FOURNISSEUR_VIREMENT', 'Paiement fournisseur virement'), ('RETRAIT_ESPECES', 'Retrait espèces')], max_length=30)),
                 ('amount', models.DecimalField(decimal_places=2, max_digits=12)),
                 ('date', models.DateField(default=django.utils.timezone.now)),
                 ('reference', models.CharField(help_text='N° chèque, N° virement, etc.', max_length=255)),

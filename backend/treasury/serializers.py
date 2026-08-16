@@ -11,15 +11,15 @@ class CashEntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = CashEntry
         fields = [
-            'id', 'type', 'type_display', 'source', 'source_display',
+            'id', 'voucher_number', 'type', 'type_display', 'source', 'source_display',
             'amount', 'date', 'reference', 'description',
-            'payment', 'disbursement',
+            'payment', 'disbursement', 'supplier_invoice',
             'created_by', 'created_by_name',
             'reconciled_by', 'reconciled_by_name', 'reconciled_at',
             'created_at'
         ]
         read_only_fields = [
-            'type_display', 'source_display', 'created_by_name',
+            'voucher_number', 'type_display', 'source_display', 'created_by_name',
             'reconciled_by_name'
         ]
 

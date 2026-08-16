@@ -8,14 +8,12 @@ from procurement.models import (
     Supplier,
     ProcurementRequest,
     SupplierQuote,
-    CashVoucher,
     SupplierInvoice,
 )
 from procurement.serializers import (
     SupplierSerializer,
     ProcurementRequestSerializer,
     SupplierQuoteSerializer,
-    CashVoucherSerializer,
     SupplierInvoiceSerializer,
 )
 from procurement.tasks import create_disbursement_request_task, post_supplier_invoice_journal_entry
@@ -75,10 +73,10 @@ class ProcurementRequestViewSet(viewsets.ModelViewSet):
     def approve_rcf(self, request, pk=None):
         """RCF validation."""
         procurement = self.get_object()
-        if procurement.status != ProcurementRequest.Status.PENDING_RCF:
+        if procurement.status != ProcurementRequest.Status.EN_ATTENTE_RCF:
             return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
 
-        procurement.status = ProcurementRequest.Status.PENDING_MANAGER
+        procurement.status = ProcurementRequest.Status.EN_ATTENTE_MANAGER
         procurement.rcf_approved_by = request.user
         procurement.rcf_approved_at = timezone.now()
         procurement.save()
@@ -89,10 +87,10 @@ class ProcurementRequestViewSet(viewsets.ModelViewSet):
     def reject_rcf(self, request, pk=None):
         """RCF reject."""
         procurement = self.get_object()
-        if procurement.status != ProcurementRequest.Status.PENDING_RCF:
+        if procurement.status != ProcurementRequest.Status.EN_ATTENTE_RCF:
             return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
 
-        procurement.status = ProcurementRequest.Status.REJECTED
+        procurement.status = ProcurementRequest.Status.REJETEE
         procurement.rejection_reason = request.data.get('reason', '')
         procurement.rcf_approved_by = request.user
         procurement.rcf_approved_at = timezone.now()
@@ -104,10 +102,10 @@ class ProcurementRequestViewSet(viewsets.ModelViewSet):
     def approve_manager(self, request, pk=None):
         """Manager (Gérant) validation."""
         procurement = self.get_object()
-        if procurement.status != ProcurementRequest.Status.PENDING_MANAGER:
+        if procurement.status != ProcurementRequest.Status.EN_ATTENTE_MANAGER:
             return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
 
-        procurement.status = ProcurementRequest.Status.APPROVED
+        procurement.status = ProcurementRequest.Status.APPROUVEE
         procurement.manager_approved_by = request.user
         procurement.manager_approved_at = timezone.now()
         procurement.save()
@@ -118,10 +116,10 @@ class ProcurementRequestViewSet(viewsets.ModelViewSet):
     def reject_manager(self, request, pk=None):
         """Manager reject."""
         procurement = self.get_object()
-        if procurement.status != ProcurementRequest.Status.PENDING_MANAGER:
+        if procurement.status != ProcurementRequest.Status.EN_ATTENTE_MANAGER:
             return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
 
-        procurement.status = ProcurementRequest.Status.REJECTED
+        procurement.status = ProcurementRequest.Status.REJETEE
         procurement.rejection_reason = request.data.get('reason', '')
         procurement.manager_approved_by = request.user
         procurement.manager_approved_at = timezone.now()
@@ -146,7 +144,7 @@ class SupplierQuoteViewSet(viewsets.ModelViewSet):
     def validate_rcf(self, request, pk=None):
         """RCF validation."""
         quote = self.get_object()
-        if quote.status != SupplierQuote.Status.PENDING:
+        if quote.status != SupplierQuote.Status.EN_ATTENTE:
             return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
 
         quote.rcf_validated_by = request.user
@@ -159,10 +157,10 @@ class SupplierQuoteViewSet(viewsets.ModelViewSet):
     def validate_manager(self, request, pk=None):
         """Manager validation."""
         quote = self.get_object()
-        if quote.status != SupplierQuote.Status.PENDING:
+        if quote.status != SupplierQuote.Status.EN_ATTENTE:
             return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
 
-        quote.status = SupplierQuote.Status.VALIDATED
+        quote.status = SupplierQuote.Status.VALIDE
         quote.manager_validated_by = request.user
         quote.manager_validated_at = timezone.now()
         quote.save()
@@ -175,32 +173,10 @@ class SupplierQuoteViewSet(viewsets.ModelViewSet):
     def reject(self, request, pk=None):
         """Reject quote."""
         quote = self.get_object()
-        quote.status = SupplierQuote.Status.REJECTED
+        quote.status = SupplierQuote.Status.REJETE
         quote.save()
 
         return Response(self.get_serializer(quote).data)
-
-
-class CashVoucherViewSet(viewsets.ModelViewSet):
-    """Pièces de caisse."""
-    queryset = CashVoucher.objects.all()
-    serializer_class = CashVoucherSerializer
-    permission_classes = [permissions.IsAuthenticated, IsFinanceOrAdmin]
-    filterset_fields = ['type', 'date']
-    ordering_fields = ['date', 'amount']
-
-    def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
-
-    @action(detail=True, methods=['post'])
-    def reconcile(self, request, pk=None):
-        """Mark voucher as reconciled."""
-        voucher = self.get_object()
-        voucher.reconciled_by = request.user
-        voucher.reconciled_at = timezone.now()
-        voucher.save()
-
-        return Response(self.get_serializer(voucher).data)
 
 
 class SupplierInvoiceViewSet(viewsets.ModelViewSet):
@@ -223,11 +199,11 @@ class SupplierInvoiceViewSet(viewsets.ModelViewSet):
     def validate(self, request, pk=None):
         """Valider facture fournisseur."""
         invoice = self.get_object()
-        if invoice.status != SupplierInvoice.Status.RECEIVED:
+        if invoice.status != SupplierInvoice.Status.RECUE:
             return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
-            invoice.status = SupplierInvoice.Status.VALIDATED
+            invoice.status = SupplierInvoice.Status.VALIDEE
             invoice.validated_by = request.user
             invoice.validated_at = timezone.now()
             invoice.save()

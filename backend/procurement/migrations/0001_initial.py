@@ -1,4 +1,7 @@
-# Generated migration — Initial procurement app (Supplier, ProcurementRequest, SupplierQuote, CashVoucher, SupplierInvoice)
+# Generated migration — Initial procurement app (Supplier, ProcurementRequest, SupplierQuote, SupplierInvoice)
+# NOTE: modèle CashVoucher (pièce de caisse) fusionné dans treasury.CashEntry
+# dès cette migration initiale — jamais déployé sous sa forme d'origine, cf.
+# docs/AUDIT_LOGIQUE_METIER_TRESORERIE_2026-08.md §H3.
 
 from django.conf import settings
 from django.db import migrations, models
@@ -48,7 +51,7 @@ class Migration(migrations.Migration):
                 ('title', models.CharField(max_length=255)),
                 ('description', models.TextField()),
                 ('estimated_amount', models.DecimalField(decimal_places=2, max_digits=12)),
-                ('status', models.CharField(choices=[('DRAFT', 'Brouillon'), ('PENDING_RCF', 'En attente RCF'), ('PENDING_MANAGER', 'En attente Gérant'), ('APPROVED', 'Approuvé'), ('REJECTED', 'Rejeté'), ('IN_PROGRESS', 'En cours (devis/décaissement)'), ('COMPLETED', 'Complété (achat fait)')], default='DRAFT', max_length=20)),
+                ('status', models.CharField(choices=[('BROUILLON', 'Brouillon'), ('EN_ATTENTE_RCF', 'En attente RCF'), ('EN_ATTENTE_MANAGER', 'En attente Gérant'), ('APPROUVEE', 'Approuvée'), ('REJETEE', 'Rejetée'), ('EN_COURS', 'En cours (devis/décaissement)'), ('TERMINEE', 'Terminée (achat fait)')], default='BROUILLON', max_length=20)),
                 ('rejection_reason', models.TextField(blank=True)),
                 ('rcf_approved_at', models.DateTimeField(blank=True, null=True)),
                 ('manager_approved_at', models.DateTimeField(blank=True, null=True)),
@@ -72,7 +75,7 @@ class Migration(migrations.Migration):
                 ('amount_ht', models.DecimalField(decimal_places=2, max_digits=12)),
                 ('vat_rate', models.DecimalField(decimal_places=2, default='0.18', max_digits=4)),
                 ('amount_ttc', models.DecimalField(decimal_places=2, editable=False, max_digits=12)),
-                ('status', models.CharField(choices=[('DRAFT', 'Brouillon'), ('PENDING', 'En attente validation'), ('VALIDATED', 'Validé'), ('REJECTED', 'Rejeté')], default='DRAFT', max_length=20)),
+                ('status', models.CharField(choices=[('BROUILLON', 'Brouillon'), ('EN_ATTENTE', 'En attente validation'), ('VALIDE', 'Validé'), ('REJETE', 'Rejeté')], default='BROUILLON', max_length=20)),
                 ('rcf_validated_at', models.DateTimeField(blank=True, null=True)),
                 ('manager_validated_at', models.DateTimeField(blank=True, null=True)),
                 ('manager_validated_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='validated_quotes_manager', to=settings.AUTH_USER_MODEL)),
@@ -82,26 +85,6 @@ class Migration(migrations.Migration):
             ],
             options={
                 'ordering': ['-quote_date'],
-                'abstract': False,
-            },
-        ),
-        migrations.CreateModel(
-            name='CashVoucher',
-            fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('type', models.CharField(choices=[('RECEIPT', 'Reçu caisse (entrée)'), ('VOUCHER', 'Pièce de sortie')], default='VOUCHER', max_length=20)),
-                ('voucher_number', models.CharField(editable=False, max_length=20, unique=True)),
-                ('date', models.DateField(default=django.utils.timezone.now)),
-                ('amount', models.DecimalField(decimal_places=2, max_digits=12)),
-                ('description', models.CharField(max_length=255)),
-                ('reconciled_at', models.DateTimeField(blank=True, null=True)),
-                ('created_by', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='created_vouchers', to=settings.AUTH_USER_MODEL)),
-                ('disbursement', models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='cash_voucher', to='finance.disbursementrequest')),
-                ('reconciled_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='reconciled_vouchers', to=settings.AUTH_USER_MODEL)),
-            ],
-            options={
-                'ordering': ['-date'],
                 'abstract': False,
             },
         ),
@@ -116,15 +99,17 @@ class Migration(migrations.Migration):
                 ('amount_ht', models.DecimalField(decimal_places=2, max_digits=12)),
                 ('vat_rate', models.DecimalField(decimal_places=2, default='0.18', max_digits=4)),
                 ('amount_ttc', models.DecimalField(decimal_places=2, editable=False, max_digits=12)),
-                ('status', models.CharField(choices=[('RECEIVED', 'Reçue'), ('VALIDATED', 'Validée'), ('PAID', 'Payée')], default='RECEIVED', max_length=20)),
+                ('status', models.CharField(choices=[('RECUE', 'Reçue'), ('VALIDEE', 'Validée'), ('PAYEE', 'Payée')], default='RECUE', max_length=20)),
                 ('received_at', models.DateTimeField(auto_now_add=True)),
                 ('validated_at', models.DateTimeField(blank=True, null=True)),
-                ('cash_voucher', models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='supplier_invoice', to='procurement.cashvoucher')),
                 ('procurement', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='invoices', to='procurement.procurementrequest')),
                 ('quote', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='invoices', to='procurement.supplierquote')),
                 ('received_by', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='received_invoices', to=settings.AUTH_USER_MODEL)),
                 ('supplier', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='invoices', to='procurement.supplier')),
                 ('validated_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='validated_supplier_invoices', to=settings.AUTH_USER_MODEL)),
+                # cash_entry (FK vers treasury.CashEntry) ajouté par procurement/0002 —
+                # doit être créé après treasury/0001 pour éviter la dépendance
+                # circulaire procurement<->treasury au niveau des migrations.
             ],
             options={
                 'ordering': ['-invoice_date'],

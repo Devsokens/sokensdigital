@@ -242,10 +242,10 @@ class PaymentSerializer(serializers.ModelSerializer):
 
     def get_total_paid(self, obj):
         """Total versé jusqu'à présent (recalc pour chaque payment)."""
-        total = obj.invoice.payments.filter(status=Payment.Status.RECEIVED).aggregate(
+        total = obj.invoice.payments.filter(status=Payment.Status.RECU).aggregate(
             total=models.Sum('amount')
         )['total'] or Decimal('0')
-        if obj.status == Payment.Status.RECEIVED:
+        if obj.status == Payment.Status.RECU:
             return total + obj.amount
         return total
 

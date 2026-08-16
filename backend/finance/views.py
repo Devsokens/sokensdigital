@@ -419,10 +419,10 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.Retr
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         payment = self.get_object()
-        if payment.status != Payment.Status.PENDING:
-            return Response({'detail': 'Payment must be PENDING'}, status=status.HTTP_400_BAD_REQUEST)
+        if payment.status != Payment.Status.EN_ATTENTE:
+            return Response({'detail': 'Payment must be EN_ATTENTE'}, status=status.HTTP_400_BAD_REQUEST)
 
-        payment.status = Payment.Status.RECEIVED
+        payment.status = Payment.Status.RECU
         payment.received_by = request.user
         payment.received_at = timezone.now()
         payment.save()
@@ -432,7 +432,7 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.Retr
 
         # Vérifier si facture 100% payée
         total_paid = payment.invoice.payments.filter(
-            status=Payment.Status.RECEIVED
+            status=Payment.Status.RECU
         ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
 
         if total_paid >= payment.invoice.amount_ttc:

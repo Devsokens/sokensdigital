@@ -27,6 +27,13 @@ class CashEntry(LoggedModel):
         # Sorties
         DEPOT_BANQUE = 'DEPOT_BANQUE', 'Dépôt espèces → banque'
         DEPENSE_OPERATIONNELLE = 'DEPENSE_OPERATIONNELLE', 'Dépense opérationnelle'
+        FOURNISSEUR_ESPECES = 'FOURNISSEUR_ESPECES', 'Paiement fournisseur en espèces'
+
+    # Numéro de pièce auto-généré (PC-YYYY-00001) — unifie l'ancien
+    # procurement.CashVoucher (fusionné ici, cf. audit AUDIT_LOGIQUE_METIER_
+    # TRESORERIE_2026-08.md §H3) et le nouveau treasury.CashEntry : un seul
+    # modèle, un seul solde de caisse, un seul état de caisse mensuel fiable.
+    voucher_number = models.CharField(max_length=20, unique=True, editable=False, blank=True)
 
     type = models.CharField(max_length=10, choices=Type.choices)
     source = models.CharField(max_length=30, choices=Source.choices)
@@ -38,6 +45,9 @@ class CashEntry(LoggedModel):
     # Liens
     payment = models.ForeignKey(Payment, on_delete=models.SET_NULL, null=True, blank=True, related_name='cash_entries')
     disbursement = models.ForeignKey(DisbursementRequest, on_delete=models.SET_NULL, null=True, blank=True, related_name='cash_entries')
+    # Facture fournisseur réglée en espèces (procurement app) — string ref
+    # pour éviter toute dépendance d'import circulaire entre les deux apps.
+    supplier_invoice = models.ForeignKey('procurement.SupplierInvoice', on_delete=models.SET_NULL, null=True, blank=True, related_name='cash_entries')
 
     # Audit
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_cash_entries')
@@ -52,11 +62,18 @@ class CashEntry(LoggedModel):
         ]
 
     def __str__(self):
-        return f'{self.type} {self.source} — {self.amount} ({self.date})'
+        return f'{self.voucher_number} — {self.type} {self.source} ({self.amount})'
 
     def clean(self):
         if self.amount <= 0:
             raise ValidationError({'amount': 'Montant doit être positif'})
+
+    def save(self, *args, **kwargs):
+        if not self.voucher_number:
+            year = timezone.now().year
+            count = CashEntry.objects.filter(voucher_number__startswith=f'PC-{year}').count() + 1
+            self.voucher_number = f'PC-{year}-{count:05d}'
+        super().save(*args, **kwargs)
 
 
 class BankEntry(LoggedModel):
@@ -73,7 +90,7 @@ class BankEntry(LoggedModel):
 
     class Source(models.TextChoices):
         # Entrées
-        CAPITAL_CONTRIBUTION = 'CAPITAL_CONTRIBUTION', 'Apport capital'
+        APPORT_CAPITAL = 'APPORT_CAPITAL', 'Apport capital'
         CLIENT_CHEQUE = 'CLIENT_CHEQUE', 'Client paie chèque'
         CLIENT_VIREMENT = 'CLIENT_VIREMENT', 'Client paie virement'
         CAISSE_DEPOT = 'CAISSE_DEPOT', 'Dépôt espèces caisse'

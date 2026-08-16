@@ -3,7 +3,6 @@ from procurement.models import (
     Supplier,
     ProcurementRequest,
     SupplierQuote,
-    CashVoucher,
     SupplierInvoice,
 )
 
@@ -58,19 +57,6 @@ class SupplierQuoteAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(CashVoucher)
-class CashVoucherAdmin(admin.ModelAdmin):
-    list_display = ('voucher_number', 'type', 'amount', 'date', 'created_at')
-    list_filter = ('type', 'date', 'reconciled_at')
-    search_fields = ('voucher_number', 'description')
-    readonly_fields = ('voucher_number', 'created_at', 'reconciled_at')
-    fieldsets = (
-        ('Pièce', {'fields': ('type', 'voucher_number', 'date', 'amount', 'description')}),
-        ('Liens', {'fields': ('disbursement', 'created_by')}),
-        ('Rapprochement', {'fields': ('reconciled_by', 'reconciled_at')}),
-    )
-
-
 @admin.register(SupplierInvoice)
 class SupplierInvoiceAdmin(admin.ModelAdmin):
     list_display = ('invoice_number', 'supplier', 'amount_ttc', 'status', 'invoice_date')
@@ -80,7 +66,7 @@ class SupplierInvoiceAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Facture', {'fields': ('supplier', 'procurement', 'quote', 'invoice_number', 'invoice_date', 'due_date')}),
         ('Montants', {'fields': ('amount_ht', 'vat_rate', 'amount_ttc')}),
-        ('Status', {'fields': ('status', 'cash_voucher')}),
+        ('Status', {'fields': ('status', 'cash_entry')}),
         ('Historique', {
             'fields': (
                 'received_by', 'received_at',

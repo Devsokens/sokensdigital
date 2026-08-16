@@ -20,6 +20,7 @@ ROLE_CONSULTANT = 'Consultant'
 ROLE_SUPPORT_CLIENT = 'Support Client'
 ROLE_COMPTABLE = 'Comptable'
 ROLE_RESPONSABLE_MARKETING = 'Responsable Marketing'
+ROLE_CAISSIER = 'Caissier'
 
 # Groupes pratiques pour les filtres de queryset
 ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN]
@@ -67,6 +68,8 @@ MODULES = [
     ('facturation', 'Facturation', 'Finance & Comptabilité'),
     ('rapprochement', 'Rapprochement bancaire', 'Finance & Comptabilité'),
     ('tva', 'Fiscalité (TVA)', 'Finance & Comptabilité'),
+    ('achats', 'Opérations d\'achats', 'Finance & Comptabilité'),
+    ('tresorerie', 'Trésorerie (caisse & banque)', 'Finance & Comptabilité'),
     ('parametres', 'Paramètres', 'Paramètres'),
 ]
 
@@ -132,12 +135,22 @@ DEFAULT_ROLE_PERMISSIONS = {
         _read_only('finance-dashboard'),
         _full('cloture', 'grand-livre', 'facturation', 'rapprochement', 'tva'),
         {'decaissements': ['voir', 'modifier']},
+        _full('achats', 'tresorerie'),
     ),
     ROLE_COMPTABLE: _merge(
         _read_only('dashboard'),
         {'messagerie': ['voir', 'creer']},
         _full('grand-livre', 'facturation', 'rapprochement', 'tva'),
         {'decaissements': ['voir', 'modifier']},
+        _read_only('achats', 'tresorerie'),
+    ),
+    ROLE_CAISSIER: _merge(
+        _read_only('dashboard'),
+        {'messagerie': ['voir', 'creer']},
+        # Caissier tient la caisse physique uniquement — pas d'accès banque/
+        # capital (réservé Directeur Financier/Comptable, cf. cahier des
+        # charges §3 "opérations de trésorerie").
+        {'tresorerie': ['voir', 'creer']},
     ),
     ROLE_RESPONSABLE_MARKETING: _merge(
         _read_only('dashboard', 'marketing-dashboard'),

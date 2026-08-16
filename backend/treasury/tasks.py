@@ -56,6 +56,12 @@ def post_cash_entry_journal_entry(self, cash_entry_id):
                     {'account': account_bank, 'label': 'Dépôt espèces caisse', 'debit': entry.amount, 'credit': Decimal('0')},
                     {'account': account_cash, 'label': 'Dépôt à la banque', 'debit': Decimal('0'), 'credit': entry.amount},
                 ]
+            elif entry.source == CashEntry.Source.FOURNISSEUR_ESPECES:
+                account_supplier = get_or_create_account(settings.default_supplier_account_code, 'Fournisseurs', Account.AccountClass.PASSIF)
+                lines = [
+                    {'account': account_supplier, 'label': 'Paiement fournisseur espèces', 'debit': entry.amount, 'credit': Decimal('0')},
+                    {'account': account_cash, 'label': 'Sortie caisse fournisseur', 'debit': Decimal('0'), 'credit': entry.amount},
+                ]
 
         if not lines:
             logger.info(f'CashEntry {cash_entry_id}: source {entry.source} sans mapping comptable, rien à poster')
@@ -105,7 +111,7 @@ def post_bank_entry_journal_entry(self, bank_entry_id):
         lines = None
 
         if entry.type == BankEntry.Type.ENTREE:
-            if entry.source == BankEntry.Source.CAPITAL_CONTRIBUTION:
+            if entry.source == BankEntry.Source.APPORT_CAPITAL:
                 account_capital = get_or_create_account(settings.default_capital_account_code, 'Capital social', Account.AccountClass.PASSIF)
                 lines = [
                     {'account': account_bank, 'label': 'Apport capital', 'debit': entry.amount, 'credit': Decimal('0')},

@@ -310,9 +310,9 @@ class Payment(LoggedModel):
     """
 
     class Status(models.TextChoices):
-        PENDING = 'PENDING', 'En attente'
-        RECEIVED = 'RECEIVED', 'Reçu'
-        RECORDED = 'RECORDED', 'Enregistré'
+        EN_ATTENTE = 'EN_ATTENTE', 'En attente'
+        RECU = 'RECU', 'Reçu'
+        ENREGISTRE = 'ENREGISTRE', 'Enregistré'
 
     class PaymentMethod(models.TextChoices):
         CHEQUE = 'CHEQUE', 'Chèque'
@@ -325,7 +325,7 @@ class Payment(LoggedModel):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     payment_date = models.DateField()
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.EN_ATTENTE)
 
     # Réception du versement
     received_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='received_payments')
@@ -361,10 +361,10 @@ class Payment(LoggedModel):
     @property
     def is_fully_paid(self):
         """Check si facture 100% payée après ce versement."""
-        total = self.invoice.payments.filter(status=self.Status.RECEIVED).aggregate(
+        total = self.invoice.payments.filter(status=self.Status.RECU).aggregate(
             total=models.Sum('amount')
         )['total'] or Decimal('0')
-        return (total + (self.amount if self.status == self.Status.RECEIVED else Decimal('0'))) >= self.invoice.amount_ttc
+        return (total + (self.amount if self.status == self.Status.RECU else Decimal('0'))) >= self.invoice.amount_ttc
 
 
 class PaymentReceipt(LoggedModel):

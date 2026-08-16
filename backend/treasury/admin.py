@@ -4,13 +4,13 @@ from treasury.models import CashEntry, BankEntry, CapitalContribution
 
 @admin.register(CashEntry)
 class CashEntryAdmin(admin.ModelAdmin):
-    list_display = ('type', 'source', 'amount', 'date', 'created_by', 'reconciled_at')
+    list_display = ('voucher_number', 'type', 'source', 'amount', 'date', 'created_by', 'reconciled_at')
     list_filter = ('type', 'source', 'date', 'reconciled_at')
-    search_fields = ('reference', 'description')
-    readonly_fields = ('created_at', 'reconciled_at')
+    search_fields = ('voucher_number', 'reference', 'description')
+    readonly_fields = ('voucher_number', 'created_at', 'reconciled_at')
     fieldsets = (
-        ('Mouvement', {'fields': ('type', 'source', 'amount', 'date', 'reference', 'description')}),
-        ('Liens', {'fields': ('payment', 'disbursement')}),
+        ('Mouvement', {'fields': ('voucher_number', 'type', 'source', 'amount', 'date', 'reference', 'description')}),
+        ('Liens', {'fields': ('payment', 'disbursement', 'supplier_invoice')}),
         ('Audit', {'fields': ('created_by', 'created_at', 'reconciled_by', 'reconciled_at')}),
     )
 

@@ -39,13 +39,13 @@ class ProcurementRequest(LoggedModel):
     """Fiche état des besoins — initie cycle achat."""
 
     class Status(models.TextChoices):
-        DRAFT = 'DRAFT', 'Brouillon'
-        PENDING_RCF = 'PENDING_RCF', 'En attente RCF'
-        PENDING_MANAGER = 'PENDING_MANAGER', 'En attente Gérant'
-        APPROVED = 'APPROVED', 'Approuvé'
-        REJECTED = 'REJECTED', 'Rejeté'
-        IN_PROGRESS = 'IN_PROGRESS', 'En cours (devis/décaissement)'
-        COMPLETED = 'COMPLETED', 'Complété (achat fait)'
+        BROUILLON = 'BROUILLON', 'Brouillon'
+        EN_ATTENTE_RCF = 'EN_ATTENTE_RCF', 'En attente RCF'
+        EN_ATTENTE_MANAGER = 'EN_ATTENTE_MANAGER', 'En attente Gérant'
+        APPROUVEE = 'APPROUVEE', 'Approuvée'
+        REJETEE = 'REJETEE', 'Rejetée'
+        EN_COURS = 'EN_COURS', 'En cours (devis/décaissement)'
+        TERMINEE = 'TERMINEE', 'Terminée (achat fait)'
 
     title = models.CharField(max_length=255)
     description = models.TextField()  # Besoins détaillés
@@ -54,7 +54,7 @@ class ProcurementRequest(LoggedModel):
     department = models.ForeignKey('core.Department', on_delete=models.CASCADE, related_name='procurement_requests')
     requested_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='procurement_requests')
 
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.BROUILLON)
     rejection_reason = models.TextField(blank=True)
 
     # Approbations
@@ -79,10 +79,10 @@ class SupplierQuote(LoggedModel):
     """Devis fournisseur — validation RCF + Gérant."""
 
     class Status(models.TextChoices):
-        DRAFT = 'DRAFT', 'Brouillon'
-        PENDING = 'PENDING', 'En attente validation'
-        VALIDATED = 'VALIDATED', 'Validé'
-        REJECTED = 'REJECTED', 'Rejeté'
+        BROUILLON = 'BROUILLON', 'Brouillon'
+        EN_ATTENTE = 'EN_ATTENTE', 'En attente validation'
+        VALIDE = 'VALIDE', 'Validé'
+        REJETE = 'REJETE', 'Rejeté'
 
     procurement = models.ForeignKey(ProcurementRequest, on_delete=models.CASCADE, related_name='quotes')
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='quotes')
@@ -94,7 +94,7 @@ class SupplierQuote(LoggedModel):
     vat_rate = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal('0.18'))
     amount_ttc = models.DecimalField(max_digits=12, decimal_places=2, editable=False)
 
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.BROUILLON)
 
     rcf_validated_at = models.DateTimeField(null=True, blank=True)
     rcf_validated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='validated_quotes_rcf')
@@ -118,47 +118,13 @@ class SupplierQuote(LoggedModel):
         super().save(*args, **kwargs)
 
 
-class CashVoucher(LoggedModel):
-    """Pièce de caisse (sortie) — constatation décaissement."""
-
-    class Type(models.TextChoices):
-        RECEIPT = 'RECEIPT', 'Reçu caisse (entrée)'
-        VOUCHER = 'VOUCHER', 'Pièce de sortie'
-
-    type = models.CharField(max_length=20, choices=Type.choices, default=Type.VOUCHER)
-    voucher_number = models.CharField(max_length=20, unique=True, editable=False)
-    date = models.DateField(default=timezone.now)
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
-    description = models.CharField(max_length=255)
-
-    # Lien à DisbursementRequest (décaissement approuvé)
-    disbursement = models.OneToOneField('finance.DisbursementRequest', on_delete=models.SET_NULL, null=True, blank=True, related_name='cash_voucher')
-
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_vouchers')
-    reconciled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reconciled_vouchers')
-    reconciled_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta(LoggedModel.Meta):
-        ordering = ['-date']
-
-    def __str__(self):
-        return f'{self.voucher_number} ({self.amount})'
-
-    def save(self, *args, **kwargs):
-        if not self.voucher_number:
-            year = timezone.now().year
-            count = CashVoucher.objects.filter(voucher_number__contains=str(year)).count() + 1
-            self.voucher_number = f'BON-{year}-{count:05d}'
-        super().save(*args, **kwargs)
-
-
 class SupplierInvoice(LoggedModel):
     """Facture fournisseur — reçue après achat."""
 
     class Status(models.TextChoices):
-        RECEIVED = 'RECEIVED', 'Reçue'
-        VALIDATED = 'VALIDATED', 'Validée'
-        PAID = 'PAID', 'Payée'
+        RECUE = 'RECUE', 'Reçue'
+        VALIDEE = 'VALIDEE', 'Validée'
+        PAYEE = 'PAYEE', 'Payée'
 
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='invoices')
     procurement = models.ForeignKey(ProcurementRequest, on_delete=models.CASCADE, related_name='invoices')
@@ -172,10 +138,12 @@ class SupplierInvoice(LoggedModel):
     vat_rate = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal('0.18'))
     amount_ttc = models.DecimalField(max_digits=12, decimal_places=2, editable=False)
 
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.RECEIVED)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.RECUE)
 
-    # Pièce caisse liée
-    cash_voucher = models.OneToOneField(CashVoucher, on_delete=models.SET_NULL, null=True, blank=True, related_name='supplier_invoice')
+    # Pièce caisse liée — si réglée en espèces. Pointe vers treasury.CashEntry
+    # (modèle unifié depuis fusion avec l'ancien procurement.CashVoucher, cf.
+    # audit AUDIT_LOGIQUE_METIER_TRESORERIE_2026-08.md §H3).
+    cash_entry = models.OneToOneField('treasury.CashEntry', on_delete=models.SET_NULL, null=True, blank=True, related_name='supplier_invoice')
 
     received_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='received_invoices')
     received_at = models.DateTimeField(auto_now_add=True)

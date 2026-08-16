@@ -9,31 +9,45 @@ from treasury.models import CashEntry, BankEntry, CapitalContribution
 from treasury.serializers import CashEntrySerializer, BankEntrySerializer, CapitalContributionSerializer
 from treasury.pdf import generate_cash_voucher_pdf, generate_cash_register_statement_pdf, generate_disbursement_request_pdf
 from treasury.tasks import post_cash_entry_journal_entry, post_bank_entry_journal_entry, post_capital_contribution_journal_entry
-from core.constants import ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN
+from core.constants import ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN, ROLE_CAISSIER
 from core.celery_utils import safe_dispatch
 from finance.models import DisbursementRequest
 
 
 class IsFinanceOrAdmin(permissions.BasePermission):
-    """Finance staff ou Super Admin."""
+    """Finance staff (Directeur Financier) ou Super Admin — banque/capital."""
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
         return request.user.has_role(ROLE_DIRECTEUR_FINANCIER) or request.user.has_role(ROLE_SUPER_ADMIN)
 
 
+class IsCaissierFinanceOrAdmin(permissions.BasePermission):
+    """Caissier, Directeur Financier ou Super Admin — caisse physique
+    uniquement (cf. cahier des charges §3 "opérations de trésorerie" : le
+    Caissier tient la caisse, pas le compte bancaire ni le capital)."""
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return (
+            request.user.has_role(ROLE_CAISSIER)
+            or request.user.has_role(ROLE_DIRECTEUR_FINANCIER)
+            or request.user.has_role(ROLE_SUPER_ADMIN)
+        )
+
+
 class CashEntryViewSet(viewsets.ModelViewSet):
-    """Gestion caisse physique — entrées/sorties espèces."""
+    """Gestion caisse physique — entrées/sorties espèces (pièces de caisse)."""
     queryset = CashEntry.objects.all()
     serializer_class = CashEntrySerializer
-    permission_classes = [permissions.IsAuthenticated, IsFinanceOrAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsCaissierFinanceOrAdmin]
     filterset_fields = ['type', 'source', 'date']
     ordering_fields = ['date', 'amount']
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsFinanceOrAdmin])
+    @action(detail=True, methods=['post'], permission_classes=[IsCaissierFinanceOrAdmin])
     def reconcile(self, request, pk=None):
         """Marquer pièce caisse comme rapprochée + poster l'écriture comptable.
 
@@ -59,7 +73,33 @@ class CashEntryViewSet(viewsets.ModelViewSet):
         return FileResponse(
             pdf_file,
             as_attachment=True,
-            filename=f'{entry.reference or entry.id}.pdf',
+            filename=f'{entry.voucher_number}.pdf',
+            content_type='application/pdf'
+        )
+
+    @action(detail=False, methods=['get'])
+    def export_monthly_statement(self, request):
+        """Télécharger état de caisse mensuel (brouillard + rapprochement)."""
+        year = int(request.query_params.get('year', timezone.now().year))
+        month = int(request.query_params.get('month', timezone.now().month))
+
+        from calendar import monthrange
+        days_in_month = monthrange(year, month)[1]
+        period_start = date(year, month, 1)
+        period_end = date(year, month, days_in_month)
+
+        cash_entries = CashEntry.objects.filter(
+            date__gte=period_start,
+            date__lte=period_end
+        ).order_by('date')
+
+        cashier_name = request.query_params.get('cashier_name') or request.user.get_full_name()
+
+        pdf_file = generate_cash_register_statement_pdf(period_start, period_end, cash_entries, cashier_name)
+        return FileResponse(
+            pdf_file,
+            as_attachment=True,
+            filename=f'EtatCaisse_{year}{month:02d}.pdf',
             content_type='application/pdf'
         )
 
@@ -104,34 +144,6 @@ class BankEntryViewSet(viewsets.ModelViewSet):
             return Response(self.get_serializer(entry).data)
         except BankTransaction.DoesNotExist:
             return Response({'error': 'BankTransaction not found'}, status=status.HTTP_404_NOT_FOUND)
-
-    @action(detail=False, methods=['get'])
-    def export_monthly_statement(self, request):
-        """Télécharger état de caisse mensuel (brouillard)."""
-        year = int(request.query_params.get('year', timezone.now().year))
-        month = int(request.query_params.get('month', timezone.now().month))
-
-        # Calculer dates début/fin mois
-        from calendar import monthrange
-        days_in_month = monthrange(year, month)[1]
-        period_start = date(year, month, 1)
-        period_end = date(year, month, days_in_month)
-
-        # Récupérer entrées caisse du mois
-        cash_entries = CashEntry.objects.filter(
-            date__gte=period_start,
-            date__lte=period_end
-        ).order_by('date')
-
-        cashier_name = request.query_params.get('cashier_name', 'À déterminer')
-
-        pdf_file = generate_cash_register_statement_pdf(period_start, period_end, cash_entries, cashier_name)
-        return FileResponse(
-            pdf_file,
-            as_attachment=True,
-            filename=f'EtatCaisse_{year}{month:02d}.pdf',
-            content_type='application/pdf'
-        )
 
 
 class CapitalContributionViewSet(viewsets.ModelViewSet):
