@@ -8,7 +8,9 @@ from datetime import date, timedelta
 from treasury.models import CashEntry, BankEntry, CapitalContribution
 from treasury.serializers import CashEntrySerializer, BankEntrySerializer, CapitalContributionSerializer
 from treasury.pdf import generate_cash_voucher_pdf, generate_cash_register_statement_pdf, generate_disbursement_request_pdf
+from treasury.tasks import post_cash_entry_journal_entry, post_bank_entry_journal_entry, post_capital_contribution_journal_entry
 from core.constants import ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN
+from core.celery_utils import safe_dispatch
 from finance.models import DisbursementRequest
 
 
@@ -33,11 +35,19 @@ class CashEntryViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], permission_classes=[IsFinanceOrAdmin])
     def reconcile(self, request, pk=None):
-        """Marquer pièce caisse comme rapprochée."""
+        """Marquer pièce caisse comme rapprochée + poster l'écriture comptable.
+
+        Déclenché explicitement ici plutôt que via signal post_save : un
+        signal sur `created` ne peut jamais voir reconciled_at (posé par un
+        second .save(), donc created=False à ce moment-là) — voir audit
+        AUDIT_LOGIQUE_METIER_TRESORERIE_2026-08.md §H1.
+        """
         entry = self.get_object()
         entry.reconciled_by = request.user
         entry.reconciled_at = timezone.now()
         entry.save()
+
+        safe_dispatch(post_cash_entry_journal_entry, (str(entry.id),))
 
         return Response(self.get_serializer(entry).data)
 
@@ -49,7 +59,7 @@ class CashEntryViewSet(viewsets.ModelViewSet):
         return FileResponse(
             pdf_file,
             as_attachment=True,
-            filename=f'{entry.voucher_number}.pdf',
+            filename=f'{entry.reference or entry.id}.pdf',
             content_type='application/pdf'
         )
 
@@ -67,11 +77,13 @@ class BankEntryViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def reconcile(self, request, pk=None):
-        """Marquer mouvement bancaire comme rapproché."""
+        """Marquer mouvement bancaire comme rapproché + poster l'écriture comptable."""
         entry = self.get_object()
         entry.reconciled_by = request.user
         entry.reconciled_at = timezone.now()
         entry.save()
+
+        safe_dispatch(post_bank_entry_journal_entry, (str(entry.id),))
 
         return Response(self.get_serializer(entry).data)
 
@@ -166,8 +178,7 @@ class CapitalContributionViewSet(viewsets.ModelViewSet):
         if contribution.status != CapitalContribution.Status.ENREGISTREE:
             return Response({'error': 'Must be registered legally first'}, status=status.HTTP_400_BAD_REQUEST)
 
-        from treasury.tasks import post_capital_contribution_journal_entry
-        post_capital_contribution_journal_entry.delay(str(contribution.id))
+        safe_dispatch(post_capital_contribution_journal_entry, (str(contribution.id),))
 
         return Response({
             'status': 'Journal entry posting initiated',

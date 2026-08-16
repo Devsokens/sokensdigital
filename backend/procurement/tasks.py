@@ -5,8 +5,9 @@ from decimal import Decimal
 import logging
 
 from procurement.models import SupplierQuote, SupplierInvoice
-from finance.models import DisbursementRequest, JournalEntry, TransactionLine
-from core.utils import safe_dispatch
+from finance.models import DisbursementRequest, JournalEntry, Account, FinanceSettings
+from finance.accounting_helpers import get_or_create_account, resolve_open_period_for_date, post_balanced_entry
+from core.celery_utils import safe_dispatch
 
 logger = logging.getLogger(__name__)
 
@@ -14,24 +15,29 @@ logger = logging.getLogger(__name__)
 @shared_task(bind=True, max_retries=3)
 def create_disbursement_request_task(self, quote_id):
     """
-    Auto-crée DisbursementRequest (décaissement) quand devis validé.
-    Montant = quote.amount_ttc
-    Description: "Décaissement devis {quote_number} — {supplier.name}"
+    Auto-crée DisbursementRequest (décaissement) quand devis validé par Manager.
+
+    IMPORTANT: le décaissement généré retombe dans le circuit d'approbation
+    N1/N2/N3 normal (§4.3 cahier des charges) via initial_status_for_amount —
+    la validation du devis n'équivaut PAS à une autorisation de paiement.
+    Sans ça, un Manager RCF pourrait faire passer un paiement fournisseur
+    de n'importe quel montant sans jamais solliciter Directeur Financier
+    ou Direction Générale.
     """
     try:
         quote = get_object_or_404(SupplierQuote, id=quote_id)
         if quote.status != SupplierQuote.Status.VALIDATED:
             return
 
-        # Créer DisbursementRequest
         disbursement = DisbursementRequest.objects.create(
             amount=quote.amount_ttc,
-            description=f'Décaissement devis {quote.quote_number} — {quote.supplier.name}',
-            procurement_quote=quote,
-            status=DisbursementRequest.Status.PENDING,
+            beneficiary=quote.supplier.name,
+            reason=f'Décaissement devis {quote.quote_number} — {quote.supplier.name}',
+            status=DisbursementRequest.initial_status_for_amount(quote.amount_ttc),
+            requested_by=quote.manager_validated_by,
         )
 
-        logger.info(f'✓ DisbursementRequest créé: {disbursement.id}')
+        logger.info(f'✓ DisbursementRequest créé (statut {disbursement.status}): {disbursement.id}')
 
     except Exception as exc:
         logger.error(f'✗ create_disbursement_request_task error: {exc}')
@@ -52,60 +58,36 @@ def post_supplier_invoice_journal_entry(self, invoice_id):
         if invoice.status != SupplierInvoice.Status.VALIDATED:
             return
 
-        # Récupérer les codes de compte
-        try:
-            from finance.models import FinanceSettings
-            settings = FinanceSettings.load()
-            account_purchases = settings.default_account_purchases or '601'
-            account_vat_deductible = settings.default_account_vat_deductible or '4456'
-            account_supplier = settings.default_account_supplier or '401'
-        except:
-            # Fallback defaults
-            account_purchases = '601'
-            account_vat_deductible = '4456'
-            account_supplier = '401'
+        period = resolve_open_period_for_date(invoice.invoice_date)
+        if not period:
+            logger.warning(f'No open accounting period for supplier invoice {invoice_id}')
+            return
 
-        # Créer JournalEntry
-        journal_entry = JournalEntry.objects.create(
-            reference=f'FAC-{invoice.invoice_number}',
-            description=f'Facture {invoice.invoice_number} — {invoice.supplier.name}',
-            amount_ht=invoice.amount_ht,
-            amount_ttc=invoice.amount_ttc,
-            vat_rate=invoice.vat_rate,
-            related_content_type=None,  # Lier au SupplierInvoice si GenericFK
-            related_object_id=str(invoice.id),
+        settings = FinanceSettings.load()
+        account_purchases = get_or_create_account(
+            settings.default_purchases_account_code, 'Achats', Account.AccountClass.CHARGE)
+        account_supplier = get_or_create_account(
+            settings.default_supplier_account_code, 'Fournisseurs', Account.AccountClass.PASSIF)
+
+        vat_amount = invoice.amount_ttc - invoice.amount_ht
+
+        lines = [
+            {'account': account_purchases, 'label': f'Achats {invoice.supplier.name}', 'debit': invoice.amount_ht, 'credit': Decimal('0')},
+        ]
+        if vat_amount:
+            account_vat_deductible = get_or_create_account(
+                settings.default_vat_deductible_account_code, 'TVA déductible', Account.AccountClass.TVA)
+            lines.append({'account': account_vat_deductible, 'label': f'TVA déductible {invoice.supplier.name}', 'debit': vat_amount, 'credit': Decimal('0')})
+        lines.append(
+            {'account': account_supplier, 'label': f'Fournisseur {invoice.supplier.name}', 'debit': Decimal('0'), 'credit': invoice.amount_ttc}
         )
 
-        # Ligne débit: Achats
-        TransactionLine.objects.create(
-            journal_entry=journal_entry,
-            account_code=account_purchases,
-            account_name=f'Achats — {invoice.supplier.name}',
-            debit=invoice.amount_ht,
-            credit=Decimal('0'),
-            line_description=f'Achats {invoice.supplier.name}',
-        )
-
-        # Ligne débit: TVA déductible
-        if invoice.vat_rate > 0:
-            vat_amount = invoice.amount_ht * invoice.vat_rate
-            TransactionLine.objects.create(
-                journal_entry=journal_entry,
-                account_code=account_vat_deductible,
-                account_name='TVA déductible',
-                debit=vat_amount,
-                credit=Decimal('0'),
-                line_description=f'TVA déductible {invoice.supplier.name}',
-            )
-
-        # Ligne crédit: Fournisseur
-        TransactionLine.objects.create(
-            journal_entry=journal_entry,
-            account_code=account_supplier,
-            account_name=f'Fournisseur {invoice.supplier.name}',
-            debit=Decimal('0'),
-            credit=invoice.amount_ttc,
-            line_description=f'Fournisseur {invoice.supplier.name}',
+        journal_entry = post_balanced_entry(
+            period=period,
+            journal_code=JournalEntry.JournalCode.ACHATS,
+            date=invoice.invoice_date,
+            label=f'Facture {invoice.invoice_number} — {invoice.supplier.name}',
+            lines=lines,
         )
 
         invoice.status = SupplierInvoice.Status.PAID

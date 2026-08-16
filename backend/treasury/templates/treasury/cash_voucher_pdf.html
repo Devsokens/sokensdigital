@@ -212,7 +212,7 @@
         {% else %}
             PIÈCE DE SORTIE DE CAISSE
         {% endif %}
-        N°{{ voucher.voucher_number }}
+        N°{{ voucher.reference|default:voucher.id }}
     </div>
 
     <div class="meta-row">

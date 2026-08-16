@@ -418,6 +418,32 @@ class FinanceSettings(models.Model):
         help_text='Code compte TVA collectée (ex: 4457)',
     )
 
+    # Comptes par défaut — achats/trésorerie (procurement + treasury apps).
+    default_purchases_account_code = models.CharField(
+        max_length=20, default='601', blank=True,
+        help_text='Code compte Achats (ex: 601 = Achats de marchandises)',
+    )
+    default_vat_deductible_account_code = models.CharField(
+        max_length=20, default='4456', blank=True,
+        help_text='Code compte TVA déductible (ex: 4456)',
+    )
+    default_supplier_account_code = models.CharField(
+        max_length=20, default='401', blank=True,
+        help_text='Code compte Fournisseurs (ex: 401)',
+    )
+    default_cash_account_code = models.CharField(
+        max_length=20, default='530', blank=True,
+        help_text='Code compte Caisse physique (ex: 530)',
+    )
+    default_bank_account_code = models.CharField(
+        max_length=20, default='512', blank=True,
+        help_text='Code compte Banque (ex: 512)',
+    )
+    default_capital_account_code = models.CharField(
+        max_length=20, default='101', blank=True,
+        help_text='Code compte Capital social (ex: 101)',
+    )
+
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

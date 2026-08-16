@@ -18,12 +18,14 @@ from procurement.serializers import (
     CashVoucherSerializer,
     SupplierInvoiceSerializer,
 )
+from procurement.tasks import create_disbursement_request_task, post_supplier_invoice_journal_entry
 from core.constants import (
     ROLE_DIRECTEUR_FINANCIER,
     ROLE_MANAGER_GENERAL,
     ROLE_MANAGER_RCF,
     ROLE_SUPER_ADMIN,
 )
+from core.celery_utils import safe_dispatch
 
 
 class IsFinanceOrAdmin(permissions.BasePermission):
@@ -165,8 +167,7 @@ class SupplierQuoteViewSet(viewsets.ModelViewSet):
         quote.manager_validated_at = timezone.now()
         quote.save()
 
-        # Signal: créer DisbursementRequest (voir signals.py)
-        # post_save signal sur SupplierQuote.validated déclenche creation
+        safe_dispatch(create_disbursement_request_task, (str(quote.id),))
 
         return Response(self.get_serializer(quote).data)
 
@@ -231,7 +232,6 @@ class SupplierInvoiceViewSet(viewsets.ModelViewSet):
             invoice.validated_at = timezone.now()
             invoice.save()
 
-            # Signal post_save crée JournalEntry (voir signals.py)
-            # Débit Achats 60x / Débit TVA 4456 / Crédit Fournisseur 401
+        safe_dispatch(post_supplier_invoice_journal_entry, (str(invoice.id),))
 
         return Response(self.get_serializer(invoice).data)

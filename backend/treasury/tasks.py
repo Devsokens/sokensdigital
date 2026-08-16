@@ -5,8 +5,9 @@ from decimal import Decimal
 import logging
 
 from treasury.models import CashEntry, BankEntry, CapitalContribution
-from finance.models import JournalEntry, TransactionLine, FinanceSettings, AccountingPeriod
-from core.utils import safe_dispatch
+from finance.models import JournalEntry, Account, FinanceSettings
+from finance.accounting_helpers import get_or_create_account, resolve_open_period_for_date, post_balanced_entry
+from core.celery_utils import safe_dispatch
 
 logger = logging.getLogger(__name__)
 
@@ -20,94 +21,53 @@ def post_cash_entry_journal_entry(self, cash_entry_id):
     - ENTREE CLIENT_ESPECES → Débit Caisse (530) / Crédit Client (411)
     - ENTREE RETRAIT_BANQUE → Débit Caisse (530) / Crédit Banque (512)
     - SORTIE DEPOT_BANQUE → Débit Banque (512) / Crédit Caisse (530)
-    - SORTIE DEPENSE → Débit Dépense / Crédit Caisse (530)
     """
     try:
         entry = get_object_or_404(CashEntry, id=cash_entry_id)
         if entry.reconciled_at is None:
             return
 
-        settings = FinanceSettings.load()
-
-        # Récupérer compte Client par défaut
-        account_client = settings.default_client_account_code or '411'
-        account_cash = '530'  # Caisse physique
-        account_bank = '512'  # Banque
-
-        # Période comptable courante
-        try:
-            period = AccountingPeriod.objects.get(status=AccountingPeriod.Status.OUVERTE)
-        except AccountingPeriod.DoesNotExist:
+        period = resolve_open_period_for_date(entry.date)
+        if not period:
             logger.warning(f'No open accounting period for cash entry {cash_entry_id}')
             return
 
-        # Créer JournalEntry
-        journal_code = JournalEntry.JournalCode.OPERATIONS_DIVERSES
-        reference = f'CASH-{entry.reference or entry.id}'
+        settings = FinanceSettings.load()
+        account_cash = get_or_create_account(settings.default_cash_account_code, 'Caisse physique', Account.AccountClass.ACTIF)
+        account_bank = get_or_create_account(settings.default_bank_account_code, 'Compte bancaire', Account.AccountClass.ACTIF)
 
-        journal_entry = JournalEntry.objects.create(
-            period=period,
-            journal_code=journal_code,
-            date=entry.date,
-            label=f'Mouvement caisse: {entry.get_source_display()}',
-        )
+        lines = None
 
         if entry.type == CashEntry.Type.ENTREE:
             if entry.source == CashEntry.Source.CLIENT_ESPECES:
-                # Débit Caisse / Crédit Client
-                TransactionLine.objects.create(
-                    entry=journal_entry,
-                    account_code=account_cash,
-                    account_name='Caisse physique',
-                    debit=entry.amount,
-                    credit=Decimal('0'),
-                    line_description=f'Entrée caisse client espèces'
-                )
-                TransactionLine.objects.create(
-                    entry=journal_entry,
-                    account_code=account_client,
-                    account_name='Clients',
-                    debit=Decimal('0'),
-                    credit=entry.amount,
-                    line_description=f'Paiement client espèces'
-                )
+                account_client = get_or_create_account(settings.default_client_account_code, 'Clients', Account.AccountClass.ACTIF)
+                lines = [
+                    {'account': account_cash, 'label': 'Entrée caisse client espèces', 'debit': entry.amount, 'credit': Decimal('0')},
+                    {'account': account_client, 'label': 'Paiement client espèces', 'debit': Decimal('0'), 'credit': entry.amount},
+                ]
             elif entry.source == CashEntry.Source.RETRAIT_BANQUE:
-                # Débit Caisse / Crédit Banque
-                TransactionLine.objects.create(
-                    entry=journal_entry,
-                    account_code=account_cash,
-                    account_name='Caisse physique',
-                    debit=entry.amount,
-                    credit=Decimal('0'),
-                    line_description='Retrait espèces banque'
-                )
-                TransactionLine.objects.create(
-                    entry=journal_entry,
-                    account_code=account_bank,
-                    account_name='Compte bancaire',
-                    debit=Decimal('0'),
-                    credit=entry.amount,
-                    line_description='Retrait compte bancaire'
-                )
+                lines = [
+                    {'account': account_cash, 'label': 'Retrait espèces banque', 'debit': entry.amount, 'credit': Decimal('0')},
+                    {'account': account_bank, 'label': 'Retrait compte bancaire', 'debit': Decimal('0'), 'credit': entry.amount},
+                ]
         else:  # SORTIE
             if entry.source == CashEntry.Source.DEPOT_BANQUE:
-                # Débit Banque / Crédit Caisse
-                TransactionLine.objects.create(
-                    entry=journal_entry,
-                    account_code=account_bank,
-                    account_name='Compte bancaire',
-                    debit=entry.amount,
-                    credit=Decimal('0'),
-                    line_description='Dépôt espèces caisse'
-                )
-                TransactionLine.objects.create(
-                    entry=journal_entry,
-                    account_code=account_cash,
-                    account_name='Caisse physique',
-                    debit=Decimal('0'),
-                    credit=entry.amount,
-                    line_description='Dépôt à la banque'
-                )
+                lines = [
+                    {'account': account_bank, 'label': 'Dépôt espèces caisse', 'debit': entry.amount, 'credit': Decimal('0')},
+                    {'account': account_cash, 'label': 'Dépôt à la banque', 'debit': Decimal('0'), 'credit': entry.amount},
+                ]
+
+        if not lines:
+            logger.info(f'CashEntry {cash_entry_id}: source {entry.source} sans mapping comptable, rien à poster')
+            return
+
+        journal_entry = post_balanced_entry(
+            period=period,
+            journal_code=JournalEntry.JournalCode.OPERATIONS_DIVERSES,
+            date=entry.date,
+            label=f'Mouvement caisse: {entry.get_source_display()}',
+            lines=lines,
+        )
 
         logger.info(f'✓ JournalEntry créé pour CashEntry {cash_entry_id}: {journal_entry.id}')
 
@@ -133,122 +93,59 @@ def post_bank_entry_journal_entry(self, bank_entry_id):
         if entry.reconciled_at is None:
             return
 
-        settings = FinanceSettings.load()
-        account_client = settings.default_client_account_code or '411'
-        account_supplier = '401'  # Fournisseurs
-        account_bank = '512'
-        account_cash = '530'
-        account_capital = '101'
-
-        # Période comptable
-        try:
-            period = AccountingPeriod.objects.get(status=AccountingPeriod.Status.OUVERTE)
-        except AccountingPeriod.DoesNotExist:
+        period = resolve_open_period_for_date(entry.date)
+        if not period:
             logger.warning(f'No open accounting period for bank entry {bank_entry_id}')
             return
 
-        journal_code = JournalEntry.JournalCode.BANQUE
-        reference = f'BANK-{entry.reference or entry.id}'
+        settings = FinanceSettings.load()
+        account_bank = get_or_create_account(settings.default_bank_account_code, 'Compte bancaire', Account.AccountClass.ACTIF)
+        account_cash = get_or_create_account(settings.default_cash_account_code, 'Caisse physique', Account.AccountClass.ACTIF)
 
-        journal_entry = JournalEntry.objects.create(
-            period=period,
-            journal_code=journal_code,
-            date=entry.date,
-            label=f'Mouvement banque: {entry.get_source_display()}',
-        )
+        lines = None
 
         if entry.type == BankEntry.Type.ENTREE:
             if entry.source == BankEntry.Source.CAPITAL_CONTRIBUTION:
-                # Débit Banque / Crédit Capital
-                TransactionLine.objects.create(
-                    entry=journal_entry,
-                    account_code=account_bank,
-                    account_name='Compte bancaire',
-                    debit=entry.amount,
-                    credit=Decimal('0'),
-                    line_description='Apport capital'
-                )
-                TransactionLine.objects.create(
-                    entry=journal_entry,
-                    account_code=account_capital,
-                    account_name='Capital social',
-                    debit=Decimal('0'),
-                    credit=entry.amount,
-                    line_description='Augmentation capital'
-                )
+                account_capital = get_or_create_account(settings.default_capital_account_code, 'Capital social', Account.AccountClass.PASSIF)
+                lines = [
+                    {'account': account_bank, 'label': 'Apport capital', 'debit': entry.amount, 'credit': Decimal('0')},
+                    {'account': account_capital, 'label': 'Augmentation capital', 'debit': Decimal('0'), 'credit': entry.amount},
+                ]
             elif entry.source in [BankEntry.Source.CLIENT_CHEQUE, BankEntry.Source.CLIENT_VIREMENT]:
-                # Débit Banque / Crédit Client
-                TransactionLine.objects.create(
-                    entry=journal_entry,
-                    account_code=account_bank,
-                    account_name='Compte bancaire',
-                    debit=entry.amount,
-                    credit=Decimal('0'),
-                    line_description=f'Paiement client {entry.source}'
-                )
-                TransactionLine.objects.create(
-                    entry=journal_entry,
-                    account_code=account_client,
-                    account_name='Clients',
-                    debit=Decimal('0'),
-                    credit=entry.amount,
-                    line_description=f'Paiement reçu'
-                )
+                account_client = get_or_create_account(settings.default_client_account_code, 'Clients', Account.AccountClass.ACTIF)
+                lines = [
+                    {'account': account_bank, 'label': f'Paiement client {entry.source}', 'debit': entry.amount, 'credit': Decimal('0')},
+                    {'account': account_client, 'label': 'Paiement reçu', 'debit': Decimal('0'), 'credit': entry.amount},
+                ]
             elif entry.source == BankEntry.Source.CAISSE_DEPOT:
-                # Débit Banque / Crédit Caisse
-                TransactionLine.objects.create(
-                    entry=journal_entry,
-                    account_code=account_bank,
-                    account_name='Compte bancaire',
-                    debit=entry.amount,
-                    credit=Decimal('0'),
-                    line_description='Dépôt espèces'
-                )
-                TransactionLine.objects.create(
-                    entry=journal_entry,
-                    account_code=account_cash,
-                    account_name='Caisse physique',
-                    debit=Decimal('0'),
-                    credit=entry.amount,
-                    line_description='Dépôt caisse à banque'
-                )
+                lines = [
+                    {'account': account_bank, 'label': 'Dépôt espèces', 'debit': entry.amount, 'credit': Decimal('0')},
+                    {'account': account_cash, 'label': 'Dépôt caisse à banque', 'debit': Decimal('0'), 'credit': entry.amount},
+                ]
         else:  # SORTIE
             if entry.source in [BankEntry.Source.FOURNISSEUR_CHEQUE, BankEntry.Source.FOURNISSEUR_VIREMENT]:
-                # Débit Fournisseur / Crédit Banque
-                TransactionLine.objects.create(
-                    entry=journal_entry,
-                    account_code=account_supplier,
-                    account_name='Fournisseurs',
-                    debit=entry.amount,
-                    credit=Decimal('0'),
-                    line_description=f'Paiement fournisseur {entry.source}'
-                )
-                TransactionLine.objects.create(
-                    entry=journal_entry,
-                    account_code=account_bank,
-                    account_name='Compte bancaire',
-                    debit=Decimal('0'),
-                    credit=entry.amount,
-                    line_description='Paiement fournisseur'
-                )
+                account_supplier = get_or_create_account(settings.default_supplier_account_code, 'Fournisseurs', Account.AccountClass.PASSIF)
+                lines = [
+                    {'account': account_supplier, 'label': f'Paiement fournisseur {entry.source}', 'debit': entry.amount, 'credit': Decimal('0')},
+                    {'account': account_bank, 'label': 'Paiement fournisseur', 'debit': Decimal('0'), 'credit': entry.amount},
+                ]
             elif entry.source == BankEntry.Source.RETRAIT_ESPECES:
-                # Débit Caisse / Crédit Banque
-                TransactionLine.objects.create(
-                    entry=journal_entry,
-                    account_code=account_cash,
-                    account_name='Caisse physique',
-                    debit=entry.amount,
-                    credit=Decimal('0'),
-                    line_description='Retrait espèces'
-                )
-                TransactionLine.objects.create(
-                    entry=journal_entry,
-                    account_code=account_bank,
-                    account_name='Compte bancaire',
-                    debit=Decimal('0'),
-                    credit=entry.amount,
-                    line_description='Retrait compte'
-                )
+                lines = [
+                    {'account': account_cash, 'label': 'Retrait espèces', 'debit': entry.amount, 'credit': Decimal('0')},
+                    {'account': account_bank, 'label': 'Retrait compte', 'debit': Decimal('0'), 'credit': entry.amount},
+                ]
+
+        if not lines:
+            logger.info(f'BankEntry {bank_entry_id}: source {entry.source} sans mapping comptable, rien à poster')
+            return
+
+        journal_entry = post_balanced_entry(
+            period=period,
+            journal_code=JournalEntry.JournalCode.BANQUE,
+            date=entry.date,
+            label=f'Mouvement banque: {entry.get_source_display()}',
+            lines=lines,
+        )
 
         logger.info(f'✓ JournalEntry créé pour BankEntry {bank_entry_id}: {journal_entry.id}')
 
@@ -266,41 +163,26 @@ def post_capital_contribution_journal_entry(self, capital_contribution_id):
     try:
         contribution = get_object_or_404(CapitalContribution, id=capital_contribution_id)
 
-        # Période comptable
-        try:
-            period = AccountingPeriod.objects.get(status=AccountingPeriod.Status.OUVERTE)
-        except AccountingPeriod.DoesNotExist:
+        period = resolve_open_period_for_date(contribution.contribution_date)
+        if not period:
             logger.warning(f'No open accounting period for capital contribution {capital_contribution_id}')
             return
 
-        account_bank = '512'
-        account_capital = '101'
+        settings = FinanceSettings.load()
+        account_bank = get_or_create_account(settings.default_bank_account_code, 'Compte bancaire', Account.AccountClass.ACTIF)
+        account_capital = get_or_create_account(settings.default_capital_account_code, 'Capital social', Account.AccountClass.PASSIF)
 
-        journal_entry = JournalEntry.objects.create(
+        lines = [
+            {'account': account_bank, 'label': 'Apport capital associés', 'debit': contribution.amount, 'credit': Decimal('0')},
+            {'account': account_capital, 'label': 'Augmentation capital', 'debit': Decimal('0'), 'credit': contribution.amount},
+        ]
+
+        journal_entry = post_balanced_entry(
             period=period,
             journal_code=JournalEntry.JournalCode.OPERATIONS_DIVERSES,
             date=contribution.contribution_date,
             label=f'Augmentation capital {contribution.amount}',
-        )
-
-        # Débit Banque
-        TransactionLine.objects.create(
-            entry=journal_entry,
-            account_code=account_bank,
-            account_name='Compte bancaire',
-            debit=contribution.amount,
-            credit=Decimal('0'),
-            line_description='Apport capital associés'
-        )
-
-        # Crédit Capital
-        TransactionLine.objects.create(
-            entry=journal_entry,
-            account_code=account_capital,
-            account_name='Capital social',
-            debit=Decimal('0'),
-            credit=contribution.amount,
-            line_description='Augmentation capital'
+            lines=lines,
         )
 
         contribution.status = CapitalContribution.Status.COMPTABILISEE
