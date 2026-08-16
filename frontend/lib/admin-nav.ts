@@ -18,6 +18,7 @@ import {
   Landmark,
   Percent,
   PieChart,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 
@@ -87,6 +88,12 @@ export const ADMIN_SECTIONS: NavSection[] = [
       { label: "Fiscalité (TVA)", href: "/admin/finance/tva", icon: Percent, moduleKey: "tva" },
     ],
   },
+  {
+    title: "Paramètres",
+    items: [
+      { label: "Réseaux sociaux", href: "/admin/parametres/reseaux-sociaux", icon: Settings, moduleKey: "parametres" },
+    ],
+  },
 ];
 
 /** One representative icon per section — used by the header's department
@@ -98,6 +105,7 @@ export const SECTION_ICONS: Record<string, LucideIcon> = {
   "Marketing & Commercial": Target,
   "Technique": FolderKanban,
   "Finance & Comptabilité": PieChart,
+  "Paramètres": Settings,
 };
 
 /** Short, single-word labels for the mobile bottom nav — the full section
@@ -109,6 +117,7 @@ export const SECTION_SHORT_LABELS: Record<string, string> = {
   "Marketing & Commercial": "Marketing",
   "Technique": "Technique",
   "Finance & Comptabilité": "Finance",
+  "Paramètres": "Réglages",
 };
 
 /** Longest-prefix match — /admin/rh/departements should resolve to the

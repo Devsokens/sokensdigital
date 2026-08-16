@@ -27,6 +27,7 @@ db.sqlite3
 .venv
 venv/
 ENV/
+client_secret.json
 
 # Node
 node_modules/

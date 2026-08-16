@@ -2,7 +2,10 @@ from rest_framework import serializers
 
 from core.models import User
 from core.serializers import UserBriefSerializer
-from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject, SiteSettings, SocialPost
+from marketing.models import (
+    BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject,
+    SiteSettings, SocialMediaCredentials, SocialPost,
+)
 
 
 class LeadPublicCreateSerializer(serializers.ModelSerializer):
@@ -78,14 +81,29 @@ class SocialPostSerializer(serializers.ModelSerializer):
         read_only_fields = ['status', 'published_at', 'post_url', 'author']
 
     def validate(self, attrs):
-        platform = attrs.get('platform', getattr(self.instance, 'platform', None))
-        content = attrs.get('content', getattr(self.instance, 'content', ''))
         image_path = attrs.get('image_path', getattr(self.instance, 'image_path', ''))
-        if platform == SocialPost.Platform.TWITTER and len(content) > 280:
-            raise serializers.ValidationError({'content': 'Twitter/X est limité à 280 caractères.'})
-        if platform == SocialPost.Platform.INSTAGRAM and not image_path:
-            raise serializers.ValidationError({'image_path': 'Instagram nécessite une image.'})
+        if not image_path:
+            raise serializers.ValidationError({'image_path': 'Une image est requise pour publier sur Facebook ou Instagram.'})
         return attrs
+
+
+class SocialMediaCredentialsSerializer(serializers.ModelSerializer):
+    """The access token is write_only — GET never echoes back a live
+    secret, even to a Super-Admin's own browser network tab. The frontend
+    uses facebook_configured/instagram_configured (computed, read-only) to
+    show "connecté"/"non connecté" without ever seeing the token itself;
+    re-saving requires pasting it again (matches how most integrations'
+    "reconnect" flows work)."""
+
+    updated_by = UserBriefSerializer(read_only=True)
+
+    class Meta:
+        model = SocialMediaCredentials
+        fields = [
+            'facebook_page_id', 'facebook_access_token', 'instagram_business_account_id',
+            'facebook_configured', 'instagram_configured', 'updated_by', 'updated_at',
+        ]
+        extra_kwargs = {'facebook_access_token': {'write_only': True, 'required': False}}
 
 
 class QuoteLineSerializer(serializers.ModelSerializer):

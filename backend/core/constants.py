@@ -65,6 +65,7 @@ MODULES = [
     ('facturation', 'Facturation', 'Finance & Comptabilité'),
     ('rapprochement', 'Rapprochement bancaire', 'Finance & Comptabilité'),
     ('tva', 'Fiscalité (TVA)', 'Finance & Comptabilité'),
+    ('parametres', 'Paramètres', 'Paramètres'),
 ]
 
 _ALL_MODULE_KEYS = [key for key, _, _ in MODULES]

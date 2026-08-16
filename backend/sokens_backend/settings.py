@@ -385,6 +385,19 @@ FACEBOOK_PAGE_ACCESS_TOKEN = os.environ.get('FACEBOOK_PAGE_ACCESS_TOKEN', '')
 # body, sent back in the X-Signature header).
 SIGNATURE_WEBHOOK_SECRET = os.environ.get('SIGNATURE_WEBHOOK_SECRET', '')
 
+# Gmail API (core/email_gmail.py) — used instead of SMTP because Render's
+# free plan blocks outbound SMTP ports; the Gmail API talks HTTPS instead.
+# GMAIL_REFRESH_TOKEN is obtained once via scripts/generate_gmail_refresh_
+# token.py (a local, interactive OAuth consent flow) and never expires
+# unless revoked — GMAIL_CLIENT_ID/SECRET come from the same Google Cloud
+# OAuth client (type "Desktop app") used to generate it. Blank by default;
+# core.notifications.notify(..., email=True) silently skips sending until
+# all three are set.
+GMAIL_CLIENT_ID = os.environ.get('GMAIL_CLIENT_ID', '')
+GMAIL_CLIENT_SECRET = os.environ.get('GMAIL_CLIENT_SECRET', '')
+GMAIL_REFRESH_TOKEN = os.environ.get('GMAIL_REFRESH_TOKEN', '')
+GMAIL_SENDER_EMAIL = os.environ.get('GMAIL_SENDER_EMAIL', '')
+
 # Firebase Admin SDK (server-side) credentials. Set one of:
 # - FIREBASE_SERVICE_ACCOUNT_JSON: the full service account JSON as a
 #   single-line string (used on Render, where mounting a file isn't

@@ -161,6 +161,18 @@ export interface SiteSocialLink {
   url: string;
 }
 
+export interface SocialMediaCredentials {
+  facebook_page_id: string;
+  instagram_business_account_id: string;
+  /** Never returned by the API — write-only. Present only so a PATCH
+   * payload can type-check; GET responses never populate it. */
+  facebook_access_token?: string;
+  facebook_configured: boolean;
+  instagram_configured: boolean;
+  updated_by: UserBrief | null;
+  updated_at: string;
+}
+
 export interface SiteSettings {
   logo_url: string;
   tagline: string;
@@ -212,7 +224,7 @@ export interface ShowcaseProject {
   created_at?: string;
 }
 
-export type SocialPlatform = "LINKEDIN" | "TWITTER" | "FACEBOOK" | "INSTAGRAM" | "YOUTUBE";
+export type SocialPlatform = "FACEBOOK" | "INSTAGRAM";
 export type SocialPostStatus = "DRAFT" | "SCHEDULED" | "PUBLISHED" | "FAILED" | "CANCELLED";
 
 export interface SocialPost {

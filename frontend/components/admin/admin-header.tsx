@@ -3,15 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Bell, ChevronRight, HelpCircle, Home, Loader2, LogOut, PanelLeft, Search, UserRound } from "lucide-react";
+import { Bell, BellOff, ChevronRight, HelpCircle, Home, Loader2, LogOut, PanelLeft, Search, UserRound } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/lib/auth/auth-context";
 import { signOutUser } from "@/lib/firebase/auth";
-import { ROLE_LABELS } from "@/lib/firebase/types";
+import { ROLE_LABELS, type Notification } from "@/lib/firebase/types";
+import { subscribeToNotifications, markNotificationRead } from "@/lib/firebase/notifications";
 import { ADMIN_SECTIONS, findNavMatch, type NavItem } from "@/lib/admin-nav";
 import { globalSearch, type SearchResult } from "@/lib/api/search";
 import { useOnboardingTour } from "@/lib/admin/onboarding-tour";
 import { useProfileModal } from "@/lib/admin/profile-modal-context";
+import { cn } from "@/lib/utils";
 
 function initials(firstName?: string, lastName?: string) {
   return `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "?";
@@ -173,6 +175,83 @@ function QuickSearch() {
   );
 }
 
+function formatNotificationTime(value: unknown): string {
+  if (!value || typeof value !== "object" || !("toDate" in value)) return "";
+  const date = (value as { toDate: () => Date }).toDate();
+  const isToday = date.toDateString() === new Date().toDateString();
+  return isToday
+    ? date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+    : date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
+
+function NotificationBell() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    return subscribeToNotifications(user.uid, setNotifications);
+  }, [user]);
+
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  function handleClick(notification: Notification) {
+    if (!notification.isRead) markNotificationRead(notification.id).catch(() => {});
+    if (notification.link) router.push(notification.link);
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        data-tour="notifications"
+        className="relative flex size-9 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+      >
+        <Bell className="size-[1.1rem]" />
+        {unreadCount > 0 && (
+          <span className="absolute top-1 right-1 flex size-4 items-center justify-center rounded-full bg-destructive text-[0.6rem] font-semibold text-white">
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        )}
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-0">
+        <div className="border-b border-neutral-100 px-4 py-3">
+          <p className="text-sm font-semibold text-neutral-900">Notifications</p>
+        </div>
+        {notifications.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+            <BellOff className="size-5 text-neutral-300" />
+            <p className="text-xs text-neutral-400">Aucune notification pour l&apos;instant.</p>
+          </div>
+        ) : (
+          <div className="max-h-96 overflow-y-auto py-1">
+            {notifications.map((notification) => (
+              <button
+                key={notification.id}
+                type="button"
+                onClick={() => handleClick(notification)}
+                className={cn(
+                  "flex w-full flex-col gap-0.5 px-4 py-2.5 text-left transition-colors hover:bg-neutral-50",
+                  !notification.isRead && "bg-primary/5"
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  {!notification.isRead && <span className="size-1.5 shrink-0 rounded-full bg-primary" />}
+                  <span className="truncate text-sm font-medium text-neutral-900">{notification.title}</span>
+                  <span className="ml-auto shrink-0 text-[0.65rem] text-neutral-400">
+                    {formatNotificationTime(notification.createdAt)}
+                  </span>
+                </span>
+                <span className="line-clamp-2 text-xs text-neutral-500">{notification.message}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function AdminHeader({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const pathname = usePathname();
   const { profile } = useAuth();
@@ -209,24 +288,7 @@ export function AdminHeader({ onToggleSidebar }: { onToggleSidebar?: () => void 
           <HelpCircle className="size-[1.1rem]" />
         </button>
 
-        <Popover>
-          <PopoverTrigger
-            data-tour="notifications"
-            className="relative flex size-9 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-          >
-            <Bell className="size-[1.1rem]" />
-          </PopoverTrigger>
-          <PopoverContent className="w-80">
-            <div className="border-b border-neutral-100 px-4 py-3">
-              <p className="text-sm font-semibold text-neutral-900">Notifications</p>
-            </div>
-            <div className="px-4 py-8 text-center">
-              <p className="text-xs text-neutral-400">
-                Aucune notification pour l&apos;instant — le module Notifications (Firestore) arrive bientôt.
-              </p>
-            </div>
-          </PopoverContent>
-        </Popover>
+        <NotificationBell />
 
         <Popover>
           <PopoverTrigger

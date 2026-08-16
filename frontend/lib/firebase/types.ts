@@ -69,7 +69,23 @@ export type VisibilityLevel = "PRIVATE" | "DEPARTMENT" | "COMPANY";
 export type NotificationType =
   | "MENTION"
   | "PROJECT_STATUS_CHANGE"
-  | "DISBURSEMENT_WAITING";
+  | "DISBURSEMENT_WAITING"
+  | "CONTENT_PUBLISH_REMINDER"
+  | "GENERAL";
+
+/** Firestore doc at /notifications/{id} — written server-side only (see
+ * firestore.rules and backend/core/firestore_client.py::create_notification),
+ * read client-side by the bell in admin-header.tsx. */
+export interface Notification {
+  id: string;
+  recipientId: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  link: string | null;
+  isRead: boolean;
+  createdAt: unknown;
+}
 
 /** Firestore doc at /profiles/{uid} — id is the Firebase Auth UID. */
 export interface Profile {

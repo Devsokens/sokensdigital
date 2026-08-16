@@ -18,6 +18,7 @@ from marketing.views import (
     QuoteViewSet,
     ShowcaseProjectViewSet,
     SiteSettingsView,
+    SocialMediaCredentialsView,
     SocialPostViewSet,
     VideoUploadView,
     marketing_dashboard,
@@ -37,6 +38,7 @@ urlpatterns = [
     path('cms/upload-video/', VideoUploadView.as_view(), name='upload-video'),
     path('cms/site-settings/', SiteSettingsView.as_view(), name='site-settings'),
     path('quote-settings/', QuoteSettingsView.as_view(), name='quote-settings'),
+    path('social-media-credentials/', SocialMediaCredentialsView.as_view(), name='social-media-credentials'),
 ] + router.urls
 
 public_urlpatterns = [

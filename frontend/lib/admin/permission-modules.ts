@@ -39,4 +39,5 @@ export const PERMISSION_MODULES: PermissionModule[] = [
   { key: "facturation", label: "Facturation", section: "Finance & Comptabilité" },
   { key: "rapprochement", label: "Rapprochement bancaire", section: "Finance & Comptabilité" },
   { key: "tva", label: "Fiscalité (TVA)", section: "Finance & Comptabilité" },
+  { key: "parametres", label: "Paramètres", section: "Paramètres" },
 ];

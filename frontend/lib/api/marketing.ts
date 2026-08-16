@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api/client";
-import type { BlogPost, Lead, MarketingDashboard, PageSection, Paginated, Quote, QuotePaymentTerm, QuoteSettings, ShowcaseProject, SitePage, SiteSettings, SocialPost } from "@/lib/api/types";
+import type { BlogPost, Lead, MarketingDashboard, PageSection, Paginated, Quote, QuotePaymentTerm, QuoteSettings, ShowcaseProject, SitePage, SiteSettings, SocialMediaCredentials, SocialPost } from "@/lib/api/types";
 
 export interface LeadInput {
   first_name: string;
@@ -105,6 +105,17 @@ export function cancelSocialPost(id: string) {
 
 export function getMarketingDashboard() {
   return apiFetch<MarketingDashboard>("/api/v1/marketing/dashboard/");
+}
+
+export function getSocialMediaCredentials() {
+  return apiFetch<SocialMediaCredentials>("/api/v1/marketing/social-media-credentials/");
+}
+
+export function updateSocialMediaCredentials(data: Partial<SocialMediaCredentials>) {
+  return apiFetch<SocialMediaCredentials>("/api/v1/marketing/social-media-credentials/", {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
 }
 
 export interface QuoteLineInput {

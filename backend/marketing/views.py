@@ -14,7 +14,10 @@ from rest_framework.views import APIView
 from core.constants import ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_MARKETING, ROLE_COMMERCIAL, ROLE_PROJECT_MANAGER
 from core.permissions import has_role
 from core.storage import upload_image, upload_video
-from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject, SiteSettings, SocialPost
+from marketing.models import (
+    BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject,
+    SiteSettings, SocialMediaCredentials, SocialPost,
+)
 from marketing.ratelimit import get_client_ip, is_rate_limited
 from marketing.serializers import (
     BlogPostPublicSerializer,
@@ -29,6 +32,7 @@ from marketing.serializers import (
     ShowcaseProjectPublicSerializer,
     ShowcaseProjectSerializer,
     SiteSettingsSerializer,
+    SocialMediaCredentialsSerializer,
     SocialPostSerializer,
 )
 
@@ -195,6 +199,44 @@ class PublicSiteSettingsView(APIView):
 
     def get(self, request):
         return Response(SiteSettingsSerializer(SiteSettings.load()).data)
+
+
+class IsSuperAdminOnly(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return has_role(request.user, ROLE_SUPER_ADMIN)
+
+
+@extend_schema(
+    tags=['Marketing & Commercial'],
+    summary='Get the Facebook/Instagram publishing credentials (Super-Admin)',
+    description='The access token is never returned — see facebook_configured/'
+    'instagram_configured to know whether one is already set.',
+    responses={200: SocialMediaCredentialsSerializer},
+)
+@extend_schema(
+    methods=['PATCH'],
+    tags=['Marketing & Commercial'],
+    summary='Set the Facebook/Instagram publishing credentials (Super-Admin)',
+    description="Configured here instead of a Render environment variable so rotating "
+    "a token is an in-app action, not a deploy — see marketing/publishing.py.",
+    responses={200: SocialMediaCredentialsSerializer},
+)
+class SocialMediaCredentialsView(APIView):
+    """Singleton — same convention as SiteSettingsView. Super-Admin only:
+    these are live tokens that can post to the company's Facebook Page/
+    Instagram account, not editorial content."""
+
+    permission_classes = [IsSuperAdminOnly]
+
+    def get(self, request):
+        return Response(SocialMediaCredentialsSerializer(SocialMediaCredentials.load()).data)
+
+    def patch(self, request):
+        instance = SocialMediaCredentials.load()
+        serializer = SocialMediaCredentialsSerializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(updated_by=request.user)
+        return Response(serializer.data)
 
 
 @extend_schema(

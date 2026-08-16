@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
+from django_cryptography.fields import encrypt
 
 from core.models import LoggedModel, User
 
@@ -101,11 +102,8 @@ class BlogPost(LoggedModel):
 
 class SocialPost(LoggedModel):
     class Platform(models.TextChoices):
-        LINKEDIN = 'LINKEDIN', 'LinkedIn'
-        TWITTER = 'TWITTER', 'Twitter/X'
         FACEBOOK = 'FACEBOOK', 'Facebook'
         INSTAGRAM = 'INSTAGRAM', 'Instagram'
-        YOUTUBE = 'YOUTUBE', 'YouTube'
 
     class Status(models.TextChoices):
         DRAFT = 'DRAFT', 'Brouillon'
@@ -113,6 +111,14 @@ class SocialPost(LoggedModel):
         PUBLISHED = 'PUBLISHED', 'Publié'
         FAILED = 'FAILED', 'Échec'
         CANCELLED = 'CANCELLED', 'Annulé'
+
+    # Reminder windows (hours before scheduled_at) — J-3h/J-2h/J-1h.
+    # `reminders_sent` below tracks which windows already notified this
+    # post's author, so a periodic check doesn't re-notify on every run.
+    # The check itself isn't wired up yet (needs an external scheduler,
+    # since Render's free plan runs no worker/cron) — see
+    # docs/roadmap for the planned GitHub Actions trigger.
+    REMINDER_WINDOWS_HOURS = (3, 2, 1)
 
     title = models.CharField(max_length=255)
     content = models.TextField()
@@ -126,6 +132,7 @@ class SocialPost(LoggedModel):
     author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='social_posts')
     notes = models.TextField(blank=True)
     tags = models.JSONField(default=list)
+    reminders_sent = models.JSONField(default=list, blank=True)
 
     class Meta(LoggedModel.Meta):
         ordering = ['-created_at']
@@ -140,10 +147,44 @@ class SocialPost(LoggedModel):
     def clean(self):
         super().clean()
         from django.core.exceptions import ValidationError
-        if self.platform == self.Platform.TWITTER and len(self.content) > 280:
-            raise ValidationError({'content': 'Twitter/X est limité à 280 caractères.'})
-        if self.platform == self.Platform.INSTAGRAM and not self.image_path:
-            raise ValidationError({'image_path': 'Instagram nécessite une image.'})
+        if not self.image_path:
+            raise ValidationError({'image_path': f'{self.get_platform_display()} nécessite au moins une image.'})
+
+
+class SocialMediaCredentials(LoggedModel):
+    """Singleton (same convention as SiteSettings/QuoteSettings) holding the
+    Facebook/Instagram publishing credentials — configured visually from
+    Paramètres instead of Render environment variables, so rotating a
+    token doesn't require a code deploy. Instagram Business publishing
+    goes through the Facebook Graph API using the *same* Page access
+    token as Facebook (Meta's API architecture ties an IG Business account
+    to its linked Facebook Page), hence one token field for both.
+
+    Tokens are encrypted at rest (django-cryptography, same pattern as
+    core.models.User.email/phone) since anyone with DB access should not
+    be able to read a live access token in plain text."""
+
+    facebook_page_id = models.CharField(max_length=100, blank=True)
+    facebook_access_token = encrypt(models.TextField(blank=True))
+    instagram_business_account_id = models.CharField(max_length=100, blank=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return 'Identifiants réseaux sociaux'
+
+    @classmethod
+    def load(cls) -> 'SocialMediaCredentials':
+        obj = cls.objects.first()
+        return obj if obj is not None else cls.objects.create()
+
+    @property
+    def facebook_configured(self) -> bool:
+        return bool(self.facebook_page_id and self.facebook_access_token)
+
+    @property
+    def instagram_configured(self) -> bool:
+        return bool(self.instagram_business_account_id and self.facebook_access_token)
 
 
 class Quote(LoggedModel):

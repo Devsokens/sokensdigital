@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils import timezone
 from PIL import Image
 from rest_framework.test import APIClient, APITestCase
@@ -332,7 +332,10 @@ class SocialPostViewSetTests(APITestCase):
         self.client_outsider.force_authenticate(user=self.outsider)
 
     def payload(self, **overrides):
-        data = {'title': 'Annonce', 'content': 'Contenu du post.', 'platform': 'LINKEDIN'}
+        data = {
+            'title': 'Annonce', 'content': 'Contenu du post.', 'platform': 'FACEBOOK',
+            'image_path': 'https://example.com/cover.jpg',
+        }
         data.update(overrides)
         return data
 
@@ -355,22 +358,17 @@ class SocialPostViewSetTests(APITestCase):
         response = self.client_outsider.post('/api/v1/marketing/social-posts/', self.payload(), format='json')
         self.assertEqual(response.status_code, 403)
 
-    def test_twitter_content_over_280_chars_rejected(self):
+    def test_post_without_image_rejected(self):
         response = self.client_marketing.post(
-            '/api/v1/marketing/social-posts/',
-            self.payload(platform='TWITTER', content='x' * 281),
-            format='json',
-        )
-        self.assertEqual(response.status_code, 400)
-
-    def test_instagram_requires_image(self):
-        response = self.client_marketing.post(
-            '/api/v1/marketing/social-posts/', self.payload(platform='INSTAGRAM'), format='json',
+            '/api/v1/marketing/social-posts/', self.payload(image_path=''), format='json',
         )
         self.assertEqual(response.status_code, 400)
 
     def test_marketing_can_schedule_post_with_date(self):
-        post = SocialPost.objects.create(title='T', content='C', platform='LINKEDIN', author=self.marketing_user)
+        post = SocialPost.objects.create(
+            title='T', content='C', platform='FACEBOOK', author=self.marketing_user,
+            image_path='https://example.com/cover.jpg',
+        )
         response = self.client_marketing.patch(
             f'/api/v1/marketing/social-posts/{post.id}/', {'scheduled_at': '2026-08-01T10:00:00Z'}, format='json',
         )
@@ -380,13 +378,13 @@ class SocialPostViewSetTests(APITestCase):
         self.assertEqual(response.json()['status'], 'SCHEDULED')
 
     def test_cannot_schedule_without_date(self):
-        post = SocialPost.objects.create(title='T', content='C', platform='LINKEDIN', author=self.marketing_user)
+        post = SocialPost.objects.create(title='T', content='C', platform='FACEBOOK', author=self.marketing_user)
         response = self.client_marketing.post(f'/api/v1/marketing/social-posts/{post.id}/schedule/')
         self.assertEqual(response.status_code, 400)
 
     def test_commercial_cannot_schedule(self):
         post = SocialPost.objects.create(
-            title='T', content='C', platform='LINKEDIN', author=self.commercial,
+            title='T', content='C', platform='FACEBOOK', author=self.commercial,
             scheduled_at='2026-08-01T10:00:00Z',
         )
         response = self.client_commercial.post(f'/api/v1/marketing/social-posts/{post.id}/schedule/')
@@ -394,7 +392,7 @@ class SocialPostViewSetTests(APITestCase):
 
     def test_marketing_can_cancel_scheduled_post(self):
         post = SocialPost.objects.create(
-            title='T', content='C', platform='LINKEDIN', author=self.marketing_user,
+            title='T', content='C', platform='FACEBOOK', author=self.marketing_user,
             status='SCHEDULED', scheduled_at='2026-08-01T10:00:00Z',
         )
         response = self.client_marketing.post(f'/api/v1/marketing/social-posts/{post.id}/cancel/')
@@ -402,8 +400,8 @@ class SocialPostViewSetTests(APITestCase):
         self.assertEqual(response.json()['status'], 'CANCELLED')
 
     def test_commercial_sees_only_own_posts(self):
-        own = SocialPost.objects.create(title='Mine', content='C', platform='LINKEDIN', author=self.commercial)
-        SocialPost.objects.create(title='Other', content='C', platform='LINKEDIN', author=self.marketing_user)
+        own = SocialPost.objects.create(title='Mine', content='C', platform='FACEBOOK', author=self.commercial)
+        SocialPost.objects.create(title='Other', content='C', platform='FACEBOOK', author=self.marketing_user)
         ids = [p['id'] for p in self.client_commercial.get('/api/v1/marketing/social-posts/').json()['results']]
         self.assertEqual(ids, [str(own.id)])
 
@@ -968,19 +966,20 @@ class SiteSettingsViewTests(APITestCase):
         self.assertIn(response.status_code, (401, 403))
 
 
-class FacebookPublishingTests(TestCase):
-    """marketing/publishing.py — Facebook is the only platform wired up so
-    far. No real Graph API calls happen here: requests.post is mocked
-    throughout, and FACEBOOK_PAGE_ID/FACEBOOK_PAGE_ACCESS_TOKEN are blank
-    by default (see settings.py) so the "not configured" path is exactly
-    what runs today, in production, until real credentials are set."""
+def _mock_response(status_code=200, json_data=None):
+    response = Mock()
+    response.status_code = status_code
+    response.json.return_value = json_data or {}
+    response.text = str(json_data)
+    return response
 
-    def _mock_response(self, status_code=200, json_data=None):
-        response = Mock()
-        response.status_code = status_code
-        response.json.return_value = json_data or {}
-        response.text = str(json_data)
-        return response
+
+class FacebookPublishingTests(TestCase):
+    """marketing/publishing.py — no real Graph API calls happen here:
+    requests.post is mocked throughout. Credentials come from
+    SocialMediaCredentials (configured via Paramètres), not settings —
+    blank by default, so the "not configured" path is exactly what runs
+    today, in production, until a Super-Admin fills in the form."""
 
     def test_raises_not_configured_when_credentials_are_blank(self):
         from marketing.publishing import PublishingNotConfiguredError, publish_to_facebook
@@ -989,13 +988,14 @@ class FacebookPublishingTests(TestCase):
         with self.assertRaises(PublishingNotConfiguredError):
             publish_to_facebook(post)
 
-    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
     def test_text_only_post_uses_feed_endpoint(self):
+        from marketing.models import SocialMediaCredentials
         from marketing.publishing import publish_to_facebook
 
+        SocialMediaCredentials.objects.create(facebook_page_id='999', facebook_access_token='tok')
         post = SocialPost(title='x', content='Bonjour Facebook', platform=SocialPost.Platform.FACEBOOK)
         with patch('marketing.publishing.requests.post') as mock_post:
-            mock_post.return_value = self._mock_response(200, {'id': '999_111'})
+            mock_post.return_value = _mock_response(200, {'id': '999_111'})
             url = publish_to_facebook(post)
 
         called_url = mock_post.call_args.args[0]
@@ -1003,16 +1003,17 @@ class FacebookPublishingTests(TestCase):
         self.assertEqual(mock_post.call_args.kwargs['data']['message'], 'Bonjour Facebook')
         self.assertEqual(url, 'https://www.facebook.com/999_111')
 
-    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
     def test_post_with_image_uses_photos_endpoint(self):
+        from marketing.models import SocialMediaCredentials
         from marketing.publishing import publish_to_facebook
 
+        SocialMediaCredentials.objects.create(facebook_page_id='999', facebook_access_token='tok')
         post = SocialPost(
             title='x', content='Regardez', platform=SocialPost.Platform.FACEBOOK,
             image_path='https://example.com/pic.jpg',
         )
         with patch('marketing.publishing.requests.post') as mock_post:
-            mock_post.return_value = self._mock_response(200, {'id': 'photo1', 'post_id': '999_222'})
+            mock_post.return_value = _mock_response(200, {'id': 'photo1', 'post_id': '999_222'})
             url = publish_to_facebook(post)
 
         called_url = mock_post.call_args.args[0]
@@ -1020,15 +1021,91 @@ class FacebookPublishingTests(TestCase):
         self.assertEqual(mock_post.call_args.kwargs['data']['url'], 'https://example.com/pic.jpg')
         self.assertEqual(url, 'https://www.facebook.com/999_222')
 
-    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
     def test_api_error_raises_publishing_error(self):
+        from marketing.models import SocialMediaCredentials
         from marketing.publishing import PublishingError, publish_to_facebook
 
+        SocialMediaCredentials.objects.create(facebook_page_id='999', facebook_access_token='tok')
         post = SocialPost(title='x', content='hello', platform=SocialPost.Platform.FACEBOOK)
         with patch('marketing.publishing.requests.post') as mock_post:
-            mock_post.return_value = self._mock_response(400, {'error': {'message': 'Invalid token'}})
+            mock_post.return_value = _mock_response(400, {'error': {'message': 'Invalid token'}})
             with self.assertRaises(PublishingError):
                 publish_to_facebook(post)
+
+
+class InstagramPublishingTests(TestCase):
+    """A single image posts directly; more than one posts as a real
+    carousel (child containers, then a parent CAROUSEL container) — see
+    marketing/publishing.py::publish_to_instagram."""
+
+    def _credentials(self):
+        from marketing.models import SocialMediaCredentials
+        return SocialMediaCredentials.objects.create(
+            instagram_business_account_id='ig123', facebook_access_token='tok',
+        )
+
+    def test_raises_not_configured_when_credentials_are_blank(self):
+        from marketing.publishing import PublishingNotConfiguredError, publish_to_instagram
+
+        post = SocialPost(title='x', content='hello', platform=SocialPost.Platform.INSTAGRAM, image_path='https://example.com/a.jpg')
+        with self.assertRaises(PublishingNotConfiguredError):
+            publish_to_instagram(post)
+
+    def test_single_image_posts_directly(self):
+        from marketing.publishing import publish_to_instagram
+
+        self._credentials()
+        post = SocialPost(
+            title='x', content='Regardez', platform=SocialPost.Platform.INSTAGRAM,
+            image_path='https://example.com/a.jpg',
+        )
+        with patch('marketing.publishing.requests.post') as mock_post, \
+                patch('marketing.publishing.requests.get') as mock_get:
+            mock_post.side_effect = [
+                _mock_response(200, {'id': 'container1'}),
+                _mock_response(200, {'id': 'media1'}),
+            ]
+            mock_get.return_value = _mock_response(200, {'permalink': 'https://www.instagram.com/p/abc/'})
+            url = publish_to_instagram(post)
+
+        self.assertEqual(mock_post.call_count, 2)
+        first_call_kwargs = mock_post.call_args_list[0].kwargs
+        self.assertEqual(first_call_kwargs['data']['image_url'], 'https://example.com/a.jpg')
+        self.assertNotIn('is_carousel_item', first_call_kwargs['data'])
+        self.assertEqual(url, 'https://www.instagram.com/p/abc/')
+
+    def test_multiple_images_post_as_carousel(self):
+        from marketing.publishing import publish_to_instagram
+
+        self._credentials()
+        post = SocialPost(
+            title='x', content='Regardez', platform=SocialPost.Platform.INSTAGRAM,
+            image_path='https://example.com/a.jpg', additional_images=['https://example.com/b.jpg'],
+        )
+        with patch('marketing.publishing.requests.post') as mock_post, \
+                patch('marketing.publishing.requests.get') as mock_get:
+            mock_post.side_effect = [
+                _mock_response(200, {'id': 'child1'}),
+                _mock_response(200, {'id': 'child2'}),
+                _mock_response(200, {'id': 'carousel1'}),
+                _mock_response(200, {'id': 'media1'}),
+            ]
+            mock_get.return_value = _mock_response(200, {'permalink': 'https://www.instagram.com/p/xyz/'})
+            url = publish_to_instagram(post)
+
+        self.assertEqual(mock_post.call_count, 4)
+        carousel_call_kwargs = mock_post.call_args_list[2].kwargs
+        self.assertEqual(carousel_call_kwargs['data']['media_type'], 'CAROUSEL')
+        self.assertEqual(carousel_call_kwargs['data']['children'], 'child1,child2')
+        self.assertEqual(url, 'https://www.instagram.com/p/xyz/')
+
+    def test_requires_at_least_one_image(self):
+        from marketing.publishing import PublishingError, publish_to_instagram
+
+        self._credentials()
+        post = SocialPost(title='x', content='hello', platform=SocialPost.Platform.INSTAGRAM)
+        with self.assertRaises(PublishingError):
+            publish_to_instagram(post)
 
 
 class RunScheduledPublishingTests(TestCase):
@@ -1036,12 +1113,9 @@ class RunScheduledPublishingTests(TestCase):
         self.past = timezone.now() - timezone.timedelta(hours=1)
         self.future = timezone.now() + timezone.timedelta(hours=1)
 
-    def _mock_response(self, status_code=200, json_data=None):
-        response = Mock()
-        response.status_code = status_code
-        response.json.return_value = json_data or {}
-        response.text = str(json_data)
-        return response
+    def _facebook_credentials(self):
+        from marketing.models import SocialMediaCredentials
+        return SocialMediaCredentials.objects.create(facebook_page_id='999', facebook_access_token='tok')
 
     def test_skips_everything_when_not_configured(self):
         from marketing.publishing import run_scheduled_publishing
@@ -1055,16 +1129,16 @@ class RunScheduledPublishingTests(TestCase):
         post.refresh_from_db()
         self.assertEqual(post.status, SocialPost.Status.SCHEDULED)
 
-    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
     def test_publishes_due_facebook_posts(self):
         from marketing.publishing import run_scheduled_publishing
 
+        self._facebook_credentials()
         post = SocialPost.objects.create(
             title='x', content='hello', platform=SocialPost.Platform.FACEBOOK,
             status=SocialPost.Status.SCHEDULED, scheduled_at=self.past,
         )
         with patch('marketing.publishing.requests.post') as mock_post:
-            mock_post.return_value = self._mock_response(200, {'id': '999_333'})
+            mock_post.return_value = _mock_response(200, {'id': '999_333'})
             results = run_scheduled_publishing()
 
         self.assertEqual(len(results), 1)
@@ -1073,37 +1147,26 @@ class RunScheduledPublishingTests(TestCase):
         self.assertEqual(post.post_url, 'https://www.facebook.com/999_333')
         self.assertIsNotNone(post.published_at)
 
-    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
     def test_marks_failed_on_api_error_with_note(self):
         from marketing.publishing import run_scheduled_publishing
 
+        self._facebook_credentials()
         post = SocialPost.objects.create(
             title='x', content='hello', platform=SocialPost.Platform.FACEBOOK,
             status=SocialPost.Status.SCHEDULED, scheduled_at=self.past,
         )
         with patch('marketing.publishing.requests.post') as mock_post:
-            mock_post.return_value = self._mock_response(400, {'error': {'message': 'Invalid token'}})
+            mock_post.return_value = _mock_response(400, {'error': {'message': 'Invalid token'}})
             run_scheduled_publishing()
 
         post.refresh_from_db()
         self.assertEqual(post.status, SocialPost.Status.FAILED)
         self.assertIn('Invalid token', post.notes)
 
-    def test_ignores_platforms_without_a_publisher(self):
-        from marketing.publishing import run_scheduled_publishing
-
-        post = SocialPost.objects.create(
-            title='x', content='hello', platform=SocialPost.Platform.LINKEDIN,
-            status=SocialPost.Status.SCHEDULED, scheduled_at=self.past,
-        )
-        run_scheduled_publishing()
-        post.refresh_from_db()
-        self.assertEqual(post.status, SocialPost.Status.SCHEDULED)
-
-    @override_settings(FACEBOOK_PAGE_ID='999', FACEBOOK_PAGE_ACCESS_TOKEN='tok')
     def test_ignores_posts_not_due_yet(self):
         from marketing.publishing import run_scheduled_publishing
 
+        self._facebook_credentials()
         post = SocialPost.objects.create(
             title='x', content='hello', platform=SocialPost.Platform.FACEBOOK,
             status=SocialPost.Status.SCHEDULED, scheduled_at=self.future,
@@ -1122,3 +1185,36 @@ class PublishScheduledPostsCommandTests(TestCase):
         out = io.StringIO()
         call_command('publish_scheduled_posts', stdout=out)
         self.assertIn('Aucune publication', out.getvalue())
+
+
+class SocialMediaCredentialsViewTests(APITestCase):
+    def setUp(self):
+        self.super_admin = User.objects.create(email='admin@sokensdigital.com', first_name='Admin')
+        _give_role(self.super_admin, ROLE_SUPER_ADMIN)
+
+        self.marketing_user = User.objects.create(email='marketing2@sokensdigital.com', first_name='Marketing')
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+
+        self.client_admin = APIClient()
+        self.client_admin.force_authenticate(user=self.super_admin)
+
+        self.client_marketing = APIClient()
+        self.client_marketing.force_authenticate(user=self.marketing_user)
+
+    def test_super_admin_can_read_and_write(self):
+        response = self.client_admin.patch(
+            '/api/v1/marketing/social-media-credentials/',
+            {'facebook_page_id': '123', 'facebook_access_token': 'secret-token'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['facebook_configured'])
+        self.assertNotIn('facebook_access_token', response.json())
+
+    def test_responsable_marketing_forbidden(self):
+        response = self.client_marketing.get('/api/v1/marketing/social-media-credentials/')
+        self.assertEqual(response.status_code, 403)
+
+    def test_unauthenticated_forbidden(self):
+        response = APIClient().get('/api/v1/marketing/social-media-credentials/')
+        self.assertIn(response.status_code, (401, 403))
