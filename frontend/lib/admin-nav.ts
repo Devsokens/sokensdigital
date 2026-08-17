@@ -21,6 +21,8 @@ import {
   Settings,
   Contact2,
   ClipboardList,
+  ShoppingCart,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -92,6 +94,8 @@ export const ADMIN_SECTIONS: NavSection[] = [
       { label: "Facturation", href: "/admin/finance/facturation", icon: Receipt, moduleKey: "facturation" },
       { label: "Rapprochement bancaire", href: "/admin/finance/rapprochement", icon: Landmark, moduleKey: "rapprochement" },
       { label: "Fiscalité (TVA)", href: "/admin/finance/tva", icon: Percent, moduleKey: "tva" },
+      { label: "Opérations d'achats", href: "/admin/finance/achats", icon: ShoppingCart, moduleKey: "achats" },
+      { label: "Trésorerie", href: "/admin/finance/tresorerie", icon: Wallet, moduleKey: "tresorerie" },
     ],
   },
   {

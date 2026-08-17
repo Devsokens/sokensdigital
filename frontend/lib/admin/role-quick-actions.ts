@@ -15,6 +15,7 @@ import {
   Target,
   UserRound,
   Users,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import type { AppRole } from "@/lib/firebase/types";
@@ -69,6 +70,9 @@ export const ROLE_QUICK_ACTIONS: Record<AppRole, QuickAction[]> = {
     { label: "Rapprochement", href: "/admin/finance/rapprochement", icon: Landmark },
     { label: "Clôture", href: "/admin/finance/cloture", icon: Lock },
     { label: "TVA", href: "/admin/finance/tva", icon: Percent },
+  ],
+  CAISSIER: [
+    { label: "Caisse", href: "/admin/finance/tresorerie", icon: Wallet },
   ],
   AUTRE: [
     { label: "Messagerie", href: "/admin/messagerie", icon: MessageSquare },

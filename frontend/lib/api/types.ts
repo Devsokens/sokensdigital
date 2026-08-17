@@ -657,6 +657,172 @@ export interface FinanceDashboard {
   executed_disbursements_by_project: Record<string, string>;
 }
 
+// --- Opérations d'achats (procurement) ---------------------------------
+
+export interface Supplier {
+  id: string;
+  name: string;
+  siret: string | null;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  postal_code: string;
+  country: string;
+  bank_account: string;
+  bank_name: string;
+  contact_person: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export type ProcurementRequestStatus =
+  | "BROUILLON" | "EN_ATTENTE_RCF" | "EN_ATTENTE_MANAGER" | "APPROUVEE" | "REJETEE" | "EN_COURS" | "TERMINEE";
+
+export interface ProcurementRequest {
+  id: string;
+  title: string;
+  description: string;
+  estimated_amount: string;
+  department: string;
+  department_name: string;
+  requested_by: string | null;
+  requested_by_name: string;
+  status: ProcurementRequestStatus;
+  status_display: string;
+  rejection_reason: string;
+  rcf_approved_at: string | null;
+  rcf_approved_by: string | null;
+  rcf_approved_by_name: string;
+  manager_approved_at: string | null;
+  manager_approved_by: string | null;
+  manager_approved_by_name: string;
+  created_at: string;
+}
+
+export type SupplierQuoteStatus = "BROUILLON" | "EN_ATTENTE" | "VALIDE" | "REJETE";
+
+export interface SupplierQuote {
+  id: string;
+  procurement: string;
+  supplier: string;
+  supplier_name: string;
+  quote_number: string;
+  quote_date: string;
+  amount_ht: string;
+  vat_rate: string;
+  vat_amount: string;
+  amount_ttc: string;
+  status: SupplierQuoteStatus;
+  status_display: string;
+  rcf_validated_at: string | null;
+  rcf_validated_by: string | null;
+  manager_validated_at: string | null;
+  manager_validated_by: string | null;
+  created_at: string;
+}
+
+export type SupplierInvoiceStatus = "RECUE" | "VALIDEE" | "PAYEE";
+
+export interface SupplierInvoice {
+  id: string;
+  supplier: string;
+  supplier_name: string;
+  procurement: string;
+  quote: string | null;
+  invoice_number: string;
+  invoice_date: string;
+  due_date: string | null;
+  amount_ht: string;
+  vat_rate: string;
+  vat_amount: string;
+  amount_ttc: string;
+  status: SupplierInvoiceStatus;
+  status_display: string;
+  cash_entry: string | null;
+  received_by: string | null;
+  received_by_name: string;
+  received_at: string;
+  validated_by: string | null;
+  validated_by_name: string;
+  validated_at: string | null;
+  created_at: string;
+}
+
+// --- Trésorerie (caisse, banque, capital) -------------------------------
+
+export type CashEntryType = "ENTREE" | "SORTIE";
+export type CashEntrySource =
+  | "CLIENT_ESPECES" | "RETRAIT_BANQUE" | "DEPOT_BANQUE" | "DEPENSE_OPERATIONNELLE" | "FOURNISSEUR_ESPECES";
+
+export interface CashEntry {
+  id: string;
+  voucher_number: string;
+  type: CashEntryType;
+  type_display: string;
+  source: CashEntrySource;
+  source_display: string;
+  amount: string;
+  date: string;
+  reference: string;
+  description: string;
+  payment: string | null;
+  disbursement: string | null;
+  supplier_invoice: string | null;
+  created_by: string | null;
+  created_by_name: string;
+  reconciled_by: string | null;
+  reconciled_by_name: string;
+  reconciled_at: string | null;
+  created_at: string;
+}
+
+export type BankEntryType = "ENTREE" | "SORTIE";
+export type BankEntrySource =
+  | "APPORT_CAPITAL" | "CLIENT_CHEQUE" | "CLIENT_VIREMENT" | "CAISSE_DEPOT"
+  | "FOURNISSEUR_CHEQUE" | "FOURNISSEUR_VIREMENT" | "RETRAIT_ESPECES";
+
+export interface BankEntry {
+  id: string;
+  type: BankEntryType;
+  type_display: string;
+  source: BankEntrySource;
+  source_display: string;
+  amount: string;
+  date: string;
+  reference: string;
+  description: string;
+  payment: string | null;
+  capital_contribution: string | null;
+  disbursement: string | null;
+  cash_entry: string | null;
+  bank_transaction: string | null;
+  created_by: string | null;
+  created_by_name: string;
+  reconciled_by: string | null;
+  reconciled_by_name: string;
+  reconciled_at: string | null;
+  created_at: string;
+}
+
+export type CapitalContributionStatus = "BROUILLON" | "DOCUMENTS_TRANSMIS" | "VALIDEE" | "ENREGISTREE" | "COMPTABILISEE";
+
+export interface CapitalContribution {
+  id: string;
+  amount: string;
+  status: CapitalContributionStatus;
+  status_display: string;
+  contribution_date: string;
+  bank_entry: string | null;
+  validated_by: string | null;
+  validated_by_name: string;
+  validated_at: string | null;
+  posted_by: string | null;
+  posted_by_name: string;
+  posted_at: string | null;
+  created_at: string;
+}
+
 export interface AuditLogEntry {
   id: string;
   user: UserBrief | null;

@@ -7,6 +7,7 @@ export type AppRole =
   | "DEVELOPPEUR"
   | "COMPTABLE"
   | "DIRECTEUR_FINANCIER"
+  | "CAISSIER"
   | "AUTRE";
 
 export const ROLE_LABELS: Record<AppRole, string> = {
@@ -18,6 +19,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   DEVELOPPEUR: "Développeur",
   COMPTABLE: "Comptable",
   DIRECTEUR_FINANCIER: "Directeur Financier",
+  CAISSIER: "Caissier",
   AUTRE: "Autre",
 };
 
@@ -36,6 +38,7 @@ export const DJANGO_ROLE_TO_APP_ROLE: Record<string, AppRole> = {
   "Développeur": "DEVELOPPEUR",
   "Comptable": "COMPTABLE",
   "Directeur Financier": "DIRECTEUR_FINANCIER",
+  "Caissier": "CAISSIER",
 };
 
 /** Cahier des charges §4.11 — which roles belong to which of the four
@@ -45,7 +48,7 @@ export const DJANGO_ROLE_TO_APP_ROLE: Record<string, AppRole> = {
  * Firestore-side equivalent yet), so they're left out of this UI flow. */
 export const ROLES_BY_DEPARTMENT: Record<string, AppRole[]> = {
   "Administration": ["SUPER_ADMIN", "RESPONSABLE_RH"],
-  "Comptabilité / Fiscalité": ["DIRECTEUR_FINANCIER", "COMPTABLE"],
+  "Comptabilité / Fiscalité": ["DIRECTEUR_FINANCIER", "COMPTABLE", "CAISSIER"],
   "Techniques": ["CHEF_DE_PROJET", "DEVELOPPEUR"],
   "Marketing / Communication": ["RESPONSABLE_MARKETING", "COMMERCIAL"],
 };
