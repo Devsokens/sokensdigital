@@ -108,6 +108,8 @@ INSTALLED_APPS = [
     'technique',
     'administration',
     'messaging',
+    'procurement',
+    'treasury',
     'support',
 ]
 
@@ -370,6 +372,21 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+
+# Celery Beat — tâches programmées (daily cron jobs)
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    'send-invoice-reminders': {
+        'task': 'finance.tasks.send_invoice_reminders',
+        'schedule': crontab(hour=9, minute=0),  # 09:00 UTC chaque jour
+        'options': {'queue': 'default'}
+    },
+    'check-budget-alerts': {
+        'task': 'technique.tasks.check_budget_alerts',
+        'schedule': crontab(hour=10, minute=0),  # 10:00 UTC chaque jour
+        'options': {'queue': 'default'}
+    },
+}
 
 # Facebook Page publishing (marketing/publishing.py) — blank by default,
 # nothing publishes until both are set. FACEBOOK_PAGE_ACCESS_TOKEN must be

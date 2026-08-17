@@ -149,7 +149,7 @@ def run_scheduled_publishing():
     from marketing.models import SocialPost
 
     due = SocialPost.objects.filter(
-        status=SocialPost.Status.SCHEDULED,
+        status=SocialPost.Status.PROGRAMME,
         scheduled_at__lte=timezone.now(),
         platform__in=PUBLISHERS.keys(),
     )
@@ -164,13 +164,13 @@ def run_scheduled_publishing():
         except Exception as exc:
             logger.exception('Failed to publish SocialPost %s to %s', post.id, post.platform)
             note = f'[Échec publication {timezone.now():%d/%m/%Y %H:%M}] {exc}'
-            post.status = SocialPost.Status.FAILED
+            post.status = SocialPost.Status.ECHEC
             post.notes = f'{post.notes}\n{note}'.strip()
             post.save(update_fields=['status', 'notes'])
             results.append((post, False))
             continue
 
-        post.status = SocialPost.Status.PUBLISHED
+        post.status = SocialPost.Status.PUBLIE
         post.published_at = timezone.now()
         post.post_url = post_url
         post.save(update_fields=['status', 'published_at', 'post_url'])

@@ -48,14 +48,14 @@ class Project(LoggedModel):
 
 class ProjectTask(LoggedModel):
     class Status(models.TextChoices):
-        TODO = 'TODO', 'À faire'
-        IN_PROGRESS = 'IN_PROGRESS', 'En cours'
-        IN_REVIEW = 'IN_REVIEW', 'En révision'
-        DONE = 'DONE', 'Terminé'
+        A_FAIRE = 'A_FAIRE', 'À faire'
+        EN_COURS = 'EN_COURS', 'En cours'
+        EN_REVISION = 'EN_REVISION', 'En révision'
+        TERMINE = 'TERMINE', 'Terminé'
 
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
     title = models.CharField(max_length=255)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.TODO)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.A_FAIRE)
     due_date = models.DateField(null=True, blank=True)
     progress = models.PositiveSmallIntegerField(default=0)
     assignees = models.ManyToManyField(User, related_name='project_tasks', blank=True)

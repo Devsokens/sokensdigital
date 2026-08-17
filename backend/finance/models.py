@@ -7,11 +7,9 @@ from django.utils import timezone
 from core.models import LoggedModel, User
 from projects.models import Project
 
-# Placeholder — same unconfirmed-rate caveat as marketing.models.DEFAULT_VAT_RATE
-# (docs/backend-specifications.md): no real rate has been confirmed for
-# Soken's Digital's jurisdiction. Kept as a separate constant rather than a
-# shared import because Finance and Marketing/Commercial invoicing are two
-# independent concerns that happen to share a number today.
+# Default VAT rate — peut être modifié dynamiquement via FinanceSettings.
+# Placeholder: 18% (OHADA/CEMAC), mais doit être confirmé pour juridiction
+# réelle de Soken's Digital. Ce constant sert de fallback si la base est vide.
 DEFAULT_VAT_RATE = Decimal('0.18')
 
 
@@ -203,7 +201,12 @@ class Invoice(LoggedModel):
         VALIDEE = 'VALIDEE', 'Validée'
 
     invoice_number = models.CharField(max_length=20, unique=True, editable=False)
-    client_name = models.CharField(max_length=255)
+    # Client link (nullable pour backward compat legacy client_name). Si client
+    # est renseigné, utiliser client.company_name; sinon client_name texte libre.
+    client = models.ForeignKey(
+        'administration.Client', on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices',
+    )
+    client_name = models.CharField(max_length=255, blank=True, help_text='Utilisé si pas de client FK (legacy)')
     # Cahier des charges §4.7 "Conversion — devis -> facture en un clic".
     # Nullable: invoices created directly (not from a quote) stay valid.
     quote = models.ForeignKey(
@@ -297,3 +300,165 @@ class TaxDeclaration(LoggedModel):
 
     def __str__(self):
         return f'TVA {self.period.label} ({self.status})'
+
+
+class Payment(LoggedModel):
+    """Versement partiel d'une facture — workflow paiements partiels.
+
+    Étapes: PENDING (en attente réception) → RECEIVED (reçu) → RECORDED (enregistré compta).
+    À chaque versement: créer PaymentReceipt (reçu client).
+    """
+
+    class Status(models.TextChoices):
+        EN_ATTENTE = 'EN_ATTENTE', 'En attente'
+        RECU = 'RECU', 'Reçu'
+        ENREGISTRE = 'ENREGISTRE', 'Enregistré'
+
+    class PaymentMethod(models.TextChoices):
+        CHEQUE = 'CHEQUE', 'Chèque'
+        VIREMENT = 'VIREMENT', 'Virement'
+        ESPECES = 'ESPECES', 'Espèces'
+        CARTE = 'CARTE', 'Carte bancaire'
+        AUTRE = 'AUTRE', 'Autre'
+
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='payments')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_date = models.DateField()
+    payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.EN_ATTENTE)
+
+    # Réception du versement
+    received_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='received_payments')
+    received_at = models.DateTimeField(null=True, blank=True)
+
+    # Notes interne (n°chèque, n°virement, etc.)
+    notes = models.TextField(blank=True)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-payment_date', '-created_at']
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['invoice', 'status']),
+            models.Index(fields=['payment_date']),
+        ]
+
+    def __str__(self):
+        return f'{self.invoice.invoice_number} — {self.amount} ({self.status})'
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        # Vérifier que montant ne dépasse pas facture
+        total_existing = self.invoice.payments.exclude(pk=self.pk).aggregate(
+            total=models.Sum('amount')
+        )['total'] or Decimal('0')
+
+        if total_existing + self.amount > self.invoice.amount_ttc:
+            raise ValidationError(
+                f'Versement dépasse montant facture. Déjà payé: {total_existing}, '
+                f'Versement: {self.amount}, Total facture: {self.invoice.amount_ttc}'
+            )
+
+    @property
+    def is_fully_paid(self):
+        """Check si facture 100% payée après ce versement."""
+        total = self.invoice.payments.filter(status=self.Status.RECU).aggregate(
+            total=models.Sum('amount')
+        )['total'] or Decimal('0')
+        return (total + (self.amount if self.status == self.Status.RECU else Decimal('0'))) >= self.invoice.amount_ttc
+
+
+class PaymentReceipt(LoggedModel):
+    """Reçu de versement — un reçu par Payment.
+
+    Numérotation auto: REC-{année}-{seq:05d}
+    """
+
+    payment = models.OneToOneField(Payment, on_delete=models.CASCADE, related_name='receipt')
+    receipt_number = models.CharField(max_length=20, unique=True, editable=False)
+    issued_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='issued_receipts')
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.receipt_number
+
+    def save(self, *args, **kwargs):
+        if not self.receipt_number:
+            year = timezone.now().year
+            count = PaymentReceipt.objects.filter(
+                receipt_number__startswith=f'REC-{year}'
+            ).count() + 1
+            self.receipt_number = f'REC-{year}-{count:05d}'
+        super().save(*args, **kwargs)
+
+
+class FinanceSettings(models.Model):
+    """Configuration Finance éditable (singleton pattern — une seule instance).
+
+    TVA, seuils d'approbation, comptes par défaut, etc. édités via Django admin
+    par le Directeur Financier."""
+
+    vat_rate = models.DecimalField(
+        max_digits=4, decimal_places=2, default=DEFAULT_VAT_RATE,
+        help_text='Taux TVA appliqué par défaut aux nouvelles factures (ex: 0.18 = 18%)',
+    )
+
+    # Comptes par défaut pour écritures auto (factures, décaissements)
+    default_client_account_code = models.CharField(
+        max_length=20, default='411', blank=True,
+        help_text='Code compte Client (ex: 411 = Clients en France)',
+    )
+    default_sales_account_code = models.CharField(
+        max_length=20, default='706', blank=True,
+        help_text='Code compte Prestations (ex: 706 = Prestations de services)',
+    )
+    default_vat_collected_account_code = models.CharField(
+        max_length=20, default='4457', blank=True,
+        help_text='Code compte TVA collectée (ex: 4457)',
+    )
+
+    # Comptes par défaut — achats/trésorerie (procurement + treasury apps).
+    default_purchases_account_code = models.CharField(
+        max_length=20, default='601', blank=True,
+        help_text='Code compte Achats (ex: 601 = Achats de marchandises)',
+    )
+    default_vat_deductible_account_code = models.CharField(
+        max_length=20, default='4456', blank=True,
+        help_text='Code compte TVA déductible (ex: 4456)',
+    )
+    default_supplier_account_code = models.CharField(
+        max_length=20, default='401', blank=True,
+        help_text='Code compte Fournisseurs (ex: 401)',
+    )
+    default_cash_account_code = models.CharField(
+        max_length=20, default='530', blank=True,
+        help_text='Code compte Caisse physique (ex: 530)',
+    )
+    default_bank_account_code = models.CharField(
+        max_length=20, default='512', blank=True,
+        help_text='Code compte Banque (ex: 512)',
+    )
+    default_capital_account_code = models.CharField(
+        max_length=20, default='101', blank=True,
+        help_text='Code compte Capital social (ex: 101)',
+    )
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = 'Finance Settings'
+
+    def __str__(self):
+        return 'Finance Settings (Global)'
+
+    @classmethod
+    def load(cls):
+        """Get or create singleton instance."""
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def save(self, *args, **kwargs):
+        """Enforce singleton: always id=1."""
+        self.pk = 1
+        super().save(*args, **kwargs)

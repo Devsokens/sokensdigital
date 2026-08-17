@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pièce de Caisse</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 0.5cm;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><text x="50" y="100" font-size="60" fill="rgba(200,200,200,0.1)" transform="rotate(-45)">SOKENS DIGITAL</text></svg>');
+            background-position: center;
+            background-repeat: repeat;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            font-size: 11px;
+            color: #333;
+            background: white;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .logo-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #ccc;
+            font-weight: bold;
+            font-size: 10px;
+        }
+
+        .company-info {
+            text-align: center;
+            flex: 1;
+        }
+
+        .company-info h1 {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+
+        .company-info p {
+            font-size: 9px;
+            margin: 2px 0;
+        }
+
+        .title {
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            margin: 15px 0;
+            text-decoration: underline;
+        }
+
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 0 10px;
+        }
+
+        .meta-item {
+            flex: 1;
+        }
+
+        .meta-label {
+            font-weight: bold;
+            font-size: 10px;
+        }
+
+        .meta-value {
+            border-bottom: 1px solid #333;
+            padding-top: 2px;
+            min-height: 20px;
+        }
+
+        .table-section {
+            margin: 15px 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+
+        th {
+            background-color: #e0e0e0;
+            border: 1px solid #333;
+            padding: 8px;
+            font-weight: bold;
+            text-align: left;
+            font-size: 10px;
+        }
+
+        td {
+            border: 1px solid #333;
+            padding: 8px;
+            height: 25px;
+            vertical-align: top;
+            font-size: 11px;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .total-row {
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }
+
+        .amount {
+            width: 100px;
+        }
+
+        .remarks-section {
+            margin: 15px 10px;
+            border: 1px solid #333;
+            padding: 10px;
+            min-height: 60px;
+        }
+
+        .remarks-label {
+            font-weight: bold;
+            font-size: 10px;
+            margin-bottom: 5px;
+        }
+
+        .remarks-content {
+            font-size: 10px;
+            line-height: 1.4;
+        }
+
+        .signatures-section {
+            margin: 20px 10px 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .signature-block {
+            flex: 1;
+            text-align: center;
+            margin-right: 10px;
+        }
+
+        .signature-line {
+            border-bottom: 1px solid #333;
+            height: 60px;
+            margin-bottom: 5px;
+        }
+
+        .signature-label {
+            font-size: 9px;
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 8px;
+            margin-top: 20px;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo-section">
+            <div class="logo">LOGO</div>
+            <div class="company-info">
+                <h1>SOKENS DIGITAL</h1>
+                <p>Société Koweïtienne d'Electronique Numérique Services</p>
+                <p>{{ company_address }}</p>
+                <p>{{ company_phone }} | {{ company_email }}</p>
+            </div>
+            <div class="logo" style="visibility: hidden;"></div>
+        </div>
+    </div>
+
+    <div class="title">
+        {% if voucher.type == 'ENTREE' %}
+            PIÈCE D'ENTRÉE DE CAISSE
+        {% else %}
+            PIÈCE DE SORTIE DE CAISSE
+        {% endif %}
+        N°{{ voucher.reference|default:voucher.id }}
+    </div>
+
+    <div class="meta-row">
+        <div class="meta-item">
+            <div class="meta-label">Période :</div>
+            <div class="meta-value">{{ voucher.date|date:"m/Y" }}</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label">Date :</div>
+            <div class="meta-value">{{ voucher.date|date:"d/m/Y" }}</div>
+        </div>
+    </div>
+
+    <div class="meta-row">
+        <div class="meta-item">
+            <div class="meta-label">Bénéficiaire :</div>
+            <div class="meta-value">{{ voucher.description }}</div>
+        </div>
+    </div>
+
+    <div class="table-section">
+        <table>
+            <thead>
+                <tr>
+                    <th>Motif</th>
+                    <th class="amount text-right">Montant (FCFA)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>{{ voucher.description }}</td>
+                    <td class="amount text-right">{{ voucher.amount|floatformat:2 }}</td>
+                </tr>
+                <tr class="total-row">
+                    <td><strong>TOTAL</strong></td>
+                    <td class="amount text-right"><strong>{{ voucher.amount|floatformat:2 }}</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="remarks-section">
+        <div class="remarks-label">Observations :</div>
+        <div class="remarks-content">
+            {{ voucher.reference }}<br>
+            {{ additional_notes }}
+        </div>
+    </div>
+
+    <div class="signatures-section">
+        <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-label">Bénéficiaire</div>
+        </div>
+        <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-label">Responsable Financier</div>
+        </div>
+        <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-label">Gérant</div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Document généré le {{ now|date:"d/m/Y à H:i" }} | Confidentiel</p>
+    </div>
+</body>
+</html>

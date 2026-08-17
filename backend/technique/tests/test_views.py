@@ -132,7 +132,7 @@ class ViewTests(APITestCase):
         self.assertEqual(response.status_code, 200)
 
         detail_url = reverse('project-tasks-detail', kwargs={'project_pk': self.project.pk, 'pk': task.pk})
-        response = self.client.patch(detail_url, {'status': 'IN_PROGRESS'})
+        response = self.client.patch(detail_url, {'status': 'EN_COURS'})
         self.assertEqual(response.status_code, 200)
 
     def test_time_entries(self):
@@ -230,7 +230,7 @@ class ViewTests(APITestCase):
         self.project.members.add(other_dev)
         self.client.force_authenticate(user=other_dev)
         url = reverse('project-tasks-detail', kwargs={'project_pk': self.project.pk, 'pk': task.pk})
-        response = self.client.patch(url, {'status': 'IN_PROGRESS'})
+        response = self.client.patch(url, {'status': 'EN_COURS'})
         self.assertEqual(response.status_code, 403)
 
     def test_time_entries_pm_other_project_scoped_to_own_entries(self):

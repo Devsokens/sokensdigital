@@ -87,7 +87,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         return len(obj.tasks.all())
 
     def get_tasks_done(self, obj):
-        return sum(1 for t in obj.tasks.all() if t.status == ProjectTask.Status.DONE)
+        return sum(1 for t in obj.tasks.all() if t.status == ProjectTask.Status.TERMINE)
 
     def validate(self, attrs):
         start = attrs.get('start_date', getattr(self.instance, 'start_date', None))

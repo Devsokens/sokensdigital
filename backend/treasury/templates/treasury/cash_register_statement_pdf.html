@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>État de Caisse</title>
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 0.5cm;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            font-size: 10px;
+            color: #333;
+            background: white;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+
+        .company-info {
+            text-align: center;
+        }
+
+        .company-info h1 {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+
+        .company-info p {
+            font-size: 9px;
+            margin: 1px 0;
+        }
+
+        .title {
+            font-size: 13px;
+            font-weight: bold;
+            text-align: center;
+            margin: 10px 0;
+            text-decoration: underline;
+        }
+
+        .meta-info {
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 10px;
+        }
+
+        .meta-item {
+            margin-right: 30px;
+        }
+
+        .meta-label {
+            font-weight: bold;
+            font-size: 9px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+            font-size: 9px;
+        }
+
+        th {
+            background-color: #d0d0d0;
+            border: 1px solid #333;
+            padding: 6px;
+            font-weight: bold;
+            text-align: left;
+        }
+
+        td {
+            border: 1px solid #ccc;
+            padding: 5px;
+            height: 18px;
+            vertical-align: center;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .total-row {
+            background-color: #e8e8e8;
+            font-weight: bold;
+            border-top: 2px solid #333;
+        }
+
+        .amount {
+            width: 80px;
+        }
+
+        .reconciliation-section {
+            margin: 15px 10px;
+            border: 1px solid #333;
+            padding: 10px;
+        }
+
+        .reconciliation-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 10px;
+        }
+
+        .reconciliation-table {
+            width: 100%;
+            font-size: 9px;
+            margin-bottom: 10px;
+        }
+
+        .reconciliation-table td {
+            border: 1px solid #ccc;
+            padding: 4px;
+            height: auto;
+        }
+
+        .reconciliation-table td:first-child {
+            width: 50%;
+            font-weight: bold;
+        }
+
+        .signatures-section {
+            margin: 15px 10px 10px;
+            display: flex;
+            justify-content: space-around;
+        }
+
+        .signature-block {
+            text-align: center;
+            flex: 1;
+        }
+
+        .signature-line {
+            border-bottom: 1px solid #333;
+            height: 40px;
+            margin-bottom: 3px;
+        }
+
+        .signature-label {
+            font-size: 8px;
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 8px;
+            margin-top: 10px;
+            border-top: 1px solid #ccc;
+            padding-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="company-info">
+            <h1>SOKENS DIGITAL</h1>
+            <p>Société Koweïtienne d'Electronique Numérique Services</p>
+            <p>{{ company_address }}</p>
+        </div>
+    </div>
+
+    <div class="title">BROUILLARD DE CAISSE</div>
+
+    <div class="meta-info">
+        <div class="meta-item">
+            <div class="meta-label">Entreprise :</div>
+            <div>SOKENS DIGITAL</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label">Période :</div>
+            <div>{{ period_start|date:"01/m/Y" }} à {{ period_end|date:"d/m/Y" }}</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label">Caissier :</div>
+            <div>{{ cashier_name }}</div>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 30px;">N°</th>
+                <th style="width: 120px;">Libellé</th>
+                <th class="amount text-right">Encaissements</th>
+                <th class="amount text-right">Décaissements</th>
+                <th class="amount text-right">Solde</th>
+                <th style="width: 200px;">Observations</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in cash_entries %}
+            <tr>
+                <td class="text-center">{{ forloop.counter }}</td>
+                <td>{{ entry.get_source_display }}</td>
+                <td class="amount text-right">
+                    {% if entry.type == 'ENTREE' %}{{ entry.amount|floatformat:2 }}{% endif %}
+                </td>
+                <td class="amount text-right">
+                    {% if entry.type == 'SORTIE' %}{{ entry.amount|floatformat:2 }}{% endif %}
+                </td>
+                <td class="amount text-right">{{ entry.running_balance|default:"-"|floatformat:2 }}</td>
+                <td>{{ entry.reference }}</td>
+            </tr>
+            {% endfor %}
+
+            <tr class="total-row">
+                <td colspan="2"><strong>TOTAL</strong></td>
+                <td class="amount text-right"><strong>{{ total_entries|floatformat:2 }}</strong></td>
+                <td class="amount text-right"><strong>{{ total_exits|floatformat:2 }}</strong></td>
+                <td class="amount text-right"><strong>{{ final_balance|floatformat:2 }}</strong></td>
+                <td></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="reconciliation-section">
+        <div class="reconciliation-title">RAPPROCHEMENT DE CAISSE</div>
+        <table class="reconciliation-table">
+            <tr>
+                <td>Solde selon le brouillard</td>
+                <td class="text-right">{{ final_balance|floatformat:2 }} FCFA</td>
+            </tr>
+            <tr>
+                <td>Espèces en caisse (comptage physique)</td>
+                <td class="text-right"><span style="border-bottom: 1px solid #333;">_______________</span> FCFA</td>
+            </tr>
+            <tr>
+                <td>Différence (à justifier si non-nulle)</td>
+                <td class="text-right"><span style="border-bottom: 1px solid #333;">_______________</span> FCFA</td>
+            </tr>
+            <tr>
+                <td><strong>Observations :</strong></td>
+                <td></td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="signatures-section">
+        <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-label">Caissier</div>
+        </div>
+        <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-label">Responsable Financier</div>
+        </div>
+        <div class="signature-block">
+            <div class="signature-line"></div>
+            <div class="signature-label">Gérant</div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Document généré le {{ now|date:"d/m/Y à H:i" }} | Rapprochement de caisse mensuel | Confidentiel</p>
+    </div>
+</body>
+</html>

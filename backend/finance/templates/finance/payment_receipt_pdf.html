@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reçu {{ receipt.receipt_number }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            color: #333;
+            line-height: 1.6;
+            padding: 20mm;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #2c5aa0;
+            padding-bottom: 15px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            color: #2c5aa0;
+            margin-bottom: 5px;
+        }
+
+        .header .subtitle {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .receipt-number {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .info-section {
+            margin-bottom: 20px;
+        }
+
+        .info-section h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #2c5aa0;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .info-section p {
+            font-size: 11px;
+            margin-bottom: 3px;
+        }
+
+        .two-columns {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .column {
+            flex: 1;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        table th {
+            background-color: #f5f5f5;
+            padding: 8px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: bold;
+            color: #2c5aa0;
+            border-bottom: 2px solid #2c5aa0;
+        }
+
+        table td {
+            padding: 8px;
+            font-size: 11px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .amount-cell {
+            text-align: right;
+            font-weight: bold;
+        }
+
+        .declaration {
+            background-color: #e8f5e9;
+            border-left: 4px solid #2c5aa0;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 3px;
+        }
+
+        .declaration p {
+            font-size: 10px;
+            margin-bottom: 5px;
+        }
+
+        .footer {
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+            font-size: 10px;
+            color: #666;
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .stamp {
+            text-align: center;
+            margin-top: 20px;
+            padding: 15px;
+            border: 2px dashed #2c5aa0;
+            border-radius: 5px;
+            color: #2c5aa0;
+            font-weight: bold;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>REÇU DE VERSEMENT</h1>
+        <p class="subtitle">Sokens Digital — Agence Numérique</p>
+    </div>
+
+    <div class="receipt-number">
+        Reçu N°: {{ receipt.receipt_number }}
+    </div>
+
+    <div class="two-columns">
+        <div class="column">
+            <div class="info-section">
+                <h3>De:</h3>
+                <p>Sokens Digital</p>
+                <p>Agence numérique</p>
+                <p>Email: contact@sokensdigital.com</p>
+            </div>
+        </div>
+
+        <div class="column">
+            <div class="info-section">
+                <h3>Vers:</h3>
+                {% if invoice.client %}
+                    <p><strong>{{ invoice.client.company_name }}</strong></p>
+                    {% if invoice.client.email %}<p>{{ invoice.client.email }}</p>{% endif %}
+                {% else %}
+                    <p><strong>{{ invoice.client_name }}</strong></p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="two-columns">
+        <div class="column">
+            <div class="info-section">
+                <h3>Facture:</h3>
+                <p><strong>{{ invoice.invoice_number }}</strong></p>
+                <p>Date: {{ invoice.issue_date|date:"d/m/Y" }}</p>
+                <p>Montant total: {{ invoice.amount_ttc|floatformat:2 }} FCFA</p>
+            </div>
+        </div>
+
+        <div class="column">
+            <div class="info-section">
+                <h3>Versement:</h3>
+                <p>Date: {{ issue_date }}</p>
+                <p>Méthode: {{ payment.get_payment_method_display }}</p>
+            </div>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 60%">Description</th>
+                <th style="width: 20%">Montant versé</th>
+                <th style="width: 20%">Référence</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Versement partiel — Facture {{ invoice.invoice_number }}</td>
+                <td class="amount-cell">{{ payment.amount|floatformat:2 }} FCFA</td>
+                <td style="text-align: center;">{{ payment.id|truncatechars:8 }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="declaration">
+        <p><strong>Déclaration:</strong></p>
+        <p>Nous reconnaissons avoir reçu du client dénommé ci-dessus la somme de {{ payment.amount|floatformat:2 }} FCFA en règlement partiel de la facture {{ invoice.invoice_number }} datée du {{ invoice.issue_date|date:"d/m/Y" }}.</p>
+        <p>Cette somme n'engage que la part spécifiée ci-dessus et ne constitue pas une acceptation des autres conditions de paiement antérieures.</p>
+    </div>
+
+    <div class="stamp">
+        ✓ REÇU ACQUITTÉ
+    </div>
+
+    <div class="footer">
+        <p>Généré le {{ issue_date }}</p>
+        <p>Sokens Digital — Plateforme de gestion</p>
+        <p>Ce reçu constitue une preuve légale de versement</p>
+    </div>
+</body>
+</html>
