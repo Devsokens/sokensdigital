@@ -8,7 +8,10 @@ from django.utils.text import slugify
 try:
     from weasyprint import HTML, CSS
     WEASYPRINT_AVAILABLE = True
-except ImportError:
+except (ImportError, OSError):
+    # OSError (pas seulement ImportError): weasyprint plante au chargement
+    # si la lib native GTK/Pango manque sur la machine (courant en dev
+    # Windows sans GTK3 installé) — pas juste quand le paquet pip est absent.
     WEASYPRINT_AVAILABLE = False
 
 

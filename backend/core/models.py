@@ -276,7 +276,7 @@ class DocumentAttachment(LoggedModel):
     file_name = models.CharField(max_length=255)
     file_size = models.BigIntegerField(default=0)  # bytes
 
-    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='uploaded_documents')
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='uploaded_attachments')
     notes = models.TextField(blank=True)
 
     class Meta(LoggedModel.Meta):

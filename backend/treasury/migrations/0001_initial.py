@@ -91,7 +91,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='capitalcontribution',
             name='bank_entry',
-            field=models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='capital_contribution', to='treasury.bankentry'),
+            field=models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='linked_capital_contribution', to='treasury.bankentry'),
         ),
         migrations.AddIndex(
             model_name='cashentry',

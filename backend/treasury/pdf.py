@@ -1,12 +1,32 @@
 from io import BytesIO
 from django.template.loader import render_to_string
 from django.utils import timezone
-from weasyprint import HTML, CSS
 from decimal import Decimal
+
+try:
+    from weasyprint import HTML, CSS
+    WEASYPRINT_AVAILABLE = True
+except (ImportError, OSError):
+    # OSError (pas seulement ImportError): weasyprint plante au chargement
+    # si la lib native GTK/Pango (libgobject-2.0-0 etc) n'est pas présente
+    # sur la machine — cas courant en dev Windows sans GTK installé. Un
+    # module PDF optionnel ne doit pas empêcher tout Django de démarrer
+    # (ni bloquer manage.py migrate) juste parce que cette lib système
+    # manque localement.
+    WEASYPRINT_AVAILABLE = False
+
+
+def _require_weasyprint():
+    if not WEASYPRINT_AVAILABLE:
+        raise ImportError(
+            'weasyprint indisponible (lib native GTK/Pango manquante). '
+            'Sous Windows : installer GTK3 runtime, ou utiliser WSL/Docker pour la génération PDF.'
+        )
 
 
 def generate_cash_voucher_pdf(voucher):
     """Générer PDF pièce de caisse (entrée/sortie)."""
+    _require_weasyprint()
     context = {
         'voucher': voucher,
         'company_address': 'Adresse Sokens Digital',
@@ -25,6 +45,7 @@ def generate_cash_voucher_pdf(voucher):
 
 def generate_cash_register_statement_pdf(period_start, period_end, cash_entries, cashier_name):
     """Générer PDF état de caisse (brouillard de caisse)."""
+    _require_weasyprint()
 
     # Calculer totaux et soldes courants
     total_entries = Decimal('0')
@@ -65,6 +86,7 @@ def generate_cash_register_statement_pdf(period_start, period_end, cash_entries,
 
 def generate_disbursement_request_pdf(disbursement):
     """Générer PDF demande de décaissement."""
+    _require_weasyprint()
     context = {
         'disbursement': disbursement,
         'company_address': 'Adresse Sokens Digital',

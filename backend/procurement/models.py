@@ -143,7 +143,7 @@ class SupplierInvoice(LoggedModel):
     # Pièce caisse liée — si réglée en espèces. Pointe vers treasury.CashEntry
     # (modèle unifié depuis fusion avec l'ancien procurement.CashVoucher, cf.
     # audit AUDIT_LOGIQUE_METIER_TRESORERIE_2026-08.md §H3).
-    cash_entry = models.OneToOneField('treasury.CashEntry', on_delete=models.SET_NULL, null=True, blank=True, related_name='supplier_invoice')
+    cash_entry = models.OneToOneField('treasury.CashEntry', on_delete=models.SET_NULL, null=True, blank=True, related_name='paid_supplier_invoice')
 
     received_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='received_invoices')
     received_at = models.DateTimeField(auto_now_add=True)

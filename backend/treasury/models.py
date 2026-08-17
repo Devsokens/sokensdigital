@@ -156,7 +156,7 @@ class CapitalContribution(LoggedModel):
     # - Annonce légale publication
 
     # Liens
-    bank_entry = models.OneToOneField(BankEntry, on_delete=models.SET_NULL, null=True, blank=True, related_name='capital_contribution')
+    bank_entry = models.OneToOneField(BankEntry, on_delete=models.SET_NULL, null=True, blank=True, related_name='linked_capital_contribution')
 
     # Validation
     validated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='validated_capital_contributions')

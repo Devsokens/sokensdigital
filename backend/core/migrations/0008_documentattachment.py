@@ -27,7 +27,7 @@ class Migration(migrations.Migration):
                 ('file_size', models.BigIntegerField(default=0)),
                 ('notes', models.TextField(blank=True)),
                 ('content_type', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='contenttypes.contenttype')),
-                ('uploaded_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='uploaded_documents', to=settings.AUTH_USER_MODEL)),
+                ('uploaded_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='uploaded_attachments', to=settings.AUTH_USER_MODEL)),
             ],
             options={
                 'ordering': ['-created_at'],
