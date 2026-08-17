@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0009_rename_core_docume_content_a1b2c3_idx_core_docume_content_72d5a0_idx_and_more'),
+        ('core', '0011_rename_core_docume_content_a1b2c3_idx_core_docume_content_72d5a0_idx_and_more'),
         ('procurement', '0002_supplierinvoice_cash_entry'),
         ('treasury', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),

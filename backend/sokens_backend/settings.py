@@ -110,6 +110,7 @@ INSTALLED_APPS = [
     'messaging',
     'procurement',
     'treasury',
+    'support',
 ]
 
 AUTH_USER_MODEL = 'core.User'

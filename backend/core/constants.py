@@ -70,6 +70,8 @@ MODULES = [
     ('tva', 'Fiscalité (TVA)', 'Finance & Comptabilité'),
     ('achats', 'Opérations d\'achats', 'Finance & Comptabilité'),
     ('tresorerie', 'Trésorerie (caisse & banque)', 'Finance & Comptabilité'),
+    ('tickets', 'Tickets', 'Support Client'),
+    ('base-connaissances', 'Base de connaissances', 'Support Client'),
     ('parametres', 'Paramètres', 'Paramètres'),
 ]
 
@@ -175,8 +177,10 @@ DEFAULT_ROLE_PERMISSIONS = {
         _read_only('dashboard'),
         {'messagerie': ['voir', 'creer']},
         # CDC §4.8 — "accès aux tickets, base de connaissances, et fiches
-        # clients" — lecture seule, création/édition réservées à
-        # Commercial/Admin côté API.
+        # clients" — tickets et base de connaissances gérés en propre par
+        # le Support Client ; fiches clients en lecture seule (création/
+        # édition réservées à Commercial/Admin côté API).
+        _full('tickets', 'base-connaissances'),
         _read_only('clients'),
     ),
 }

@@ -104,3 +104,87 @@ export async function acceptPublicQuote(token: string): Promise<PublicQuote> {
   if (!response.ok) throw new Error("Impossible d'accepter ce devis pour l'instant.");
   return response.json();
 }
+
+export interface PublicFAQEntry {
+  id: string;
+  question: string;
+  answer: string;
+  category: string;
+  order: number;
+}
+
+/** Server-side fetch — same revalidate-every-60s pattern as getSiteSettings,
+ * with an empty-array fallback so the /faq page never breaks if the
+ * backend is unreachable. */
+export async function listPublicFAQ(): Promise<PublicFAQEntry[]> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/public/faq/`, {
+      next: { revalidate: 60 },
+    });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return data.results ?? data;
+  } catch {
+    return [];
+  }
+}
+
+export interface PublicTicketMessage {
+  id: string;
+  sender_type: "VISITEUR" | "STAFF";
+  author: { id: string; first_name: string; last_name: string } | null;
+  body: string;
+  created_at: string;
+}
+
+export interface PublicTicket {
+  id: string;
+  visitor_name: string;
+  subject: string;
+  status: "OUVERT" | "EN_COURS" | "FERME";
+  messages: PublicTicketMessage[];
+  created_at: string;
+}
+
+export interface CreateTicketInput {
+  visitor_name: string;
+  visitor_email: string;
+  subject?: string;
+  message: string;
+}
+
+/** Client-side call — the support chat widget runs entirely in the
+ * browser, no Firebase auth. The returned access_token is the visitor's
+ * only credential to poll/reply afterwards (persisted in localStorage by
+ * the widget, not here). */
+export async function createSupportTicket(data: CreateTicketInput): Promise<{ id: string; access_token: string }> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/public/tickets/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    if (response.status === 429) throw new Error("Trop de tentatives. Réessaie dans une minute.");
+    throw new Error("Impossible d'envoyer le message. Réessaie dans un instant.");
+  }
+  return response.json();
+}
+
+export async function getSupportTicket(accessToken: string): Promise<PublicTicket> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/public/tickets/${accessToken}/`);
+  if (!response.ok) throw new Error("Cette conversation est introuvable.");
+  return response.json();
+}
+
+export async function replySupportTicket(accessToken: string, message: string): Promise<PublicTicketMessage> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/public/tickets/${accessToken}/reply/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+  });
+  if (!response.ok) {
+    if (response.status === 429) throw new Error("Trop de tentatives. Réessaie dans une minute.");
+    throw new Error("Impossible d'envoyer le message.");
+  }
+  return response.json();
+}

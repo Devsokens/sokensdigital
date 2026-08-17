@@ -23,6 +23,8 @@ import {
   ClipboardList,
   ShoppingCart,
   Wallet,
+  Headset,
+  Library,
   type LucideIcon,
 } from "lucide-react";
 
@@ -99,6 +101,13 @@ export const ADMIN_SECTIONS: NavSection[] = [
     ],
   },
   {
+    title: "Support Client",
+    items: [
+      { label: "Tickets", href: "/admin/support/tickets", icon: Headset, moduleKey: "tickets" },
+      { label: "Base de connaissances", href: "/admin/support/base-connaissances", icon: Library, moduleKey: "base-connaissances" },
+    ],
+  },
+  {
     title: "Paramètres",
     items: [
       { label: "Réseaux sociaux", href: "/admin/parametres/reseaux-sociaux", icon: Settings, moduleKey: "parametres" },
@@ -115,6 +124,7 @@ export const SECTION_ICONS: Record<string, LucideIcon> = {
   "Marketing & Commercial": Target,
   "Technique": FolderKanban,
   "Finance & Comptabilité": PieChart,
+  "Support Client": Headset,
   "Paramètres": Settings,
 };
 
@@ -127,6 +137,7 @@ export const SECTION_SHORT_LABELS: Record<string, string> = {
   "Marketing & Commercial": "Marketing",
   "Technique": "Technique",
   "Finance & Comptabilité": "Finance",
+  "Support Client": "Support",
   "Paramètres": "Réglages",
 };
 

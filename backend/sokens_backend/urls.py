@@ -13,6 +13,7 @@ from drf_spectacular.views import (
 )
 
 from marketing.urls import public_urlpatterns as marketing_public_urlpatterns
+from support.urls import public_urlpatterns as support_public_urlpatterns
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -31,7 +32,9 @@ urlpatterns = [
     path('api/v1/finance/', include('finance.urls')),
     path('api/v1/procurement/', include('procurement.urls')),
     path('api/v1/treasury/', include('treasury.urls')),
+    path('api/v1/support/', include('support.urls')),
     path('api/v1/public/', include(marketing_public_urlpatterns)),
+    path('api/v1/public/', include(support_public_urlpatterns)),
     path('api/administration/', include('administration.urls')),
     path('api/technique/', include('technique.urls')),
     path('api/messaging/', include('messaging.urls')),

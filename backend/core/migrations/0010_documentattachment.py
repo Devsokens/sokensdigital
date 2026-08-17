@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ('contenttypes', '0002_remove_content_type_name'),
-        ('core', '0007_add_cahier_des_charges_permission'),
+        ('core', '0008_add_support_permissions'),
     ]
 
     operations = [
