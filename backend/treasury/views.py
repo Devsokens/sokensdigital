@@ -38,7 +38,7 @@ class IsCaissierFinanceOrAdmin(permissions.BasePermission):
 
 class CashEntryViewSet(viewsets.ModelViewSet):
     """Gestion caisse physique — entrées/sorties espèces (pièces de caisse)."""
-    queryset = CashEntry.objects.all()
+    queryset = CashEntry.objects.select_related('created_by', 'reconciled_by')
     serializer_class = CashEntrySerializer
     permission_classes = [permissions.IsAuthenticated, IsCaissierFinanceOrAdmin]
     filterset_fields = ['type', 'source', 'date']
@@ -106,7 +106,7 @@ class CashEntryViewSet(viewsets.ModelViewSet):
 
 class BankEntryViewSet(viewsets.ModelViewSet):
     """Gestion compte bancaire — entrées/sorties banque."""
-    queryset = BankEntry.objects.all()
+    queryset = BankEntry.objects.select_related('created_by', 'reconciled_by')
     serializer_class = BankEntrySerializer
     permission_classes = [permissions.IsAuthenticated, IsFinanceOrAdmin]
     filterset_fields = ['type', 'source', 'date']
@@ -148,7 +148,7 @@ class BankEntryViewSet(viewsets.ModelViewSet):
 
 class CapitalContributionViewSet(viewsets.ModelViewSet):
     """Gestion apports en capital — associés apportent numéraire."""
-    queryset = CapitalContribution.objects.all()
+    queryset = CapitalContribution.objects.select_related('validated_by', 'posted_by')
     serializer_class = CapitalContributionSerializer
     permission_classes = [permissions.IsAuthenticated, IsFinanceOrAdmin]
     filterset_fields = ['status', 'contribution_date']

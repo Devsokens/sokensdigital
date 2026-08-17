@@ -432,7 +432,8 @@ class TicketViewSet(viewsets.ModelViewSet):
 class KnowledgeBaseViewSet(viewsets.ModelViewSet):
     """Base de connaissances technique."""
     serializer_class = KnowledgeBaseSerializer
-    queryset = KnowledgeBase.objects.all()
+    # select_related : get_created_by_name() traverse created_by par ligne.
+    queryset = KnowledgeBase.objects.select_related('created_by')
     search_fields = ['title', 'content', 'tags']
 
     def get_permissions(self):

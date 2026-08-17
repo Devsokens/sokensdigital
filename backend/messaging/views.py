@@ -1,5 +1,6 @@
 import uuid
 
+from django.db import models
 from rest_framework import viewsets, permissions
 from rest_framework.exceptions import PermissionDenied, ValidationError as DRFValidationError
 from rest_framework.response import Response
@@ -26,7 +27,14 @@ class ChannelMetadataViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        qs = ChannelMetadata.objects.all()
+        # participant_count annoté en une seule requête (GROUP BY) au lieu
+        # d'un COUNT(*) séparé par canal — le serializer lisait
+        # participants.count via `source`, soit N requêtes pour N canaux
+        # affichés. distinct=True car le JOIN participants est déjà utilisé
+        # par le filtre ci-dessous pour les non-admins.
+        qs = ChannelMetadata.objects.annotate(
+            participant_count=models.Count('participants', distinct=True)
+        )
         if user.roles.filter(name__in=ADMIN_ROLES).exists():
             return qs
         return qs.filter(participants__user=user).distinct()
@@ -98,7 +106,9 @@ class ChannelParticipantViewSet(viewsets.ModelViewSet):
         if not channel:
             return ChannelParticipant.objects.none()
         self._check_access(channel)
-        return ChannelParticipant.objects.filter(channel=channel)
+        # select_related('user') : ChannelParticipantSerializer.user_email
+        # traverse la FK par ligne — sans ça, N participants = N requêtes.
+        return ChannelParticipant.objects.filter(channel=channel).select_related('user')
 
     def perform_create(self, serializer):
         channel = self._get_channel()

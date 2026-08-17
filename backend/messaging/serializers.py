@@ -15,7 +15,20 @@ class ChannelParticipantSerializer(serializers.ModelSerializer):
 
 
 class ChannelMetadataSerializer(serializers.ModelSerializer):
-    participant_count = serializers.IntegerField(source='participants.count', read_only=True)
+    participant_count = serializers.SerializerMethodField()
+
+    def get_participant_count(self, obj):
+        # list/retrieve passent par ChannelMetadataViewSet.get_queryset(),
+        # qui annote déjà participant_count (Count('participants',
+        # distinct=True), 1 seule requête pour toute la page) — le lire
+        # directement évite un COUNT(*) séparé par ligne affichée.
+        # create()/update() renvoient une instance non annotée (pas
+        # re-fetchée depuis get_queryset) : fallback sur un count() direct,
+        # toujours correct, juste pas optimisé (un seul objet de toute
+        # façon, donc pas de N+1 possible dans ce cas).
+        if hasattr(obj, 'participant_count'):
+            return obj.participant_count
+        return obj.participants.count()
 
     class Meta:
         model = ChannelMetadata

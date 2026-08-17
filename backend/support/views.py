@@ -77,7 +77,10 @@ class PublicTicketCreateView(APIView):
     'quote tracking_token. Used by the chat widget to poll for staff replies.',
 )
 class PublicTicketDetailView(generics.RetrieveAPIView):
-    queryset = SupportTicket.objects.prefetch_related('messages')
+    # messages__author (pas juste messages) : TicketMessageSerializer.author
+    # traverse toujours la FK, un ticket avec 10 messages sans ce prefetch
+    # = 10 requêtes en plus par affichage.
+    queryset = SupportTicket.objects.prefetch_related('messages__author')
     serializer_class = SupportTicketPublicDetailSerializer
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
@@ -132,7 +135,7 @@ class FAQViewSet(viewsets.ModelViewSet):
     partial_update=extend_schema(tags=['Support Client'], summary='Update ticket status/assignee'),
 )
 class SupportTicketViewSet(viewsets.ModelViewSet):
-    queryset = SupportTicket.objects.select_related('assigned_to').prefetch_related('messages')
+    queryset = SupportTicket.objects.select_related('assigned_to').prefetch_related('messages__author')
     permission_classes = [IsSupportStaff]
     http_method_names = ['get', 'patch', 'post', 'head', 'options']
 

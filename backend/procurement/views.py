@@ -65,7 +65,12 @@ class SupplierViewSet(viewsets.ModelViewSet):
 
 class ProcurementRequestViewSet(viewsets.ModelViewSet):
     """Fiches besoins — ProcurementRequest."""
-    queryset = ProcurementRequest.objects.all()
+    # select_related : le serializer traverse 4 FK par ligne (requested_by,
+    # rcf_approved_by, manager_approved_by, department) — sans ça, une
+    # page de 25 lignes coûte ~101 requêtes SQL au lieu d'une seule jointe.
+    queryset = ProcurementRequest.objects.select_related(
+        'department', 'requested_by', 'rcf_approved_by', 'manager_approved_by',
+    )
     serializer_class = ProcurementRequestSerializer
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['department', 'status']
@@ -135,7 +140,9 @@ class ProcurementRequestViewSet(viewsets.ModelViewSet):
 
 class SupplierQuoteViewSet(viewsets.ModelViewSet):
     """Devis fournisseur."""
-    queryset = SupplierQuote.objects.all()
+    queryset = SupplierQuote.objects.select_related(
+        'supplier', 'rcf_validated_by', 'manager_validated_by',
+    )
     serializer_class = SupplierQuoteSerializer
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['procurement', 'supplier', 'status']
@@ -186,7 +193,9 @@ class SupplierQuoteViewSet(viewsets.ModelViewSet):
 
 class SupplierInvoiceViewSet(viewsets.ModelViewSet):
     """Factures fournisseur."""
-    queryset = SupplierInvoice.objects.all()
+    queryset = SupplierInvoice.objects.select_related(
+        'supplier', 'received_by', 'validated_by',
+    )
     serializer_class = SupplierInvoiceSerializer
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['supplier', 'procurement', 'status']

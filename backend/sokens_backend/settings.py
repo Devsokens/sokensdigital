@@ -126,6 +126,12 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    # WhiteNoise ne compresse que les statics — les réponses JSON de l'API
+    # (souvent le gros du trafic : listes paginées, Grand Livre, factures)
+    # partaient jusqu'ici sans compression. Gain typique 70-85% de taille
+    # sur du JSON, gratuit et sans risque (négociation de contenu standard
+    # HTTP, aucun client ne casse s'il n'envoie pas Accept-Encoding: gzip).
+    'django.middleware.gzip.GZipMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',

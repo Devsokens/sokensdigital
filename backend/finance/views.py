@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.core.cache import cache
 from django.db import models
 from django.db.models import Q, Sum
 from django.utils import timezone
@@ -562,6 +563,16 @@ def fec_export(request, period_id):
     return response
 
 
+FINANCE_DASHBOARD_CACHE_KEY = 'finance:dashboard:v1'
+# 5 min — le settings.py promettait déjà ce comportement (commentaire
+# "Cache (also used to memoize dashboard aggregations behind a TTL"),
+# jamais câblé jusqu'ici. Plusieurs agrégations pleine-table à chaque vue
+# de la page, alors qu'une fraîcheur à 5 min est largement suffisante pour
+# un dashboard financier consulté plusieurs fois par jour par la même
+# personne.
+FINANCE_DASHBOARD_CACHE_TTL = 300
+
+
 @extend_schema(
     tags=['Finance & Comptabilité'],
     summary='Finance dashboard (§4.1 Analytique & Reporting)',
@@ -578,11 +589,15 @@ def finance_dashboard(request):
     if not has_role(request.user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN):
         return Response(status=status.HTTP_403_FORBIDDEN)
 
+    cached = cache.get(FINANCE_DASHBOARD_CACHE_KEY)
+    if cached is not None:
+        return Response(cached)
+
     bank_lines = TransactionLine.objects.filter(account__code='512')
-    cash_balance = (
-        (bank_lines.aggregate(total=Sum('debit'))['total'] or Decimal('0'))
-        - (bank_lines.aggregate(total=Sum('credit'))['total'] or Decimal('0'))
-    )
+    # Une seule requête (2 Sum dans le même aggregate) au lieu de deux scans
+    # identiques de bank_lines.
+    bank_totals = bank_lines.aggregate(debit_total=Sum('debit'), credit_total=Sum('credit'))
+    cash_balance = (bank_totals['debit_total'] or Decimal('0')) - (bank_totals['credit_total'] or Decimal('0'))
 
     charge_lines = TransactionLine.objects.filter(account__account_class=Account.AccountClass.CHARGE)
     produit_lines = TransactionLine.objects.filter(account__account_class=Account.AccountClass.PRODUIT)
@@ -599,9 +614,11 @@ def finance_dashboard(request):
         .values('project_id').annotate(total=Sum('amount')).order_by()
     }
 
-    return Response({
+    payload = {
         'cash_balance': str(cash_balance),
         'gross_result': str(total_produits - total_charges),
         'dso_days': dso_days,
         'executed_disbursements_by_project': disbursements_by_project,
-    })
+    }
+    cache.set(FINANCE_DASHBOARD_CACHE_KEY, payload, FINANCE_DASHBOARD_CACHE_TTL)
+    return Response(payload)
