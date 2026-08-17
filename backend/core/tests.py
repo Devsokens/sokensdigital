@@ -23,6 +23,60 @@ def _give_role(user, name):
 
 
 
+class FirebaseAuthenticationTests(APITestCase):
+    """Exercice core.authentication.FirebaseAuthentication directement (pas
+    via force_authenticate) — verify_id_token est mocké, tout le reste est
+    le vrai code de résolution/provisioning."""
+
+    def _request_with_token(self, token='fake-token'):
+        return APIClient().get('/api/v1/auth/me/', HTTP_AUTHORIZATION=f'Bearer {token}')
+
+    @patch('core.authentication.auth.verify_id_token')
+    def test_preprovisioned_user_is_linked_by_email_hash(self, mock_verify):
+        # Compte créé à l'avance (bootstrap_admin, ProvisionUserView...)
+        # sans firebase_uid encore renseigné — premier login doit le lier.
+        user = User.objects.create(email='preprovisioned@sokensdigital.com', first_name='Ada')
+        self.assertIsNone(user.firebase_uid)
+        mock_verify.return_value = {'uid': 'firebase-uid-123', 'email': 'preprovisioned@sokensdigital.com'}
+
+        response = self._request_with_token()
+
+        self.assertEqual(response.status_code, 200)
+        user.refresh_from_db()
+        self.assertEqual(user.firebase_uid, 'firebase-uid-123')
+
+    @patch('core.authentication.auth.verify_id_token')
+    def test_unprovisioned_email_is_rejected_not_auto_created(self, mock_verify):
+        # Sécurité (audit 2026-08, finding C1) : un token Firebase valide
+        # pour une adresse SANS compte Django pré-provisionné ne doit
+        # jamais créer silencieusement un User actif — sinon n'importe qui
+        # capable de s'inscrire côté Firebase Auth (self-signup, indépendant
+        # des Firestore rules) obtient un accès API IsAuthenticated.
+        mock_verify.return_value = {'uid': 'stranger-uid', 'email': 'stranger@example.com'}
+
+        response = self._request_with_token()
+
+        self.assertEqual(response.status_code, 401)
+        self.assertFalse(User.objects.filter(email_hash__isnull=False, firebase_uid='stranger-uid').exists())
+
+    @patch('core.authentication.auth.verify_id_token')
+    def test_invalid_token_returns_generic_message(self, mock_verify):
+        # Sécurité (finding H1) : le message d'exception brut du SDK ne
+        # doit jamais atteindre le client.
+        mock_verify.side_effect = ValueError('some internal Firebase SDK detail')
+
+        response = self._request_with_token()
+
+        self.assertEqual(response.status_code, 401)
+        self.assertNotIn('internal Firebase SDK detail', response.content.decode())
+
+    def test_whitespace_authorization_header_does_not_crash(self):
+        # Sécurité (finding H2) : IndexError non catché sur un header
+        # Authorization composé uniquement d'espaces.
+        response = APIClient().get('/api/v1/auth/me/', HTTP_AUTHORIZATION='   ')
+        self.assertEqual(response.status_code, 401)
+
+
 class MeViewTests(APITestCase):
     """
     Exercises GET/PATCH /api/v1/auth/me/ with `force_authenticate`, i.e.
@@ -572,12 +626,23 @@ class ChatAttachmentUploadViewTests(APITestCase):
         'CLOUDINARY_CLOUD_NAME': 'test-cloud', 'CLOUDINARY_API_KEY': 'test-key', 'CLOUDINARY_API_SECRET': 'test-secret',
     })
     @patch('core.storage.cloudinary.uploader.upload')
-    def test_authenticated_user_can_upload_any_file_type(self, mock_upload):
+    def test_authenticated_user_can_upload_allowed_file_type(self, mock_upload):
         mock_upload.return_value = {'secure_url': 'https://res.cloudinary.com/test-cloud/raw/upload/v1/chat-attachments/abc.pdf'}
         response = self.client.post('/api/v1/uploads/chat-attachment/', {'file': self.any_file()}, format='multipart')
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.json()['url'], 'https://res.cloudinary.com/test-cloud/raw/upload/v1/chat-attachments/abc.pdf')
         self.assertEqual(mock_upload.call_args.kwargs['folder'], 'chat-attachments')
+
+    def test_disallowed_file_type_rejected(self):
+        # Défense contre la distribution de malware via un lien Cloudinary
+        # de confiance en pièce jointe chat — core.storage.ALLOWED_CHAT_
+        # ATTACHMENT_TYPES exclut délibérément les exécutables/scripts.
+        response = self.client.post(
+            '/api/v1/uploads/chat-attachment/',
+            {'file': self.any_file(content_type='application/x-msdownload', name='payload.exe')},
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 400)
 
 
 class RoleViewSetTests(APITestCase):

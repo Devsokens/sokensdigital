@@ -27,6 +27,20 @@ MAX_VIDEO_UPLOAD_SIZE = 25 * 1024 * 1024  # 25 Mo — short demo clips only, not
 ALLOWED_VIDEO_CONTENT_TYPES = {'video/mp4', 'video/webm', 'video/quicktime'}
 
 MAX_FILE_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 Mo — matches the chat-attachment cap from the (now unused) storage.rules
+# Pièces jointes chat — documents/images usuels uniquement. Pas d'exécutables,
+# scripts, HTML (vecteur XSS/malware si le lien Cloudinary est cliqué par un
+# collègue qui fait confiance au domaine). Étendre à la demande plutôt que
+# l'inverse si un usage légitime bloqué est signalé.
+ALLOWED_CHAT_ATTACHMENT_TYPES = {
+    'image/png', 'image/jpeg', 'image/webp', 'image/gif',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain', 'text/csv',
+    'application/zip',
+}
 
 _bucket_ensured = False
 
@@ -157,11 +171,13 @@ def upload_video(file, folder: str) -> str:
 
 
 def upload_file(file, folder: str) -> str:
-    """Uploads an arbitrary file (chat attachments, not just images) to
-    Cloudinary and returns its public URL. No type restriction beyond the
-    size cap — the caller is always an authenticated user, same trust
-    level firestore/storage.rules granted any signed-in user before Storage
-    required Blaze."""
+    """Uploads a chat attachment (documents/images, not arbitrary files) to
+    Cloudinary and returns its public URL. Type-restricted to
+    ALLOWED_CHAT_ATTACHMENT_TYPES — un fichier authentifié uploadé n'est pas
+    pour autant un fichier de confiance ; un exécutable/script partagé en
+    pièce jointe piège les collègues qui font confiance au lien."""
+    if file.content_type not in ALLOWED_CHAT_ATTACHMENT_TYPES:
+        raise ValidationError(f'Type de fichier non autorisé : {file.content_type}.')
     if file.size > MAX_FILE_UPLOAD_SIZE:
         raise ValidationError('Le fichier dépasse la taille maximale autorisée (20 Mo).')
     return _upload_to_cloudinary(file.read(), folder)

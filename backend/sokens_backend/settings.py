@@ -111,6 +111,10 @@ INSTALLED_APPS = [
     'procurement',
     'treasury',
     'support',
+    # Rate-limit/lockout sur /admin/login — le formulaire Django admin
+    # n'est couvert par aucun throttle DRF (ceux-ci ne s'appliquent qu'aux
+    # vues API). Sans axes, /admin/ est bruteforçable sans limite.
+    'axes',
 ]
 
 AUTH_USER_MODEL = 'core.User'
@@ -127,7 +131,24 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Doit être après AuthenticationMiddleware — voir django-axes docs.
+    'axes.middleware.AxesMiddleware',
 ]
+
+AUTHENTICATION_BACKENDS = [
+    # Doit être en premier — axes doit voir la tentative avant que
+    # ModelBackend ne l'authentifie, sinon il ne compte rien.
+    'axes.backends.AxesStandaloneBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# Verrouille /admin/login après 5 échecs par compte — le formulaire admin
+# n'est couvert par aucun throttle DRF (ceux-ci ne s'appliquent qu'aux
+# vues API, pas au login Django classique).
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = 1  # heure
+AXES_LOCKOUT_PARAMETERS = [['username', 'ip_address']]
+AXES_RESET_ON_SUCCESS = True
 
 # In local development it's convenient to allow every origin. In any real
 # deployment, set CORS_ALLOWED_ORIGINS (comma-separated) instead — e.g. the

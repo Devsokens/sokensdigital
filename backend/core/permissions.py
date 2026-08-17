@@ -162,6 +162,15 @@ class IsProjectMember(permissions.BasePermission):
     - tout objet ayant un FK ``project`` vers un Project
     """
 
+    def has_permission(self, request, view):
+        # DRF n'appelle has_object_permission() que sur les actions qui
+        # passent par get_object() (retrieve/update/destroy) — sans ce
+        # garde, une vue qui utilise cette classe SEULE (sans queryset
+        # scopé) laisserait passer n'importe quel utilisateur authentifié
+        # sur list/create, la vérif "membre du projet" ne s'appliquant
+        # jamais. Le vrai filtrage doit aussi venir de get_queryset().
+        return bool(request.user and request.user.is_authenticated)
+
     def has_object_permission(self, request, view, obj):
         # Déterminer l'objet Project
         if hasattr(obj, 'members'):
@@ -192,6 +201,11 @@ class IsAssignedDeveloper(permissions.BasePermission):
     Accès objet : autorise le développeur assigné (Task.assigned_to
     ou Ticket.assigned_developer).
     """
+
+    def has_permission(self, request, view):
+        # Voir IsProjectMember.has_permission — même piège DRF (has_object_
+        # permission n'est jamais consulté sur list/create).
+        return bool(request.user and request.user.is_authenticated)
 
     def has_object_permission(self, request, view, obj):
         assigned = getattr(obj, 'assigned_to', None)

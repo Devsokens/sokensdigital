@@ -5,6 +5,7 @@ import json
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.core.exceptions import ValidationError
+from django.core.validators import FileExtensionValidator
 from django.utils import timezone
 from django.forms.models import model_to_dict
 from django.core.serializers.json import DjangoJSONEncoder
@@ -245,6 +246,19 @@ class Notification(LoggedModel):
         ]
 
 
+# Pièces justificatives comptables — PDF/scan uniquement, pas d'exécutables
+# ni de HTML. Pas encore d'endpoint d'upload câblé sur ce modèle à ce jour,
+# mais les validators sont posés dès maintenant pour que le premier endpoint
+# qui l'utilisera hérite d'une contrainte plutôt que d'un champ ouvert.
+DOCUMENT_ATTACHMENT_ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png']
+DOCUMENT_ATTACHMENT_MAX_SIZE = 10 * 1024 * 1024  # 10 Mo
+
+
+def validate_document_attachment_size(file):
+    if file.size > DOCUMENT_ATTACHMENT_MAX_SIZE:
+        raise ValidationError('Le fichier dépasse la taille maximale autorisée (10 Mo).')
+
+
 class DocumentAttachment(LoggedModel):
     """Pièces justificatives génériques — factures, reçus, chèques, virements, etc.
 
@@ -272,7 +286,13 @@ class DocumentAttachment(LoggedModel):
     content_object = GenericForeignKey('content_type', 'object_id')
 
     document_type = models.CharField(max_length=20, choices=DOCUMENT_TYPES)
-    file = models.FileField(upload_to='documents/%Y/%m/%d/')
+    file = models.FileField(
+        upload_to='documents/%Y/%m/%d/',
+        validators=[
+            FileExtensionValidator(allowed_extensions=DOCUMENT_ATTACHMENT_ALLOWED_EXTENSIONS),
+            validate_document_attachment_size,
+        ],
+    )
     file_name = models.CharField(max_length=255)
     file_size = models.BigIntegerField(default=0)  # bytes
 

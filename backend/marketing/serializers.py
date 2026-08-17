@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from core.models import User
+from core.sanitize import sanitize_html
 from core.serializers import UserBriefSerializer
 from marketing.models import (
     BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject,
@@ -50,6 +51,15 @@ class BlogPostSerializer(serializers.ModelSerializer):
         model = BlogPost
         fields = ['id', 'title', 'slug', 'author', 'cover_image', 'content', 'status', 'published_at', 'created_at']
         read_only_fields = ['slug', 'author']
+
+    def validate_content(self, value):
+        # Défense contre XSS stockée : le HTML produit par l'éditeur Tiptap
+        # admin est rendu tel quel sur le site public (dangerouslySetInnerHTML,
+        # frontend/components/blog/article-content.tsx) — la restriction
+        # côté éditeur n'est pas une frontière de sécurité, un appel API
+        # direct la contourne entièrement. Nettoyage ici, au plus près du
+        # stockage, quel que soit le chemin d'écriture.
+        return sanitize_html(value)
 
 
 class BlogPostPublicSerializer(serializers.ModelSerializer):

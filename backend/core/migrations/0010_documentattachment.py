@@ -2,7 +2,9 @@
 
 from django.conf import settings
 from django.db import migrations, models
+import django.core.validators
 import django.db.models.deletion
+import core.models
 import uuid
 
 
@@ -22,7 +24,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('object_id', models.CharField(max_length=255)),
                 ('document_type', models.CharField(choices=[('CHEQUE', 'Chèque'), ('BORDEREAU', 'Bordereau de versement'), ('BANK_STATEMENT', 'Attestation de virement'), ('INVOICE', 'Facture'), ('RECEIPT', 'Reçu'), ('QUOTE', 'Devis'), ('CONTRACT', 'Contrat'), ('OTHER', 'Autre')], max_length=20)),
-                ('file', models.FileField(upload_to='documents/%Y/%m/%d/')),
+                ('file', models.FileField(upload_to='documents/%Y/%m/%d/', validators=[django.core.validators.FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png']), core.models.validate_document_attachment_size])),
                 ('file_name', models.CharField(max_length=255)),
                 ('file_size', models.BigIntegerField(default=0)),
                 ('notes', models.TextField(blank=True)),

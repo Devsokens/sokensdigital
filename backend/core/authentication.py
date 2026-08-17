@@ -1,3 +1,5 @@
+import logging
+
 from firebase_admin import auth
 from rest_framework import authentication
 from rest_framework import exceptions
@@ -6,6 +8,7 @@ from django.contrib.auth import get_user_model
 from core.models import hash_email
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 # Firebase Admin is initialized once at startup in core.apps.CoreConfig.ready().
 
@@ -17,9 +20,9 @@ class FirebaseAuthentication(authentication.BaseAuthentication):
             return None
 
         parts = auth_header.split()
-        if parts[0].lower() != 'bearer':
+        if not parts or parts[0].lower() != 'bearer':
             return None
-        
+
         if len(parts) == 1:
             raise exceptions.AuthenticationFailed('Invalid token header. No credentials provided.')
         elif len(parts) > 2:
@@ -32,8 +35,13 @@ class FirebaseAuthentication(authentication.BaseAuthentication):
             decoded_token = auth.verify_id_token(id_token)
             uid = decoded_token.get('uid')
             email = decoded_token.get('email')
-        except Exception as e:
-            raise exceptions.AuthenticationFailed(f'Invalid Firebase ID token: {str(e)}')
+        except Exception:
+            # Ne jamais renvoyer le message d'exception brut du SDK au
+            # client (peut révéler des détails internes utiles pour
+            # affiner une attaque) — logué côté serveur, générique côté
+            # client.
+            logger.warning('Firebase token verification failed', exc_info=True)
+            raise exceptions.AuthenticationFailed('Invalid or expired authentication token.')
 
         if not email:
             raise exceptions.AuthenticationFailed(
@@ -56,7 +64,19 @@ class FirebaseAuthentication(authentication.BaseAuthentication):
                 existing.save(update_fields=['firebase_uid'])
                 user = existing
             else:
-                user = User.objects.create(email=email, firebase_uid=uid, is_active=True)
+                # Refuser l'auto-provisioning : un compte doit être créé
+                # par un Super-Admin/RH (ProvisionUserView) AVANT qu'un
+                # token Firebase ne soit accepté côté API. Sans ce garde,
+                # n'importe qui capable de s'inscrire côté Firebase Auth
+                # (self-signup Email/Password, indépendant des Firestore
+                # rules qui n'interdisent que la création de *profil*)
+                # obtenait un User Django actif et passait IsAuthenticated
+                # partout — porte d'entrée pour un inconnu sans rôle.
+                logger.warning('Firebase token verified for unprovisioned email: %s', email)
+                raise exceptions.AuthenticationFailed(
+                    "Aucun compte Soken's Digital associé à cette adresse. "
+                    'Contactez un administrateur pour être provisionné.'
+                )
         except Exception:
             raise exceptions.AuthenticationFailed('Could not retrieve user.')
 
