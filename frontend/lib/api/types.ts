@@ -347,6 +347,7 @@ export interface PublicQuote {
   total_ttc: string;
   lines: QuoteLine[];
   signed_at: string | null;
+  signature_url: string;
   company_stamp_url: string;
 }
 
@@ -371,6 +372,7 @@ export interface Quote {
   sent_at: string | null;
   opened_at: string | null;
   signed_at: string | null;
+  signature_url: string;
   parent_quote: string | null;
   version: number;
   document_color: string;

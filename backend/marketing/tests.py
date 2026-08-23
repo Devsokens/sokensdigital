@@ -712,36 +712,77 @@ class QuoteViewSetTests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
 
+def _signature_data_url() -> str:
+    import base64
+    buffer = io.BytesIO()
+    Image.new('RGBA', (10, 10), color=(0, 0, 0, 0)).save(buffer, format='PNG')
+    return 'data:image/png;base64,' + base64.b64encode(buffer.getvalue()).decode()
+
+
 class PublicQuoteAcceptViewTests(APITestCase):
     def setUp(self):
+        cache.clear()
         self.commercial = User.objects.create(email='commercial-accept@sokensdigital.com', first_name='Commercial')
         _give_role(self.commercial, ROLE_COMMERCIAL)
         self.quote = Quote.objects.create(
             created_by=self.commercial, client_name='Client X', status=Quote.Status.ENVOYE,
         )
 
-    def test_accept_sets_signed_at_and_ip(self):
+    @patch('core.storage._bucket_ensured', False)
+    @patch.dict('os.environ', {'SUPABASE_URL': 'https://test-project.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'test-key'})
+    @patch('core.storage.requests.post')
+    def test_accept_sets_signed_at_ip_and_signature(self, mock_post):
+        mock_post.side_effect = [
+            Mock(status_code=200, text='{}'),  # bucket ensure
+            Mock(status_code=200, text='{}'),  # object upload
+        ]
         anon = APIClient()
         response = anon.post(
             f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/',
+            {'signature': _signature_data_url()},
+            format='json',
             REMOTE_ADDR='203.0.113.5',
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'ACCEPTE')
+        self.assertTrue(response.json()['signature_url'])
         self.quote.refresh_from_db()
         self.assertIsNotNone(self.quote.signed_at)
         self.assertEqual(self.quote.accepted_ip, '203.0.113.5')
+        self.assertTrue(self.quote.signature_url)
+
+    def test_accept_without_signature_is_rejected(self):
+        anon = APIClient()
+        response = anon.post(f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/')
+        self.assertEqual(response.status_code, 400)
+        self.quote.refresh_from_db()
+        self.assertEqual(self.quote.status, Quote.Status.ENVOYE)
 
     def test_cannot_accept_a_draft_quote(self):
         self.quote.status = Quote.Status.BROUILLON
         self.quote.save(update_fields=['status'])
         anon = APIClient()
-        response = anon.post(f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/')
+        response = anon.post(
+            f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/',
+            {'signature': _signature_data_url()}, format='json',
+        )
         self.assertEqual(response.status_code, 400)
 
-    def test_accepting_twice_is_idempotent(self):
+    @patch('core.storage._bucket_ensured', False)
+    @patch.dict('os.environ', {'SUPABASE_URL': 'https://test-project.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'test-key'})
+    @patch('core.storage.requests.post')
+    def test_accepting_twice_is_idempotent(self, mock_post):
+        mock_post.side_effect = [
+            Mock(status_code=200, text='{}'),
+            Mock(status_code=200, text='{}'),
+        ]
         anon = APIClient()
-        anon.post(f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/')
+        anon.post(
+            f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/',
+            {'signature': _signature_data_url()}, format='json',
+        )
+        # Already ACCEPTE — the view returns early before re-validating the
+        # signature, so a second call (even without one) must still succeed.
         response = anon.post(f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'ACCEPTE')

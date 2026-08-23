@@ -233,12 +233,15 @@ class Quote(LoggedModel):
     sent_at = models.DateTimeField(null=True, blank=True)
     opened_at = models.DateTimeField(null=True, blank=True)
     # Cahier des charges §4.7 "Validation Client — portail de validation
-    # client avec signature électronique". MVP: a checkbox + timestamp +
-    # IP recorded as acceptance proof (see PublicQuoteAcceptView), not a
-    # real e-signature provider (Yousign/DocuSign) — nothing in this
-    # project currently justifies that cost/integration.
+    # client avec signature électronique". e-signature: a hand-drawn
+    # signature (canvas, mouse/touch/pen) captured on the public
+    # acceptance page, uploaded as an image, plus timestamp + IP recorded
+    # as acceptance proof (see PublicQuoteAcceptView) — not a
+    # third-party e-signature provider (Yousign/DocuSign), nothing in
+    # this project currently justifies that cost/integration.
     signed_at = models.DateTimeField(null=True, blank=True)
     accepted_ip = models.GenericIPAddressField(null=True, blank=True)
+    signature_url = models.URLField(max_length=500, blank=True)
     # Versioning for the /clone/ endpoint — a sent quote is read-only, a
     # new edit becomes a new Quote row (parent_quote -> original, version
     # incremented), never an in-place edit of something already sent.

@@ -97,11 +97,21 @@ export async function getPublicQuote(token: string): Promise<PublicQuote> {
   return response.json();
 }
 
-export async function acceptPublicQuote(token: string): Promise<PublicQuote> {
+/** `signatureDataUrl` is the signature pad's `canvas.toDataURL('image/png')`
+ * output — the server decodes/uploads it and stores signature_url on the
+ * quote (§4.7 e-signature). Required by the backend for a first
+ * acceptance; omitted on the idempotent re-post once already ACCEPTE. */
+export async function acceptPublicQuote(token: string, signatureDataUrl?: string): Promise<PublicQuote> {
   const response = await fetch(`${API_BASE_URL}/api/v1/public/quotes/track/${token}/accept/`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(signatureDataUrl ? { signature: signatureDataUrl } : {}),
   });
-  if (!response.ok) throw new Error("Impossible d'accepter ce devis pour l'instant.");
+  if (!response.ok) {
+    if (response.status === 429) throw new Error("Trop de tentatives. Réessaie dans une minute.");
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || "Impossible d'accepter ce devis pour l'instant.");
+  }
   return response.json();
 }
 

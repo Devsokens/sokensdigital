@@ -139,12 +139,12 @@ class QuoteSerializer(serializers.ModelSerializer):
             'id', 'quote_number', 'lead', 'created_by', 'client_name', 'intro_message',
             'subject', 'description', 'project_duration', 'payment_terms', 'issue_date',
             'expiry_date', 'status', 'discount_amount', 'total_ht', 'total_ttc',
-            'tracking_token', 'sent_at', 'opened_at', 'signed_at', 'parent_quote', 'version',
+            'tracking_token', 'sent_at', 'opened_at', 'signed_at', 'signature_url', 'parent_quote', 'version',
             'document_color', 'lines', 'created_at', 'updated_at',
         ]
         read_only_fields = [
             'quote_number', 'status', 'total_ht', 'total_ttc', 'tracking_token',
-            'sent_at', 'opened_at', 'signed_at', 'parent_quote', 'version', 'updated_at',
+            'sent_at', 'opened_at', 'signed_at', 'signature_url', 'parent_quote', 'version', 'updated_at',
         ]
 
     def create(self, validated_data):
@@ -303,7 +303,8 @@ class QuoteTrackSerializer(serializers.ModelSerializer):
         fields = [
             'quote_number', 'client_name', 'intro_message', 'subject', 'description',
             'project_duration', 'payment_terms', 'issue_date', 'expiry_date', 'status',
-            'discount_amount', 'total_ht', 'total_ttc', 'lines', 'signed_at', 'company_stamp_url',
+            'discount_amount', 'total_ht', 'total_ttc', 'lines', 'signed_at', 'signature_url',
+            'company_stamp_url',
         ]
 
     def get_company_stamp_url(self, obj) -> str:

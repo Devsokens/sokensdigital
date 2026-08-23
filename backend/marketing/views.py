@@ -1,6 +1,8 @@
+import base64
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import Count, F, Max, Sum
 from django.shortcuts import get_object_or_404
 from django.db.models.functions import TruncDate
@@ -715,13 +717,33 @@ class PublicQuoteTrackView(generics.RetrieveAPIView):
         return Response(self.get_serializer(instance).data)
 
 
+PUBLIC_QUOTE_ACCEPT_RATE_LIMIT = 5  # per IP
+PUBLIC_QUOTE_ACCEPT_RATE_WINDOW = 60  # seconds
+
+
+def _decode_signature_image(data_url: str) -> SimpleUploadedFile:
+    """Turns the signature pad's `canvas.toDataURL('image/png')` output
+    (a `data:image/png;base64,...` string) into something core.storage.
+    upload_image can consume — same validated/resized pipeline as any
+    other image upload, just fed bytes instead of a real HTTP file."""
+    try:
+        header, encoded = data_url.split(',', 1)
+        raw = base64.b64decode(encoded)
+    except (ValueError, TypeError, base64.binascii.Error):
+        raise ValidationError('Signature invalide.')
+    content_type = 'image/png' if 'image/png' in header else 'image/jpeg'
+    return SimpleUploadedFile('signature.png', raw, content_type=content_type)
+
+
 @extend_schema(
     tags=['Marketing & Commercial'],
     summary='Accept a quote from its public tracking page (§4.7)',
-    description="No auth — the tracking_token is the credential, same as the GET above. MVP e-signature: "
-    "an explicit checkbox acceptance recorded with a timestamp (signed_at) and the requester's IP "
-    "(accepted_ip) as proof, not a third-party e-signature provider.",
-    responses={200: QuoteTrackSerializer},
+    description="No auth — the tracking_token is the credential, same as the GET above. e-signature: "
+    "a hand-drawn signature (canvas, mouse/touch/pen) sent as a base64 PNG in `signature`, "
+    "uploaded and stored as signature_url, plus a timestamp (signed_at) and the requester's IP "
+    "(accepted_ip) as proof — not a third-party e-signature provider. Rate-limited to 5 "
+    'requests/minute/IP.',
+    responses={200: QuoteTrackSerializer, 400: None, 429: None},
 )
 class PublicQuoteAcceptView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -735,10 +757,27 @@ class PublicQuoteAcceptView(APIView):
             return Response(
                 {'detail': "Seul un devis envoyé peut être accepté."}, status=status.HTTP_400_BAD_REQUEST,
             )
+        ip = get_client_ip(request)
+        if is_rate_limited(f'quoteacceptrate:{ip}', PUBLIC_QUOTE_ACCEPT_RATE_LIMIT, PUBLIC_QUOTE_ACCEPT_RATE_WINDOW):
+            return Response(
+                {'detail': 'Trop de requêtes. Réessayez dans une minute.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        signature_data_url = request.data.get('signature')
+        if not signature_data_url:
+            return Response({'detail': 'La signature est requise pour accepter ce devis.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            signature_file = _decode_signature_image(signature_data_url)
+            signature_url = upload_image(signature_file, 'quote-signatures')
+        except ValidationError as exc:
+            return Response({'detail': str(exc.message if hasattr(exc, "message") else exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except RuntimeError:
+            return Response({'detail': "Impossible d'enregistrer la signature. Réessayez."}, status=status.HTTP_502_BAD_GATEWAY)
         quote.status = Quote.Status.ACCEPTE
         quote.signed_at = timezone.now()
-        quote.accepted_ip = get_client_ip(request)
-        quote.save(update_fields=['status', 'signed_at', 'accepted_ip'])
+        quote.accepted_ip = ip
+        quote.signature_url = signature_url
+        quote.save(update_fields=['status', 'signed_at', 'accepted_ip', 'signature_url'])
         return Response(QuoteTrackSerializer(quote).data)
 
 

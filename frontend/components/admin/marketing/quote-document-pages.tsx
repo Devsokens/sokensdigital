@@ -18,6 +18,10 @@ export interface QuoteDocumentData {
   discount_amount: string;
   payment_terms: QuotePaymentTerm[];
   lines: { id: string; service_title: string; description: string; total_line: string; amount_label: string }[];
+  /** Set once the client has accepted via the public signature pad
+   * (§4.7) — absent on a still-BROUILLON/ENVOYE quote or the live
+   * editor's in-progress draft. */
+  signature_url?: string;
 }
 
 export interface QuoteDocumentSettings {
@@ -211,10 +215,17 @@ export function QuoteDocumentPages({
           <div className="mt-4 grid grid-cols-2 gap-8">
             <div>
               <p className="text-sm font-semibold text-neutral-900">{clientLabel}</p>
-              <div className="mt-2 flex h-24 items-center justify-center rounded-lg bg-white text-center text-xs text-neutral-400 italic">
-                Signature suivi de la mention
-                <br />
-                lu et approuvé
+              <div className="mt-2 flex h-24 items-center justify-center rounded-lg bg-white">
+                {quote.signature_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={quote.signature_url} alt="Signature du client" className="max-h-20 max-w-full object-contain" style={printColorAdjust} />
+                ) : (
+                  <p className="text-center text-xs text-neutral-400 italic">
+                    Signature suivi de la mention
+                    <br />
+                    lu et approuvé
+                  </p>
+                )}
               </div>
             </div>
             <div>
