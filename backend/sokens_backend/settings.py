@@ -180,9 +180,16 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 25,
-    # Global abuse-prevention floor. Individual public/sensitive views
-    # (webhooks, public devis/contact forms, auth-adjacent endpoints) layer
-    # a tighter scoped throttle on top — see core.throttles.
+    # Global abuse-prevention floor (anon: 100/hour/IP, auth'd user: 2000/hour).
+    # 'webhook' is a ScopedRateThrottle applied via throttle_scope on
+    # administration.views.SignatureWebhookView. 'public_write' is *not*
+    # currently wired to any view via throttle_scope — the highest-value
+    # public write endpoints (lead capture, support ticket create/reply)
+    # instead use a bespoke per-IP Redis limiter, see marketing.ratelimit.
+    # is_rate_limited(). 'public_write' is kept here as a ready-made scope
+    # for new AllowAny write endpoints (e.g. add
+    # `throttle_classes = [ScopedRateThrottle]; throttle_scope = 'public_write'`
+    # on the view) rather than reinventing rate limiting each time.
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle',

@@ -1,5 +1,9 @@
+from decimal import Decimal
+
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
-from django.db.models import Q
+from django.db.models import Count, F, Sum, Q
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
@@ -496,3 +500,93 @@ def global_search(request):
             })
 
     return Response(results)
+
+
+GLOBAL_DASHBOARD_CACHE_KEY = 'core:dashboard:v1'
+# Same TTL as finance_dashboard (finance/views.py) — an aggregate spanning
+# 5 apps is worth caching, and nothing here needs to-the-second freshness.
+GLOBAL_DASHBOARD_CACHE_TTL = 300
+
+
+@extend_schema(
+    tags=['Général'],
+    summary='Global cross-department dashboard (§4.1/4.2)',
+    description="Authenticated — every role sees the exact same figures (no per-role "
+    "filtering, unlike the department dashboards). One flat snapshot per "
+    'department, not a detailed drill-down — that stays in each department\'s '
+    'own dashboard.',
+    responses={200: {'type': 'object'}},
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def global_dashboard(request):
+    cached = cache.get(GLOBAL_DASHBOARD_CACHE_KEY)
+    if cached is not None:
+        return Response(cached)
+
+    # Local imports, same reasoning as global_search above and
+    # send_quote_and_invoice_reminders.py — avoids core importing every
+    # other app's models at module load time.
+    from hr.models import EmployeeProfile
+    from marketing.models import Lead, SocialPost
+    from finance.models import Account, DisbursementRequest, TransactionLine
+    from projects.models import Project
+    from support.models import SupportTicket
+
+    today = timezone.now().date()
+    month_start = today.replace(day=1)
+
+    # RH
+    active_employees = EmployeeProfile.objects.filter(status=EmployeeProfile.Status.ACTIF).count()
+    new_hires_this_month = EmployeeProfile.objects.filter(hire_date__gte=month_start).count()
+
+    # Marketing — same weighted-pipeline formula as marketing_dashboard
+    # (marketing/views.py), just company-wide instead of role-scoped.
+    active_lead_statuses = [Lead.Status.NOUVEAU, Lead.Status.QUALIFIE, Lead.Status.PROPOSITION_EN_COURS]
+    active_leads = Lead.objects.filter(status__in=active_lead_statuses, estimated_value__isnull=False)
+    weighted_pipeline = (active_leads.aggregate(
+        total=Sum(F('estimated_value') * F('qualification_score'))
+    )['total'] or Decimal('0')) / Decimal(100)
+    total_leads = Lead.objects.count()
+    social_posts_published_this_month = SocialPost.objects.filter(
+        status=SocialPost.Status.PUBLIE, published_at__date__gte=month_start,
+    ).count()
+
+    # Finance — same accounting aggregates as finance_dashboard
+    # (finance/views.py), duplicated in compact form rather than importing
+    # that view (this endpoint is deliberately role-independent, that one
+    # isn't).
+    bank_totals = TransactionLine.objects.filter(account__code='512').aggregate(
+        debit_total=Sum('debit'), credit_total=Sum('credit'),
+    )
+    cash_balance = (bank_totals['debit_total'] or Decimal('0')) - (bank_totals['credit_total'] or Decimal('0'))
+    total_charges = TransactionLine.objects.filter(
+        account__account_class=Account.AccountClass.CHARGE
+    ).aggregate(total=Sum('debit'))['total'] or Decimal('0')
+    total_produits = TransactionLine.objects.filter(
+        account__account_class=Account.AccountClass.PRODUIT
+    ).aggregate(total=Sum('credit'))['total'] or Decimal('0')
+
+    # Technique
+    active_projects = Project.objects.filter(status=Project.Status.EN_COURS).count()
+    pending_disbursements = DisbursementRequest.objects.filter(status__in=DisbursementRequest.PENDING_STATUSES).count()
+
+    # Support
+    open_tickets = SupportTicket.objects.filter(
+        status__in=[SupportTicket.Status.OUVERT, SupportTicket.Status.EN_COURS]
+    ).count()
+
+    payload = {
+        'active_employees': active_employees,
+        'new_hires_this_month': new_hires_this_month,
+        'weighted_pipeline': str(weighted_pipeline.quantize(Decimal('0.01'))),
+        'total_leads': total_leads,
+        'social_posts_published_this_month': social_posts_published_this_month,
+        'cash_balance': str(cash_balance),
+        'gross_result': str(total_produits - total_charges),
+        'active_projects': active_projects,
+        'pending_disbursements': pending_disbursements,
+        'open_tickets': open_tickets,
+    }
+    cache.set(GLOBAL_DASHBOARD_CACHE_KEY, payload, GLOBAL_DASHBOARD_CACHE_TTL)
+    return Response(payload)

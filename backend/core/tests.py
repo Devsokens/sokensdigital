@@ -486,6 +486,39 @@ class GlobalSearchTests(APITestCase):
         self.assertNotIn('Zenith Cloud Migration', labels)
 
 
+class GlobalDashboardTests(APITestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.marketing_user = User.objects.create(email='dashmkt@sokensdigital.com', first_name='Marketing')
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        self.outsider = User.objects.create(email='dashdev@sokensdigital.com', first_name='Dev')
+        _give_role(self.outsider, ROLE_DEVELOPER)
+
+    def test_authenticated_user_sees_dashboard(self):
+        client = APIClient()
+        client.force_authenticate(user=self.marketing_user)
+        response = client.get('/api/v1/dashboard/')
+        self.assertEqual(response.status_code, 200)
+        for key in [
+            'active_employees', 'new_hires_this_month', 'weighted_pipeline', 'total_leads',
+            'social_posts_published_this_month', 'cash_balance', 'gross_result',
+            'active_projects', 'pending_disbursements', 'open_tickets',
+        ]:
+            self.assertIn(key, response.json())
+
+    def test_every_role_sees_the_same_payload(self):
+        client_marketing = APIClient()
+        client_marketing.force_authenticate(user=self.marketing_user)
+        client_outsider = APIClient()
+        client_outsider.force_authenticate(user=self.outsider)
+        self.assertEqual(client_marketing.get('/api/v1/dashboard/').json(), client_outsider.get('/api/v1/dashboard/').json())
+
+    def test_unauthenticated_is_rejected(self):
+        response = APIClient().get('/api/v1/dashboard/')
+        self.assertIn(response.status_code, (401, 403))
+
+
 class GetProfileRoleCacheTests(APITestCase):
     """get_profile_role() used to hit Firestore on every call (i.e. every
     authenticated request) — this is the fix: cache the result briefly so

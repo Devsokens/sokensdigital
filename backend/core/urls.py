@@ -11,6 +11,7 @@ from core.views import (
     RoleViewSet,
     SetUserRoleView,
     UserListView,
+    global_dashboard,
     global_search,
     health_check,
 )
@@ -25,6 +26,7 @@ router.register('roles', RoleViewSet, basename='role')
 urlpatterns = [
     path('health/', health_check, name='health-check'),
     path('search/', global_search, name='global-search'),
+    path('dashboard/', global_dashboard, name='global-dashboard'),
     path('auth/me/', MeView.as_view(), name='me'),
     path('uploads/avatar/', AvatarUploadView.as_view(), name='upload-avatar'),
     path('uploads/chat-attachment/', ChatAttachmentUploadView.as_view(), name='upload-chat-attachment'),
