@@ -1,3 +1,8 @@
+> ⚠️ Le nom de champ `voucher_number` référencé ici a été corrigé (existait
+> mal câblé à l'origine sur `CashEntry`, cf. audit du 17/08) — le champ est
+> maintenant correctement présent sur `treasury.CashEntry` (auto-généré
+> `PC-{année}-{seq}`), l'export PDF fonctionne comme décrit ci-dessous.
+
 # Templates PDF — Pièces Comptables (Treasury)
 
 **Status:** ✅ Implémentation complète | **Date:** 2026-08-16

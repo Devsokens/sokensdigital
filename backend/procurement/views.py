@@ -79,6 +79,30 @@ class ProcurementRequestViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(requested_by=self.request.user)
 
+    def _reject_if_approved(self, procurement):
+        # Immutabilité une fois approuvée — cf. audit VERIFICATION_STATUT_
+        # IMPLEMENTATION_2026-08.md finding #1 : sans ce garde, une fiche
+        # déjà approuvée reste éditable (montant, description...) après
+        # que le workflow ait déjà avancé dessus.
+        if procurement.status == ProcurementRequest.Status.APPROUVEE:
+            return Response(
+                {'detail': 'Une fiche approuvée ne peut plus être modifiée.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return None
+
+    def update(self, request, *args, **kwargs):
+        blocked = self._reject_if_approved(self.get_object())
+        if blocked:
+            return blocked
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        blocked = self._reject_if_approved(self.get_object())
+        if blocked:
+            return blocked
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
     def approve_rcf(self, request, pk=None):
         """RCF validation."""
@@ -152,6 +176,30 @@ class SupplierQuoteViewSet(viewsets.ModelViewSet):
             return [IsFinanceOrAdmin()]
         return super().get_permissions()
 
+    def _reject_if_validated(self, quote):
+        # Immutabilité une fois validé — un devis VALIDE a déjà déclenché
+        # un DisbursementRequest sur son amount_ttc (safe_dispatch dans
+        # validate_manager ci-dessous) ; le laisser éditable désynchronise
+        # silencieusement le décaissement déjà créé du montant réel.
+        if quote.status == SupplierQuote.Status.VALIDE:
+            return Response(
+                {'detail': 'Un devis validé ne peut plus être modifié.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return None
+
+    def update(self, request, *args, **kwargs):
+        blocked = self._reject_if_validated(self.get_object())
+        if blocked:
+            return blocked
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        blocked = self._reject_if_validated(self.get_object())
+        if blocked:
+            return blocked
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
     def validate_rcf(self, request, pk=None):
         """RCF validation."""
@@ -208,6 +256,31 @@ class SupplierInvoiceViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(received_by=self.request.user)
+
+    def _reject_if_finalized(self, invoice):
+        # Immutabilité une fois validée/payée — une facture VALIDEE a déjà
+        # fait poster un JournalEntry (safe_dispatch dans validate()
+        # ci-dessous, qui pousse ensuite le statut à PAYEE) ; l'éditer
+        # après coup désynchronise l'écriture comptable déjà en Grand
+        # Livre de l'enregistrement source.
+        if invoice.status in (SupplierInvoice.Status.VALIDEE, SupplierInvoice.Status.PAYEE):
+            return Response(
+                {'detail': 'Une facture validée/payée ne peut plus être modifiée.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return None
+
+    def update(self, request, *args, **kwargs):
+        blocked = self._reject_if_finalized(self.get_object())
+        if blocked:
+            return blocked
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        blocked = self._reject_if_finalized(self.get_object())
+        if blocked:
+            return blocked
+        return super().destroy(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'], permission_classes=[IsFinanceOrAdmin])
     def validate(self, request, pk=None):

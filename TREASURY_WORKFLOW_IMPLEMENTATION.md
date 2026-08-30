@@ -1,3 +1,12 @@
+> ⚠️ **Document historique (2026-08-16).** Les "3 signaux" décrits plus bas
+> n'existent plus — supprimés (bug de fond : `created and reconciled_at`
+> n'était jamais vrai en pratique), remplacés par dispatch explicite depuis
+> les actions des vues. Statuts `BankEntry.Source.CAPITAL_CONTRIBUTION`
+> renommé `APPORT_CAPITAL`. Immutabilité (`update`/`destroy` bloqués une
+> fois rapproché/comptabilisé) ajoutée le 17/08 — absente à l'origine malgré
+> ce que ce document laissait entendre. Voir
+> `docs/ETAT_ACTUEL_FINANCE_ACHATS_TRESORERIE_2026-08.md`.
+
 # Opérations de Trésorerie (Treasury Workflow) — Implémentation Complète
 
 **Status:** ✅ Implémentation terminée (ne pas pousser sans autorisation utilisateur)

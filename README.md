@@ -22,7 +22,8 @@ Le projet repose sur **deux backends complémentaires**, chacun responsable d'un
 ## Structure du repo
 
 ```
-backend/           Django REST (apps: core, hr, projects — finance/marketing à venir)
+backend/           Django REST (apps: core, hr, projects, finance, marketing, technique,
+                    administration, messaging, procurement, treasury, support)
 frontend/           Next.js 16 (App Router)
 firestore.rules      Règles de sécurité Firestore (à publier manuellement dans la Console, ou via `firebase deploy --only firestore:rules`)
 docs/backend-specifications.md   Cahier des charges détaillé + état d'avancement par département
@@ -38,7 +39,7 @@ cd backend
 python -m venv .venv && source .venv/Scripts/activate  # ou .venv/bin/activate sous Linux/Mac
 pip install -r requirements.txt
 python manage.py migrate
-python manage.py test          # 20 tests doivent passer
+python manage.py test          # 350+ tests doivent passer (pytest -q recommandé, voir pytest.ini)
 python manage.py runserver 8000
 ```
 
@@ -67,7 +68,7 @@ Il n'y a pas d'auto-inscription. Pour créer un nouveau compte :
 1. Firebase Console → Authentication → Add user (email + mot de passe)
 2. Firestore → collection `profiles` → document dont l'ID = l'UID Firebase généré → champs `email`, `firstName`, `lastName`, `role`, `departmentId`, `createdAt`, `updatedAt`
 
-Le rôle (`role`) détermine ce que la personne peut faire, aussi bien côté Firestore (règles) que côté Django (`core.permissions.has_role()`, qui lit ce même champ). Valeurs possibles : `SUPER_ADMIN`, `RESPONSABLE_MARKETING`, `RESPONSABLE_RH`, `COMMERCIAL`, `CHEF_DE_PROJET`, `DEVELOPPEUR`, `COMPTABLE`, `DIRECTEUR_FINANCIER`, `AUTRE`.
+Le rôle (`role`) détermine ce que la personne peut faire, aussi bien côté Firestore (règles) que côté Django (`core.permissions.has_role()`, qui lit ce même champ). Valeurs possibles : `SUPER_ADMIN`, `RESPONSABLE_MARKETING`, `RESPONSABLE_RH`, `COMMERCIAL`, `CHEF_DE_PROJET`, `DEVELOPPEUR`, `COMPTABLE`, `DIRECTEUR_FINANCIER`, `CAISSIER`, `AUTRE`.
 
 Actuellement le frontend (`/admin`) affiche tous les modules à n'importe quel compte connecté — la restriction par rôle se fait uniquement côté API pour l'instant (un compte non-RH qui appelle `/api/v1/hr/employees/` ne voit que sa propre fiche, par exemple). Le filtrage de la sidebar par rôle reste à faire une fois plusieurs rôles réels en usage.
 
@@ -88,7 +89,11 @@ Actuellement le frontend (`/admin`) affiche tous les modules à n'importe quel c
 | Finance — Rapprochement bancaire | ✅ (import de lignes déjà parsées, pas d'upload CSV brut — voir §6.4) | ✅ `/admin/finance/rapprochement` |
 | Finance — TVA (génération, signature CFO) | ✅ | ✅ `/admin/finance/tva` |
 | Finance — Export FEC | ✅ (simplifié, non certifié DGFiP — voir §6.6) | ✅ (bouton dans l'écran TVA) |
-| Finance — Dashboard (Analytique & Reporting) | ✅ (indicateurs simplifiés — voir §6.6) | ✅ `/admin/finance/dashboard` |
+| Finance — Dashboard (Analytique & Reporting) | ✅ (indicateurs simplifiés, mis en cache 5 min — voir §6.6) | ✅ `/admin/finance/dashboard` |
+| Finance — Versements partiels (Payment/PaymentReceipt) | ✅ (`invoices/{id}/payments/`, reçu PDF auto) | ❌ backend seul, aucune UI |
+| Opérations d'achats (fiches besoins → devis → décaissement auto → facture) | ✅ Django (`procurement` app) | ✅ `/admin/finance/achats` |
+| Trésorerie (caisse, banque, apports capital) | ✅ Django (`treasury` app) | ✅ `/admin/finance/tresorerie` |
+| Support Client (Tickets, Base de connaissances, FAQ) | ✅ Django (`support` app) | ✅ `/admin/support/tickets`, `/admin/support/base-connaissances` |
 | Marketing/Commercial — Leads (Tunnel commercial) | ✅ | ✅ `/admin/marketing/leads` |
 | Marketing/Commercial — Blog (Gestion de contenu) | ✅ | ✅ `/admin/marketing/blog` |
 | Marketing/Commercial — Réseaux sociaux (Plan Éditorial) | ✅ (sans moteur de publication réel — voir §7.4) | ✅ `/admin/marketing/plan-editorial` |

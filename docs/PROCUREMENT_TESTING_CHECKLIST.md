@@ -1,3 +1,10 @@
+> ⚠️ **Document historique (2026-08-16), pas exécuté.** Référence encore
+> `CashVoucher` (supprimé, fusionné dans `treasury.CashEntry`) et les statuts
+> anglais (renommés en français depuis). Aucun fichier de test n'existe
+> encore pour `procurement`/`treasury` (`ls procurement/tests*` → rien) —
+> cette checklist manuelle reste la seule couverture documentée, toujours
+> pas exécutée. Voir `docs/ETAT_ACTUEL_FINANCE_ACHATS_TRESORERIE_2026-08.md`.
+
 # Checklist Tests — Workflow Opérations d'Achats (Procurement)
 
 **Module:** `procurement` | **Apps:** Supplier, ProcurementRequest, SupplierQuote, CashVoucher, SupplierInvoice

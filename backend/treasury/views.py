@@ -47,6 +47,29 @@ class CashEntryViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
+    def _reject_if_reconciled(self, entry):
+        # Immutabilité une fois rapprochée — reconcile() ci-dessous a déjà
+        # fait poster un JournalEntry sur ce montant ; l'éditer après coup
+        # désynchronise l'écriture déjà en Grand Livre.
+        if entry.reconciled_at is not None:
+            return Response(
+                {'detail': 'Une pièce de caisse rapprochée ne peut plus être modifiée.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return None
+
+    def update(self, request, *args, **kwargs):
+        blocked = self._reject_if_reconciled(self.get_object())
+        if blocked:
+            return blocked
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        blocked = self._reject_if_reconciled(self.get_object())
+        if blocked:
+            return blocked
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=True, methods=['post'], permission_classes=[IsCaissierFinanceOrAdmin])
     def reconcile(self, request, pk=None):
         """Marquer pièce caisse comme rapprochée + poster l'écriture comptable.
@@ -115,6 +138,26 @@ class BankEntryViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
+    def _reject_if_reconciled(self, entry):
+        if entry.reconciled_at is not None:
+            return Response(
+                {'detail': 'Un mouvement bancaire rapproché ne peut plus être modifié.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return None
+
+    def update(self, request, *args, **kwargs):
+        blocked = self._reject_if_reconciled(self.get_object())
+        if blocked:
+            return blocked
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        blocked = self._reject_if_reconciled(self.get_object())
+        if blocked:
+            return blocked
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=True, methods=['post'])
     def reconcile(self, request, pk=None):
         """Marquer mouvement bancaire comme rapproché + poster l'écriture comptable."""
@@ -154,6 +197,26 @@ class CapitalContributionViewSet(viewsets.ModelViewSet):
     filterset_fields = ['status', 'contribution_date']
     ordering_fields = ['contribution_date', 'amount']
 
+    def _reject_if_posted(self, contribution):
+        if contribution.status == CapitalContribution.Status.COMPTABILISEE:
+            return Response(
+                {'detail': 'Un apport déjà comptabilisé ne peut plus être modifié.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return None
+
+    def update(self, request, *args, **kwargs):
+        blocked = self._reject_if_posted(self.get_object())
+        if blocked:
+            return blocked
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        blocked = self._reject_if_posted(self.get_object())
+        if blocked:
+            return blocked
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=True, methods=['post'], permission_classes=[IsFinanceOrAdmin])
     def validate(self, request, pk=None):
         """Finance Director validation des justificatifs."""
@@ -165,9 +228,6 @@ class CapitalContributionViewSet(viewsets.ModelViewSet):
         contribution.validated_by = request.user
         contribution.validated_at = timezone.now()
         contribution.save()
-
-        # Signal: crée JournalEntry si BankEntry liée
-        # (voir signals.py)
 
         return Response(self.get_serializer(contribution).data)
 
