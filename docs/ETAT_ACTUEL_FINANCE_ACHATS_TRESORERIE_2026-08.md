@@ -113,13 +113,34 @@ Ajouté (`core/constants.py ROLE_CAISSIER`, `AppRole` côté frontend, mapping D
 
 - `manage.py check` : 0 issue
 - `manage.py migrate` : 100% appliqué
-- `pytest` : 351/351 passent
+- `pytest` : 391/391 passent (351 + 40 nouveaux tests procurement/treasury, voir section dédiée ci-dessous)
 - `tsc --noEmit` : aucune erreur nouvelle
 - **Poussé sur `main`** (plus "non poussé sans autorisation" — dépassé depuis plusieurs merges)
+
+## Tests procurement/treasury — ajoutés le 17/08
+
+Écrire les tests (`procurement/tests.py`, `treasury/tests.py`, 40 tests) a immédiatement
+révélé un bug critique jamais détecté : **toutes** les permission classes de
+ces deux apps (`IsFinanceOrAdmin`, `IsManagerOrAdmin`, `IsCaissierFinanceOrAdmin`)
+appelaient `request.user.has_role(...)` — une méthode qui **n'existe pas**
+sur `User` (la vraie fonction est `core.permissions.has_role(user, *roles)`,
+libre, pas une méthode). Résultat : chaque requête sur ces 2 apps plantait
+en 500 au lieu de vérifier un rôle — le module procurement/treasury n'a
+jamais fonctionné en pratique depuis sa création, malgré `check`/`migrate`
+verts (ces commandes n'exercent jamais le code de permission). Corrigé dans
+le même passage (9 sites d'appel sur les deux fichiers `views.py`).
+
+Couverture ajoutée : modèles (numérotation auto, calcul TTC, validation),
+permissions par rôle (c'est ce qui a révélé le bug), transitions de statut,
+immutabilité (les gardes ajoutés plus haut), tâches Celery exécutées
+directement via `.apply()` (`safe_dispatch()` est un no-op pendant les
+tests — passer par la vue ne les déclenche jamais réellement en test),
+2 tests d'intégration bout-en-bout (fiche besoins → devis → décaissement
+auto → facture → écriture comptable ; pièce de caisse → rapprochement →
+écriture comptable).
 
 ## Gaps confirmés toujours ouverts
 
 - Frontend Payment/versements (voir tableau ci-dessus)
-- Tests automatisés pour `procurement`/`treasury` : **aucun fichier de test n'existe** pour ces deux apps (`ls procurement/tests* treasury/tests*` → rien). Les 351 tests qui passent couvrent tout le reste du projet mais pas ces deux apps spécifiquement — seule la vérification manuelle (`check`/`migrate`/syntaxe) couvre leur code à ce jour.
 - Validation des feuilles de temps (`technique.TimeEntry` sans champ `is_validated`/`validated_by`) — toujours pas fait
 - Rapports/analytics avancés, multi-devises, relances fournisseurs, bons de commande, workflow d'approbation par département — toujours pas commencés, aucun signal contraire trouvé en scannant le code

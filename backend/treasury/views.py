@@ -10,6 +10,7 @@ from treasury.serializers import CashEntrySerializer, BankEntrySerializer, Capit
 from treasury.pdf import generate_cash_voucher_pdf, generate_cash_register_statement_pdf, generate_disbursement_request_pdf
 from treasury.tasks import post_cash_entry_journal_entry, post_bank_entry_journal_entry, post_capital_contribution_journal_entry
 from core.constants import ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN, ROLE_CAISSIER
+from core.permissions import has_role
 from core.celery_utils import safe_dispatch
 from finance.models import DisbursementRequest
 
@@ -19,7 +20,11 @@ class IsFinanceOrAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        return request.user.has_role(ROLE_DIRECTEUR_FINANCIER) or request.user.has_role(ROLE_SUPER_ADMIN)
+        # has_role(user, *roles) — fonction libre de core.permissions, PAS
+        # une méthode sur User (bug trouvé le 17/08 : `request.user.
+        # has_role(...)` n'existe pas sur le modèle, plantait en 500 sur
+        # CHAQUE requête — jamais détecté faute de tests sur cette app).
+        return has_role(request.user, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN)
 
 
 class IsCaissierFinanceOrAdmin(permissions.BasePermission):
@@ -29,11 +34,7 @@ class IsCaissierFinanceOrAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        return (
-            request.user.has_role(ROLE_CAISSIER)
-            or request.user.has_role(ROLE_DIRECTEUR_FINANCIER)
-            or request.user.has_role(ROLE_SUPER_ADMIN)
-        )
+        return has_role(request.user, ROLE_CAISSIER, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN)
 
 
 class CashEntryViewSet(viewsets.ModelViewSet):
@@ -277,7 +278,7 @@ class DisbursementRequestPDFViewSet(viewsets.ViewSet):
 
             # Only requestor or finance staff can view
             is_requestor = disbursement.requested_by == request.user
-            is_finance = request.user.has_role(ROLE_DIRECTEUR_FINANCIER) or request.user.has_role(ROLE_SUPER_ADMIN)
+            is_finance = has_role(request.user, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN)
 
             if not (is_requestor or is_finance):
                 return Response({'error': 'Not authorized to view this document'}, status=status.HTTP_403_FORBIDDEN)

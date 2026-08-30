@@ -22,6 +22,7 @@ from core.constants import (
     ROLE_DIRECTEUR_FINANCIER,
     ROLE_SUPER_ADMIN,
 )
+from core.permissions import has_role
 from core.celery_utils import safe_dispatch
 
 
@@ -30,7 +31,11 @@ class IsFinanceOrAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        return request.user.has_role(ROLE_DIRECTEUR_FINANCIER) or request.user.has_role(ROLE_SUPER_ADMIN)
+        # has_role(user, *roles) — fonction libre de core.permissions, PAS
+        # une méthode sur User (bug trouvé le 17/08 : `request.user.
+        # has_role(...)` n'existe pas sur le modèle, plantait en 500 sur
+        # CHAQUE requête — jamais détecté faute de tests sur cette app).
+        return has_role(request.user, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN)
 
 
 class IsManagerOrAdmin(permissions.BasePermission):
@@ -44,11 +49,7 @@ class IsManagerOrAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        return (
-            request.user.has_role(ROLE_COMPTABLE)
-            or request.user.has_role(ROLE_DIRECTEUR_FINANCIER)
-            or request.user.has_role(ROLE_SUPER_ADMIN)
-        )
+        return has_role(request.user, ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN)
 
 
 class SupplierViewSet(viewsets.ModelViewSet):
