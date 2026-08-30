@@ -37,6 +37,11 @@ export interface NavItem {
    * this item out of the nav (and block direct URL access) for a role
    * whose Role.permissions doesn't include it. */
   moduleKey: string;
+  /** Optional sub-grouping within a section — rendered as a small
+   * secondary heading in the sidebar (e.g. "RH" items inside the
+   * "Administration" section). Purely cosmetic, doesn't affect
+   * findNavMatch/filterSectionsByAccess. */
+  group?: string;
 }
 
 export interface NavSection {
@@ -56,14 +61,17 @@ export const ADMIN_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: "Administration & RH",
+    title: "Administration",
     items: [
-      { label: "Tableau de bord", href: "/admin/rh/dashboard", icon: LayoutDashboard, moduleKey: "rh-dashboard" },
-      { label: "Employés", href: "/admin/rh", icon: Users, moduleKey: "employes" },
-      { label: "Départements", href: "/admin/rh/departements", icon: Building2, moduleKey: "departements" },
       { label: "Clients", href: "/admin/rh/clients", icon: Contact2, moduleKey: "clients" },
       { label: "Utilisateurs & Rôles", href: "/admin/rh/utilisateurs", icon: UserCog, moduleKey: "utilisateurs" },
       { label: "Audit Log", href: "/admin/rh/audit-log", icon: ScrollText, moduleKey: "audit-log" },
+      // RH — sous-interface d'Administration, regroupée visuellement dans
+      // la sidebar (voir AdminSidebar) plutôt qu'être son propre
+      // département de premier niveau.
+      { label: "Tableau de bord", href: "/admin/rh/dashboard", icon: LayoutDashboard, moduleKey: "rh-dashboard", group: "RH" },
+      { label: "Employés", href: "/admin/rh", icon: Users, moduleKey: "employes", group: "RH" },
+      { label: "Départements", href: "/admin/rh/departements", icon: Building2, moduleKey: "departements", group: "RH" },
     ],
   },
   {
@@ -120,7 +128,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
  * department rather than the per-item icons above. */
 export const SECTION_ICONS: Record<string, LucideIcon> = {
   "Général": LayoutDashboard,
-  "Administration & RH": Users,
+  "Administration": Users,
   "Marketing & Commercial": Target,
   "Technique": FolderKanban,
   "Finance & Comptabilité": PieChart,
@@ -129,11 +137,11 @@ export const SECTION_ICONS: Record<string, LucideIcon> = {
 };
 
 /** Short, single-word labels for the mobile bottom nav — the full section
- * titles ("Administration & RH", "Finance & Comptabilité"...) don't fit
+ * titles ("Administration", "Finance & Comptabilité"...) don't fit
  * under a 5-column icon row without truncating illegibly. */
 export const SECTION_SHORT_LABELS: Record<string, string> = {
   "Général": "Accueil",
-  "Administration & RH": "RH",
+  "Administration": "Admin",
   "Marketing & Commercial": "Marketing",
   "Technique": "Technique",
   "Finance & Comptabilité": "Finance",

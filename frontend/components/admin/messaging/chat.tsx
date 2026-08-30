@@ -332,6 +332,7 @@ export function Chat() {
                       href={m.attachment?.url}
                       target="_blank"
                       rel="noreferrer"
+                      download={m.attachment?.name}
                       className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-neutral-700 hover:bg-neutral-50"
                     >
                       <Paperclip className="size-3.5 shrink-0 text-neutral-400" />
@@ -544,6 +545,7 @@ function MessageBubble({
             href={message.attachment.url}
             target="_blank"
             rel="noreferrer"
+            download={message.attachment.name}
             className="mt-2 flex max-w-[320px] items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5"
           >
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-neutral-500">

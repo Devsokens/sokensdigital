@@ -69,23 +69,35 @@ export function AdminSidebar({ collapsed = false }: { collapsed?: boolean }) {
               </p>
             )}
             <div className="space-y-0.5">
-              {section.items.map((item) => {
+              {section.items.map((item, index) => {
                 const isActive = item.href === activeItemHref;
                 const Icon = item.icon;
+                // Sous-en-tête de groupe (ex: "RH" dans "Administration") —
+                // affiché juste avant le premier item d'un nouveau group,
+                // jamais répété entre deux items du même group.
+                const previousGroup = index > 0 ? section.items[index - 1].group : undefined;
+                const showGroupHeading = item.group && item.group !== previousGroup;
                 return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
-                      isActive
-                        ? "bg-primary/10 font-semibold text-primary"
-                        : "text-foreground/80 hover:bg-white/5 hover:text-foreground"
+                  <div key={item.href}>
+                    {showGroupHeading && (
+                      <p className="mb-1 mt-3 px-2.5 text-[0.6rem] font-semibold tracking-wider text-muted-foreground/50 uppercase first:mt-0">
+                        {item.group}
+                      </p>
                     )}
-                  >
-                    <Icon className="size-4" />
-                    {item.label}
-                  </Link>
+                    <Link
+                      href={item.href}
+                      className={cn(
+                        "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+                        item.group && "ml-1",
+                        isActive
+                          ? "bg-primary/10 font-semibold text-primary"
+                          : "text-foreground/80 hover:bg-white/5 hover:text-foreground"
+                      )}
+                    >
+                      <Icon className="size-4" />
+                      {item.label}
+                    </Link>
+                  </div>
                 );
               })}
             </div>
