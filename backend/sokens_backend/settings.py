@@ -420,6 +420,13 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=10, minute=0),  # 10:00 UTC chaque jour
         'options': {'queue': 'default'}
     },
+    'check-maintenance-due': {
+        # 07:00 UTC : avant la journee de travail, pour que le retard soit
+        # visible au moment ou il peut encore etre rattrape.
+        'task': 'technique.tasks.check_maintenance_due',
+        'schedule': crontab(hour=7, minute=0),
+        'options': {'queue': 'default'}
+    },
 }
 
 # Facebook Page publishing (marketing/publishing.py) — blank by default,
