@@ -8,7 +8,16 @@ import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/s
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/lib/api/client";
 import { ImageUploadField } from "@/components/admin/marketing/page-section-editor";
-import { RichTextEditor } from "@/components/admin/marketing/rich-text-editor";
+import dynamic from "next/dynamic";
+
+// Tiptap (~200 Ko) n'est utile qu'une fois le tiroir d'édition ouvert —
+// le charger à la demande évite de le facturer à quiconque ouvre la
+// simple liste des articles. ssr:false : l'éditeur manipule le DOM et
+// n'a rien à rendre côté serveur.
+const RichTextEditor = dynamic(
+  () => import("@/components/admin/marketing/rich-text-editor").then((m) => m.RichTextEditor),
+  { ssr: false, loading: () => <div className="h-48 animate-pulse rounded-lg bg-neutral-100" /> }
+);
 import { ProjectCardMedia } from "@/components/projects/card-media";
 import {
   listBlogPosts,

@@ -66,6 +66,15 @@ class Project(LoggedModel):
     status = models.CharField(max_length=50, choices=ProjectStatus.choices, default=ProjectStatus.PROSPECTION)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta(LoggedModel.Meta):
+        # Colonnes réellement filtrées par ProjectViewSet.filterset_fields —
+        # sans index, chaque filtre force un parcours complet de la table.
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['status']),
+            models.Index(fields=['client']),
+            models.Index(fields=['project_manager']),
+        ]
+
     @property
     def total_cost(self):
         total_hours = sum(t.actual_hours for t in self.tasks.all())
@@ -139,8 +148,16 @@ class Task(LoggedModel):
     completed_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
+    class Meta(LoggedModel.Meta):
         ordering = ['-priority', 'due_date']
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['project', 'status']),
+            models.Index(fields=['assigned_to']),
+            models.Index(fields=['phase']),
+            # Couvre l'ordering par défaut : sans lui, chaque liste de
+            # tâches trie en mémoire après lecture complète.
+            models.Index(fields=['-priority', 'due_date']),
+        ]
 
     def __str__(self):
         return self.name
@@ -187,6 +204,13 @@ class Ticket(LoggedModel):
     severity = models.CharField(max_length=50, choices=TicketSeverity.choices, default=TicketSeverity.MOYENNE)
     assigned_developer = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tickets')
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta(LoggedModel.Meta):
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['status']),
+            models.Index(fields=['project']),
+            models.Index(fields=['assigned_developer']),
+        ]
 
     def __str__(self):
         return self.title
