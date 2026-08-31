@@ -169,3 +169,15 @@ def api_client():
     """Client API DRF pour les tests."""
     from rest_framework.test import APIClient
     return APIClient()
+
+
+@pytest.fixture(autouse=True)
+def _isolated_media_root(settings, tmp_path):
+    """Redirige les uploads vers un repertoire temporaire.
+
+    En production le FileField des pieces justificatives vise le bucket prive
+    Supabase ; sans SUPABASE_URL (tests, CI) il retombe sur le stockage local,
+    qui ecrivait donc dans backend/documents/ au fil des tests — des fichiers
+    reels laisses dans l'arborescence du projet, et committes par accident.
+    """
+    settings.MEDIA_ROOT = str(tmp_path / 'media')
