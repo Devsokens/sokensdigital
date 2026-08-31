@@ -979,3 +979,39 @@ export interface MaintenanceReport {
   next_actions: string;
   created_at: string;
 }
+
+export type PaymentStatus = "EN_ATTENTE" | "RECU" | "ENREGISTRE";
+export type PaymentMethod = "CHEQUE" | "VIREMENT" | "ESPECES" | "CARTE" | "AUTRE";
+
+export interface PaymentReceipt {
+  id: string;
+  receipt_number: string;
+  issued_at: string;
+}
+
+export interface Payment {
+  id: string;
+  invoice: string;
+  amount: string;
+  payment_date: string;
+  payment_method: PaymentMethod;
+  payment_method_display: string;
+  status: PaymentStatus;
+  status_display: string;
+  received_by: UserBrief | null;
+  received_at: string | null;
+  notes: string;
+  receipt: PaymentReceipt | null;
+  /** Cumul encaissé sur la facture, tous versements confondus. */
+  total_paid: string;
+  /** Restant dû après ce cumul. */
+  remaining: string;
+  created_at: string;
+}
+
+export interface PaymentInput {
+  amount: string;
+  payment_date: string;
+  payment_method: PaymentMethod;
+  notes?: string;
+}
