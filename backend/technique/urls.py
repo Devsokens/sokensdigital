@@ -4,11 +4,17 @@ from .views import (
     ProjectViewSet, ProjectPhaseViewSet, ProjectDocumentViewSet,
     TaskViewSet, TimeEntryViewSet, TicketViewSet, KnowledgeBaseViewSet
 )
+from .maintenance_views import (
+    MaintainedAppViewSet, MaintenanceReportViewSet, MaintenanceServiceAccountViewSet,
+)
 
 router = DefaultRouter()
 router.register(r'projects', ProjectViewSet, basename='project')
 router.register(r'tickets', TicketViewSet, basename='ticket')
 router.register(r'knowledge-base', KnowledgeBaseViewSet, basename='knowledgebase')
+router.register(r'maintenance/apps', MaintainedAppViewSet, basename='maintained-app')
+router.register(r'maintenance/service-accounts', MaintenanceServiceAccountViewSet, basename='maintenance-service-account')
+router.register(r'maintenance/reports', MaintenanceReportViewSet, basename='maintenance-report')
 
 urlpatterns = [
     path('', include(router.urls)),

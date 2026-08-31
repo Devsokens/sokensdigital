@@ -60,6 +60,7 @@ MODULES = [
     ('devis', 'Devis', 'Marketing & Commercial'),
     ('projets', 'Gestion de projet', 'Technique'),
     ('timesheets', 'Timesheets', 'Technique'),
+    ('maintenance', 'Maintenance', 'Technique'),
     ('decaissements', 'Décaissements', 'Technique'),
     ('cahier-des-charges', 'Cahier des charges', 'Technique'),
     ('finance-dashboard', 'Analytique', 'Finance & Comptabilité'),
@@ -120,6 +121,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         _full('projets'),
         {'timesheets': ['voir', 'creer', 'modifier']},
         {'decaissements': ['voir', 'creer']},
+        _full('maintenance'),
         # _accessible_clients_qs scope un Chef de Projet non-Admin aux
         # clients liés à ses propres projets — lecture seule.
         _read_only('clients'),
@@ -130,6 +132,9 @@ DEFAULT_ROLE_PERMISSIONS = {
         {'messagerie': ['voir', 'creer']},
         {'projets': ['voir', 'modifier']},
         {'timesheets': ['voir', 'creer']},
+        # Voit les fiches et rédige des rapports ; l'attribution et les
+        # accès de production restent au responsable technique.
+        {'maintenance': ['voir', 'creer']},
         _full('cahier-des-charges'),
     ),
     ROLE_DIRECTEUR_FINANCIER: _merge(

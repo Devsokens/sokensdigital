@@ -33,6 +33,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
   { key: "devis", label: "Devis", section: "Marketing & Commercial" },
   { key: "projets", label: "Gestion de projet", section: "Technique" },
   { key: "timesheets", label: "Timesheets", section: "Technique" },
+  { key: "maintenance", label: "Maintenance", section: "Technique" },
   { key: "decaissements", label: "Décaissements", section: "Technique" },
   { key: "cahier-des-charges", label: "Cahier des charges", section: "Technique" },
   { key: "finance-dashboard", label: "Analytique", section: "Finance & Comptabilité" },

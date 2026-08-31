@@ -1,5 +1,10 @@
+from datetime import timedelta
+from django.utils import timezone
 from rest_framework import serializers
-from .models import Project, ProjectPhase, ProjectDocument, Task, TimeEntry, Ticket, KnowledgeBase
+from .models import (
+    Project, ProjectPhase, ProjectDocument, Task, TimeEntry, Ticket, KnowledgeBase,
+    MaintainedApp, MaintenanceServiceAccount, MaintenanceReport,
+)
 from core.models import User
 from core.constants import ROLE_DEVELOPER, MANAGEMENT_ROLES
 from administration.models import Client
@@ -162,3 +167,116 @@ class KnowledgeBaseSerializer(serializers.ModelSerializer):
         if obj.created_by:
             return f"{obj.created_by.first_name} {obj.created_by.last_name}".strip() or obj.created_by.email
         return None
+
+
+# ---------------------------------------------------------------------------
+# Maintenance
+# ---------------------------------------------------------------------------
+
+class MaintenanceServiceAccountSerializer(serializers.ModelSerializer):
+    """Compte de service AVEC ses identifiants — n'est monté que depuis
+    l'action `secrets` de MaintainedAppViewSet, jamais dans une liste."""
+
+    class Meta:
+        model = MaintenanceServiceAccount
+        fields = ['id', 'app', 'service_name', 'url', 'username', 'password', 'notes', 'updated_at']
+
+
+class MaintenanceServiceAccountPublicSerializer(serializers.ModelSerializer):
+    """Le même compte SANS les identifiants — pour dire "cette app utilise
+    Cloudinary et SendGrid" sans divulguer comment s'y connecter."""
+
+    class Meta:
+        model = MaintenanceServiceAccount
+        fields = ['id', 'service_name', 'url']
+
+
+class MaintainedAppSerializer(serializers.ModelSerializer):
+    """Fiche descriptive — AUCUN identifiant. C'est ce que voit toute
+    l'équipe technique en liste et en détail.
+
+    Les champs chiffrés (admin_username/password, access_notes) sont
+    délibérément absents de `fields` : un serializer qui les exposerait
+    "juste en lecture pour les personnes autorisées" finirait tôt ou tard
+    par fuiter dans un log, un cache ou un écran de debug. Ils ne
+    transitent que par l'action dédiée `secrets`.
+    """
+
+    assigned_to_name = serializers.SerializerMethodField(read_only=True)
+    client_name = serializers.CharField(source='client.company_name', read_only=True)
+    project_name = serializers.CharField(source='project.name', read_only=True)
+    service_accounts = MaintenanceServiceAccountPublicSerializer(many=True, read_only=True)
+    last_report_at = serializers.SerializerMethodField(read_only=True)
+    last_report_status = serializers.SerializerMethodField(read_only=True)
+    reports_last_7_days = serializers.SerializerMethodField(read_only=True)
+    expected_reports_per_week = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = MaintainedApp
+        fields = [
+            'id', 'name', 'app_type', 'url', 'description',
+            'client', 'client_name', 'project', 'project_name',
+            'tech_stack', 'hosting_provider', 'repository_url', 'admin_url',
+            'assigned_to', 'assigned_to_name', 'assigned_by', 'assigned_at',
+            'maintenance_frequency', 'expected_reports_per_week', 'is_active',
+            'service_accounts', 'last_report_at', 'last_report_status',
+            'reports_last_7_days', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['assigned_by', 'assigned_at']
+
+    def get_assigned_to_name(self, obj):
+        if not obj.assigned_to:
+            return None
+        full = f'{obj.assigned_to.first_name} {obj.assigned_to.last_name}'.strip()
+        return full or obj.assigned_to.email
+
+    def _recent_reports(self, obj):
+        # Annoté par MaintainedAppViewSet.get_queryset() quand disponible —
+        # évite une requête par ligne sur un écran qui liste toutes les apps.
+        return getattr(obj, 'recent_reports_count', None)
+
+    def get_reports_last_7_days(self, obj):
+        annotated = self._recent_reports(obj)
+        if annotated is not None:
+            return annotated
+        since = timezone.now() - timedelta(days=7)
+        return obj.reports.filter(performed_at__gte=since).count()
+
+    def get_last_report_at(self, obj):
+        last = obj.reports.first()  # ordering = ['-performed_at']
+        return last.performed_at if last else None
+
+    def get_last_report_status(self, obj):
+        last = obj.reports.first()
+        return last.status if last else None
+
+
+class MaintainedAppSecretsSerializer(serializers.ModelSerializer):
+    """Les accès, et rien d'autre. Servi uniquement par l'action `secrets`,
+    réservée à la personne assignée et aux responsables techniques."""
+
+    service_accounts = MaintenanceServiceAccountSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = MaintainedApp
+        fields = ['id', 'admin_url', 'admin_username', 'admin_password', 'access_notes', 'service_accounts']
+
+
+class MaintenanceReportSerializer(serializers.ModelSerializer):
+    performed_by_name = serializers.SerializerMethodField(read_only=True)
+    app_name = serializers.CharField(source='app.name', read_only=True)
+
+    class Meta:
+        model = MaintenanceReport
+        fields = [
+            'id', 'app', 'app_name', 'performed_by', 'performed_by_name', 'performed_at',
+            'status', 'site_reachable', 'backups_verified', 'updates_applied', 'ssl_valid',
+            'summary', 'next_actions', 'created_at',
+        ]
+        read_only_fields = ['performed_by']
+
+    def get_performed_by_name(self, obj):
+        if not obj.performed_by:
+            return None
+        full = f'{obj.performed_by.first_name} {obj.performed_by.last_name}'.strip()
+        return full or obj.performed_by.email

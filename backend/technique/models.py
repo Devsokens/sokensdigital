@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from core.models import LoggedModel, User
 from administration.models import Client
+from django_cryptography.fields import encrypt
 
 class ProjectStatus(models.TextChoices):
     PROSPECTION = 'PROSPECTION', 'Prospection'
@@ -202,3 +203,160 @@ class KnowledgeBase(LoggedModel):
 
     def __str__(self):
         return self.title
+
+
+# ---------------------------------------------------------------------------
+# Maintenance — applications et sites livrés que l'équipe technique entretient
+# ---------------------------------------------------------------------------
+
+class MaintenanceFrequency(models.TextChoices):
+    TROIS_PAR_SEMAINE = 'TROIS_PAR_SEMAINE', '3 fois par semaine'
+    HEBDOMADAIRE = 'HEBDOMADAIRE', 'Hebdomadaire'
+    BIMENSUELLE = 'BIMENSUELLE', 'Toutes les 2 semaines'
+    MENSUELLE = 'MENSUELLE', 'Mensuelle'
+
+
+class MaintainedAppType(models.TextChoices):
+    SITE_WEB = 'SITE_WEB', 'Site web'
+    APP_WEB = 'APP_WEB', 'Application web'
+    APP_MOBILE = 'APP_MOBILE', 'Application mobile'
+    API = 'API', 'API / service'
+    AUTRE = 'AUTRE', 'Autre'
+
+
+class MaintainedApp(LoggedModel):
+    """Une application ou un site livré au client, que l'équipe technique
+    doit entretenir périodiquement.
+
+    Porte deux natures de données très différentes :
+    - la fiche descriptive (nom, URL, stack, hébergeur...), lisible par
+      toute l'équipe technique ;
+    - les accès (URL admin, identifiants), chiffrés au repos et
+      volontairement exclus du serializer de liste — voir
+      MaintainedAppSerializer / MaintainedAppSecretsSerializer.
+    """
+
+    name = models.CharField(max_length=255)
+    app_type = models.CharField(max_length=20, choices=MaintainedAppType.choices, default=MaintainedAppType.SITE_WEB)
+    url = models.URLField(blank=True, help_text='URL publique de production')
+    description = models.TextField(blank=True)
+
+    client = models.ForeignKey(
+        'administration.Client', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='maintained_apps',
+    )
+    project = models.ForeignKey(
+        Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='maintained_apps',
+    )
+
+    # Infos essentielles — stack, hébergement, dépôt.
+    tech_stack = models.CharField(max_length=255, blank=True, help_text='Ex: Next.js, Django, PostgreSQL')
+    hosting_provider = models.CharField(max_length=255, blank=True, help_text='Ex: Vercel, Render, OVH')
+    repository_url = models.URLField(blank=True)
+
+    # Accès à l'espace d'administration — chiffrés au repos (AES via
+    # django-cryptography), même traitement que administration.ClientDocument.
+    # name : ces valeurs ouvrent des systèmes de production, une fuite de dump
+    # SQL ne doit pas suffire à les lire.
+    admin_url = models.URLField(blank=True)
+    admin_username = encrypt(models.CharField(max_length=255, blank=True, default=''))
+    admin_password = encrypt(models.CharField(max_length=255, blank=True, default=''))
+    access_notes = encrypt(models.TextField(blank=True, default=''))
+
+    # Attribution — décidée par le responsable de l'équipe technique
+    # (Chef de Projet / Admin / Super-Admin, cf. CanAssignMaintenance).
+    assigned_to = models.ForeignKey(
+        'core.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='maintained_apps',
+    )
+    assigned_by = models.ForeignKey(
+        'core.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='assigned_maintenance_apps',
+    )
+    assigned_at = models.DateTimeField(null=True, blank=True)
+
+    maintenance_frequency = models.CharField(
+        max_length=20, choices=MaintenanceFrequency.choices,
+        default=MaintenanceFrequency.TROIS_PAR_SEMAINE,
+    )
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['name']
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['is_active']),
+            models.Index(fields=['assigned_to']),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def expected_reports_per_week(self):
+        return {
+            MaintenanceFrequency.TROIS_PAR_SEMAINE: 3,
+            MaintenanceFrequency.HEBDOMADAIRE: 1,
+            MaintenanceFrequency.BIMENSUELLE: 0.5,
+            MaintenanceFrequency.MENSUELLE: 0.25,
+        }.get(self.maintenance_frequency, 0)
+
+
+class MaintenanceServiceAccount(LoggedModel):
+    """Compte d'un service tiers utilisé PAR une application maintenue
+    (hébergeur, base de données, mail transactionnel, CDN, analytics...).
+
+    Séparé de MaintainedApp parce qu'une même app en cumule facilement
+    cinq ou six, chacun avec ses propres identifiants — les entasser en
+    champs texte sur l'app aurait été ingérable.
+    """
+
+    app = models.ForeignKey(MaintainedApp, on_delete=models.CASCADE, related_name='service_accounts')
+    service_name = models.CharField(max_length=255, help_text='Ex: Cloudinary, Supabase, SendGrid')
+    url = models.URLField(blank=True)
+    username = encrypt(models.CharField(max_length=255, blank=True, default=''))
+    password = encrypt(models.CharField(max_length=255, blank=True, default=''))
+    notes = encrypt(models.TextField(blank=True, default=''))
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['service_name']
+
+    def __str__(self):
+        return f'{self.service_name} ({self.app.name})'
+
+
+class MaintenanceReport(LoggedModel):
+    """Compte-rendu d'une session de maintenance, visible par toute
+    l'équipe technique."""
+
+    class Status(models.TextChoices):
+        OK = 'OK', 'Tout fonctionne'
+        DEGRADE = 'DEGRADE', 'Dégradé — à surveiller'
+        INCIDENT = 'INCIDENT', 'Incident — action requise'
+
+    app = models.ForeignKey(MaintainedApp, on_delete=models.CASCADE, related_name='reports')
+    performed_by = models.ForeignKey(
+        'core.User', on_delete=models.SET_NULL, null=True, related_name='maintenance_reports',
+    )
+    performed_at = models.DateTimeField(default=timezone.now)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.OK)
+
+    # Points de contrôle usuels — cochés à chaque passage.
+    site_reachable = models.BooleanField(default=True, help_text='Le site/app répond')
+    backups_verified = models.BooleanField(default=False, help_text='Sauvegardes vérifiées')
+    updates_applied = models.BooleanField(default=False, help_text='Mises à jour appliquées')
+    ssl_valid = models.BooleanField(default=True, help_text='Certificat SSL valide')
+
+    summary = models.TextField(help_text='Ce qui a été fait / constaté')
+    next_actions = models.TextField(blank=True, help_text='À faire au prochain passage')
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-performed_at']
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['app', '-performed_at']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return f'{self.app.name} — {self.performed_at:%Y-%m-%d} ({self.status})'

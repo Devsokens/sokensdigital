@@ -900,3 +900,82 @@ export interface EncaissementsResponse {
    * voit alors que les entrées de caisse, pas la banque ni les versements. */
   scope: "caisse" | "complet";
 }
+
+// --- Maintenance (technique) ---------------------------------------------
+
+export type MaintainedAppType = "SITE_WEB" | "APP_WEB" | "APP_MOBILE" | "API" | "AUTRE";
+export type MaintenanceFrequency = "TROIS_PAR_SEMAINE" | "HEBDOMADAIRE" | "BIMENSUELLE" | "MENSUELLE";
+export type MaintenanceReportStatus = "OK" | "DEGRADE" | "INCIDENT";
+
+/** Compte de service SANS identifiants — ce que renvoie la liste. */
+export interface MaintenanceServiceAccountPublic {
+  id: string;
+  service_name: string;
+  url: string;
+}
+
+/** Compte de service AVEC identifiants — uniquement via l'action `secrets`. */
+export interface MaintenanceServiceAccount extends MaintenanceServiceAccountPublic {
+  app: string;
+  username: string;
+  password: string;
+  notes: string;
+  updated_at: string;
+}
+
+export interface MaintainedApp {
+  id: string;
+  name: string;
+  app_type: MaintainedAppType;
+  url: string;
+  description: string;
+  client: string | null;
+  client_name: string | null;
+  project: string | null;
+  project_name: string | null;
+  tech_stack: string;
+  hosting_provider: string;
+  repository_url: string;
+  admin_url: string;
+  assigned_to: string | null;
+  assigned_to_name: string | null;
+  assigned_by: string | null;
+  assigned_at: string | null;
+  maintenance_frequency: MaintenanceFrequency;
+  expected_reports_per_week: number;
+  is_active: boolean;
+  service_accounts: MaintenanceServiceAccountPublic[];
+  last_report_at: string | null;
+  last_report_status: MaintenanceReportStatus | null;
+  reports_last_7_days: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Identifiants de production — jamais dans une liste, obtenus à la demande
+ * et journalisés côté serveur (AuditLog action=READ_SECRETS). */
+export interface MaintainedAppSecrets {
+  id: string;
+  admin_url: string;
+  admin_username: string;
+  admin_password: string;
+  access_notes: string;
+  service_accounts: MaintenanceServiceAccount[];
+}
+
+export interface MaintenanceReport {
+  id: string;
+  app: string;
+  app_name: string;
+  performed_by: string | null;
+  performed_by_name: string | null;
+  performed_at: string;
+  status: MaintenanceReportStatus;
+  site_reachable: boolean;
+  backups_verified: boolean;
+  updates_applied: boolean;
+  ssl_valid: boolean;
+  summary: string;
+  next_actions: string;
+  created_at: string;
+}

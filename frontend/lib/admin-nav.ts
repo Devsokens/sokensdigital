@@ -24,6 +24,7 @@ import {
   ShoppingCart,
   Wallet,
   ArrowDownToLine,
+  Wrench,
   Headset,
   Library,
   type LucideIcon,
@@ -91,6 +92,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
     items: [
       { label: "Gestion de projet", href: "/admin/technique/projets", icon: FolderKanban, moduleKey: "projets" },
       { label: "Timesheets", href: "/admin/technique/timesheets", icon: Clock, moduleKey: "timesheets" },
+      { label: "Maintenance", href: "/admin/technique/maintenance", icon: Wrench, moduleKey: "maintenance" },
       { label: "Décaissements", href: "/admin/technique/decaissements", icon: Banknote, moduleKey: "decaissements" },
       { label: "Devis", href: "/admin/technique/devis", icon: FileText, moduleKey: "devis" },
       { label: "Cahier des charges", href: "/admin/technique/cahier-des-charges", icon: ClipboardList, moduleKey: "cahier-des-charges" },
