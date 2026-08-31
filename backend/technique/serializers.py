@@ -124,12 +124,30 @@ class TaskSerializer(serializers.ModelSerializer):
 
 class TimeEntrySerializer(serializers.ModelSerializer):
     task_name = serializers.CharField(source='task.name', read_only=True)
+    validated_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = TimeEntry
         fields = '__all__'
+        # La validation passe exclusivement par les actions valider/devalider
+        # de TimeEntryViewSet, qui verifient que l'appelant est bien le chef
+        # du projet et tracent l'acte. En laissant ces champs inscriptibles,
+        # n'importe qui pourrait valider ses propres heures via un simple
+        # PATCH.
+        read_only_fields = ['is_validated', 'validated_by', 'validated_at']
+
+    def get_validated_by_name(self, obj):
+        if not obj.validated_by:
+            return None
+        full = f'{obj.validated_by.first_name} {obj.validated_by.last_name}'.strip()
+        return full or obj.validated_by.email
 
     def validate(self, data):
+        if self.instance and self.instance.is_validated:
+            raise serializers.ValidationError(
+                'Cette entree de temps a ete validee et ne peut plus etre modifiee.'
+            )
+
         date = data.get('date')
         if date and date > timezone.now().date():
             raise serializers.ValidationError({"date": "Date cannot be in the future."})
