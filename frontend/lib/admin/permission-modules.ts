@@ -39,6 +39,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
   { key: "cloture", label: "Clôture comptable", section: "Finance & Comptabilité" },
   { key: "grand-livre", label: "Grand Livre", section: "Finance & Comptabilité" },
   { key: "facturation", label: "Facturation", section: "Finance & Comptabilité" },
+  { key: "encaissements", label: "Encaissements", section: "Finance & Comptabilité" },
   { key: "rapprochement", label: "Rapprochement bancaire", section: "Finance & Comptabilité" },
   { key: "tva", label: "Fiscalité (TVA)", section: "Finance & Comptabilité" },
   { key: "achats", label: "Opérations d'achats", section: "Finance & Comptabilité" },

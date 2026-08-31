@@ -874,3 +874,29 @@ export interface AuditLogEntry {
   ip_address: string | null;
   created_at: string;
 }
+
+// --- Encaissements consolidés (caisse + banque + versements) -------------
+
+export type EncaissementOrigin = "CAISSE" | "BANQUE" | "VERSEMENT";
+
+export interface EncaissementRow {
+  id: string;
+  origin: EncaissementOrigin;
+  origin_label: string;
+  reference: string;
+  label: string;
+  description: string;
+  amount: string;
+  date: string;
+  reconciled: boolean;
+}
+
+export interface EncaissementsResponse {
+  results: EncaissementRow[];
+  count: number;
+  totals_by_origin: Partial<Record<EncaissementOrigin, string>>;
+  total: string;
+  /** "caisse" quand l'utilisateur est Caissier sans rôle Finance — il ne
+   * voit alors que les entrées de caisse, pas la banque ni les versements. */
+  scope: "caisse" | "complet";
+}

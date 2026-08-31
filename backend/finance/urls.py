@@ -12,6 +12,7 @@ from finance.views import (
     PaymentReceiptViewSet,
     TaxDeclarationViewSet,
     fec_export,
+    encaissements,
     finance_dashboard,
 )
 
@@ -38,6 +39,7 @@ nested_router = NestedPaymentRouter()
 urlpatterns = router.urls + [
     path('accounting-periods/<uuid:period_id>/fec-export/', fec_export, name='fec-export'),
     path('dashboard/', finance_dashboard, name='finance-dashboard'),
+    path('encaissements/', encaissements, name='finance-encaissements'),
 
     # Nested: invoices/{invoice_id}/payments/
     re_path(r'^invoices/(?P<invoice_id>[^/.]+)/payments/$',

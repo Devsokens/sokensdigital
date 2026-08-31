@@ -47,12 +47,12 @@ MODULE_ACTIONS = ['voir', 'creer', 'modifier', 'supprimer']
 MODULES = [
     ('dashboard', 'Tableau de bord', 'Général'),
     ('messagerie', 'Messagerie', 'Général'),
-    ('rh-dashboard', 'Tableau de bord RH', 'Administration & RH'),
-    ('employes', 'Employés', 'Administration & RH'),
-    ('departements', 'Départements', 'Administration & RH'),
-    ('clients', 'Clients', 'Administration & RH'),
-    ('utilisateurs', 'Utilisateurs & Rôles', 'Administration & RH'),
-    ('audit-log', 'Audit Log', 'Administration & RH'),
+    ('rh-dashboard', 'Tableau de bord RH', 'Administration'),
+    ('employes', 'Employés', 'Administration'),
+    ('departements', 'Départements', 'Administration'),
+    ('clients', 'Clients', 'Administration'),
+    ('utilisateurs', 'Utilisateurs & Rôles', 'Administration'),
+    ('audit-log', 'Audit Log', 'Administration'),
     ('marketing-dashboard', 'Dashboard Marketing', 'Marketing & Commercial'),
     ('contenu', 'Gestion de contenu', 'Marketing & Commercial'),
     ('plan-editorial', 'Plan Éditorial', 'Marketing & Commercial'),
@@ -66,6 +66,7 @@ MODULES = [
     ('cloture', 'Clôture comptable', 'Finance & Comptabilité'),
     ('grand-livre', 'Grand Livre', 'Finance & Comptabilité'),
     ('facturation', 'Facturation', 'Finance & Comptabilité'),
+    ('encaissements', 'Encaissements', 'Finance & Comptabilité'),
     ('rapprochement', 'Rapprochement bancaire', 'Finance & Comptabilité'),
     ('tva', 'Fiscalité (TVA)', 'Finance & Comptabilité'),
     ('achats', 'Opérations d\'achats', 'Finance & Comptabilité'),
@@ -137,14 +138,14 @@ DEFAULT_ROLE_PERMISSIONS = {
         _read_only('finance-dashboard'),
         _full('cloture', 'grand-livre', 'facturation', 'rapprochement', 'tva'),
         {'decaissements': ['voir', 'modifier']},
-        _full('achats', 'tresorerie'),
+        _full('achats', 'tresorerie', 'encaissements'),
     ),
     ROLE_COMPTABLE: _merge(
         _read_only('dashboard'),
         {'messagerie': ['voir', 'creer']},
         _full('grand-livre', 'facturation', 'rapprochement', 'tva'),
         {'decaissements': ['voir', 'modifier']},
-        _read_only('achats', 'tresorerie'),
+        _read_only('achats', 'tresorerie', 'encaissements'),
     ),
     ROLE_CAISSIER: _merge(
         _read_only('dashboard'),
@@ -153,6 +154,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         # capital (réservé Directeur Financier/Comptable, cf. cahier des
         # charges §3 "opérations de trésorerie").
         {'tresorerie': ['voir', 'creer']},
+        _read_only('encaissements'),
     ),
     ROLE_RESPONSABLE_MARKETING: _merge(
         _read_only('dashboard', 'marketing-dashboard'),

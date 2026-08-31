@@ -9,7 +9,7 @@ from rest_framework import mixins, permissions, status, viewsets, serializers
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 
-from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE
+from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE, ROLE_CAISSIER
 from core.permissions import has_role
 from decimal import Decimal as D
 from django.utils import timezone
@@ -622,3 +622,112 @@ def finance_dashboard(request):
     }
     cache.set(FINANCE_DASHBOARD_CACHE_KEY, payload, FINANCE_DASHBOARD_CACHE_TTL)
     return Response(payload)
+
+
+# ---------------------------------------------------------------------------
+# Encaissements — vue consolidée de TOUTES les entrées d'argent
+# ---------------------------------------------------------------------------
+
+@extend_schema(
+    tags=['Finance & Comptabilité'],
+    summary='Encaissements consolidés (caisse + banque + versements clients)',
+    description="Toutes les entrées d'argent de l'entreprise en une seule liste, quelle que "
+    "soit leur porte d'entrée : espèces en caisse (treasury.CashEntry type=ENTREE), "
+    "crédits bancaires (treasury.BankEntry type=ENTREE) et versements clients encaissés "
+    "(finance.Payment status=RECU). Agrégé côté serveur plutôt que par 3 appels frontend "
+    "séparés : une seule requête HTTP, un seul tri chronologique, des totaux cohérents.\n\n"
+    "Filtres optionnels `date_from`/`date_to` (YYYY-MM-DD). Accès Directeur Financier / "
+    "Comptable / Super-Admin ; le Caissier y accède aussi mais ne voit que la caisse "
+    "(la banque et les versements ne sont pas de son périmètre, cf. cahier des charges §3).",
+    responses={200: {'type': 'object'}},
+)
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def encaissements(request):
+    from treasury.models import BankEntry, CashEntry
+
+    is_finance = has_role(request.user, *FINANCE_READ_ROLES, ROLE_SUPER_ADMIN)
+    is_caissier = has_role(request.user, ROLE_CAISSIER)
+    if not (is_finance or is_caissier):
+        return Response(status=status.HTTP_403_FORBIDDEN)
+
+    date_from = request.query_params.get('date_from')
+    date_to = request.query_params.get('date_to')
+
+    def _apply_date_filter(qs, field='date'):
+        if date_from:
+            qs = qs.filter(**{f'{field}__gte': date_from})
+        if date_to:
+            qs = qs.filter(**{f'{field}__lte': date_to})
+        return qs
+
+    rows = []
+
+    # --- Caisse (visible par le Caissier comme par la Finance) -------------
+    cash_qs = _apply_date_filter(
+        CashEntry.objects.filter(type=CashEntry.Type.ENTREE).select_related('created_by')
+    )
+    for entry in cash_qs:
+        rows.append({
+            'id': str(entry.id),
+            'origin': 'CAISSE',
+            'origin_label': 'Caisse',
+            'reference': entry.voucher_number,
+            'label': entry.get_source_display(),
+            'description': entry.description,
+            'amount': str(entry.amount),
+            'date': entry.date.isoformat(),
+            'reconciled': entry.reconciled_at is not None,
+        })
+
+    # --- Banque + versements clients : Finance uniquement ------------------
+    if is_finance:
+        bank_qs = _apply_date_filter(
+            BankEntry.objects.filter(type=BankEntry.Type.ENTREE).select_related('created_by')
+        )
+        for entry in bank_qs:
+            rows.append({
+                'id': str(entry.id),
+                'origin': 'BANQUE',
+                'origin_label': 'Banque',
+                'reference': entry.reference,
+                'label': entry.get_source_display(),
+                'description': entry.description,
+                'amount': str(entry.amount),
+                'date': entry.date.isoformat(),
+                'reconciled': entry.reconciled_at is not None,
+            })
+
+        payment_qs = _apply_date_filter(
+            Payment.objects.filter(status=Payment.Status.RECU).select_related('invoice'),
+            field='payment_date',
+        )
+        for payment in payment_qs:
+            rows.append({
+                'id': str(payment.id),
+                'origin': 'VERSEMENT',
+                'origin_label': 'Versement client',
+                'reference': payment.invoice.invoice_number,
+                'label': payment.get_payment_method_display(),
+                'description': payment.notes,
+                'amount': str(payment.amount),
+                'date': payment.payment_date.isoformat(),
+                # Un versement encaissé est constaté par nature — il n'a pas
+                # d'étape de rapprochement propre (celle-ci vit sur la pièce
+                # de caisse ou le mouvement bancaire correspondant).
+                'reconciled': True,
+            })
+
+    rows.sort(key=lambda r: r['date'], reverse=True)
+
+    totals = {}
+    for row in rows:
+        totals[row['origin']] = str(Decimal(totals.get(row['origin'], '0')) + Decimal(row['amount']))
+
+    return Response({
+        'results': rows,
+        'count': len(rows),
+        'totals_by_origin': totals,
+        'total': str(sum((Decimal(r['amount']) for r in rows), Decimal('0'))),
+        'scope': 'caisse' if (is_caissier and not is_finance) else 'complet',
+    })
