@@ -23,8 +23,18 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
+# libpq-dev : client Postgres.
+# libpango / libharfbuzz / libcairo : dependances natives de WeasyPrint.
+# Sans elles, "import weasyprint" leve une OSError que finance/pdf.py et
+# treasury/pdf.py rattrapent en desactivant la generation PDF : app
+# demarre, mais factures, recus de versement et pieces de caisse ne sont
+# plus telechargeables, en silence. Ces paquets ne sont pas optionnels.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libharfbuzz0b \
+    libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/wheels /wheels
