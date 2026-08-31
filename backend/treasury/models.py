@@ -98,6 +98,12 @@ class BankEntry(LoggedModel):
         FOURNISSEUR_CHEQUE = 'FOURNISSEUR_CHEQUE', 'Paiement fournisseur chèque'
         FOURNISSEUR_VIREMENT = 'FOURNISSEUR_VIREMENT', 'Paiement fournisseur virement'
         RETRAIT_ESPECES = 'RETRAIT_ESPECES', 'Retrait espèces'
+        # Fourre-tout pour les mouvements qui ne rentrent dans aucune des
+        # catégories ci-dessus (frais bancaires, intérêts, régularisation...).
+        # Volontairement SANS mapping comptable auto dans treasury/tasks.py :
+        # le comptable saisit l'écriture à la main au Grand Livre, plutôt que
+        # de deviner un compte de contrepartie qui serait faux une fois sur deux.
+        AUTRE = 'AUTRE', 'Autre'
 
     type = models.CharField(max_length=10, choices=Type.choices)
     source = models.CharField(max_length=30, choices=Source.choices)

@@ -263,6 +263,7 @@ const BANK_SOURCE_LABELS: Record<BankEntrySource, string> = {
   FOURNISSEUR_CHEQUE: "Paiement fournisseur chèque",
   FOURNISSEUR_VIREMENT: "Paiement fournisseur virement",
   RETRAIT_ESPECES: "Retrait espèces",
+  AUTRE: "Autre",
 };
 
 function BanquePanel() {
@@ -378,8 +379,8 @@ function BankEntryForm({ onSaved }: { onSaved: () => void }) {
 
   const sourcesForType: BankEntrySource[] =
     type === "ENTREE"
-      ? ["APPORT_CAPITAL", "CLIENT_CHEQUE", "CLIENT_VIREMENT", "CAISSE_DEPOT"]
-      : ["FOURNISSEUR_CHEQUE", "FOURNISSEUR_VIREMENT", "RETRAIT_ESPECES"];
+      ? ["APPORT_CAPITAL", "CLIENT_CHEQUE", "CLIENT_VIREMENT", "CAISSE_DEPOT", "AUTRE"]
+      : ["FOURNISSEUR_CHEQUE", "FOURNISSEUR_VIREMENT", "RETRAIT_ESPECES", "AUTRE"];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

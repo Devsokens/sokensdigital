@@ -10,6 +10,7 @@ import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { formatFcfa } from "@/lib/format-currency";
 import { useAuth } from "@/lib/auth/auth-context";
 import { listDepartments } from "@/lib/api/hr";
+import { listDisbursementRequests } from "@/lib/api/finance";
 import {
   listSuppliers, createSupplier,
   listProcurementRequests, createProcurementRequest,
@@ -19,7 +20,7 @@ import {
   listSupplierInvoices, createSupplierInvoice, validateSupplierInvoice,
 } from "@/lib/api/procurement";
 import type {
-  Department, ProcurementRequest, Supplier, SupplierInvoice, SupplierQuote,
+  Department, DisbursementRequest, ProcurementRequest, Supplier, SupplierInvoice, SupplierQuote,
 } from "@/lib/api/types";
 
 const CAN_APPROVE = ["SUPER_ADMIN", "DIRECTEUR_FINANCIER", "COMPTABLE"];
@@ -75,10 +76,29 @@ const PROCUREMENT_STATUS_COLORS: Record<ProcurementRequest["status"], string> = 
   TERMINEE: "bg-emerald-100 text-emerald-700",
 };
 
+const DISBURSEMENT_STATUS_LABELS: Record<DisbursementRequest["status"], string> = {
+  EN_ATTENTE_N1: "En attente (N1)",
+  EN_ATTENTE_N2: "En attente (N2)",
+  EN_ATTENTE_N3: "En attente (N3)",
+  APPROUVE: "Approuvé",
+  REJETE: "Rejeté",
+  EXECUTE: "Exécuté",
+};
+
+const DISBURSEMENT_STATUS_COLORS: Record<DisbursementRequest["status"], string> = {
+  EN_ATTENTE_N1: "bg-amber-100 text-amber-700",
+  EN_ATTENTE_N2: "bg-amber-100 text-amber-700",
+  EN_ATTENTE_N3: "bg-amber-100 text-amber-700",
+  APPROUVE: "bg-emerald-100 text-emerald-700",
+  REJETE: "bg-destructive/10 text-destructive",
+  EXECUTE: "bg-primary/10 text-primary",
+};
+
 function FichesPanel() {
   const { profile } = useAuth();
   const canApprove = CAN_APPROVE.includes(profile?.role ?? "");
   const [requests, setRequests] = useState<ProcurementRequest[] | null>(null);
+  const [disbursements, setDisbursements] = useState<DisbursementRequest[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -86,9 +106,19 @@ function FichesPanel() {
 
   async function load() {
     try {
-      const [reqRes, deptRes] = await Promise.all([listProcurementRequests(), listDepartments()]);
+      // Une demande de décaissement EST l'expression d'un besoin, au même
+      // titre qu'une fiche état des besoins — les deux remontent donc dans
+      // ce tableau. Elles gardent en revanche leur circuit d'approbation
+      // propre (N1/N2/N3 selon le montant, écran Technique > Décaissements) :
+      // on les affiche ici en lecture, sans dupliquer ce workflow.
+      const [reqRes, deptRes, disbRes] = await Promise.all([
+        listProcurementRequests(),
+        listDepartments(),
+        listDisbursementRequests(),
+      ]);
       setRequests(reqRes.results);
       setDepartments(deptRes.results);
+      setDisbursements(disbRes.results);
     } catch {
       setError("Impossible de charger les fiches besoins.");
     }
@@ -134,6 +164,7 @@ function FichesPanel() {
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
+              <th className="px-4 py-3 font-medium">Origine</th>
               <th className="px-4 py-3 font-medium">Titre</th>
               <th className="px-4 py-3 font-medium">Département</th>
               <th className="px-4 py-3 font-medium">Montant estimé</th>
@@ -144,6 +175,9 @@ function FichesPanel() {
           <tbody className="divide-y divide-neutral-100">
             {requests.map((r) => (
               <tr key={r.id}>
+                <td className="px-4 py-3">
+                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">Fiche besoins</span>
+                </td>
                 <td className="px-4 py-3">
                   <p className="text-neutral-900">{r.title}</p>
                   <p className="max-w-xs truncate text-xs text-neutral-400">{r.description}</p>
@@ -176,8 +210,38 @@ function FichesPanel() {
                 )}
               </tr>
             ))}
-            {requests.length === 0 && (
-              <tr><td colSpan={canApprove ? 5 : 4} className="px-4 py-8 text-center text-neutral-400">Aucune fiche besoins.</td></tr>
+            {disbursements.map((d) => (
+              <tr key={d.id} className="bg-neutral-50/40">
+                <td className="px-4 py-3">
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">Décaissement</span>
+                </td>
+                <td className="px-4 py-3">
+                  <p className="text-neutral-900">{d.beneficiary}</p>
+                  <p className="max-w-xs truncate text-xs text-neutral-400">{d.reason}</p>
+                </td>
+                <td className="px-4 py-3 text-neutral-500">—</td>
+                <td className="px-4 py-3 font-mono text-neutral-900">{formatFcfa(d.amount)}</td>
+                <td className="px-4 py-3">
+                  <span className={`rounded-full px-2 py-0.5 text-xs ${DISBURSEMENT_STATUS_COLORS[d.status]}`}>
+                    {DISBURSEMENT_STATUS_LABELS[d.status]}
+                  </span>
+                  {d.status === "REJETE" && d.rejection_reason && (
+                    <p className="mt-1 max-w-xs truncate text-xs text-destructive" title={d.rejection_reason}>Motif : {d.rejection_reason}</p>
+                  )}
+                </td>
+                {canApprove && (
+                  <td className="px-4 py-3">
+                    {/* Le circuit N1/N2/N3 vit dans son propre écran — pas
+                        de duplication du workflow d'approbation ici. */}
+                    <a href="/admin/technique/decaissements" className="text-xs text-primary hover:underline">
+                      Traiter →
+                    </a>
+                  </td>
+                )}
+              </tr>
+            ))}
+            {requests.length === 0 && disbursements.length === 0 && (
+              <tr><td colSpan={canApprove ? 6 : 5} className="px-4 py-8 text-center text-neutral-400">Aucun besoin enregistré.</td></tr>
             )}
           </tbody>
         </table>

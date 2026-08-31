@@ -821,7 +821,7 @@ export interface CashEntry {
 export type BankEntryType = "ENTREE" | "SORTIE";
 export type BankEntrySource =
   | "APPORT_CAPITAL" | "CLIENT_CHEQUE" | "CLIENT_VIREMENT" | "CAISSE_DEPOT"
-  | "FOURNISSEUR_CHEQUE" | "FOURNISSEUR_VIREMENT" | "RETRAIT_ESPECES";
+  | "FOURNISSEUR_CHEQUE" | "FOURNISSEUR_VIREMENT" | "RETRAIT_ESPECES" | "AUTRE";
 
 export interface BankEntry {
   id: string;
