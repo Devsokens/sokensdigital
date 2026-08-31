@@ -13,6 +13,7 @@ from finance.models import (
     DisbursementRequest,
     Invoice,
     JournalEntry,
+    Payment,
     TaxDeclaration,
     TransactionLine,
 )
@@ -525,3 +526,74 @@ class FecExportAndDashboardTests(APITestCase):
     def test_dashboard_forbidden_for_outsider(self):
         response = self.client_outsider.get('/api/v1/finance/dashboard/')
         self.assertEqual(response.status_code, 403)
+
+
+class PaymentAmountRulesTests(APITestCase):
+    """Regles de montant sur les versements partiels.
+
+    Le restant du pilote l'affichage client et le rapprochement comptable :
+    s'il est faux, l'erreur se propage aux deux.
+    """
+
+    def setUp(self):
+        self.cfo = User.objects.create(email='df-versements@sokens.test')
+        self.cfo.roles.add(Role.objects.get_or_create(name=ROLE_DIRECTEUR_FINANCIER)[0])
+        self.client.force_authenticate(user=self.cfo)
+
+        # 1000 HT + TVA => amount_ttc calcule par le modele.
+        self.invoice = Invoice.objects.create(
+            client_name='Acme SARL',
+            issue_date=datetime.date(2026, 7, 15),
+            amount_ht=Decimal('1000'),
+        )
+        self.invoice.refresh_from_db()
+        self.list_url = f'/api/v1/finance/invoices/{self.invoice.id}/payments/'
+
+    def _create(self, amount):
+        return self.client.post(self.list_url, {
+            'amount': str(amount),
+            'payment_date': '2026-07-20',
+            'payment_method': 'VIREMENT',
+        }, format='json')
+
+    def _receive(self, payment_id):
+        return self.client.post(
+            f'{self.list_url}{payment_id}/receive/', {}, format='json',
+        )
+
+    def test_total_paid_does_not_double_count_the_current_payment(self):
+        created = self._create(Decimal('100'))
+        self.assertEqual(created.status_code, 201, created.data)
+        received = self._receive(created.data['id'])
+        self.assertEqual(received.status_code, 200, received.data)
+
+        self.assertEqual(Decimal(received.data['total_paid']), Decimal('100'))
+        self.assertEqual(
+            Decimal(received.data['remaining']), self.invoice.amount_ttc - Decimal('100'),
+        )
+
+    def test_payment_above_remaining_is_refused(self):
+        response = self._create(self.invoice.amount_ttc + Decimal('1'))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('amount', response.data)
+        self.assertEqual(Payment.objects.count(), 0)
+
+    def test_second_payment_cannot_exceed_what_is_left(self):
+        first = self._create(Decimal('200'))
+        self._receive(first.data['id'])
+
+        response = self._create(self.invoice.amount_ttc)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Payment.objects.count(), 1)
+
+    def test_payment_up_to_the_remaining_balance_is_accepted(self):
+        first = self._create(Decimal('200'))
+        self._receive(first.data['id'])
+
+        response = self._create(self.invoice.amount_ttc - Decimal('200'))
+        self.assertEqual(response.status_code, 201, response.data)
+
+    def test_negative_amount_is_refused(self):
+        response = self._create(Decimal('-50'))
+        self.assertEqual(response.status_code, 400)
