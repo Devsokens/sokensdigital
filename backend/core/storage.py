@@ -7,6 +7,8 @@ import cloudinary
 import cloudinary.uploader
 import requests
 from django.core.exceptions import ValidationError
+from django.core.files.base import File
+from django.core.files.storage import Storage
 from PIL import Image, ImageOps
 
 logger = logging.getLogger(__name__)
@@ -202,3 +204,123 @@ def _upload_bytes(data: bytes, content_type: str, extension: str, folder: str) -
         raise RuntimeError(f"Échec de l'upload vers Supabase Storage : {response.text}")
 
     return f'{url}/storage/v1/object/public/{BUCKET_NAME}/{path}'
+
+
+# ---------------------------------------------------------------------------
+# Pièces justificatives — bucket privé
+# ---------------------------------------------------------------------------
+# BUCKET_NAME est public : c'est voulu pour les visuels du site vitrine. Les
+# justificatifs comptables (chèques, bordereaux, relevés bancaires) n'ont rien
+# à y faire — une URL publique devinable exposerait des RIB et des montants
+# clients à qui la trouve. D'où un second bucket, privé, servi uniquement par
+# URL signée à durée limitée.
+PRIVATE_BUCKET_NAME = 'documents'
+
+# Durée d'une URL signée. Assez pour ouvrir ou télécharger la pièce depuis
+# l'interface, trop court pour qu'un lien copié dans un e-mail reste utile.
+SIGNED_URL_TTL_SECONDS = 300
+
+_private_bucket_ensured = False
+
+
+def _ensure_private_bucket() -> None:
+    global _private_bucket_ensured
+    if _private_bucket_ensured:
+        return
+    url, key = _supabase_config()
+    requests.post(
+        f'{url}/storage/v1/bucket',
+        headers={'Authorization': f'Bearer {key}', 'apikey': key},
+        json={'name': PRIVATE_BUCKET_NAME, 'id': PRIVATE_BUCKET_NAME, 'public': False},
+        timeout=15,
+    )
+    # Un 400 « already exists » est le cas nominal au 2e appel : on ne
+    # distingue pas, la création est idempotente côté usage.
+    _private_bucket_ensured = True
+
+
+class SupabasePrivateStorage(Storage):
+    """Backend de stockage Django adossé au bucket privé Supabase.
+
+    Le stockage par défaut du projet est FileSystemStorage, et l'hébergement
+    (Render) a un disque éphémère : une pièce justificative écrite sur disque
+    disparaît au déploiement suivant. Pour des documents à valeur probante
+    comptable, c'est une perte de données, pas une gêne.
+
+    Implémenté comme un Storage plutôt qu'en appelant l'upload depuis la vue
+    pour que le FileField continue de fonctionner normalement — validateurs,
+    admin Django, `.url`, suppression en cascade.
+    """
+
+    def _open(self, name, mode='rb'):
+        url, key = _supabase_config()
+        response = requests.get(
+            f'{url}/storage/v1/object/{PRIVATE_BUCKET_NAME}/{name}',
+            headers={'Authorization': f'Bearer {key}', 'apikey': key},
+            timeout=30,
+        )
+        if response.status_code != 200:
+            raise FileNotFoundError(name)
+        return File(io.BytesIO(response.content), name=name)
+
+    def _save(self, name, content):
+        _ensure_private_bucket()
+        url, key = _supabase_config()
+
+        # Le nom vient du fichier envoyé par l'utilisateur : on ne le
+        # réutilise pas comme chemin. Un UUID écarte d'un coup la traversée
+        # de répertoire, les collisions et l'écrasement d'une pièce
+        # existante par un homonyme.
+        extension = os.path.splitext(name)[1].lower()
+        path = f'{uuid.uuid4()}{extension}'
+
+        content.seek(0)
+        response = requests.post(
+            f'{url}/storage/v1/object/{PRIVATE_BUCKET_NAME}/{path}',
+            headers={
+                'Authorization': f'Bearer {key}',
+                'apikey': key,
+                'Content-Type': getattr(content, 'content_type', None) or 'application/octet-stream',
+            },
+            data=content.read(),
+            timeout=60,
+        )
+        if response.status_code not in (200, 201):
+            raise RuntimeError(f"Échec de l'upload du justificatif : {response.text}")
+        return path
+
+    def delete(self, name):
+        url, key = _supabase_config()
+        requests.delete(
+            f'{url}/storage/v1/object/{PRIVATE_BUCKET_NAME}/{name}',
+            headers={'Authorization': f'Bearer {key}', 'apikey': key},
+            timeout=15,
+        )
+
+    def exists(self, name):
+        # Toujours False : les chemins sont des UUID générés dans _save, donc
+        # jamais en collision. Répondre autrement obligerait à un aller-retour
+        # réseau à chaque upload pour une question déjà tranchée.
+        return False
+
+    def size(self, name):
+        url, key = _supabase_config()
+        response = requests.head(
+            f'{url}/storage/v1/object/{PRIVATE_BUCKET_NAME}/{name}',
+            headers={'Authorization': f'Bearer {key}', 'apikey': key},
+            timeout=15,
+        )
+        return int(response.headers.get('Content-Length', 0))
+
+    def url(self, name):
+        """URL signée, valable SIGNED_URL_TTL_SECONDS."""
+        url, key = _supabase_config()
+        response = requests.post(
+            f'{url}/storage/v1/object/sign/{PRIVATE_BUCKET_NAME}/{name}',
+            headers={'Authorization': f'Bearer {key}', 'apikey': key},
+            json={'expiresIn': SIGNED_URL_TTL_SECONDS},
+            timeout=15,
+        )
+        if response.status_code != 200:
+            raise RuntimeError(f"Impossible de signer l'URL du justificatif : {response.text}")
+        return f"{url}/storage/v1{response.json()['signedURL']}"

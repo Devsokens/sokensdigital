@@ -1,3 +1,4 @@
+import os
 import hashlib
 import uuid
 import re
@@ -259,6 +260,24 @@ def validate_document_attachment_size(file):
         raise ValidationError('Le fichier dépasse la taille maximale autorisée (10 Mo).')
 
 
+def attachment_storage():
+    """Bucket prive Supabase des que les cles sont presentes, stockage local
+    sinon.
+
+    Le disque de l'hebergeur est ephemere : un justificatif ecrit en local y
+    disparait au deploiement suivant. On ne veut pas de ce comportement en
+    production, mais on ne veut pas non plus que les tests et le dev local
+    exigent un Supabase joignable.
+    """
+    from django.core.files.storage import default_storage
+
+    if os.environ.get('SUPABASE_URL') and os.environ.get('SUPABASE_SERVICE_ROLE_KEY'):
+        from core.storage import SupabasePrivateStorage
+
+        return SupabasePrivateStorage()
+    return default_storage
+
+
 class DocumentAttachment(LoggedModel):
     """Pièces justificatives génériques — factures, reçus, chèques, virements, etc.
 
@@ -288,6 +307,11 @@ class DocumentAttachment(LoggedModel):
     document_type = models.CharField(max_length=20, choices=DOCUMENT_TYPES)
     file = models.FileField(
         upload_to='documents/%Y/%m/%d/',
+        # Callable et non instance : la migration ne fige que la reference
+        # a la fonction, le backend reel est choisi a chaque acces. Les
+        # tests et le dev local n'ont donc pas besoin d'un Supabase
+        # joignable, et basculer de stockage ne demande pas de migration.
+        storage=attachment_storage,
         validators=[
             FileExtensionValidator(allowed_extensions=DOCUMENT_ATTACHMENT_ALLOWED_EXTENSIONS),
             validate_document_attachment_size,
