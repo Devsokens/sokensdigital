@@ -7,6 +7,7 @@ import Link from "next/link";
 import { motion } from "motion/react";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { InstallButton } from "@/components/pwa/install-button";
 import { signIn, friendlyAuthError } from "@/lib/firebase/auth";
 
 const inputClass =
@@ -138,6 +139,14 @@ export function LoginForm() {
               "Se connecter"
             )}
           </Button>
+
+          {/* Installation de l'app — sous le bouton de connexion : c'est
+              l'endroit où l'utilisateur arrive quand il ouvre l'outil au
+              quotidien, donc le moment naturel pour proposer de l'épingler.
+              Le composant ne rend rien si l'app tourne déjà en installé. */}
+          <div className="border-t border-white/10 pt-4">
+            <InstallButton />
+          </div>
 
           <p className="text-center text-xs leading-relaxed text-muted-foreground/70">
             En vous connectant, vous acceptez nos{" "}

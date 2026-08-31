@@ -94,3 +94,23 @@
     @apply font-sans;
   }
 }
+
+/* PWA installée — sur iPhone, le contenu passe sinon sous l'encoche et
+   sous la barre d'accueil. Ces marges ne s'appliquent qu'en mode
+   standalone : dans un onglet classique, le navigateur gère déjà. */
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Empêche le rebond élastique iOS de faire apparaître un fond blanc sous
+   l'app quand on scrolle au-delà du contenu. */
+@supports (-webkit-touch-callout: none) {
+  html {
+    background-color: var(--background);
+  }
+}
