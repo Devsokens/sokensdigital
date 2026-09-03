@@ -53,3 +53,7 @@ logs/
 htmlcov*/
 reports/
 .pytest_cache/
+
+# Fichiers ecrits par le stockage local (tests, dev) — jamais versionnes.
+backend/documents/
+backend/media/

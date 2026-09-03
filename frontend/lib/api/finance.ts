@@ -12,6 +12,8 @@ import type {
   TaxDeclaration,
   TransactionLine,
   EncaissementsResponse,
+  Payment,
+  PaymentInput,
 } from "@/lib/api/types";
 
 export function listDisbursementRequests() {
@@ -190,4 +192,24 @@ export function getEncaissements(params?: { date_from?: string; date_to?: string
   if (params?.date_to) qs.set("date_to", params.date_to);
   const suffix = qs.toString() ? `?${qs}` : "";
   return apiFetch<EncaissementsResponse>(`/api/v1/finance/encaissements/${suffix}`);
+}
+
+// --- Versements (paiements partiels d'une facture) ---
+
+export function listPayments(invoiceId: string) {
+  return apiFetch<Paginated<Payment>>(`/api/v1/finance/invoices/${invoiceId}/payments/`);
+}
+
+export function createPayment(invoiceId: string, data: PaymentInput) {
+  return apiFetch<Payment>(`/api/v1/finance/invoices/${invoiceId}/payments/`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function receivePayment(invoiceId: string, paymentId: string) {
+  return apiFetch<Payment>(
+    `/api/v1/finance/invoices/${invoiceId}/payments/${paymentId}/receive/`,
+    { method: "POST", body: JSON.stringify({}) },
+  );
 }

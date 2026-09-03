@@ -1,5 +1,6 @@
 from rest_framework.test import APITestCase
 from django.urls import reverse
+from technique.models import TimeEntry
 from .factories import (
     UserFactory, ProjectFactory, RoleFactory, ProjectPhaseFactory,
     ProjectDocumentFactory, TaskFactory, TimeEntryFactory, TicketFactory, KnowledgeBaseFactory
@@ -284,3 +285,106 @@ class ViewTests(APITestCase):
         url = reverse('knowledgebase-list')
         response = self.client.post(url, {'title': 'Article', 'content': 'x'}, format='json')
         self.assertEqual(response.status_code, 201)
+
+
+class TimeEntryValidationTests(APITestCase):
+    """Validation des heures par le chef de projet (matrice des roles 3.1).
+
+    Une entree validee alimente la facturation : elle doit se figer, et
+    personne ne doit pouvoir valider ses propres heures.
+    """
+
+    def setUp(self):
+        self.pm_role = RoleFactory(name=ROLE_PROJECT_MANAGER)
+        self.dev_role = RoleFactory(name=ROLE_DEVELOPER)
+
+        self.pm = UserFactory()
+        self.pm.roles.add(self.pm_role)
+        self.dev = UserFactory()
+        self.dev.roles.add(self.dev_role)
+
+        self.project = ProjectFactory(project_manager=self.pm)
+        self.task = TaskFactory(project=self.project)
+        self.entry = TimeEntryFactory(task=self.task, user=self.dev, hours=4)
+
+    def _url(self, action):
+        return reverse(
+            f'task-timeentries-{action}',
+            kwargs={'task_pk': self.task.pk, 'pk': self.entry.pk},
+        )
+
+    def test_project_manager_validates(self):
+        self.client.force_authenticate(user=self.pm)
+        response = self.client.post(self._url('valider'))
+
+        self.assertEqual(response.status_code, 200)
+        self.entry.refresh_from_db()
+        self.assertTrue(self.entry.is_validated)
+        self.assertEqual(self.entry.validated_by_id, self.pm.id)
+        self.assertIsNotNone(self.entry.validated_at)
+
+    def test_developer_cannot_validate_own_hours(self):
+        self.client.force_authenticate(user=self.dev)
+        response = self.client.post(self._url('valider'))
+
+        self.assertEqual(response.status_code, 403)
+        self.entry.refresh_from_db()
+        self.assertFalse(self.entry.is_validated)
+
+    def test_manager_of_another_project_cannot_validate(self):
+        other_pm = UserFactory()
+        other_pm.roles.add(self.pm_role)
+        self.client.force_authenticate(user=other_pm)
+
+        response = self.client.post(self._url('valider'))
+        # 404 et non 403 : get_queryset ne lui expose deja pas cette entree,
+        # donc il n'apprend meme pas qu'elle existe.
+        self.assertEqual(response.status_code, 404)
+        self.entry.refresh_from_db()
+        self.assertFalse(self.entry.is_validated)
+
+    def test_validated_entry_is_frozen(self):
+        self.client.force_authenticate(user=self.pm)
+        self.client.post(self._url('valider'))
+
+        self.client.force_authenticate(user=self.dev)
+        response = self.client.patch(self._url('detail'), {'hours': '9.00'}, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.entry.refresh_from_db()
+        self.assertEqual(str(self.entry.hours), '4.00')
+
+    def test_validated_entry_cannot_be_deleted(self):
+        self.client.force_authenticate(user=self.pm)
+        self.client.post(self._url('valider'))
+
+        self.client.force_authenticate(user=self.dev)
+        response = self.client.delete(self._url('detail'))
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(TimeEntry.objects.filter(pk=self.entry.pk).exists())
+
+    def test_validation_flag_is_not_writable_through_patch(self):
+        # Sans read_only_fields, un simple PATCH suffirait a s'auto-valider.
+        self.client.force_authenticate(user=self.dev)
+        response = self.client.patch(
+            self._url('detail'), {'is_validated': True}, format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.entry.refresh_from_db()
+        self.assertFalse(self.entry.is_validated)
+
+    def test_unvalidate_reopens_the_entry(self):
+        self.client.force_authenticate(user=self.pm)
+        self.client.post(self._url('valider'))
+        response = self.client.post(self._url('devalider'))
+
+        self.assertEqual(response.status_code, 200)
+        self.entry.refresh_from_db()
+        self.assertFalse(self.entry.is_validated)
+        self.assertIsNone(self.entry.validated_by_id)
+
+        self.client.force_authenticate(user=self.dev)
+        patch = self.client.patch(self._url('detail'), {'hours': '5.00'}, format='json')
+        self.assertEqual(patch.status_code, 200)

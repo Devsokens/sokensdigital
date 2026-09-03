@@ -169,8 +169,23 @@ class TimeEntry(LoggedModel):
     date = models.DateField()
     description = models.TextField()
 
+    # Validation par le chef de projet (matrice des roles 3.1). Une entree
+    # validee alimente la facturation client et le calcul de marge : elle
+    # doit donc cesser d'etre modifiable, sinon le montant deja facture peut
+    # bouger apres coup sans trace.
+    is_validated = models.BooleanField(default=False)
+    validated_by = models.ForeignKey(
+        'core.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='validated_time_entries',
+    )
+    validated_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         ordering = ['-date', '-created_at']
+        indexes = [
+            models.Index(fields=['user', 'is_validated']),
+            models.Index(fields=['is_validated', 'date']),
+        ]
 
     def clean(self):
         if self.date and self.date > timezone.now().date():
@@ -189,6 +204,27 @@ class TimeEntry(LoggedModel):
                 })
 
     def save(self, *args, **kwargs):
+        # Une entree validee est figee, sauf pour l'acte de validation
+        # lui-meme (et sa revocation par un chef de projet). Verifie ici et
+        # pas seulement dans la vue, pour couvrir l'admin Django, le shell
+        # et les scripts.
+        if self.pk and not self._state.adding:
+            previous = TimeEntry.objects.filter(pk=self.pk).values(
+                'is_validated', 'hours', 'date', 'description', 'task_id',
+            ).first()
+            if previous and previous['is_validated'] and (
+                self.is_validated
+                and (
+                    previous['hours'] != self.hours
+                    or previous['date'] != self.date
+                    or previous['description'] != self.description
+                    or previous['task_id'] != self.task_id
+                )
+            ):
+                raise ValidationError(
+                    'Cette entree de temps a ete validee et ne peut plus etre '
+                    'modifiee. Demandez au chef de projet de lever la validation.'
+                )
         self.clean()
         super().save(*args, **kwargs)
 

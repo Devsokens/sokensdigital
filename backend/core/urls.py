@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
+from core.attachment_views import DocumentAttachmentViewSet
 from core.views import (
     AuditLogViewSet,
     AvatarUploadView,
@@ -21,6 +22,7 @@ router.register('departments', DepartmentViewSet, basename='department')
 router.register('users', UserListView, basename='user')
 router.register('audit-logs', AuditLogViewSet, basename='audit-log')
 router.register('roles', RoleViewSet, basename='role')
+router.register('attachments', DocumentAttachmentViewSet, basename='attachment')
 
 # Feature endpoints get added here as they're built, one at a time.
 urlpatterns = [

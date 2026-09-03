@@ -398,14 +398,21 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.Retr
         qs = Payment.objects.filter(invoice_id=invoice_id).select_related('invoice', 'received_by')
         return qs.prefetch_related('receipt', 'attachments')
 
-    def perform_create(self, serializer):
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        # Le serializer valide le montant contre le restant du, donc il lui
+        # faut la facture des la creation — a ce moment la, l'instance n'a
+        # pas encore de FK.
         invoice_id = self.kwargs.get('invoice_id')
-        try:
-            invoice = Invoice.objects.get(id=invoice_id)
-        except Invoice.DoesNotExist:
-            raise serializers.ValidationError('Invoice not found')
+        if invoice_id:
+            context['invoice'] = Invoice.objects.filter(id=invoice_id).first()
+        return context
 
-        payment = serializer.save(invoice=invoice)
+    def perform_create(self, serializer):
+        invoice = self.get_serializer_context().get('invoice')
+        if invoice is None:
+            raise serializers.ValidationError('Invoice not found')
+        serializer.save(invoice=invoice)
 
     @extend_schema(
         tags=['Finance & Comptabilité'],

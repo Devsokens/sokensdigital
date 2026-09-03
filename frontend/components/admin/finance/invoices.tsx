@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { Fragment, useEffect, useState } from "react";
+import { ChevronDown, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/sheet";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { createInvoice, listInvoices, validateInvoice } from "@/lib/api/finance";
+import { InvoicePayments } from "@/components/admin/finance/invoice-payments";
+import { formatFcfa } from "@/lib/format-currency";
 import type { Invoice } from "@/lib/api/types";
 
 export function Invoices() {
@@ -14,6 +16,7 @@ export function Invoices() {
   const [open, setOpen] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   async function load() {
     try {
@@ -86,14 +89,16 @@ export function Invoices() {
               <th className="px-4 py-3 font-medium">Montant TTC</th>
               <th className="px-4 py-3 font-medium">Statut</th>
               <th className="px-4 py-3 font-medium">Action</th>
+              <th className="w-32 px-4 py-3 font-medium">Versements</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-100">
             {invoices.map((invoice) => (
-              <tr key={invoice.id}>
+              <Fragment key={invoice.id}>
+              <tr>
                 <td className="px-4 py-3 text-neutral-900">{invoice.invoice_number}</td>
                 <td className="px-4 py-3 text-neutral-700">{invoice.client_name}</td>
-                <td className="px-4 py-3 text-neutral-900">{invoice.amount_ttc} €</td>
+                <td className="px-4 py-3 text-neutral-900">{formatFcfa(invoice.amount_ttc)}</td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${
                     invoice.status === "VALIDEE" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
@@ -112,11 +117,31 @@ export function Invoices() {
                     </button>
                   )}
                 </td>
+                <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId((id) => (id === invoice.id ? null : invoice.id))}
+                    className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900"
+                  >
+                    <ChevronDown
+                      className={`size-3.5 transition-transform ${expandedId === invoice.id ? "rotate-180" : ""}`}
+                    />
+                    {expandedId === invoice.id ? "Masquer" : "Voir"}
+                  </button>
+                </td>
               </tr>
+              {expandedId === invoice.id && (
+                <tr>
+                  <td colSpan={6} className="bg-neutral-50/60 px-4 py-5">
+                    <InvoicePayments invoice={invoice} />
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
             {invoices.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-neutral-400">Aucune facture pour l&apos;instant.</td>
+                <td colSpan={6} className="px-4 py-8 text-center text-neutral-400">Aucune facture pour l&apos;instant.</td>
               </tr>
             )}
           </tbody>

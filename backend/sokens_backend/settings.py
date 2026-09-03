@@ -420,6 +420,13 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=10, minute=0),  # 10:00 UTC chaque jour
         'options': {'queue': 'default'}
     },
+    'check-maintenance-due': {
+        # 07:00 UTC : avant la journee de travail, pour que le retard soit
+        # visible au moment ou il peut encore etre rattrape.
+        'task': 'technique.tasks.check_maintenance_due',
+        'schedule': crontab(hour=7, minute=0),
+        'options': {'queue': 'default'}
+    },
 }
 
 # Facebook Page publishing (marketing/publishing.py) — blank by default,
@@ -457,3 +464,55 @@ GMAIL_SENDER_EMAIL = os.environ.get('GMAIL_SENDER_EMAIL', '')
 # - GOOGLE_APPLICATION_CREDENTIALS: a filesystem path to the service
 #   account JSON (used locally / in Docker via a mounted file).
 # Actual initialization happens in core.apps.CoreConfig.ready().
+
+
+# ---------------------------------------------------------------------------
+# Sentry — supervision des erreurs
+# ---------------------------------------------------------------------------
+# Jusqu'ici, une 500 en production ne laissait qu'un traceback dans les logs
+# Render : personne n'est prévenu, et la trace disparaît à la rotation. Sentry
+# agrège, déduplique et alerte.
+#
+# Entièrement optionnel : sans SENTRY_DSN (dev, CI, tests), le SDK n'est même
+# pas initialisé — aucune dépendance réseau ajoutée à ces environnements.
+SENTRY_DSN = os.environ.get('SENTRY_DSN', '')
+
+if SENTRY_DSN:
+    import sentry_sdk
+
+    def _scrub_sensitive(event, hint):
+        """Retire du payload ce qui ne doit jamais quitter l'infrastructure.
+
+        L'application manipule des identifiants d'accès clients (chiffrés au
+        repos via django-cryptography) et des données comptables nominatives.
+        `send_default_pii=False` couvre déjà cookies/IP/corps de requête, mais
+        pas les variables locales capturées dans les frames du traceback — or
+        c'est précisément là qu'un mot de passe déchiffré peut apparaître.
+        """
+        for exception in (event.get('exception') or {}).get('values') or []:
+            for frame in (exception.get('stacktrace') or {}).get('frames') or []:
+                variables = frame.get('vars')
+                if not variables:
+                    continue
+                for name in list(variables):
+                    lowered = name.lower()
+                    if any(marker in lowered for marker in (
+                        'password', 'secret', 'token', 'key', 'credential',
+                        'admin_username', 'access_notes', 'authorization',
+                    )):
+                        variables[name] = '[filtré]'
+        return event
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=os.environ.get('SENTRY_ENVIRONMENT', 'production'),
+        release=os.environ.get('RENDER_GIT_COMMIT', ''),
+        # Jamais d'IP, de cookies ni de corps de requête : le RGPD s'applique
+        # aux salariés comme aux clients, et ces champs n'aident pas à
+        # diagnostiquer un bug de logique métier.
+        send_default_pii=False,
+        before_send=_scrub_sensitive,
+        # 10 % des transactions : assez pour voir les endpoints lents sans
+        # saturer le quota ni ajouter de latence sur chaque requête.
+        traces_sample_rate=float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', '0.1')),
+    )

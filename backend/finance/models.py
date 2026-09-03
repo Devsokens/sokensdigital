@@ -1,6 +1,7 @@
 import uuid
 from decimal import Decimal
 
+from django.contrib.contenttypes.fields import GenericRelation
 from django.db import models
 from django.utils import timezone
 
@@ -322,6 +323,17 @@ class Payment(LoggedModel):
         AUTRE = 'AUTRE', 'Autre'
 
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='payments')
+
+    # PaymentSerializer exposait deja `attachments` et le queryset de la vue
+    # le prefetchait, mais la relation inverse n'existait pas : toute lecture
+    # d'un versement levait une AttributeError. Les pieces (cheque, bordereau,
+    # attestation de virement) sont des DocumentAttachment generiques, d'ou
+    # une GenericRelation plutot qu'une FK dediee.
+    attachments = GenericRelation(
+        'core.DocumentAttachment', content_type_field='content_type',
+        object_id_field='object_id', related_query_name='payment',
+    )
+
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     payment_date = models.DateField()
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices)

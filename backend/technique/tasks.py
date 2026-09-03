@@ -95,3 +95,101 @@ def send_ticket_resolution_email(ticket_id):
         recipient_list=[recipient],
         fail_silently=True,
     )
+
+
+@shared_task
+def check_maintenance_due():
+    """Alerte sur les applications dont la maintenance est en retard.
+
+    Planifiée chaque matin (CELERY_BEAT_SCHEDULE). Le cahier des charges
+    impose 3 passages par semaine sur les apps livrées ; sans rappel, un
+    oubli ne se voit qu'au prochain incident client.
+
+    La fenêtre est calculée depuis `expected_reports_per_week` plutôt que
+    codée en dur : une app en maintenance mensuelle ne doit pas déclencher
+    une alerte au bout de deux jours.
+
+    Destinataires : l'assigné s'il y en a un, sinon les responsables
+    techniques — une app non attribuée est justement celle qu'on oublie, la
+    laisser sans destinataire reproduirait le problème qu'on corrige.
+
+    La déduplication réutilise le motif de check_budget_alerts, mais bornée
+    à la journée : une alerte de retard doit se répéter tant que le retard
+    dure, sinon elle ne se voit qu'une fois et le retard s'installe.
+    """
+    from datetime import timedelta
+
+    from django.db.models import Max
+
+    from core.constants import ROLE_ADMIN, ROLE_PROJECT_MANAGER, ROLE_SUPER_ADMIN
+    from core.models import User
+    from .models import MaintainedApp
+
+    now = timezone.now()
+    today = timezone.localdate()
+
+    apps = (
+        MaintainedApp.objects.filter(is_active=True)
+        .select_related('assigned_to')
+        .annotate(last_report_at=Max('reports__performed_at'))
+    )
+
+    fallback_recipient_ids = None  # résolu une seule fois, si nécessaire
+
+    for app in apps:
+        per_week = app.expected_reports_per_week
+        if not per_week:
+            continue
+
+        # Intervalle nominal entre deux passages, plus 1 jour de tolérance
+        # pour ne pas alerter sur un décalage de quelques heures.
+        interval_days = 7 / per_week
+        deadline = now - timedelta(days=interval_days + 1)
+
+        last = app.last_report_at
+        if last is not None and last > deadline:
+            continue
+
+        if last is None:
+            detail = "aucune maintenance n'a encore été enregistrée"
+        else:
+            detail = f'dernière maintenance le {timezone.localtime(last):%d/%m/%Y}'
+
+        if app.assigned_to_id:
+            recipient_ids = [app.assigned_to_id]
+        else:
+            if fallback_recipient_ids is None:
+                fallback_recipient_ids = list(
+                    User.objects.filter(
+                        is_active=True,
+                        roles__name__in=(ROLE_PROJECT_MANAGER, ROLE_ADMIN, ROLE_SUPER_ADMIN),
+                    )
+                    .values_list('id', flat=True)
+                    .distinct()
+                )
+            recipient_ids = fallback_recipient_ids
+            detail += " — aucun technicien n'est assigné à cette application"
+
+        for user_id in recipient_ids:
+            already_alerted_today = Notification.objects.filter(
+                user_id=user_id,
+                notification_type=Notification.NotificationType.FOLLOW_UP,
+                entity_type='MaintainedApp',
+                entity_id=str(app.pk),
+                created_at__date=today,
+            ).exists()
+            if already_alerted_today:
+                continue
+
+            Notification.objects.create(
+                user_id=user_id,
+                title=f'Maintenance en retard — {app.name}',
+                message=(
+                    f'La maintenance de « {app.name} » est en retard '
+                    f'({app.get_maintenance_frequency_display().lower()}, {detail}).'
+                ),
+                notification_type=Notification.NotificationType.FOLLOW_UP,
+                entity_type='MaintainedApp',
+                entity_id=str(app.pk),
+                link='/admin/technique/maintenance',
+            )

@@ -25,30 +25,30 @@ router.register('invoices', InvoiceViewSet, basename='invoice')
 router.register('bank-imports', BankStatementImportViewSet, basename='bank-import')
 router.register('tax-declarations', TaxDeclarationViewSet, basename='tax-declaration')
 
-# Nested routes: invoices/{id}/payments/ et invoices/{id}/receipts/
-class NestedPaymentRouter:
-    def __init__(self):
-        self.payment_router = DefaultRouter()
-        self.payment_router.register('', PaymentViewSet, basename='payment')
-
-        self.receipt_router = DefaultRouter()
-        self.receipt_router.register('', PaymentReceiptViewSet, basename='receipt')
-
-nested_router = NestedPaymentRouter()
-
+# Routes imbriquees sous une facture. Ecrites a la main plutot qu'avec un
+# routeur imbrique : la version precedente instanciait un DefaultRouter puis
+# piochait `urls[0].callback` en esperant que ce soit bien la vue de liste.
+# Cela tenait par accident de l'ordre de generation, et le routeur des recus
+# n'etait branche nulle part malgre sa declaration.
 urlpatterns = router.urls + [
     path('accounting-periods/<uuid:period_id>/fec-export/', fec_export, name='fec-export'),
     path('dashboard/', finance_dashboard, name='finance-dashboard'),
     path('encaissements/', encaissements, name='finance-encaissements'),
 
-    # Nested: invoices/{invoice_id}/payments/
     re_path(r'^invoices/(?P<invoice_id>[^/.]+)/payments/$',
-            nested_router.payment_router.urls[0].callback if nested_router.payment_router.urls else None,
+            PaymentViewSet.as_view({'get': 'list', 'post': 'create'}),
             name='invoice-payment-list'),
     re_path(r'^invoices/(?P<invoice_id>[^/.]+)/payments/(?P<pk>[^/.]+)/$',
-            PaymentViewSet.as_view({'get': 'retrieve', 'post': 'receive'}),
+            PaymentViewSet.as_view({'get': 'retrieve'}),
             name='invoice-payment-detail'),
     re_path(r'^invoices/(?P<invoice_id>[^/.]+)/payments/(?P<pk>[^/.]+)/receive/$',
             PaymentViewSet.as_view({'post': 'receive'}),
             name='invoice-payment-receive'),
+
+    re_path(r'^invoices/(?P<invoice_id>[^/.]+)/receipts/$',
+            PaymentReceiptViewSet.as_view({'get': 'list'}),
+            name='invoice-receipt-list'),
+    re_path(r'^invoices/(?P<invoice_id>[^/.]+)/receipts/(?P<pk>[^/.]+)/$',
+            PaymentReceiptViewSet.as_view({'get': 'retrieve'}),
+            name='invoice-receipt-detail'),
 ]
