@@ -109,7 +109,7 @@ jobs:
         run: |
           set -o pipefail
           if ! npm ci 2>&1 | tee /tmp/npm-ci.log; then
-            echo "::error::npm ci a echoue : $(tail -n 30 /tmp/npm-ci.log | tr -s '[:space:]' ' ')"
+            echo "::error::npm ci a echoue : $(head -n 12 /tmp/npm-ci.log | tr -s '[:space:]' ' ')"
             exit 1
           fi
 
