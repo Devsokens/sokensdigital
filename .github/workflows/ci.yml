@@ -102,7 +102,16 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm ci
+        # La sortie est remontee en annotation d'echec : les logs bruts d'un
+        # job demandent les droits admin sur le depot, alors que les
+        # annotations sont lisibles par tous. Sans ca, un npm ci casse ne
+        # laisse voir que « exit code 1 ».
+        run: |
+          set -o pipefail
+          if ! npm ci 2>&1 | tee /tmp/npm-ci.log; then
+            echo "::error::npm ci a echoue : $(tail -n 30 /tmp/npm-ci.log | tr -s '[:space:]' ' ')"
+            exit 1
+          fi
 
       - name: Type check
         working-directory: frontend
