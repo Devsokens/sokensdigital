@@ -96,7 +96,7 @@ function VideoUploadField({ value, onChange }: { value: string; onChange: (url: 
           <X className="size-3.5" />
         </button>
       )}
-      <input ref={inputRef} type="file" accept="video/mp4,video/webm,video/quicktime" onChange={handleFile} className="hidden" />
+      <input ref={inputRef} type="file" accept=".mp4,.webm,.mov" onChange={handleFile} className="hidden" />
       {error && <p className="text-[0.6rem] text-destructive">{error}</p>}
     </div>
   );
@@ -277,7 +277,7 @@ export function ShowcaseProjectList() {
           ))}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-neutral-200 shadow-sm">
+        <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
           <table className="w-full text-sm">
             <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
               <tr>

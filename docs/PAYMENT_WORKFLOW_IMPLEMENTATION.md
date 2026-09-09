@@ -1,3 +1,11 @@
+> ⚠️ **Document historique (2026-08-16).** `Payment.Status` renommé en
+> français (`PENDING`→`EN_ATTENTE`, `RECEIVED`→`RECU`, `RECORDED`→
+> `ENREGISTRE`). Backend confirmé complet et fonctionnel, **mais aucune UI
+> frontend n'existe encore pour ce workflow** (`components/admin/finance/
+> invoices.tsx` ne mentionne pas Payment) — seul un appel API direct permet
+> de l'utiliser aujourd'hui. Voir
+> `docs/ETAT_ACTUEL_FINANCE_ACHATS_TRESORERIE_2026-08.md`.
+
 # Implémentation Workflow Paiements Partiels
 
 **Date:** 2026-08-16  

@@ -30,3 +30,4 @@ cloudinary
 flake8
 nh3
 django-axes
+sentry-sdk[django]

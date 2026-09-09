@@ -1,10 +1,9 @@
 import datetime
 
 from celery import shared_task
-from django.conf import settings
-from django.core.mail import send_mail
 from django.utils import timezone
 
+from core import mailer
 from core.models import Notification
 from .models import ClientInteraction, ClientDocument, EmployeeDocument, ContractGenerator
 
@@ -75,19 +74,14 @@ def document_expiry():
             entity_type='EmployeeDocument',
             entity_id=str(doc.pk),
         )
-        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
-        if from_email and doc.user and doc.user.email:
-            send_mail(
-                subject=f'Document bientôt expiré — {doc.document_name}',
-                message=(
-                    f'Bonjour {doc.user.first_name},\n\nVotre document '
-                    f'"{doc.document_name}" expire le '
-                    f'{doc.expiry_date.strftime("%d/%m/%Y")}. Merci de le '
-                    'renouveler auprès du service RH.\n\nCordialement.'
-                ),
-                from_email=from_email,
-                recipient_list=[doc.user.email],
-                fail_silently=True,
+        if doc.user and doc.user.email:
+            mailer.send_mail(
+                doc.user.email,
+                f'Document bientôt expiré — {doc.document_name}',
+                f'Bonjour {doc.user.first_name},\n\nVotre document '
+                f'"{doc.document_name}" expire le '
+                f'{doc.expiry_date.strftime("%d/%m/%Y")}. Merci de le '
+                'renouveler auprès du service RH.\n\nCordialement.',
             )
 
 @shared_task

@@ -1,3 +1,13 @@
+> ⚠️ **Document historique (construction initiale du 2026-08-16).** Plusieurs
+> passes d'audit ont suivi et corrigé/renommé des choses décrites ici comme
+> définitives : `CashVoucher` fusionné dans `treasury.CashEntry`, statuts
+> renommés en français (PENDING→EN_ATTENTE, DRAFT→BROUILLON, etc.), les
+> "signaux" décrits plus bas ont été supprimés et remplacés par un dispatch
+> explicite depuis les vues, l'immutabilité du statut n'était PAS enforced
+> comme annoncé (corrigé le 17/08), et tout ceci est poussé sur `main`
+> depuis plusieurs merges (les mentions "ne pas pousser" sont obsolètes).
+> **État réel à jour :** `docs/ETAT_ACTUEL_FINANCE_ACHATS_TRESORERIE_2026-08.md`.
+
 # Implémentation Complète — Tous Workflows Financiers
 
 **Status:** ✅ 4 Workflows implémentés | **Date:** 2026-08-16

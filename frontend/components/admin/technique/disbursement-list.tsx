@@ -18,37 +18,34 @@ import { listProjects } from "@/lib/api/projects";
 import type { DisbursementRequest, DisbursementStatus, Project } from "@/lib/api/types";
 
 const STATUS_LABELS: Record<DisbursementStatus, string> = {
-  EN_ATTENTE_N1: "En attente (N1)",
-  EN_ATTENTE_N2: "En attente (N2)",
-  EN_ATTENTE_N3: "En attente (N3)",
+  EN_ATTENTE_RCF: "En attente RCF",
+  EN_ATTENTE_GERANT: "En attente Gérant",
   APPROUVE: "Approuvé",
   REJETE: "Rejeté",
   EXECUTE: "Exécuté",
 };
 
 const STATUS_COLORS: Record<DisbursementStatus, string> = {
-  EN_ATTENTE_N1: "bg-amber-100 text-amber-700",
-  EN_ATTENTE_N2: "bg-amber-100 text-amber-700",
-  EN_ATTENTE_N3: "bg-amber-100 text-amber-700",
+  EN_ATTENTE_RCF: "bg-amber-100 text-amber-700",
+  EN_ATTENTE_GERANT: "bg-amber-100 text-amber-700",
   APPROUVE: "bg-emerald-100 text-emerald-700",
   REJETE: "bg-destructive/10 text-destructive",
   EXECUTE: "bg-primary/10 text-primary",
 };
 
-// Cahier des charges §4.3 — qui valide quel palier.
-const TIER_APPROVER_LABEL: Partial<Record<DisbursementStatus, string>> = {
-  EN_ATTENTE_N1: "Comptable",
-  EN_ATTENTE_N2: "Directeur Financier",
-  EN_ATTENTE_N3: "Direction Générale (Super-Admin)",
+// Process comptable et financier, "Demande de décaissement" : circuit fixe,
+// aucun seuil de montant — la RCF examine d'abord, puis le Gérant statue.
+const STAGE_APPROVER_LABEL: Partial<Record<DisbursementStatus, string>> = {
+  EN_ATTENTE_RCF: "Responsable Comptable et Financière",
+  EN_ATTENTE_GERANT: "Gérant",
 };
 
 type Role = string | undefined;
 
-function canApproveTier(role: Role, tier: DisbursementStatus): boolean {
+function canApproveStage(role: Role, stage: DisbursementStatus): boolean {
   if (role === "SUPER_ADMIN") return true;
-  if (tier === "EN_ATTENTE_N1") return role === "COMPTABLE" || role === "DIRECTEUR_FINANCIER";
-  if (tier === "EN_ATTENTE_N2") return role === "DIRECTEUR_FINANCIER";
-  return false; // N3 : Super-Admin uniquement
+  if (stage === "EN_ATTENTE_RCF") return role === "COMPTABLE" || role === "DIRECTEUR_FINANCIER";
+  return false; // Gérant : Super-Admin uniquement
 }
 
 export function DisbursementList() {
@@ -111,8 +108,8 @@ export function DisbursementList() {
         <div>
           <h1 className="text-2xl font-semibold text-neutral-900">Décaissements</h1>
           <p className="text-sm text-neutral-500">
-            Le palier de validation requis dépend du montant : Comptable (&lt;10 000 FCFA), Directeur Financier
-            (10 000-50 000), Direction Générale (&gt;50 000).
+            Toute demande est examinée par la Responsable Comptable et Financière, puis validée ou refusée
+            par le Gérant — quel que soit le montant.
           </p>
         </div>
         <Sheet open={open} onOpenChange={setOpen}>
@@ -129,7 +126,7 @@ export function DisbursementList() {
         </Sheet>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-neutral-200 shadow-sm">
+      <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
@@ -142,8 +139,8 @@ export function DisbursementList() {
           </thead>
           <tbody className="divide-y divide-neutral-100">
             {requests.map((req) => {
-              const isPending = req.status === "EN_ATTENTE_N1" || req.status === "EN_ATTENTE_N2" || req.status === "EN_ATTENTE_N3";
-              const canApproveThis = isPending && canApproveTier(profile?.role, req.status);
+              const isPending = req.status === "EN_ATTENTE_RCF" || req.status === "EN_ATTENTE_GERANT";
+              const canApproveThis = isPending && canApproveStage(profile?.role, req.status);
               return (
                 <tr key={req.id}>
                   <td className="px-4 py-3">
@@ -156,7 +153,7 @@ export function DisbursementList() {
                       {STATUS_LABELS[req.status]}
                     </span>
                     {isPending && (
-                      <p className="mt-1 text-xs text-neutral-400">Validation : {TIER_APPROVER_LABEL[req.status]}</p>
+                      <p className="mt-1 text-xs text-neutral-400">Validation : {STAGE_APPROVER_LABEL[req.status]}</p>
                     )}
                     {req.status === "REJETE" && req.rejection_reason && (
                       <p className="mt-1 max-w-xs truncate text-xs text-destructive" title={req.rejection_reason}>
@@ -304,7 +301,7 @@ function RequestForm({ projects, onSaved }: { projects: Project[]; onSaved: () =
         <span className={labelClass}>Montant (FCFA)</span>
         <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} required />
         <p className="mt-1 text-xs text-neutral-400">
-          &lt;10 000 : validation Comptable · 10 000-50 000 : Directeur Financier · &gt;50 000 : Direction Générale.
+          Toute demande passe par la RCF puis le Gérant, quel que soit le montant.
         </p>
       </label>
 

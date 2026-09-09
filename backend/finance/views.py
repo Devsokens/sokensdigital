@@ -9,7 +9,7 @@ from rest_framework import mixins, permissions, status, viewsets, serializers
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 
-from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE
+from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE, ROLE_CAISSIER
 from core.permissions import has_role
 from decimal import Decimal as D
 from django.utils import timezone
@@ -45,17 +45,15 @@ COMPTABLE_ROLES = (ROLE_COMPTABLE,)
 FINANCE_READ_ROLES = (ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE)
 
 
-def _can_approve_tier(user, pending_status):
-    """A higher validation tier's role can always approve a lower tier's
-    request — Directeur Financier and Super-Admin both cover the
-    Comptable-only N1 tier, Super-Admin also covers N2 (cahier des
-    charges §4.3: N1 Comptable <10 000, N2 Directeur Financier
-    10 000-50 000, N3 direction générale >50 000)."""
-    if pending_status == DisbursementRequest.Status.EN_ATTENTE_N1:
+def _can_decide_stage(user, pending_status):
+    """Circuit fixe RCF puis Gérant (process comptable et financier,
+    "Demande de décaissement") — aucun seuil de montant. Comptable et
+    Directeur Financier tiennent lieu de RCF (même convention que
+    procurement.views.IsManagerOrAdmin) ; Super-Admin tient lieu de
+    Gérant."""
+    if pending_status == DisbursementRequest.Status.EN_ATTENTE_RCF:
         return has_role(user, *COMPTABLE_ROLES, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN)
-    if pending_status == DisbursementRequest.Status.EN_ATTENTE_N2:
-        return has_role(user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN)
-    return has_role(user, ROLE_SUPER_ADMIN)  # EN_ATTENTE_N3
+    return has_role(user, ROLE_SUPER_ADMIN)  # EN_ATTENTE_GERANT
 
 
 class CanInitiateDisbursement(permissions.BasePermission):
@@ -98,22 +96,18 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
         if project and project.lead_project_manager_id != self.request.user.id:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Tu ne peux initier une demande que pour un projet que tu diriges.")
-        amount = serializer.validated_data['amount']
         serializer.save(
             requested_by=self.request.user,
-            status=DisbursementRequest.initial_status_for_amount(amount),
+            status=DisbursementRequest.Status.EN_ATTENTE_RCF,
         )
 
     @extend_schema(
         tags=['Finance & Comptabilité'],
-        summary='Give validation to a disbursement request (§4.3)',
-        description="Which role can approve depends on the request's current tier "
-        "(EN_ATTENTE_N1/N2/N3, set from the amount at creation — see "
-        "DisbursementRequest.initial_status_for_amount): Comptable for N1 "
-        "(<10 000 FCFA), Directeur Financier for N2 (10 000-50 000), Super-Admin "
-        "for N3 (>50 000, standing in for the spec's \"direction générale\", no "
-        "dedicated role exists). A higher tier's role can always approve a lower "
-        "one. Rejecting requires `rejection_reason`.",
+        summary='Give validation to a disbursement request',
+        description="Circuit fixe, sans seuil de montant : la RCF (Comptable ou "
+        "Directeur Financier) examine d'abord — approuver transmet au Gérant "
+        "(Super-Admin), rejeter clôture la demande. Le Gérant statue ensuite en "
+        "dernier ressort. Rejeter exige `rejection_reason`.",
         request={'application/json': {'type': 'object', 'properties': {
             'decision': {'type': 'string', 'enum': ['APPROUVE', 'REJETE']},
             'rejection_reason': {'type': 'string'},
@@ -125,22 +119,41 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
         disbursement = self.get_object()
         if disbursement.status not in DisbursementRequest.PENDING_STATUSES:
             return Response({'detail': 'Cette demande a déjà été traitée.'}, status=status.HTTP_400_BAD_REQUEST)
-        if not _can_approve_tier(request.user, disbursement.status):
+        if not _can_decide_stage(request.user, disbursement.status):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         decision = request.data.get('decision')
-        if decision not in (DisbursementRequest.Status.APPROUVE, DisbursementRequest.Status.REJETE):
+        if decision not in ('APPROUVE', 'REJETE'):
             return Response({'detail': 'decision doit être APPROUVE ou REJETE.'}, status=status.HTTP_400_BAD_REQUEST)
 
         rejection_reason = (request.data.get('rejection_reason') or '').strip()
-        if decision == DisbursementRequest.Status.REJETE and not rejection_reason:
+        if decision == 'REJETE' and not rejection_reason:
             return Response({'detail': 'Un motif de rejet est obligatoire.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        disbursement.status = decision
-        disbursement.rejection_reason = rejection_reason if decision == DisbursementRequest.Status.REJETE else ''
-        disbursement.decided_by = request.user
-        disbursement.decided_at = timezone.now()
-        disbursement.save(update_fields=['status', 'rejection_reason', 'decided_by', 'decided_at'])
+        at_rcf_stage = disbursement.status == DisbursementRequest.Status.EN_ATTENTE_RCF
+
+        if decision == 'REJETE':
+            disbursement.status = DisbursementRequest.Status.REJETE
+            disbursement.rejection_reason = rejection_reason
+        elif at_rcf_stage:
+            # La RCF approuve : la demande passe au Gérant, elle n'est pas
+            # encore définitivement approuvée — c'est lui qui statue en
+            # dernier ressort (process comptable, "Demande de décaissement").
+            disbursement.status = DisbursementRequest.Status.EN_ATTENTE_GERANT
+        else:
+            disbursement.status = DisbursementRequest.Status.APPROUVE
+
+        update_fields = ['status', 'rejection_reason']
+        if at_rcf_stage:
+            disbursement.rcf_decided_by = request.user
+            disbursement.rcf_decided_at = timezone.now()
+            update_fields += ['rcf_decided_by', 'rcf_decided_at']
+        else:
+            disbursement.decided_by = request.user
+            disbursement.decided_at = timezone.now()
+            update_fields += ['decided_by', 'decided_at']
+
+        disbursement.save(update_fields=update_fields)
         return Response(DisbursementRequestSerializer(disbursement).data)
 
     @extend_schema(
@@ -398,14 +411,21 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.Retr
         qs = Payment.objects.filter(invoice_id=invoice_id).select_related('invoice', 'received_by')
         return qs.prefetch_related('receipt', 'attachments')
 
-    def perform_create(self, serializer):
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        # Le serializer valide le montant contre le restant du, donc il lui
+        # faut la facture des la creation — a ce moment la, l'instance n'a
+        # pas encore de FK.
         invoice_id = self.kwargs.get('invoice_id')
-        try:
-            invoice = Invoice.objects.get(id=invoice_id)
-        except Invoice.DoesNotExist:
-            raise serializers.ValidationError('Invoice not found')
+        if invoice_id:
+            context['invoice'] = Invoice.objects.filter(id=invoice_id).first()
+        return context
 
-        payment = serializer.save(invoice=invoice)
+    def perform_create(self, serializer):
+        invoice = self.get_serializer_context().get('invoice')
+        if invoice is None:
+            raise serializers.ValidationError('Invoice not found')
+        serializer.save(invoice=invoice)
 
     @extend_schema(
         tags=['Finance & Comptabilité'],
@@ -622,3 +642,112 @@ def finance_dashboard(request):
     }
     cache.set(FINANCE_DASHBOARD_CACHE_KEY, payload, FINANCE_DASHBOARD_CACHE_TTL)
     return Response(payload)
+
+
+# ---------------------------------------------------------------------------
+# Encaissements — vue consolidée de TOUTES les entrées d'argent
+# ---------------------------------------------------------------------------
+
+@extend_schema(
+    tags=['Finance & Comptabilité'],
+    summary='Encaissements consolidés (caisse + banque + versements clients)',
+    description="Toutes les entrées d'argent de l'entreprise en une seule liste, quelle que "
+    "soit leur porte d'entrée : espèces en caisse (treasury.CashEntry type=ENTREE), "
+    "crédits bancaires (treasury.BankEntry type=ENTREE) et versements clients encaissés "
+    "(finance.Payment status=RECU). Agrégé côté serveur plutôt que par 3 appels frontend "
+    "séparés : une seule requête HTTP, un seul tri chronologique, des totaux cohérents.\n\n"
+    "Filtres optionnels `date_from`/`date_to` (YYYY-MM-DD). Accès Directeur Financier / "
+    "Comptable / Super-Admin ; le Caissier y accède aussi mais ne voit que la caisse "
+    "(la banque et les versements ne sont pas de son périmètre, cf. cahier des charges §3).",
+    responses={200: {'type': 'object'}},
+)
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def encaissements(request):
+    from treasury.models import BankEntry, CashEntry
+
+    is_finance = has_role(request.user, *FINANCE_READ_ROLES, ROLE_SUPER_ADMIN)
+    is_caissier = has_role(request.user, ROLE_CAISSIER)
+    if not (is_finance or is_caissier):
+        return Response(status=status.HTTP_403_FORBIDDEN)
+
+    date_from = request.query_params.get('date_from')
+    date_to = request.query_params.get('date_to')
+
+    def _apply_date_filter(qs, field='date'):
+        if date_from:
+            qs = qs.filter(**{f'{field}__gte': date_from})
+        if date_to:
+            qs = qs.filter(**{f'{field}__lte': date_to})
+        return qs
+
+    rows = []
+
+    # --- Caisse (visible par le Caissier comme par la Finance) -------------
+    cash_qs = _apply_date_filter(
+        CashEntry.objects.filter(type=CashEntry.Type.ENTREE).select_related('created_by')
+    )
+    for entry in cash_qs:
+        rows.append({
+            'id': str(entry.id),
+            'origin': 'CAISSE',
+            'origin_label': 'Caisse',
+            'reference': entry.voucher_number,
+            'label': entry.get_source_display(),
+            'description': entry.description,
+            'amount': str(entry.amount),
+            'date': entry.date.isoformat(),
+            'reconciled': entry.reconciled_at is not None,
+        })
+
+    # --- Banque + versements clients : Finance uniquement ------------------
+    if is_finance:
+        bank_qs = _apply_date_filter(
+            BankEntry.objects.filter(type=BankEntry.Type.ENTREE).select_related('created_by')
+        )
+        for entry in bank_qs:
+            rows.append({
+                'id': str(entry.id),
+                'origin': 'BANQUE',
+                'origin_label': 'Banque',
+                'reference': entry.reference,
+                'label': entry.get_source_display(),
+                'description': entry.description,
+                'amount': str(entry.amount),
+                'date': entry.date.isoformat(),
+                'reconciled': entry.reconciled_at is not None,
+            })
+
+        payment_qs = _apply_date_filter(
+            Payment.objects.filter(status=Payment.Status.RECU).select_related('invoice'),
+            field='payment_date',
+        )
+        for payment in payment_qs:
+            rows.append({
+                'id': str(payment.id),
+                'origin': 'VERSEMENT',
+                'origin_label': 'Versement client',
+                'reference': payment.invoice.invoice_number,
+                'label': payment.get_payment_method_display(),
+                'description': payment.notes,
+                'amount': str(payment.amount),
+                'date': payment.payment_date.isoformat(),
+                # Un versement encaissé est constaté par nature — il n'a pas
+                # d'étape de rapprochement propre (celle-ci vit sur la pièce
+                # de caisse ou le mouvement bancaire correspondant).
+                'reconciled': True,
+            })
+
+    rows.sort(key=lambda r: r['date'], reverse=True)
+
+    totals = {}
+    for row in rows:
+        totals[row['origin']] = str(Decimal(totals.get(row['origin'], '0')) + Decimal(row['amount']))
+
+    return Response({
+        'results': rows,
+        'count': len(rows),
+        'totals_by_origin': totals,
+        'total': str(sum((Decimal(r['amount']) for r in rows), Decimal('0'))),
+        'scope': 'caisse' if (is_caissier and not is_finance) else 'complet',
+    })

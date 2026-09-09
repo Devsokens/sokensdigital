@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from decimal import Decimal
 
@@ -15,6 +16,35 @@ from core.models import LoggedModel, User
 DEFAULT_VAT_RATE = Decimal('0.18')
 
 
+class LeadReferenceSequence(models.Model):
+    """Dernier numéro de référence attribué, par année.
+
+    Un compteur persistant, et non le maximum des références en base, pour
+    deux raisons que les tests ont mises au jour :
+
+    - **Une suppression ne doit pas faire reculer le compteur.** Sinon la
+      demande suivante reprend une référence déjà envoyée par e-mail à
+      quelqu'un d'autre, et deux clients citent le même numéro.
+    - **Deux soumissions simultanées liraient le même maximum**, produiraient
+      la même référence, et l'une des deux échouerait sur la contrainte
+      d'unicité — un formulaire public en erreur pour cause de concurrence.
+      `select_for_update` sérialise l'attribution.
+    """
+
+    year = models.PositiveIntegerField(primary_key=True)
+    last_value = models.PositiveIntegerField(default=0)
+
+    @classmethod
+    def next_value(cls, year: int) -> int:
+        from django.db import transaction
+
+        with transaction.atomic():
+            row, _ = cls.objects.select_for_update().get_or_create(year=year)
+            row.last_value += 1
+            row.save(update_fields=['last_value'])
+            return row.last_value
+
+
 class Lead(LoggedModel):
     class Source(models.TextChoices):
         FORMULAIRE_CONTACT = 'FORMULAIRE_CONTACT', 'Formulaire de contact'
@@ -29,6 +59,22 @@ class Lead(LoggedModel):
         PROPOSITION_EN_COURS = 'PROPOSITION_EN_COURS', 'Proposition en cours'
         PERDU = 'PERDU', 'Perdu'
         CONVERTI = 'CONVERTI', 'Converti'
+
+    class WorkflowStage(models.TextChoices):
+        """Parcours d'une demande entre Marketing et Technique.
+
+        Distinct de `status`, qui est le pipeline commercial : une demande
+        peut être « qualifiée » commercialement tout en étant encore chez
+        Technique pour analyse. Mélanger les deux obligerait chaque
+        département à lire les étapes de l'autre.
+        """
+
+        SOUMIS = 'SOUMIS', 'Soumis'
+        CHEZ_TECHNIQUE = 'CHEZ_TECHNIQUE', 'En analyse technique'
+        CDC_PRET = 'CDC_PRET', 'Cahier des charges prêt'
+        SOUMIS_CLIENT = 'SOUMIS_CLIENT', 'Soumis au client'
+        VALIDE_CLIENT = 'VALIDE_CLIENT', 'Validé par le client'
+        EN_DEVELOPPEMENT = 'EN_DEVELOPPEMENT', 'En développement'
 
     # `client` (FK -> ClientAccount) omitted — ClientAccount isn't defined
     # yet (docs/backend-specifications.md §13, open question). Add once
@@ -52,12 +98,78 @@ class Lead(LoggedModel):
     # built yet (§7.2, ⏳).
     estimated_value = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
+    # Suivi public. La référence est ce que le client note et cite ; le jeton
+    # est ce qui ouvre la page de suivi depuis le lien de son e-mail.
+    #
+    # Les deux existent parce qu'ils ne servent pas à la même chose : une
+    # référence lisible se dicte au téléphone mais se devine (SKN-2026-0002
+    # suit SKN-2026-0001), un jeton ne se devine pas mais ne se dicte pas.
+    # La consultation par référence exige donc aussi l'e-mail du demandeur,
+    # et le lien direct porte le jeton.
+    # `unique=True` suffit : il crée déjà l'index. Y ajouter `db_index`
+    # faisait générer deux fois, dans la même migration, l'index
+    # `..._like` que PostgreSQL attache aux colonnes texte indexées —
+    # d'où un « relation already exists » au déploiement.
+    # Étape du parcours Marketing <-> Technique, et cahier des charges que
+    # Technique y attache. La demande reste l'objet unique qui circule : un
+    # second modèle « projet soumis » dupliquerait le demandeur, ses
+    # coordonnées et sa référence de suivi, avec deux vérités à réconcilier.
+    workflow_stage = models.CharField(
+        max_length=20, choices=WorkflowStage.choices, default=WorkflowStage.SOUMIS,
+    )
+    specification = models.ForeignKey(
+        'marketing.Specification', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='leads',
+    )
+
+    tracking_reference = models.CharField(max_length=20, unique=True, blank=True)
+    tracking_token = models.CharField(max_length=64, unique=True, blank=True)
+
     class Meta(LoggedModel.Meta):
         ordering = ['-created_at']
         indexes = LoggedModel.Meta.indexes + [
             models.Index(fields=['status']),
             models.Index(fields=['assigned_to']),
+            models.Index(fields=['workflow_stage']),
         ]
+
+    def save(self, *args, **kwargs):
+        # Générés à la création et jamais réattribués : le client garde sa
+        # référence dans sa boîte mail, elle doit rester valable.
+        if not self.tracking_token:
+            self.tracking_token = secrets.token_urlsafe(32)
+        if not self.tracking_reference:
+            self.tracking_reference = self._next_reference()
+        super().save(*args, **kwargs)
+
+    @staticmethod
+    def _next_reference() -> str:
+        """SKN-<année>-<compteur à 4 chiffres>, remis à zéro chaque année."""
+        year = timezone.now().year
+        return f'SKN-{year}-{LeadReferenceSequence.next_value(year):04d}'
+
+    # Étapes présentées au client, dans l'ordre. Volontairement plus grossier
+    # que le pipeline commercial interne : le prospect n'a pas à lire nos
+    # statuts de qualification, et « Perdu » ne s'affiche pas comme une étape.
+    TRACKING_STEPS = ['Soumis', 'Analyse', 'Cadrage', 'Proposition', 'Validé']
+
+    @property
+    def tracking_step_index(self) -> int:
+        return {
+            self.Status.NOUVEAU: 1,
+            self.Status.QUALIFIE: 2,
+            self.Status.PROPOSITION_EN_COURS: 3,
+            self.Status.CONVERTI: 4,
+            self.Status.PERDU: 1,
+        }.get(self.status, 0)
+
+    @property
+    def tracking_state_label(self) -> str:
+        if self.status == self.Status.PERDU:
+            return 'Demande clôturée'
+        if self.status == self.Status.CONVERTI:
+            return 'Projet validé'
+        return f'{self.TRACKING_STEPS[self.tracking_step_index]} en cours'
 
     def __str__(self):
         return f'{self.first_name} {self.last_name} ({self.company_name or "particulier"})'

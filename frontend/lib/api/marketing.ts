@@ -317,3 +317,61 @@ export function updateSiteSettings(data: Partial<SiteSettings>) {
     body: JSON.stringify(data),
   });
 }
+
+// --- Parcours des projets soumis (Marketing <-> Technique) ---
+
+export type WorkflowStage =
+  | "SOUMIS"
+  | "CHEZ_TECHNIQUE"
+  | "CDC_PRET"
+  | "SOUMIS_CLIENT"
+  | "VALIDE_CLIENT"
+  | "EN_DEVELOPPEMENT";
+
+export interface WorkflowAction {
+  action: string;
+  label: string;
+}
+
+export interface SubmittedProject {
+  id: string;
+  reference: string;
+  first_name: string;
+  last_name: string;
+  company_name: string;
+  email: string;
+  phone: string;
+  message: string;
+  estimated_value: string | null;
+  created_at: string;
+  workflow_stage: WorkflowStage;
+  workflow_stage_display: string;
+  specification: {
+    id: string;
+    spec_number: string;
+    title: string;
+    status: string;
+  } | null;
+  /** Actions que le rôle de l'utilisateur autorise à cette étape. Le serveur
+   * les calcule pour que l'interface n'affiche pas de bouton qui échouerait. */
+  available_actions: WorkflowAction[];
+}
+
+export function listSubmittedProjects(stages?: WorkflowStage[]) {
+  const query = stages?.length ? `?${stages.map((s) => `stage=${s}`).join("&")}` : "";
+  return apiFetch<SubmittedProject[]>(`/api/v1/marketing/submitted-projects/${query}`);
+}
+
+export function runWorkflowAction(
+  leadId: string,
+  action: string,
+  specificationId?: string,
+) {
+  return apiFetch<SubmittedProject>(`/api/v1/marketing/leads/${leadId}/workflow/`, {
+    method: "POST",
+    body: JSON.stringify({
+      action,
+      ...(specificationId ? { specification_id: specificationId } : {}),
+    }),
+  });
+}

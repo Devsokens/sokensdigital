@@ -1,3 +1,4 @@
+import os
 import hashlib
 import uuid
 import re
@@ -250,13 +251,45 @@ class Notification(LoggedModel):
 # ni de HTML. Pas encore d'endpoint d'upload câblé sur ce modèle à ce jour,
 # mais les validators sont posés dès maintenant pour que le premier endpoint
 # qui l'utilisera hérite d'une contrainte plutôt que d'un champ ouvert.
-DOCUMENT_ATTACHMENT_ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png']
+#
+# Le type MIME servi au telechargement est deduit de l'extension, cote
+# serveur (`UploadedFile.content_type` est l'en-tete envoye par le client :
+# Django ne le valide pas). Cette table est donc la source unique : une
+# extension est autorisee *parce qu'on sait la servir sans risque*, et la
+# liste des extensions permises s'en deduit au lieu d'etre maintenue a cote.
+DOCUMENT_ATTACHMENT_MIME_BY_EXTENSION = {
+    '.pdf': 'application/pdf',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+}
+DOCUMENT_ATTACHMENT_ALLOWED_EXTENSIONS = [
+    extension.lstrip('.') for extension in DOCUMENT_ATTACHMENT_MIME_BY_EXTENSION
+]
 DOCUMENT_ATTACHMENT_MAX_SIZE = 10 * 1024 * 1024  # 10 Mo
 
 
 def validate_document_attachment_size(file):
     if file.size > DOCUMENT_ATTACHMENT_MAX_SIZE:
         raise ValidationError('Le fichier dépasse la taille maximale autorisée (10 Mo).')
+
+
+def attachment_storage():
+    """Bucket prive Supabase des que les cles sont presentes, stockage local
+    sinon.
+
+    Le disque de l'hebergeur est ephemere : un justificatif ecrit en local y
+    disparait au deploiement suivant. On ne veut pas de ce comportement en
+    production, mais on ne veut pas non plus que les tests et le dev local
+    exigent un Supabase joignable.
+    """
+    from django.core.files.storage import default_storage
+
+    if os.environ.get('SUPABASE_URL') and os.environ.get('SUPABASE_SERVICE_ROLE_KEY'):
+        from core.storage import SupabasePrivateStorage
+
+        return SupabasePrivateStorage()
+    return default_storage
 
 
 class DocumentAttachment(LoggedModel):
@@ -288,6 +321,11 @@ class DocumentAttachment(LoggedModel):
     document_type = models.CharField(max_length=20, choices=DOCUMENT_TYPES)
     file = models.FileField(
         upload_to='documents/%Y/%m/%d/',
+        # Callable et non instance : la migration ne fige que la reference
+        # a la fonction, le backend reel est choisi a chaque acces. Les
+        # tests et le dev local n'ont donc pas besoin d'un Supabase
+        # joignable, et basculer de stockage ne demande pas de migration.
+        storage=attachment_storage,
         validators=[
             FileExtensionValidator(allowed_extensions=DOCUMENT_ATTACHMENT_ALLOWED_EXTENSIONS),
             validate_document_attachment_size,
@@ -313,3 +351,43 @@ class DocumentAttachment(LoggedModel):
         if self.file:
             self.file_size = self.file.size
         super().save(*args, **kwargs)
+
+
+class PushDevice(LoggedModel):
+    """Appareil autorisé à recevoir les notifications push d'un utilisateur.
+
+    Un jeton FCM par appareil et par navigateur : la même personne au bureau,
+    sur son téléphone et sur la PWA installée en a trois, et une notification
+    doit atteindre les trois. D'où une table plutôt qu'un champ sur User.
+
+    Les jetons expirent et se renouvellent sans prévenir (réinstallation,
+    nettoyage du navigateur, rotation par Firebase). `last_seen_at` permet de
+    retirer ceux qui ne se sont pas manifestés depuis longtemps, et l'envoi
+    supprime lui-même ceux que FCM déclare invalides — un jeton mort qu'on
+    garde, c'est un échec d'envoi répété à chaque notification.
+    """
+
+    class Platform(models.TextChoices):
+        WEB = 'WEB', 'Navigateur'
+        ANDROID = 'ANDROID', 'Android'
+        IOS = 'IOS', 'iOS'
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='push_devices')
+    # Les jetons FCM tournent autour de 160 caractères aujourd'hui, sans
+    # maximum garanti par Google : on prend large plutôt que de tronquer un
+    # jeton et de rendre l'appareil injoignable en silence.
+    token = models.CharField(max_length=512, unique=True)
+    platform = models.CharField(max_length=10, choices=Platform.choices, default=Platform.WEB)
+    # Purement informatif, pour qu'un utilisateur reconnaisse ses appareils
+    # dans ses préférences.
+    label = models.CharField(max_length=255, blank=True, default='')
+    last_seen_at = models.DateTimeField(default=timezone.now)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-last_seen_at']
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['user', '-last_seen_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.user} — {self.get_platform_display()}'

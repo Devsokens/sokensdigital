@@ -1,43 +1,77 @@
 import type { NextConfig } from "next";
 
-// Domains the app actually talks to from the browser — Firebase Auth (login),
-// Firestore/Storage, the Django API, and the two asset hosts already wired
-// into `images.remotePatterns` below (Cloudinary, Supabase). Kept in one
-// place so the CSP below and any future `connect-src` additions stay in
-// sync with what's really used (see SECURITY.md §CSP).
-const csp = [
+/**
+ * Content-Security-Policy, en Report-Only.
+ *
+ * Deploye en Report-Only et non en mode bloquant : une directive trop
+ * serree casse silencieusement une page entiere cote navigateur, sans
+ * erreur serveur pour le signaler. On observe d'abord les violations
+ * reelles, on resserre ensuite, puis on bascule l'en-tete sur
+ * `Content-Security-Policy` une fois le rapport propre.
+ *
+ * `unsafe-inline` sur script-src est necessaire tant qu'on n'a pas de
+ * middleware a nonce : l'App Router injecte ses propres scripts inline pour
+ * l'hydratation et le streaming. C'est la principale faiblesse de cette
+ * politique, et le premier point a reprendre apres la phase d'observation.
+ * Elle apporte deja frame-ancestors, object-src et base-uri, qui ferment le
+ * clickjacking, les plugins et la reecriture de <base>.
+ */
+const API_ORIGIN = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000").origin;
+  } catch {
+    return "http://localhost:8000";
+  }
+})();
+
+const CSP_DIRECTIVES = [
   "default-src 'self'",
-  // Next.js injects small inline bootstrap/hydration scripts — 'unsafe-inline'
-  // is required without a nonce-based setup (see SECURITY.md for the
-  // stricter nonce-based follow-up). 'unsafe-eval' is dev-only (Fast Refresh).
-  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV !== "production" ? " 'unsafe-eval'" : ""}`,
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  // Tailwind et les styles inline de Next : pas de nonce disponible ici non plus.
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://res.cloudinary.com https://*.supabase.co",
+  // next/font/google auto-heberge les fichiers au build, donc pas de gstatic.
   "font-src 'self' data:",
-  // NEXT_PUBLIC_API_BASE_URL is the Django backend — a different origin in
-  // every deployment (localhost in dev, the Render URL in prod) — so it must
-  // be added explicitly or every fetch() to it gets CSP-blocked.
-  `connect-src 'self' ${process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"} https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://identitytoolkit.googleapis.com https://*.cloudfunctions.net https://res.cloudinary.com https://*.supabase.co`,
-  "frame-src 'self' https://*.firebaseapp.com",
+  // Cloudinary et Supabase Storage servent les visuels et les pieces jointes.
+  "img-src 'self' data: blob: https://res.cloudinary.com https://*.supabase.co",
+  "media-src 'self' https://res.cloudinary.com https://*.supabase.co",
+  [
+    "connect-src 'self'",
+    API_ORIGIN,
+    // Firebase Auth (verification de jeton) et Firestore (chat,
+    // notifications) — Firestore ouvre aussi un canal websocket.
+    "https://*.googleapis.com",
+    "https://*.firebaseio.com",
+    "wss://*.firebaseio.com",
+    "https://*.supabase.co",
+    "wss://*.supabase.co",
+    "https://*.ingest.sentry.io",
+    "https://*.ingest.de.sentry.io",
+    "https://*.ingest.us.sentry.io",
+  ].join(" "),
+  "worker-src 'self' blob:",
+  // Le service worker de la PWA doit pouvoir prendre la main sur tout le site.
+  "manifest-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
-  "upgrade-insecure-requests",
 ].join("; ");
 
-const securityHeaders = [
+const SECURITY_HEADERS = [
+  { key: "Content-Security-Policy-Report-Only", value: CSP_DIRECTIVES },
+  // Pas de version Report-Only pour celui-ci — c'est binaire (autorisé ou
+  // non), donc aucun risque de casser une page silencieusement. Fait déjà
+  // le travail anti-clickjacking pendant que frame-ancestors reste en
+  // observation dans la CSP ci-dessus.
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-  { key: "Content-Security-Policy", value: csp },
+  // Aucun ecran n'utilise ces capteurs : les refuser explicitement evite
+  // qu'un script tiers introduit plus tard les demande a l'utilisateur.
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), interest-cohort=()" },
 ];
 
 const nextConfig: NextConfig = {
-  async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
-  },
   images: {
     // Sans ça, next/image refuse toute image distante (Cloudinary,
     // Supabase Storage) — c'est très probablement pourquoi le code utilise
@@ -52,6 +86,10 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "res.cloudinary.com" },
       { protocol: "https", hostname: "*.supabase.co" },
     ],
+  },
+
+  async headers() {
+    return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },
 };
 

@@ -17,12 +17,11 @@ def create_disbursement_request_task(self, quote_id):
     """
     Auto-crée DisbursementRequest (décaissement) quand devis validé par Manager.
 
-    IMPORTANT: le décaissement généré retombe dans le circuit d'approbation
-    N1/N2/N3 normal (§4.3 cahier des charges) via initial_status_for_amount —
-    la validation du devis n'équivaut PAS à une autorisation de paiement.
-    Sans ça, un Manager RCF pourrait faire passer un paiement fournisseur
-    de n'importe quel montant sans jamais solliciter Directeur Financier
-    ou Direction Générale.
+    IMPORTANT: le décaissement généré retombe dans le circuit RCF → Gérant
+    normal (process comptable, "Demande de décaissement") — la validation
+    du devis n'équivaut PAS à une autorisation de paiement. Sans ça, un
+    Manager RCF pourrait faire passer un paiement fournisseur sans jamais
+    solliciter le Gérant.
     """
     try:
         quote = get_object_or_404(SupplierQuote, id=quote_id)
@@ -33,7 +32,7 @@ def create_disbursement_request_task(self, quote_id):
             amount=quote.amount_ttc,
             beneficiary=quote.supplier.name,
             reason=f'Décaissement devis {quote.quote_number} — {quote.supplier.name}',
-            status=DisbursementRequest.initial_status_for_amount(quote.amount_ttc),
+            status=DisbursementRequest.Status.EN_ATTENTE_RCF,
             requested_by=quote.manager_validated_by,
         )
 

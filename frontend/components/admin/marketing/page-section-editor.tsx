@@ -201,7 +201,7 @@ export function ImageUploadField({
           <ImagePlus className="size-3.5 text-white" />
         </span>
       </button>
-      <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+      <input ref={inputRef} type="file" accept=".png,.jpg,.jpeg,.webp,.gif" onChange={handleFile} className="hidden" />
       {error && <p className="max-w-20 text-center text-[0.6rem] leading-tight text-destructive">{error}</p>}
     </div>
   );
@@ -437,7 +437,7 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
             </div>
           </div>
           {(stats.length > 0 || editing) && (
-            <div className="mt-8 grid grid-cols-3 gap-4 border-t border-white/10 pt-6">
+            <div className="mt-8 grid grid-cols-1 gap-4 border-t border-white/10 pt-6 sm:grid-cols-3">
               {stats.map((stat, index) => (
                 <div key={index} className="group relative flex flex-col items-center gap-1">
                   {editing && <RemoveItemButton onClick={() => removeItem(index)} />}

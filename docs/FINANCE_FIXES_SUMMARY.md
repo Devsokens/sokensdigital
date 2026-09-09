@@ -1,3 +1,8 @@
+> ⚠️ **Document historique (2026-08-16), poussé sur `main` depuis** (la
+> mention "NON POUSSÉE" ci-dessous est obsolète). Voir
+> `docs/ETAT_ACTUEL_FINANCE_ACHATS_TRESORERIE_2026-08.md` pour l'état réel
+> du module Finance après les audits qui ont suivi.
+
 # Finance — Fixes P1/P2 appliquées
 
 **Date:** 2026-08-16  

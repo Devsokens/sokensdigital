@@ -1,3 +1,9 @@
+> ⚠️ **Document historique (construction initiale du 2026-08-16).** Voir
+> `docs/ETAT_ACTUEL_FINANCE_ACHATS_TRESORERIE_2026-08.md` pour l'état réel —
+> `CashVoucher` fusionné dans `treasury.CashEntry`, statuts renommés en
+> français, signaux supprimés (remplacés par dispatch explicite depuis les
+> vues), immutabilité du statut corrigée le 17/08, poussé sur `main` depuis.
+
 # Résumé Complet — Finance Module Implementations
 
 **Date:** 2026-08-16 | **Branch:** taiger_technique | **Status:** ✅ Implémentation terminée
@@ -548,6 +554,6 @@ Finance:
 
 ---
 
-**Author:** Claude (via AI-assisted development)
+**Author:** Taiger dev
 **Date:** 2026-08-16 | **Duration:** Multi-session implementation
 **Branch:** taiger_technique | **Target:** main branch (after approval)

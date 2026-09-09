@@ -28,9 +28,11 @@ tourne en mode dégradé sans) :
   électronique refuse tout callback (503). C'est le comportement voulu
   (fail closed plutôt qu'accepter en clair) mais bloque l'intégration
   jusqu'à configuration côté prestataire.
-- `EMAIL_HOST` + `EMAIL_HOST_USER`/`EMAIL_HOST_PASSWORD` — sans elles, les
-  emails (résolution ticket, alerte expiration doc RH) partent vers la
-  console des logs, jamais réellement envoyés.
+- `GMAIL_CLIENT_ID`/`GMAIL_CLIENT_SECRET`/`GMAIL_REFRESH_TOKEN` (API Gmail —
+  voir docs/NOTIFICATIONS_ET_EMAILS.md) — sans elles, les emails (résolution
+  ticket, alerte expiration doc RH, accusés de réception) partent vers la
+  console des logs, jamais réellement envoyés. Le SMTP n'est plus une
+  option : Render bloque ses ports sortants sur l'offre gratuite.
 - `DEFAULT_FROM_EMAIL` — a un défaut (`no-reply@sokensdigital.com`), à
   adapter au vrai domaine.
 - `THROTTLE_RATE_*` — valeurs par défaut posées (100/h anon, 2000/h user,

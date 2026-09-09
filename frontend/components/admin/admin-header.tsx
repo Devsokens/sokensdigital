@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { signOutUser } from "@/lib/firebase/auth";
 import { ROLE_LABELS, type Notification } from "@/lib/firebase/types";
 import { subscribeToNotifications, markNotificationRead } from "@/lib/firebase/notifications";
+import { enablePush, getPushPermission, refreshPushRegistration, type PushPermission } from "@/lib/push";
 import { ADMIN_SECTIONS, findNavMatch, type NavItem } from "@/lib/admin-nav";
 import { globalSearch, type SearchResult } from "@/lib/api/search";
 import { useOnboardingTour } from "@/lib/admin/onboarding-tour";
@@ -184,6 +185,53 @@ function formatNotificationTime(value: unknown): string {
     : date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
 
+/**
+ * Activation des notifications du navigateur.
+ *
+ * Placée dans le panneau de la cloche, et non déclenchée au chargement : le
+ * navigateur ne pose la question qu'une fois, et un refus est définitif —
+ * il faut alors passer par ses réglages. Mieux vaut la poser à quelqu'un qui
+ * vient d'ouvrir ses notifications qu'à quelqu'un qui arrive sur une page.
+ */
+function PushToggle() {
+  const [permission, setPermission] = useState<PushPermission>("unsupported");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    getPushPermission().then(setPermission);
+    // Les jetons FCM tournent sans prévenir : sans ce rafraîchissement, une
+    // personne ayant accepté il y a des mois cesserait d'être notifiée sans
+    // que rien ne le signale.
+    refreshPushRegistration();
+  }, []);
+
+  if (permission === "unsupported" || permission === "granted") return null;
+
+  if (permission === "denied") {
+    return (
+      <p className="mt-1.5 text-[0.7rem] leading-snug text-neutral-400">
+        Notifications bloquées par le navigateur — à réactiver dans ses réglages de site.
+      </p>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        const ok = await enablePush();
+        setPermission(ok ? "granted" : await getPushPermission());
+        setBusy(false);
+      }}
+      className="mt-1.5 text-[0.7rem] font-medium text-primary hover:underline disabled:opacity-50"
+    >
+      Activer les notifications sur cet appareil
+    </button>
+  );
+}
+
 function NotificationBell() {
   const router = useRouter();
   const { user } = useAuth();
@@ -217,6 +265,7 @@ function NotificationBell() {
       <PopoverContent className="w-80 p-0">
         <div className="border-b border-neutral-100 px-4 py-3">
           <p className="text-sm font-semibold text-neutral-900">Notifications</p>
+          <PushToggle />
         </div>
         {notifications.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">

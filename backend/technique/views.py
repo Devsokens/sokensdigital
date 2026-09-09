@@ -1,3 +1,4 @@
+from django.utils import timezone
 from django.db import models, transaction
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
@@ -379,9 +380,73 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         # Recalcul actual_hours géré par le signal post_save
 
     def perform_destroy(self, instance):
+        if instance.is_validated:
+            raise PermissionDenied(
+                "Cette entrée de temps a été validée et ne peut plus être supprimée."
+            )
         task = instance.task
         instance.delete()
         # Recalcul actual_hours géré par le signal post_delete
+
+    def _assert_can_validate(self, entry):
+        """Seul le chef du projet concerné (ou l'administration) valide.
+
+        `IsOwner` protège les autres actions, mais serait ici exactement
+        l'inverse de ce qu'on veut : personne ne valide ses propres heures.
+        """
+        user = self.request.user
+        if user.roles.filter(name__in=ADMIN_ROLES).exists():
+            return
+        is_pm_of_project = (
+            user.roles.filter(name=ROLE_PROJECT_MANAGER).exists()
+            and entry.task.project.project_manager_id == user.pk
+        )
+        if not is_pm_of_project:
+            raise PermissionDenied(
+                "Seul le chef de projet peut valider les entrées de temps de ce projet."
+            )
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def valider(self, request, pk=None, task_pk=None):
+        entry = self.get_object()
+        self._assert_can_validate(entry)
+        if entry.is_validated:
+            return Response(self.get_serializer(entry).data)
+
+        entry.is_validated = True
+        entry.validated_by = request.user
+        entry.validated_at = timezone.now()
+        entry.save(update_fields=['is_validated', 'validated_by', 'validated_at'])
+
+        AuditLog.objects.create(
+            user=request.user, action='VALIDATE', entity_type='TimeEntry',
+            entity_id=str(entry.pk),
+            details={'hours': str(entry.hours), 'date': str(entry.date)},
+            ip_address=request.META.get('REMOTE_ADDR'),
+        )
+        return Response(self.get_serializer(entry).data)
+
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def devalider(self, request, pk=None, task_pk=None):
+        """Lève la validation — le seul moyen de corriger une erreur repérée
+        après coup, puisque l'entrée est figée une fois validée. Tracé au
+        même titre que la validation."""
+        entry = self.get_object()
+        self._assert_can_validate(entry)
+        if not entry.is_validated:
+            return Response(self.get_serializer(entry).data)
+
+        entry.is_validated = False
+        entry.validated_by = None
+        entry.validated_at = None
+        entry.save(update_fields=['is_validated', 'validated_by', 'validated_at'])
+
+        AuditLog.objects.create(
+            user=request.user, action='UNVALIDATE', entity_type='TimeEntry',
+            entity_id=str(entry.pk), details={},
+            ip_address=request.META.get('REMOTE_ADDR'),
+        )
+        return Response(self.get_serializer(entry).data)
 
 
 class TicketViewSet(viewsets.ModelViewSet):

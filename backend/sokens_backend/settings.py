@@ -274,21 +274,36 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-# Email — utilisé par technique.tasks.send_ticket_resolution_email et les
-# alertes d'expiration de documents RH. EMAIL_BACKEND par défaut = console
-# (affiche l'email dans les logs, aucun envoi réel) tant que EMAIL_HOST
-# n'est pas configuré — évite un crash au démarrage/dans les tests si SMTP
-# n'est pas disponible, tout en gardant le code d'envoi actif.
-if os.environ.get('EMAIL_HOST'):
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    EMAIL_HOST = os.environ.get('EMAIL_HOST')
-    EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
-    EMAIL_USE_TLS = _env_bool('EMAIL_USE_TLS', default=True)
-    EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
-    EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+# ---------------------------------------------------------------------------
+# Email
+# ---------------------------------------------------------------------------
+# Deux backends seulement, dans cet ordre de préférence — le SMTP a été
+# retiré : Render bloque les ports SMTP sortants (25/465/587) sur son offre
+# gratuite, donc cette voie ne fonctionnait jamais en production et n'existait
+# que comme filet théorique. L'API Gmail (HTTPS) est désormais la seule voie
+# d'envoi réelle.
+#
+# 1. API Gmail (core.mail_backend.GmailAPIBackend) dès que les identifiants
+#    OAuth sont là — voir scripts/generate_gmail_refresh_token.py pour les
+#    obtenir, et docs/NOTIFICATIONS_ET_EMAILS.md pour la procédure complète.
+# 2. Console sinon (dev, CI) : l'e-mail s'affiche dans les logs, rien ne part,
+#    et rien ne plante.
+if os.environ.get('GMAIL_CLIENT_ID') and os.environ.get('GMAIL_REFRESH_TOKEN'):
+    EMAIL_BACKEND = 'core.mail_backend.GmailAPIBackend'
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@sokensdigital.com')
+
+# Gmail envoie toujours depuis le compte authentifié : un `From` différent
+# est réécrit, quand il n'est pas refusé. Le décalage entre l'en-tête annoncé
+# et l'expéditeur réel est aussi ce qui fait classer un message en
+# indésirable. On aligne donc le défaut sur l'expéditeur effectif.
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL') or os.environ.get('GMAIL_SENDER_EMAIL') or 'no-reply@sokensdigital.com'
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# Adresse publique du site, pour composer les liens envoyés par e-mail (suivi
+# de demande, validation de devis). Sans elle, un e-mail contiendrait un lien
+# relatif — inutilisable dans une boîte mail.
+PUBLIC_SITE_URL = os.environ.get('PUBLIC_SITE_URL', 'https://sokensdigital.com').rstrip('/')
 
 ROOT_URLCONF = 'sokens_backend.urls'
 
@@ -420,6 +435,13 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=10, minute=0),  # 10:00 UTC chaque jour
         'options': {'queue': 'default'}
     },
+    'check-maintenance-due': {
+        # 07:00 UTC : avant la journee de travail, pour que le retard soit
+        # visible au moment ou il peut encore etre rattrape.
+        'task': 'technique.tasks.check_maintenance_due',
+        'schedule': crontab(hour=7, minute=0),
+        'options': {'queue': 'default'}
+    },
 }
 
 # Facebook Page publishing (marketing/publishing.py) — blank by default,
@@ -437,14 +459,15 @@ FACEBOOK_PAGE_ACCESS_TOKEN = os.environ.get('FACEBOOK_PAGE_ACCESS_TOKEN', '')
 # body, sent back in the X-Signature header).
 SIGNATURE_WEBHOOK_SECRET = os.environ.get('SIGNATURE_WEBHOOK_SECRET', '')
 
-# Gmail API (core/email_gmail.py) — used instead of SMTP because Render's
-# free plan blocks outbound SMTP ports; the Gmail API talks HTTPS instead.
-# GMAIL_REFRESH_TOKEN is obtained once via scripts/generate_gmail_refresh_
-# token.py (a local, interactive OAuth consent flow) and never expires
-# unless revoked — GMAIL_CLIENT_ID/SECRET come from the same Google Cloud
-# OAuth client (type "Desktop app") used to generate it. Blank by default;
-# core.notifications.notify(..., email=True) silently skips sending until
-# all three are set.
+# Gmail API (core/mail_backend.py's GmailAPIBackend, wired as EMAIL_BACKEND
+# above) — the only email transport in this project, used instead of SMTP
+# because Render's free plan blocks outbound SMTP ports; the Gmail API talks
+# HTTPS instead. GMAIL_REFRESH_TOKEN is obtained once via scripts/generate_
+# gmail_refresh_token.py (a local, interactive OAuth consent flow) and never
+# expires unless revoked — GMAIL_CLIENT_ID/SECRET come from the same Google
+# Cloud OAuth client (type "Desktop app") used to generate it. Blank by
+# default; EMAIL_BACKEND then falls back to the console backend, and every
+# caller of core.mailer.send_mail silently no-ops instead of failing.
 GMAIL_CLIENT_ID = os.environ.get('GMAIL_CLIENT_ID', '')
 GMAIL_CLIENT_SECRET = os.environ.get('GMAIL_CLIENT_SECRET', '')
 GMAIL_REFRESH_TOKEN = os.environ.get('GMAIL_REFRESH_TOKEN', '')
@@ -457,3 +480,55 @@ GMAIL_SENDER_EMAIL = os.environ.get('GMAIL_SENDER_EMAIL', '')
 # - GOOGLE_APPLICATION_CREDENTIALS: a filesystem path to the service
 #   account JSON (used locally / in Docker via a mounted file).
 # Actual initialization happens in core.apps.CoreConfig.ready().
+
+
+# ---------------------------------------------------------------------------
+# Sentry — supervision des erreurs
+# ---------------------------------------------------------------------------
+# Jusqu'ici, une 500 en production ne laissait qu'un traceback dans les logs
+# Render : personne n'est prévenu, et la trace disparaît à la rotation. Sentry
+# agrège, déduplique et alerte.
+#
+# Entièrement optionnel : sans SENTRY_DSN (dev, CI, tests), le SDK n'est même
+# pas initialisé — aucune dépendance réseau ajoutée à ces environnements.
+SENTRY_DSN = os.environ.get('SENTRY_DSN', '')
+
+if SENTRY_DSN:
+    import sentry_sdk
+
+    def _scrub_sensitive(event, hint):
+        """Retire du payload ce qui ne doit jamais quitter l'infrastructure.
+
+        L'application manipule des identifiants d'accès clients (chiffrés au
+        repos via django-cryptography) et des données comptables nominatives.
+        `send_default_pii=False` couvre déjà cookies/IP/corps de requête, mais
+        pas les variables locales capturées dans les frames du traceback — or
+        c'est précisément là qu'un mot de passe déchiffré peut apparaître.
+        """
+        for exception in (event.get('exception') or {}).get('values') or []:
+            for frame in (exception.get('stacktrace') or {}).get('frames') or []:
+                variables = frame.get('vars')
+                if not variables:
+                    continue
+                for name in list(variables):
+                    lowered = name.lower()
+                    if any(marker in lowered for marker in (
+                        'password', 'secret', 'token', 'key', 'credential',
+                        'admin_username', 'access_notes', 'authorization',
+                    )):
+                        variables[name] = '[filtré]'
+        return event
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=os.environ.get('SENTRY_ENVIRONMENT', 'production'),
+        release=os.environ.get('RENDER_GIT_COMMIT', ''),
+        # Jamais d'IP, de cookies ni de corps de requête : le RGPD s'applique
+        # aux salariés comme aux clients, et ces champs n'aident pas à
+        # diagnostiquer un bug de logique métier.
+        send_default_pii=False,
+        before_send=_scrub_sensitive,
+        # 10 % des transactions : assez pour voir les endpoints lents sans
+        # saturer le quota ni ajouter de latence sur chaque requête.
+        traces_sample_rate=float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', '0.1')),
+    )

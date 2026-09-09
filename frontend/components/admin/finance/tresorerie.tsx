@@ -126,7 +126,7 @@ function CaissePanel() {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-neutral-200 shadow-sm">
+      <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
@@ -263,6 +263,7 @@ const BANK_SOURCE_LABELS: Record<BankEntrySource, string> = {
   FOURNISSEUR_CHEQUE: "Paiement fournisseur chèque",
   FOURNISSEUR_VIREMENT: "Paiement fournisseur virement",
   RETRAIT_ESPECES: "Retrait espèces",
+  AUTRE: "Autre",
 };
 
 function BanquePanel() {
@@ -313,7 +314,7 @@ function BanquePanel() {
         </Sheet>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-neutral-200 shadow-sm">
+      <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
@@ -378,8 +379,8 @@ function BankEntryForm({ onSaved }: { onSaved: () => void }) {
 
   const sourcesForType: BankEntrySource[] =
     type === "ENTREE"
-      ? ["APPORT_CAPITAL", "CLIENT_CHEQUE", "CLIENT_VIREMENT", "CAISSE_DEPOT"]
-      : ["FOURNISSEUR_CHEQUE", "FOURNISSEUR_VIREMENT", "RETRAIT_ESPECES"];
+      ? ["APPORT_CAPITAL", "CLIENT_CHEQUE", "CLIENT_VIREMENT", "CAISSE_DEPOT", "AUTRE"]
+      : ["FOURNISSEUR_CHEQUE", "FOURNISSEUR_VIREMENT", "RETRAIT_ESPECES", "AUTRE"];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -500,7 +501,7 @@ function CapitalPanel() {
         </Sheet>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-neutral-200 shadow-sm">
+      <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>

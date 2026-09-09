@@ -11,6 +11,9 @@ import type {
   Paginated,
   TaxDeclaration,
   TransactionLine,
+  EncaissementsResponse,
+  Payment,
+  PaymentInput,
 } from "@/lib/api/types";
 
 export function listDisbursementRequests() {
@@ -181,4 +184,32 @@ export async function downloadFecExport(periodId: string, periodLabel: string) {
 
 export function getFinanceDashboard() {
   return apiFetch<FinanceDashboard>("/api/v1/finance/dashboard/");
+}
+
+export function getEncaissements(params?: { date_from?: string; date_to?: string }) {
+  const qs = new URLSearchParams();
+  if (params?.date_from) qs.set("date_from", params.date_from);
+  if (params?.date_to) qs.set("date_to", params.date_to);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return apiFetch<EncaissementsResponse>(`/api/v1/finance/encaissements/${suffix}`);
+}
+
+// --- Versements (paiements partiels d'une facture) ---
+
+export function listPayments(invoiceId: string) {
+  return apiFetch<Paginated<Payment>>(`/api/v1/finance/invoices/${invoiceId}/payments/`);
+}
+
+export function createPayment(invoiceId: string, data: PaymentInput) {
+  return apiFetch<Payment>(`/api/v1/finance/invoices/${invoiceId}/payments/`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function receivePayment(invoiceId: string, paymentId: string) {
+  return apiFetch<Payment>(
+    `/api/v1/finance/invoices/${invoiceId}/payments/${paymentId}/receive/`,
+    { method: "POST", body: JSON.stringify({}) },
+  );
 }

@@ -153,7 +153,7 @@ export function QuoteList({ basePath = "/admin/marketing/devis" }: { basePath?: 
         </SheetContent>
       </Sheet>
 
-      <div className="overflow-hidden rounded-xl border border-neutral-200 shadow-sm">
+      <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
@@ -336,7 +336,7 @@ function StampUploadField({ value, onChange }: { value: string; onChange: (url: 
           {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
         </div>
       </div>
-      <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
+      <input ref={inputRef} type="file" accept=".png,.jpg,.jpeg,.webp,.gif" onChange={handleFile} className="hidden" />
     </div>
   );
 }

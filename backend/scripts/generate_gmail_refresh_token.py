@@ -1,6 +1,6 @@
 """One-time local script — run this once on your own machine, never on
 Render, to obtain a Gmail API refresh token for the account that will send
-notification emails (core/email_gmail.py).
+notification emails (core/mail_backend.py's GmailAPIBackend).
 
 Setup (once):
   1. https://console.cloud.google.com/ -> create/select a project ->

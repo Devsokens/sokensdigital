@@ -241,15 +241,50 @@ class PaymentSerializer(serializers.ModelSerializer):
         ]
 
     def get_total_paid(self, obj):
-        """Total versé jusqu'à présent (recalc pour chaque payment)."""
-        total = obj.invoice.payments.filter(status=Payment.Status.RECU).aggregate(
+        """Total effectivement encaissé sur la facture.
+
+        L'agrégat couvre déjà tous les versements RECU, celui-ci compris :
+        y rajouter obj.amount le comptait deux fois et sous-évaluait d'autant
+        le restant dû affiché.
+        """
+        return obj.invoice.payments.filter(status=Payment.Status.RECU).aggregate(
             total=models.Sum('amount')
         )['total'] or Decimal('0')
-        if obj.status == Payment.Status.RECU:
-            return total + obj.amount
-        return total
 
     def get_remaining(self, obj):
         """Montant restant à payer."""
         total_paid = self.get_total_paid(obj)
         return max(Decimal('0'), obj.invoice.amount_ttc - total_paid)
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError('Le montant du versement doit être positif.')
+        return value
+
+    def validate(self, data):
+        """Un versement ne peut pas dépasser le restant dû.
+
+        Sans ce contrôle, une facture peut être encaissée au-delà de son
+        montant TTC : le trop-perçu n'apparaît nulle part et fausse aussi
+        bien le suivi client que le rapprochement comptable.
+        """
+        invoice = self.instance.invoice if self.instance else self.context.get('invoice')
+        amount = data.get('amount')
+        if invoice is None or amount is None:
+            return data
+
+        already_paid = invoice.payments.filter(
+            status=Payment.Status.RECU,
+        ).exclude(pk=self.instance.pk if self.instance else None).aggregate(
+            total=models.Sum('amount'),
+        )['total'] or Decimal('0')
+
+        if already_paid + amount > invoice.amount_ttc:
+            remaining = invoice.amount_ttc - already_paid
+            raise serializers.ValidationError({
+                'amount': (
+                    f'Ce versement dépasse le restant dû sur la facture '
+                    f'({remaining} FCFA).'
+                ),
+            })
+        return data

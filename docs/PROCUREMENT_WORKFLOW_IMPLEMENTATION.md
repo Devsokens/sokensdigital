@@ -1,3 +1,11 @@
+> ⚠️ **Document historique (construction initiale du 2026-08-16).** Voir
+> `docs/ETAT_ACTUEL_FINANCE_ACHATS_TRESORERIE_2026-08.md` pour l'état réel —
+> `CashVoucher` supprimé (fusionné dans `treasury.CashEntry`), statuts
+> renommés en français (DRAFT→BROUILLON, PENDING→EN_ATTENTE, VALIDATED→VALIDE,
+> etc.), les signaux décrits plus bas n'existent plus (remplacés par dispatch
+> explicite depuis les vues), immutabilité du statut ajoutée le 17/08, déjà
+> poussé sur `main`.
+
 # Opérations d'Achats (Procurement Workflow) — Implémentation Complète
 
 **Status:** ✅ Implémentation terminée (ne pas pousser sans autorisation utilisateur)
