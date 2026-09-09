@@ -143,3 +143,66 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(staleWhileRevalidate(request));
   }
 });
+
+/* ---------------------------------------------------------------------------
+ * Notifications push
+ * ---------------------------------------------------------------------------
+ * Le backend envoie des messages FCM « data-only » (voir core/push.py) : sans
+ * bloc `notification`, c'est ce worker qui affiche la notification, et non le
+ * navigateur. C'est ce qui permet de router le clic vers le bon écran — une
+ * charge `notification` s'afficherait toute seule et le worker ne verrait
+ * jamais l'événement.
+ */
+
+const DEFAULT_NOTIFICATION_LINK = "/admin";
+
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+
+  let payload = {};
+  try {
+    const parsed = event.data.json();
+    // FCM enveloppe la charge utile dans `data` ; un push envoyé directement
+    // (tests, autre émetteur) arrive à plat. On accepte les deux plutôt que
+    // de dépendre de la forme d'un émetteur particulier.
+    payload = parsed.data || parsed;
+  } catch {
+    payload = { title: "Soken's Digital", body: event.data.text() };
+  }
+
+  const title = payload.title || "Soken's Digital";
+  const link = payload.link || DEFAULT_NOTIFICATION_LINK;
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: payload.body || "",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { link },
+      // Regroupe par destination : dix mises à jour du même écran empilent
+      // dix bannières sinon, ce qui fait désactiver les notifications.
+      tag: link,
+      renotify: true,
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const link = event.notification.data?.link || DEFAULT_NOTIFICATION_LINK;
+  const target = new URL(link, self.location.origin).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      // Réutilise un onglet déjà ouvert sur l'application plutôt que d'en
+      // ouvrir un de plus à chaque notification — et, en PWA installée,
+      // ouvrir une fenêtre reviendrait à relancer l'app.
+      for (const client of clients) {
+        if (new URL(client.url).origin === self.location.origin && "focus" in client) {
+          return client.navigate(target).then(() => client.focus());
+        }
+      }
+      return self.clients.openWindow(target);
+    })
+  );
+});

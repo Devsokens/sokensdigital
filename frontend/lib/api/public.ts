@@ -74,7 +74,7 @@ export interface LeadPublicInput {
  * browser) — no Firebase token, this is the public unauthenticated intake
  * endpoint. Throws on failure so the caller can show a real error instead
  * of silently pretending the submission worked. */
-export async function createLead(data: LeadPublicInput): Promise<void> {
+export async function createLead(data: LeadPublicInput): Promise<{ tracking_reference: string }> {
   const response = await fetch(`${API_BASE_URL}/api/v1/public/leads/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -86,6 +86,9 @@ export async function createLead(data: LeadPublicInput): Promise<void> {
     }
     throw new Error("Impossible d'envoyer la demande. Réessaie dans un instant.");
   }
+  // La référence vient du serveur : c'est elle qui est enregistrée et
+  // envoyée par e-mail, donc la seule avec laquelle le suivi répondra.
+  return response.json();
 }
 
 /** Client-side call — the quote acceptance page runs entirely in the
@@ -197,4 +200,62 @@ export async function replySupportTicket(accessToken: string, message: string): 
     throw new Error("Impossible d'envoyer le message.");
   }
   return response.json();
+}
+
+export interface TrackingStep {
+  label: string;
+  status: "done" | "current" | "upcoming";
+}
+
+export interface ProjectTracking {
+  reference: string;
+  project_name: string;
+  submitted_at: string;
+  state_label: string;
+  is_closed: boolean;
+  steps: TrackingStep[];
+  contact_email: string;
+  contact_phone: string;
+}
+
+/** Erreur portant le statut HTTP, pour que l'appelant distingue « référence
+ * inconnue » (404, message à afficher tel quel) de « trop de tentatives »
+ * (429) ou d'une panne. */
+export class TrackingError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function readTracking(response: Response): Promise<ProjectTracking> {
+  if (response.ok) return response.json();
+  const detail = await response
+    .json()
+    .then((b) => b?.detail as string | undefined)
+    .catch(() => undefined);
+  throw new TrackingError(
+    response.status,
+    detail ?? "Le suivi est momentanément indisponible. Réessaie dans un instant.",
+  );
+}
+
+/** Consultation depuis le formulaire : la référence seule ne suffit pas,
+ * le serveur exige aussi l'adresse utilisée lors de la demande. */
+export async function trackProject(reference: string, email: string): Promise<ProjectTracking> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/public/tracking/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reference, email }),
+  });
+  return readTracking(response);
+}
+
+/** Lien direct reçu par e-mail — le jeton tient lieu d'identification. */
+export async function trackProjectByToken(token: string): Promise<ProjectTracking> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/public/tracking/${encodeURIComponent(token)}/`,
+  );
+  return readTracking(response);
 }

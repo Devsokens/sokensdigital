@@ -62,13 +62,6 @@ const STEP_COPY: Record<StepKey, { title: string; subtitle: string }> = {
   validation: { title: "", subtitle: "" },
 };
 
-function generateReference() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-  for (let i = 0; i < 3; i++) code += chars[Math.floor(Math.random() * chars.length)];
-  return `SKN-2026-${code}`;
-}
-
 type Props = {
   objectifs: ObjectifOption[];
   solutions: SolutionOption[];
@@ -96,7 +89,10 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
     canal: canaux[0]?.label ?? "",
     nda: false,
   }));
-  const [reference] = useState(generateReference);
+  // Attribuée par le serveur à l'enregistrement. Elle était jusqu'ici
+  // tirée au hasard dans le navigateur : le client notait une référence
+  // qui n'existait nulle part, et le suivi ne pouvait rien en faire.
+  const [reference, setReference] = useState("");
 
   const update = (patch: Partial<ProjectFormData>) =>
     setData((prev) => ({ ...prev, ...patch }));
@@ -110,7 +106,8 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
       setSubmitError(null);
       setSubmitting(true);
       try {
-        await createLead(buildLeadPayload(data));
+        const created = await createLead(buildLeadPayload(data));
+        setReference(created.tracking_reference);
         setSubmitted(true);
       } catch (err) {
         setSubmitError(err instanceof Error ? err.message : "Impossible d'envoyer la demande.");

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
@@ -20,7 +21,13 @@ export default async function SuiviProjetPage() {
       <SiteHeader />
       <main className="flex-1">
         <TrackingHero section={findSection(sections, "tracking_hero")} />
-        <ProjectStatusCard />
+        {/* La carte lit `?t=<jeton>` pour ouvrir directement le suivi
+            depuis le lien de l'e-mail. `useSearchParams` suspend au
+            prérendu : sans cette limite, tout le reste de la page
+            basculerait en rendu client. */}
+        <Suspense fallback={<div className="min-h-64" />}>
+          <ProjectStatusCard />
+        </Suspense>
         <TrackingFeatures section={findSection(sections, "tracking_features")} />
       </main>
       <SiteFooter />
