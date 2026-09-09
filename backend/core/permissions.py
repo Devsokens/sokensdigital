@@ -6,6 +6,8 @@ des rôles du cahier des charges.
 """
 from rest_framework import permissions
 
+from core.constants import ROLE_SUPER_ADMIN
+
 
 # ---------------------------------------------------------------------------
 # Helper
@@ -19,9 +21,24 @@ def _user_has_role(user, role_name):
 
 
 def _user_has_any_role(user, *role_names):
-    """Vérifie si un utilisateur possède au moins un des rôles listés."""
+    """Vérifie si un utilisateur possède au moins un des rôles listés.
+
+    Le Super-Administrateur satisfait toute vérification, sans avoir à
+    figurer dans la liste. C'est une décision de conception : le privilège
+    devient structurel au lieu de dépendre de la vigilance de chaque
+    appelant à penser à l'ajouter — un oubli l'enfermait dehors, et il y en
+    avait déjà.
+
+    Cela ne lui retire rien nulle part : les vérifications qui *restreignent*
+    d'après un rôle (masquer le budget d'un projet à un développeur, borner
+    un queryset) interrogent `user.roles.filter(...)` directement et ne
+    passent pas par ici. Un super-admin n'est donc jamais traité comme un
+    développeur par effet de bord.
+    """
     if not user or user.is_anonymous:
         return False
+    if _user_has_role(user, ROLE_SUPER_ADMIN):
+        return True
     return user.roles.filter(name__in=role_names).exists()
 
 

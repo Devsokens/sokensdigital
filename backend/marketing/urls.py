@@ -2,6 +2,7 @@ from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from marketing.tracking_views import PublicTrackingByTokenView, PublicTrackingView
+from marketing.workflow_views import LeadWorkflowActionView, SubmittedProjectListView
 from marketing.views import (
     BlogPostViewSet,
     ImageUploadView,
@@ -43,6 +44,8 @@ urlpatterns = [
     path('cms/site-settings/', SiteSettingsView.as_view(), name='site-settings'),
     path('quote-settings/', QuoteSettingsView.as_view(), name='quote-settings'),
     path('social-media-credentials/', SocialMediaCredentialsView.as_view(), name='social-media-credentials'),
+    path('submitted-projects/', SubmittedProjectListView.as_view(), name='submitted-projects'),
+    path('leads/<uuid:pk>/workflow/', LeadWorkflowActionView.as_view(), name='lead-workflow'),
 ] + router.urls
 
 public_urlpatterns = [

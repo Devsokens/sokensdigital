@@ -60,6 +60,22 @@ class Lead(LoggedModel):
         PERDU = 'PERDU', 'Perdu'
         CONVERTI = 'CONVERTI', 'Converti'
 
+    class WorkflowStage(models.TextChoices):
+        """Parcours d'une demande entre Marketing et Technique.
+
+        Distinct de `status`, qui est le pipeline commercial : une demande
+        peut être « qualifiée » commercialement tout en étant encore chez
+        Technique pour analyse. Mélanger les deux obligerait chaque
+        département à lire les étapes de l'autre.
+        """
+
+        SOUMIS = 'SOUMIS', 'Soumis'
+        CHEZ_TECHNIQUE = 'CHEZ_TECHNIQUE', 'En analyse technique'
+        CDC_PRET = 'CDC_PRET', 'Cahier des charges prêt'
+        SOUMIS_CLIENT = 'SOUMIS_CLIENT', 'Soumis au client'
+        VALIDE_CLIENT = 'VALIDE_CLIENT', 'Validé par le client'
+        EN_DEVELOPPEMENT = 'EN_DEVELOPPEMENT', 'En développement'
+
     # `client` (FK -> ClientAccount) omitted — ClientAccount isn't defined
     # yet (docs/backend-specifications.md §13, open question). Add once
     # clarified; the /convert/ endpoint depends on it too and is not
@@ -94,6 +110,18 @@ class Lead(LoggedModel):
     # faisait générer deux fois, dans la même migration, l'index
     # `..._like` que PostgreSQL attache aux colonnes texte indexées —
     # d'où un « relation already exists » au déploiement.
+    # Étape du parcours Marketing <-> Technique, et cahier des charges que
+    # Technique y attache. La demande reste l'objet unique qui circule : un
+    # second modèle « projet soumis » dupliquerait le demandeur, ses
+    # coordonnées et sa référence de suivi, avec deux vérités à réconcilier.
+    workflow_stage = models.CharField(
+        max_length=20, choices=WorkflowStage.choices, default=WorkflowStage.SOUMIS,
+    )
+    specification = models.ForeignKey(
+        'marketing.Specification', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='leads',
+    )
+
     tracking_reference = models.CharField(max_length=20, unique=True, blank=True)
     tracking_token = models.CharField(max_length=64, unique=True, blank=True)
 
@@ -102,6 +130,7 @@ class Lead(LoggedModel):
         indexes = LoggedModel.Meta.indexes + [
             models.Index(fields=['status']),
             models.Index(fields=['assigned_to']),
+            models.Index(fields=['workflow_stage']),
         ]
 
     def save(self, *args, **kwargs):
