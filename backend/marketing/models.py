@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from decimal import Decimal
 
@@ -13,6 +14,35 @@ from core.models import LoggedModel, User
 # baseline; replace with a real configured rate (or a per-Quote override)
 # once Finance/Comptabilité confirms it.
 DEFAULT_VAT_RATE = Decimal('0.18')
+
+
+class LeadReferenceSequence(models.Model):
+    """Dernier numéro de référence attribué, par année.
+
+    Un compteur persistant, et non le maximum des références en base, pour
+    deux raisons que les tests ont mises au jour :
+
+    - **Une suppression ne doit pas faire reculer le compteur.** Sinon la
+      demande suivante reprend une référence déjà envoyée par e-mail à
+      quelqu'un d'autre, et deux clients citent le même numéro.
+    - **Deux soumissions simultanées liraient le même maximum**, produiraient
+      la même référence, et l'une des deux échouerait sur la contrainte
+      d'unicité — un formulaire public en erreur pour cause de concurrence.
+      `select_for_update` sérialise l'attribution.
+    """
+
+    year = models.PositiveIntegerField(primary_key=True)
+    last_value = models.PositiveIntegerField(default=0)
+
+    @classmethod
+    def next_value(cls, year: int) -> int:
+        from django.db import transaction
+
+        with transaction.atomic():
+            row, _ = cls.objects.select_for_update().get_or_create(year=year)
+            row.last_value += 1
+            row.save(update_fields=['last_value'])
+            return row.last_value
 
 
 class Lead(LoggedModel):
@@ -52,12 +82,61 @@ class Lead(LoggedModel):
     # built yet (§7.2, ⏳).
     estimated_value = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
+    # Suivi public. La référence est ce que le client note et cite ; le jeton
+    # est ce qui ouvre la page de suivi depuis le lien de son e-mail.
+    #
+    # Les deux existent parce qu'ils ne servent pas à la même chose : une
+    # référence lisible se dicte au téléphone mais se devine (SKN-2026-0002
+    # suit SKN-2026-0001), un jeton ne se devine pas mais ne se dicte pas.
+    # La consultation par référence exige donc aussi l'e-mail du demandeur,
+    # et le lien direct porte le jeton.
+    tracking_reference = models.CharField(max_length=20, unique=True, blank=True, db_index=True)
+    tracking_token = models.CharField(max_length=64, unique=True, blank=True)
+
     class Meta(LoggedModel.Meta):
         ordering = ['-created_at']
         indexes = LoggedModel.Meta.indexes + [
             models.Index(fields=['status']),
             models.Index(fields=['assigned_to']),
         ]
+
+    def save(self, *args, **kwargs):
+        # Générés à la création et jamais réattribués : le client garde sa
+        # référence dans sa boîte mail, elle doit rester valable.
+        if not self.tracking_token:
+            self.tracking_token = secrets.token_urlsafe(32)
+        if not self.tracking_reference:
+            self.tracking_reference = self._next_reference()
+        super().save(*args, **kwargs)
+
+    @staticmethod
+    def _next_reference() -> str:
+        """SKN-<année>-<compteur à 4 chiffres>, remis à zéro chaque année."""
+        year = timezone.now().year
+        return f'SKN-{year}-{LeadReferenceSequence.next_value(year):04d}'
+
+    # Étapes présentées au client, dans l'ordre. Volontairement plus grossier
+    # que le pipeline commercial interne : le prospect n'a pas à lire nos
+    # statuts de qualification, et « Perdu » ne s'affiche pas comme une étape.
+    TRACKING_STEPS = ['Soumis', 'Analyse', 'Cadrage', 'Proposition', 'Validé']
+
+    @property
+    def tracking_step_index(self) -> int:
+        return {
+            self.Status.NOUVEAU: 1,
+            self.Status.QUALIFIE: 2,
+            self.Status.PROPOSITION_EN_COURS: 3,
+            self.Status.CONVERTI: 4,
+            self.Status.PERDU: 1,
+        }.get(self.status, 0)
+
+    @property
+    def tracking_state_label(self) -> str:
+        if self.status == self.Status.PERDU:
+            return 'Demande clôturée'
+        if self.status == self.Status.CONVERTI:
+            return 'Projet validé'
+        return f'{self.TRACKING_STEPS[self.tracking_step_index]} en cours'
 
     def __str__(self):
         return f'{self.first_name} {self.last_name} ({self.company_name or "particulier"})'

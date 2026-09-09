@@ -2,6 +2,9 @@ export type ProjectFormData = {
   prenom: string;
   nom: string;
   email: string;
+  /** Sert à joindre le client et à lui adresser ses documents (devis,
+   * cahier des charges) hors de l'application. */
+  telephone: string;
   entreprise: string;
   secteur: string;
   /** The chosen objective's title text (not a coded key) — the option

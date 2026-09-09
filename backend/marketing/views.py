@@ -24,6 +24,7 @@ from marketing.models import (
     BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject,
     SiteSettings, SocialMediaCredentials, SocialPost, Specification,
 )
+from marketing.emails import send_lead_acknowledgement
 from marketing.ratelimit import get_client_ip, is_rate_limited
 from marketing.serializers import (
     BlogPostPublicSerializer,
@@ -82,8 +83,17 @@ class PublicLeadCreateView(APIView):
             )
         serializer = LeadPublicCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        lead = serializer.save()
+
+        # L'accusé de réception porte la référence de suivi : c'est le seul
+        # endroit où le client la reçoit, et sans elle la page de suivi ne
+        # lui sert à rien. Envoi hors transaction et sans lever : une demande
+        # enregistrée doit le rester même si l'e-mail ne part pas.
+        send_lead_acknowledgement(lead)
+
+        data = dict(serializer.data)
+        data['tracking_reference'] = lead.tracking_reference
+        return Response(data, status=status.HTTP_201_CREATED)
 
 
 class IsMarketingOrOwnCommercial(permissions.BasePermission):

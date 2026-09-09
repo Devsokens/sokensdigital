@@ -9,6 +9,7 @@ from core.views import (
     DepartmentViewSet,
     MeView,
     ProvisionUserView,
+    PushDeviceView,
     RoleViewSet,
     SetUserRoleView,
     UserListView,
@@ -33,5 +34,6 @@ urlpatterns = [
     path('uploads/avatar/', AvatarUploadView.as_view(), name='upload-avatar'),
     path('uploads/chat-attachment/', ChatAttachmentUploadView.as_view(), name='upload-chat-attachment'),
     path('users/provision/', ProvisionUserView.as_view(), name='provision-user'),
+    path('push/devices/', PushDeviceView.as_view(), name='push-devices'),
     path('users/<uuid:pk>/role/', SetUserRoleView.as_view(), name='set-user-role'),
 ] + router.urls

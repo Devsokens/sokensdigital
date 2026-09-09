@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
+from marketing.tracking_views import PublicTrackingByTokenView, PublicTrackingView
 from marketing.views import (
     BlogPostViewSet,
     ImageUploadView,
@@ -45,6 +46,8 @@ urlpatterns = [
 ] + router.urls
 
 public_urlpatterns = [
+    path('tracking/', PublicTrackingView.as_view(), name='public-tracking'),
+    path('tracking/<str:token>/', PublicTrackingByTokenView.as_view(), name='public-tracking-token'),
     path('leads/', PublicLeadCreateView.as_view(), name='public-lead-create'),
     path('cms/blog/', PublicBlogListView.as_view(), name='public-blog-list'),
     path('cms/blog/<slug:slug>/', PublicBlogDetailView.as_view(), name='public-blog-detail'),

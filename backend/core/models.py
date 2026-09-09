@@ -351,3 +351,43 @@ class DocumentAttachment(LoggedModel):
         if self.file:
             self.file_size = self.file.size
         super().save(*args, **kwargs)
+
+
+class PushDevice(LoggedModel):
+    """Appareil autorisé à recevoir les notifications push d'un utilisateur.
+
+    Un jeton FCM par appareil et par navigateur : la même personne au bureau,
+    sur son téléphone et sur la PWA installée en a trois, et une notification
+    doit atteindre les trois. D'où une table plutôt qu'un champ sur User.
+
+    Les jetons expirent et se renouvellent sans prévenir (réinstallation,
+    nettoyage du navigateur, rotation par Firebase). `last_seen_at` permet de
+    retirer ceux qui ne se sont pas manifestés depuis longtemps, et l'envoi
+    supprime lui-même ceux que FCM déclare invalides — un jeton mort qu'on
+    garde, c'est un échec d'envoi répété à chaque notification.
+    """
+
+    class Platform(models.TextChoices):
+        WEB = 'WEB', 'Navigateur'
+        ANDROID = 'ANDROID', 'Android'
+        IOS = 'IOS', 'iOS'
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='push_devices')
+    # Les jetons FCM tournent autour de 160 caractères aujourd'hui, sans
+    # maximum garanti par Google : on prend large plutôt que de tronquer un
+    # jeton et de rendre l'appareil injoignable en silence.
+    token = models.CharField(max_length=512, unique=True)
+    platform = models.CharField(max_length=10, choices=Platform.choices, default=Platform.WEB)
+    # Purement informatif, pour qu'un utilisateur reconnaisse ses appareils
+    # dans ses préférences.
+    label = models.CharField(max_length=255, blank=True, default='')
+    last_seen_at = models.DateTimeField(default=timezone.now)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-last_seen_at']
+        indexes = LoggedModel.Meta.indexes + [
+            models.Index(fields=['user', '-last_seen_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.user} — {self.get_platform_display()}'

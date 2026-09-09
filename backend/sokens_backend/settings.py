@@ -274,12 +274,27 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-# Email — utilisé par technique.tasks.send_ticket_resolution_email et les
-# alertes d'expiration de documents RH. EMAIL_BACKEND par défaut = console
-# (affiche l'email dans les logs, aucun envoi réel) tant que EMAIL_HOST
-# n'est pas configuré — évite un crash au démarrage/dans les tests si SMTP
-# n'est pas disponible, tout en gardant le code d'envoi actif.
-if os.environ.get('EMAIL_HOST'):
+# ---------------------------------------------------------------------------
+# Email
+# ---------------------------------------------------------------------------
+# Trois backends, dans cet ordre de préférence :
+#
+# 1. API Gmail (core.mail_backend.GmailAPIBackend) dès que les identifiants
+#    OAuth sont là. C'est la voie de production : Render bloque les ports SMTP
+#    sortants sur son offre gratuite, alors que l'API Gmail passe en HTTPS
+#    comme n'importe quel autre appel externe de ce backend.
+# 2. SMTP si EMAIL_HOST est fourni — pour un hébergeur qui l'autorise, ou un
+#    relais interne.
+# 3. Console sinon (dev, CI) : l'e-mail s'affiche dans les logs, rien ne part,
+#    et rien ne plante.
+#
+# Ce réglage est ce qui rend `send_mail` réellement effectif : jusqu'ici les
+# rappels de tickets et les alertes d'expiration RH partaient dans le backend
+# console en production, donc nulle part, alors que le reste des
+# notifications passait par l'API Gmail via core.notifications.
+if os.environ.get('GMAIL_CLIENT_ID') and os.environ.get('GMAIL_REFRESH_TOKEN'):
+    EMAIL_BACKEND = 'core.mail_backend.GmailAPIBackend'
+elif os.environ.get('EMAIL_HOST'):
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
     EMAIL_HOST = os.environ.get('EMAIL_HOST')
     EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
@@ -288,7 +303,21 @@ if os.environ.get('EMAIL_HOST'):
     EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@sokensdigital.com')
+
+# Gmail envoie toujours depuis le compte propriétaire du jeton : une adresse
+# d'expéditeur différente serait réécrite. On aligne donc le défaut sur
+# GMAIL_SENDER_EMAIL quand il est fourni, pour que l'en-tête annoncé
+# corresponde à l'expéditeur réel.
+DEFAULT_FROM_EMAIL = os.environ.get(
+    'DEFAULT_FROM_EMAIL',
+    os.environ.get('GMAIL_SENDER_EMAIL') or 'no-reply@sokensdigital.com',
+)
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# Adresse publique du site, pour composer les liens envoyés par e-mail (suivi
+# de demande, validation de devis). Sans elle, un e-mail contiendrait un lien
+# relatif — inutilisable dans une boîte mail.
+PUBLIC_SITE_URL = os.environ.get('PUBLIC_SITE_URL', 'https://sokensdigital.com').rstrip('/')
 
 ROOT_URLCONF = 'sokens_backend.urls'
 

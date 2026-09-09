@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.firestore_client import create_profile, invalidate_role_cache, update_profile_fields, upsert_chat_room
-from core.models import AuditLog, Department, Role, User, hash_email
+from core.models import AuditLog, Department, PushDevice, Role, User, hash_email
 from core.permissions import has_role
 from core.storage import upload_avatar, upload_file
 from core.constants import (
@@ -590,3 +590,49 @@ def global_dashboard(request):
     }
     cache.set(GLOBAL_DASHBOARD_CACHE_KEY, payload, GLOBAL_DASHBOARD_CACHE_TTL)
     return Response(payload)
+
+
+class PushDeviceView(APIView):
+    """Enregistre ou retire l'appareil courant des destinataires push.
+
+    POST — idempotent : le même jeton renvoyé au prochain démarrage met à jour
+    `last_seen_at` au lieu de créer un doublon. Firebase peut réattribuer un
+    jeton d'un compte à un autre sur un appareil partagé, d'où la mise à jour
+    du propriétaire plutôt qu'un simple `get_or_create`.
+
+    DELETE — quand l'utilisateur retire l'autorisation. Sans cela, son ancien
+    appareil continuerait de recevoir des notifications le concernant.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        token = (request.data.get('token') or '').strip()
+        if not token:
+            return Response({'token': 'Jeton requis.'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(token) > 512:
+            return Response({'token': 'Jeton trop long.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        platform = request.data.get('platform') or PushDevice.Platform.WEB
+        if platform not in PushDevice.Platform.values:
+            platform = PushDevice.Platform.WEB
+
+        PushDevice.objects.update_or_create(
+            token=token,
+            defaults={
+                'user': request.user,
+                'platform': platform,
+                'label': (request.data.get('label') or '')[:255],
+                'last_seen_at': timezone.now(),
+            },
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def delete(self, request):
+        token = (request.data.get('token') or '').strip()
+        if not token:
+            return Response({'token': 'Jeton requis.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Restreint à l'utilisateur courant : sans ce filtre, connaître un
+        # jeton suffirait à couper les notifications de quelqu'un d'autre.
+        PushDevice.objects.filter(token=token, user=request.user).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

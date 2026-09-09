@@ -44,7 +44,7 @@ export function StepConcept({ data, update, objectifs }: Props) {
                 className={inputClass}
               />
             </label>
-            <label className="block sm:col-span-2">
+            <label className="block">
               <span className="mb-1.5 block text-xs text-muted-foreground">
                 Email Professionnel
               </span>
@@ -53,6 +53,21 @@ export function StepConcept({ data, update, objectifs }: Props) {
                 value={data.email}
                 onChange={(e) => update({ email: e.target.value })}
                 placeholder="mboumba@gmail.com"
+                autoComplete="email"
+                className={inputClass}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs text-muted-foreground">
+                Téléphone
+              </span>
+              <input
+                type="tel"
+                value={data.telephone}
+                onChange={(e) => update({ telephone: e.target.value })}
+                placeholder="+241 06 12 34 56"
+                autoComplete="tel"
+                inputMode="tel"
                 className={inputClass}
               />
             </label>
