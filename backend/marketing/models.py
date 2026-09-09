@@ -90,7 +90,11 @@ class Lead(LoggedModel):
     # suit SKN-2026-0001), un jeton ne se devine pas mais ne se dicte pas.
     # La consultation par référence exige donc aussi l'e-mail du demandeur,
     # et le lien direct porte le jeton.
-    tracking_reference = models.CharField(max_length=20, unique=True, blank=True, db_index=True)
+    # `unique=True` suffit : il crée déjà l'index. Y ajouter `db_index`
+    # faisait générer deux fois, dans la même migration, l'index
+    # `..._like` que PostgreSQL attache aux colonnes texte indexées —
+    # d'où un « relation already exists » au déploiement.
+    tracking_reference = models.CharField(max_length=20, unique=True, blank=True)
     tracking_token = models.CharField(max_length=64, unique=True, blank=True)
 
     class Meta(LoggedModel.Meta):

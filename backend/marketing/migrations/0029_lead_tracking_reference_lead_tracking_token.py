@@ -45,7 +45,10 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='lead',
             name='tracking_reference',
-            field=models.CharField(blank=True, db_index=True, default='', max_length=20),
+            # Sans index à cette étape : PostgreSQL nomme l'index `_like`
+            # d'après la colonne, et le recréer plus bas avec la contrainte
+            # d'unicité échouait sur un nom déjà pris.
+            field=models.CharField(blank=True, default='', max_length=20),
         ),
         migrations.AddField(
             model_name='lead',
@@ -56,7 +59,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='lead',
             name='tracking_reference',
-            field=models.CharField(blank=True, db_index=True, max_length=20, unique=True),
+            field=models.CharField(blank=True, max_length=20, unique=True),
         ),
         migrations.AlterField(
             model_name='lead',
