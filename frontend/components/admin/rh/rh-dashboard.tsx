@@ -18,6 +18,7 @@ import { Building2, Loader2, UserCheck, UserPlus, Users } from "lucide-react";
 import { listEmployees, listDepartments } from "@/lib/api/hr";
 import type { EmployeeProfile, Department } from "@/lib/api/types";
 import { formatFcfa } from "@/lib/format-currency";
+import { StatCard } from "@/components/admin/stat-card";
 
 const CONTRACT_LABELS: Record<string, string> = {
   CDI: "CDI",
@@ -27,26 +28,6 @@ const CONTRACT_LABELS: Record<string, string> = {
 };
 
 const PALETTE = ["#06b6d4", "#6366f1", "#f59e0b", "#f43f5e", "#8b5cf6", "#10b981"];
-
-function StatCard({
-  label, value, sublabel, icon: Icon, accent,
-}: { label: string; value: string; sublabel?: string; icon: React.ComponentType<{ className?: string }>; accent: string }) {
-  return (
-    <div className="relative overflow-hidden rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-      <div className="absolute -top-8 -right-8 size-24 rounded-full opacity-[0.08]" style={{ background: accent }} />
-      <div className="relative flex items-start justify-between">
-        <div>
-          <p className="text-xs text-neutral-500">{label}</p>
-          <p className="mt-1.5 text-2xl font-semibold text-neutral-900">{value}</p>
-          {sublabel && <p className="mt-1 text-[0.7rem] text-neutral-400">{sublabel}</p>}
-        </div>
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl" style={{ background: `${accent}1a`, color: accent }}>
-          <Icon className="size-4.5" />
-        </span>
-      </div>
-    </div>
-  );
-}
 
 function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (

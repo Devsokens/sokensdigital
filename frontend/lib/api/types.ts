@@ -437,6 +437,22 @@ export interface MarketingDashboard {
   published_social_posts_by_platform: Record<string, number>;
 }
 
+/** GET /api/v1/dashboard/ — one flat snapshot per department, identical
+ * for every authenticated role (no per-role filtering). See
+ * backend/core/views.py::global_dashboard. */
+export interface GlobalDashboard {
+  active_employees: number;
+  new_hires_this_month: number;
+  weighted_pipeline: string;
+  total_leads: number;
+  social_posts_published_this_month: number;
+  cash_balance: string;
+  gross_result: string;
+  active_projects: number;
+  pending_disbursements: number;
+  open_tickets: number;
+}
+
 export type FAQAudience = "PUBLIC" | "INTERNE";
 
 export interface FAQEntry {

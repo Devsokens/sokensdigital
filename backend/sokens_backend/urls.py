@@ -4,6 +4,8 @@ URL configuration for sokens_backend project.
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/5.0/topics/http/urls/
 """
+import os
+
 from django.contrib import admin
 from django.urls import path, include
 from drf_spectacular.views import (
@@ -15,8 +17,20 @@ from drf_spectacular.views import (
 from marketing.urls import public_urlpatterns as marketing_public_urlpatterns
 from support.urls import public_urlpatterns as support_public_urlpatterns
 
+# Django admin only manages the DB directly (bypasses every DRF role check
+# audited elsewhere) and its login has no built-in brute-force lockout — the
+# default '/admin/' path is the first thing every automated scanner tries.
+# ADMIN_URL lets a real deployment move it to an unguessable path as one
+# extra layer (defense in depth, not a replacement for a WAF/IP allowlist —
+# see SECURITY.md "Durcissement de l'admin Django"). Trailing slash required
+# by Django's URL resolver; defaults to the original path so local dev is
+# unaffected.
+ADMIN_URL = os.environ.get('ADMIN_URL', 'admin/').lstrip('/')
+if not ADMIN_URL.endswith('/'):
+    ADMIN_URL += '/'
+
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path(ADMIN_URL, admin.site.urls),
 
     # OpenAPI schema + interactive docs.
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

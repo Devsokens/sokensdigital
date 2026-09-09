@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { Loader2, Megaphone, Newspaper, TrendingUp, Users } from "lucide-react";
 import { getMarketingDashboard } from "@/lib/api/marketing";
+import { StatCard } from "@/components/admin/stat-card";
 import type { MarketingDashboard } from "@/lib/api/types";
 
 const LEAD_STATUS_LABELS: Record<string, string> = {
@@ -50,32 +51,6 @@ function formatCurrency(value: string) {
 
 function formatShortDate(iso: string) {
   return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit" }).format(new Date(iso));
-}
-
-function StatCard({
-  label, value, sublabel, icon: Icon, accent,
-}: { label: string; value: string; sublabel?: string; icon: React.ComponentType<{ className?: string }>; accent: string }) {
-  return (
-    <div className="relative overflow-hidden rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-      <div
-        className="absolute -top-8 -right-8 size-24 rounded-full opacity-[0.08]"
-        style={{ background: accent }}
-      />
-      <div className="relative flex items-start justify-between">
-        <div>
-          <p className="text-xs text-neutral-500">{label}</p>
-          <p className="mt-1.5 text-2xl font-semibold text-neutral-900">{value}</p>
-          {sublabel && <p className="mt-1 text-[0.7rem] text-neutral-400">{sublabel}</p>}
-        </div>
-        <span
-          className="flex size-9 shrink-0 items-center justify-center rounded-xl"
-          style={{ background: `${accent}1a`, color: accent }}
-        >
-          <Icon className="size-4.5" />
-        </span>
-      </div>
-    </div>
-  );
 }
 
 function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {

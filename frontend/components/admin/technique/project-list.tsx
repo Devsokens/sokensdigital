@@ -406,6 +406,7 @@ export function ProjectList() {
               onToggleArchive={handleToggleArchive}
               onToggleLock={handleToggleLock}
               onDelete={handleDelete}
+              onSaved={load}
             />
           ))}
         </div>
@@ -490,14 +491,17 @@ function ProjectCard({
   onToggleArchive,
   onToggleLock,
   onDelete,
+  onSaved,
 }: {
   project: Project;
   onTogglePin: (project: Project) => void;
   onToggleArchive: (project: Project) => void;
   onToggleLock: (project: Project) => void;
   onDelete: (project: Project) => void;
+  onSaved: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const progress = project.tasks_total > 0 ? Math.round((project.tasks_done / project.tasks_total) * 100) : 0;
   const avatarUsers = [
     ...(project.lead_project_manager ? [project.lead_project_manager] : []),
@@ -507,123 +511,242 @@ function ProjectCard({
   const overflow = avatarUsers.length - shown.length;
 
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm transition-colors hover:border-primary/40">
-      <div className="mb-3 flex items-center justify-between">
-        <Link href={`/admin/technique/projets/${project.id}`} className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-medium text-neutral-900 hover:text-primary">
-          <span className="shrink-0">{pickCardIcon(project.id)}</span>
-          <span className="truncate">{project.name}</span>
-        </Link>
-        <div className="flex shrink-0 items-center gap-1 pl-2">
-          {project.is_locked && <Lock className="size-3.5 text-neutral-400" />}
-          {!project.is_locked && project.is_pinned && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                onTogglePin(project);
-              }}
-              aria-label="Désépingler"
-            >
-              <Star className="size-3.5 fill-amber-400 text-amber-400" />
-            </button>
-          )}
-          <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-            <SheetTrigger
-              render={
-                <button
-                  type="button"
-                  onClick={(e) => e.preventDefault()}
-                  aria-label="Actions du projet"
-                  className="rounded-full p-0.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
-                >
-                  <MoreVertical className="size-3.5" />
-                </button>
-              }
-            />
-            <SheetContent title={project.name}>
-              <div className="space-y-1">
-                <ActionRow
-                  icon={Pin}
-                  label={project.is_pinned ? "Désépingler" : "Épingler"}
-                  onClick={() => { onTogglePin(project); setMenuOpen(false); }}
-                />
-                <ActionRow
-                  icon={project.is_locked ? Unlock : Lock}
-                  label={project.is_locked ? "Déverrouiller" : "Verrouiller"}
-                  onClick={() => { onToggleLock(project); setMenuOpen(false); }}
-                />
-                <ActionRow
-                  icon={Archive}
-                  label={project.is_archived ? "Désarchiver" : "Archiver"}
-                  onClick={() => { onToggleArchive(project); setMenuOpen(false); }}
-                />
-                <ActionRow
-                  icon={Trash2}
-                  label="Supprimer"
-                  danger
-                  onClick={() => { setMenuOpen(false); onDelete(project); }}
-                />
-              </div>
-            </SheetContent>
-          </Sheet>
-        </div>
-      </div>
-
-      <div className="mb-1.5 flex items-center justify-between text-xs text-neutral-400">
-        <span className="flex items-center gap-1">
-          <ListChecks className="size-3.5" />
-          {project.tasks_total > 0 ? `${project.tasks_done}/${project.tasks_total}` : "Aucune tâche"}
-        </span>
-        {project.tasks_total > 0 && <span>({progress}% terminé)</span>}
-      </div>
-      <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
-        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />
-      </div>
-
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <p className="text-[10px] uppercase tracking-wide text-neutral-400">Assigné à</p>
-          <div className="mt-1 flex -space-x-1.5">
-            {shown.map((user) => (
-              <span
-                key={user.id}
-                title={`${user.first_name} ${user.last_name}`}
-                className="flex size-6 items-center justify-center rounded-full border-2 border-white bg-primary/10 text-[10px] font-semibold text-primary"
+    <>
+      <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm transition-colors hover:border-primary/40">
+        <div className="mb-3 flex items-center justify-between">
+          <Link href={`/admin/technique/projets/${project.id}`} className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-medium text-neutral-900 hover:text-primary">
+            <span className="shrink-0">{pickCardIcon(project.id)}</span>
+            <span className="truncate">{project.name}</span>
+          </Link>
+          <div className="flex shrink-0 items-center gap-1 pl-2">
+            {project.is_locked && <Lock className="size-3.5 text-neutral-400" />}
+            {!project.is_locked && project.is_pinned && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onTogglePin(project);
+                }}
+                aria-label="Désépingler"
               >
-                {initials(user.first_name, user.last_name)}
-              </span>
-            ))}
-            {overflow > 0 && (
-              <span className="flex size-6 items-center justify-center rounded-full border-2 border-white bg-neutral-100 text-[10px] font-semibold text-neutral-500">
-                +{overflow}
-              </span>
+                <Star className="size-3.5 fill-amber-400 text-amber-400" />
+              </button>
             )}
-            {avatarUsers.length === 0 && <span className="text-xs text-neutral-300">—</span>}
+            <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+              <SheetTrigger
+                render={
+                  <button
+                    type="button"
+                    onClick={(e) => e.preventDefault()}
+                    aria-label="Actions du projet"
+                    className="rounded-full p-0.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
+                  >
+                    <MoreVertical className="size-3.5" />
+                  </button>
+                }
+              />
+              <SheetContent title={project.name}>
+                <div className="space-y-1">
+                  <ActionRow
+                    icon={SlidersHorizontal}
+                    label="Modifier les détails"
+                    onClick={() => { setMenuOpen(false); setEditOpen(true); }}
+                  />
+                  <ActionRow
+                    icon={Pin}
+                    label={project.is_pinned ? "Désépingler" : "Épingler"}
+                    onClick={() => { onTogglePin(project); setMenuOpen(false); }}
+                  />
+                  <ActionRow
+                    icon={project.is_locked ? Unlock : Lock}
+                    label={project.is_locked ? "Déverrouiller" : "Verrouiller"}
+                    onClick={() => { onToggleLock(project); setMenuOpen(false); }}
+                  />
+                  <ActionRow
+                    icon={Archive}
+                    label={project.is_archived ? "Désarchiver" : "Archiver"}
+                    onClick={() => { onToggleArchive(project); setMenuOpen(false); }}
+                  />
+                  <ActionRow
+                    icon={Trash2}
+                    label="Supprimer"
+                    danger
+                    onClick={() => { setMenuOpen(false); onDelete(project); }}
+                  />
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-[10px] uppercase tracking-wide text-neutral-400">Échéance</p>
-          <p className="mt-1 flex items-center gap-1 text-xs text-neutral-600">
-            <CalendarDays className="size-3.5 text-neutral-400" />
-            {formatDate(project.end_date)}
-          </p>
+
+        <div className="mb-1.5 flex items-center justify-between text-xs text-neutral-400">
+          <span className="flex items-center gap-1">
+            <ListChecks className="size-3.5" />
+            {project.tasks_total > 0 ? `${project.tasks_done}/${project.tasks_total}` : "Aucune tâche"}
+          </span>
+          {project.tasks_total > 0 && <span>({progress}% terminé)</span>}
+        </div>
+        <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
+          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />
+        </div>
+
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-neutral-400">Assigné à</p>
+            <div className="mt-1 flex -space-x-1.5">
+              {shown.map((user) => (
+                <span
+                  key={user.id}
+                  title={`${user.first_name} ${user.last_name}`}
+                  className="flex size-6 items-center justify-center rounded-full border-2 border-white bg-primary/10 text-[10px] font-semibold text-primary"
+                >
+                  {initials(user.first_name, user.last_name)}
+                </span>
+              ))}
+              {overflow > 0 && (
+                <span className="flex size-6 items-center justify-center rounded-full border-2 border-white bg-neutral-100 text-[10px] font-semibold text-neutral-500">
+                  +{overflow}
+                </span>
+              )}
+              {avatarUsers.length === 0 && <span className="text-xs text-neutral-300">—</span>}
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] uppercase tracking-wide text-neutral-400">Échéance</p>
+            <p className="mt-1 flex items-center gap-1 text-xs text-neutral-600">
+              <CalendarDays className="size-3.5 text-neutral-400" />
+              {formatDate(project.end_date)}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          <span className={`rounded-full px-2 py-0.5 text-[11px] ${PRIORITY_COLORS[project.priority]}`}>
+            {PRIORITY_LABELS[project.priority]}
+          </span>
+          {project.category && (
+            <span className={`rounded-full px-2 py-0.5 text-[11px] ${categoryColor(project.category)}`}>
+              {project.category}
+            </span>
+          )}
+          <span className={`rounded-full px-2 py-0.5 text-[11px] ${STATUS_COLORS[project.status]}`}>
+            {STATUS_LABELS[project.status]}
+          </span>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        <span className={`rounded-full px-2 py-0.5 text-[11px] ${PRIORITY_COLORS[project.priority]}`}>
-          {PRIORITY_LABELS[project.priority]}
-        </span>
-        {project.category && (
-          <span className={`rounded-full px-2 py-0.5 text-[11px] ${categoryColor(project.category)}`}>
-            {project.category}
-          </span>
-        )}
-        <span className={`rounded-full px-2 py-0.5 text-[11px] ${STATUS_COLORS[project.status]}`}>
-          {STATUS_LABELS[project.status]}
-        </span>
+      <Sheet open={editOpen} onOpenChange={setEditOpen}>
+        <SheetContent title={`Modifier ${project.name}`}>
+          <EditProjectForm
+            project={project}
+            onSaved={() => {
+              setEditOpen(false);
+              onSaved();
+            }}
+          />
+        </SheetContent>
+      </Sheet>
+    </>
+  );
+}
+
+function EditProjectForm({ project, onSaved }: { project: Project; onSaved: () => void }) {
+  const [name, setName] = useState(project.name);
+  const [status, setStatus] = useState<ProjectStatus>(project.status);
+  const [priority, setPriority] = useState<ProjectPriority>(project.priority);
+  const [category, setCategory] = useState(project.category || "");
+  const [startDate, setStartDate] = useState(project.start_date || "");
+  const [endDate, setEndDate] = useState(project.end_date || "");
+  const [budget, setBudget] = useState(project.budget || "");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSaving(true);
+    try {
+      await updateProject(project.id, {
+        name,
+        status,
+        priority,
+        category: category || undefined,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        budget: budget || undefined,
+      });
+      onSaved();
+    } catch {
+      setError("Impossible d'enregistrer les modifications.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {error && (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
+          {error}
+        </p>
+      )}
+      <label className="block">
+        <span className={labelClass}>Nom du projet</span>
+        <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
+      </label>
+
+      <div className="grid grid-cols-2 gap-4">
+        <label className="block">
+          <span className={labelClass}>Statut</span>
+          <select value={status} onChange={(e) => setStatus(e.target.value as ProjectStatus)} className={inputClass}>
+            {(Object.keys(STATUS_LABELS) as ProjectStatus[]).map((s) => (
+              <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className={labelClass}>Priorité</span>
+          <select value={priority} onChange={(e) => setPriority(e.target.value as ProjectPriority)} className={inputClass}>
+            {(Object.keys(PRIORITY_LABELS) as ProjectPriority[]).map((p) => (
+              <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
+            ))}
+          </select>
+        </label>
       </div>
-    </div>
+
+      <label className="block">
+        <span className={labelClass}>Catégorie</span>
+        <input
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className={inputClass}
+          placeholder="Site web, App mobile, Design..."
+        />
+      </label>
+
+      <div className="grid grid-cols-2 gap-4">
+        <label className="block">
+          <span className={labelClass}>Date de début</span>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputClass} />
+        </label>
+        <label className="block">
+          <span className={labelClass}>Date de fin</span>
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputClass} />
+        </label>
+      </div>
+
+      <label className="block">
+        <span className={labelClass}>Budget (FCFA)</span>
+        <input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} className={inputClass} />
+      </label>
+
+      <div className="flex items-center justify-between pt-2">
+        <SheetClose render={<Button type="button" variant="outline" className="rounded-full px-4">Annuler</Button>} />
+        <Button type="submit" disabled={saving} className="rounded-full px-5">
+          {saving ? <Loader2 className="size-4 animate-spin" /> : "Enregistrer"}
+        </Button>
+      </div>
+    </form>
   );
 }
 
