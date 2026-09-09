@@ -302,10 +302,11 @@ class ProcurementTasksTests(ProcurementTestBase):
             status=ProcurementRequest.Status.APPROUVEE,
         )
 
-    def test_create_disbursement_request_task_creates_disbursement_with_correct_tier(self):
-        # amount_ht=100000 * 1.18 = 118000 > THRESHOLD_N3 (50000) → doit
-        # tomber en EN_ATTENTE_N3, pas dans un statut inventé qui bypasserait
-        # le circuit d'approbation (c'était le bug H2 de l'audit du 17/08).
+    def test_create_disbursement_request_task_creates_disbursement_pending_rcf(self):
+        # Circuit fixe : toute demande, quel que soit son montant, doit
+        # d'abord passer par la RCF plutôt que dans un statut inventé qui
+        # bypasserait le circuit d'approbation (c'était le bug H2 de
+        # l'audit du 17/08, sous l'ancien système à seuils).
         quote = SupplierQuote.objects.create(
             procurement=self.procurement, supplier=self.supplier,
             quote_date='2026-08-15', amount_ht=Decimal('100000'), vat_rate=Decimal('0.18'),
@@ -318,7 +319,7 @@ class ProcurementTasksTests(ProcurementTestBase):
         self.assertEqual(DisbursementRequest.objects.count(), 1)
         disbursement = DisbursementRequest.objects.first()
         self.assertEqual(disbursement.amount, quote.amount_ttc)
-        self.assertEqual(disbursement.status, DisbursementRequest.Status.EN_ATTENTE_N3)
+        self.assertEqual(disbursement.status, DisbursementRequest.Status.EN_ATTENTE_RCF)
         self.assertEqual(disbursement.requested_by, self.cfo)
 
     def test_create_disbursement_request_task_noop_if_quote_not_validated(self):

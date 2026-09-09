@@ -572,7 +572,7 @@ export interface TeamTimesheetResponse {
   members: TeamTimesheetMember[];
 }
 
-export type DisbursementStatus = "EN_ATTENTE_N1" | "EN_ATTENTE_N2" | "EN_ATTENTE_N3" | "APPROUVE" | "REJETE" | "EXECUTE";
+export type DisbursementStatus = "EN_ATTENTE_RCF" | "EN_ATTENTE_GERANT" | "APPROUVE" | "REJETE" | "EXECUTE";
 
 export interface DisbursementRequest {
   id: string;

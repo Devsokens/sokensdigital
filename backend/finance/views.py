@@ -45,17 +45,15 @@ COMPTABLE_ROLES = (ROLE_COMPTABLE,)
 FINANCE_READ_ROLES = (ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE)
 
 
-def _can_approve_tier(user, pending_status):
-    """A higher validation tier's role can always approve a lower tier's
-    request — Directeur Financier and Super-Admin both cover the
-    Comptable-only N1 tier, Super-Admin also covers N2 (cahier des
-    charges §4.3: N1 Comptable <10 000, N2 Directeur Financier
-    10 000-50 000, N3 direction générale >50 000)."""
-    if pending_status == DisbursementRequest.Status.EN_ATTENTE_N1:
+def _can_decide_stage(user, pending_status):
+    """Circuit fixe RCF puis Gérant (process comptable et financier,
+    "Demande de décaissement") — aucun seuil de montant. Comptable et
+    Directeur Financier tiennent lieu de RCF (même convention que
+    procurement.views.IsManagerOrAdmin) ; Super-Admin tient lieu de
+    Gérant."""
+    if pending_status == DisbursementRequest.Status.EN_ATTENTE_RCF:
         return has_role(user, *COMPTABLE_ROLES, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN)
-    if pending_status == DisbursementRequest.Status.EN_ATTENTE_N2:
-        return has_role(user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN)
-    return has_role(user, ROLE_SUPER_ADMIN)  # EN_ATTENTE_N3
+    return has_role(user, ROLE_SUPER_ADMIN)  # EN_ATTENTE_GERANT
 
 
 class CanInitiateDisbursement(permissions.BasePermission):
@@ -98,22 +96,18 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
         if project and project.lead_project_manager_id != self.request.user.id:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Tu ne peux initier une demande que pour un projet que tu diriges.")
-        amount = serializer.validated_data['amount']
         serializer.save(
             requested_by=self.request.user,
-            status=DisbursementRequest.initial_status_for_amount(amount),
+            status=DisbursementRequest.Status.EN_ATTENTE_RCF,
         )
 
     @extend_schema(
         tags=['Finance & Comptabilité'],
-        summary='Give validation to a disbursement request (§4.3)',
-        description="Which role can approve depends on the request's current tier "
-        "(EN_ATTENTE_N1/N2/N3, set from the amount at creation — see "
-        "DisbursementRequest.initial_status_for_amount): Comptable for N1 "
-        "(<10 000 FCFA), Directeur Financier for N2 (10 000-50 000), Super-Admin "
-        "for N3 (>50 000, standing in for the spec's \"direction générale\", no "
-        "dedicated role exists). A higher tier's role can always approve a lower "
-        "one. Rejecting requires `rejection_reason`.",
+        summary='Give validation to a disbursement request',
+        description="Circuit fixe, sans seuil de montant : la RCF (Comptable ou "
+        "Directeur Financier) examine d'abord — approuver transmet au Gérant "
+        "(Super-Admin), rejeter clôture la demande. Le Gérant statue ensuite en "
+        "dernier ressort. Rejeter exige `rejection_reason`.",
         request={'application/json': {'type': 'object', 'properties': {
             'decision': {'type': 'string', 'enum': ['APPROUVE', 'REJETE']},
             'rejection_reason': {'type': 'string'},
@@ -125,22 +119,41 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
         disbursement = self.get_object()
         if disbursement.status not in DisbursementRequest.PENDING_STATUSES:
             return Response({'detail': 'Cette demande a déjà été traitée.'}, status=status.HTTP_400_BAD_REQUEST)
-        if not _can_approve_tier(request.user, disbursement.status):
+        if not _can_decide_stage(request.user, disbursement.status):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         decision = request.data.get('decision')
-        if decision not in (DisbursementRequest.Status.APPROUVE, DisbursementRequest.Status.REJETE):
+        if decision not in ('APPROUVE', 'REJETE'):
             return Response({'detail': 'decision doit être APPROUVE ou REJETE.'}, status=status.HTTP_400_BAD_REQUEST)
 
         rejection_reason = (request.data.get('rejection_reason') or '').strip()
-        if decision == DisbursementRequest.Status.REJETE and not rejection_reason:
+        if decision == 'REJETE' and not rejection_reason:
             return Response({'detail': 'Un motif de rejet est obligatoire.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        disbursement.status = decision
-        disbursement.rejection_reason = rejection_reason if decision == DisbursementRequest.Status.REJETE else ''
-        disbursement.decided_by = request.user
-        disbursement.decided_at = timezone.now()
-        disbursement.save(update_fields=['status', 'rejection_reason', 'decided_by', 'decided_at'])
+        at_rcf_stage = disbursement.status == DisbursementRequest.Status.EN_ATTENTE_RCF
+
+        if decision == 'REJETE':
+            disbursement.status = DisbursementRequest.Status.REJETE
+            disbursement.rejection_reason = rejection_reason
+        elif at_rcf_stage:
+            # La RCF approuve : la demande passe au Gérant, elle n'est pas
+            # encore définitivement approuvée — c'est lui qui statue en
+            # dernier ressort (process comptable, "Demande de décaissement").
+            disbursement.status = DisbursementRequest.Status.EN_ATTENTE_GERANT
+        else:
+            disbursement.status = DisbursementRequest.Status.APPROUVE
+
+        update_fields = ['status', 'rejection_reason']
+        if at_rcf_stage:
+            disbursement.rcf_decided_by = request.user
+            disbursement.rcf_decided_at = timezone.now()
+            update_fields += ['rcf_decided_by', 'rcf_decided_at']
+        else:
+            disbursement.decided_by = request.user
+            disbursement.decided_at = timezone.now()
+            update_fields += ['decided_by', 'decided_at']
+
+        disbursement.save(update_fields=update_fields)
         return Response(DisbursementRequestSerializer(disbursement).data)
 
     @extend_schema(

@@ -15,41 +15,51 @@ DEFAULT_VAT_RATE = Decimal('0.18')
 
 
 class DisbursementRequest(LoggedModel):
-    """docs/backend-specifications.md §3.1/§4.1/§4.2/§6.3 + cahier des
-    charges §4.3. Chef de Projet initiates; which validation tier is
-    required is decided by `amount` (see THRESHOLD_N2/THRESHOLD_N3 and
-    `initial_status_for_amount`) — under 10 000 FCFA a Comptable can give
-    final approval alone (N1), 10 000-50 000 needs the Directeur Financier
-    (N2), above 50 000 needs Super-Admin as "direction générale" (N3, no
-    dedicated role exists for that in this codebase or the spec's own
-    §4.8 role list). A higher tier can always approve a lower one (the
-    `approve` action's role check in finance/views.py is cumulative, not
-    exclusive). Comptable marks it EXECUTE once the money has actually
-    moved (`execute` action)."""
+    """Process comptable et financier (document officiel, section
+    "Demande de décaissement") : circuit fixe à deux étapes, quel que soit
+    le montant — "la demande doit être examinée successivement : par la
+    Responsable Comptable et Financière ; puis validée ou refusée par le
+    gérant."
+
+    Remplace un système à trois paliers indexés sur le montant
+    (Comptable seul <10k, Directeur Financier 10-50k, Super-Admin >50k)
+    qui contredisait ce document : celui-ci ne prévoit aucun seuil, RCF
+    puis Gérant systématiquement.
+
+    Pas de rôle "RCF"/"Gérant" dédié dans core.constants — même
+    convention que procurement.views.IsManagerOrAdmin (déjà en place
+    avant ce changement) : Comptable ou Directeur Financier tiennent
+    lieu de RCF, Super-Admin tient lieu de Gérant.
+
+    Le Chef de Projet initie ; le Comptable marque EXECUTE une fois les
+    fonds réellement sortis (`execute`, inchangé)."""
 
     class Status(models.TextChoices):
-        EN_ATTENTE_N1 = 'EN_ATTENTE_N1', 'En attente (N1)'
-        EN_ATTENTE_N2 = 'EN_ATTENTE_N2', 'En attente (N2)'
-        EN_ATTENTE_N3 = 'EN_ATTENTE_N3', 'En attente (N3)'
+        EN_ATTENTE_RCF = 'EN_ATTENTE_RCF', 'En attente RCF'
+        EN_ATTENTE_GERANT = 'EN_ATTENTE_GERANT', 'En attente Gérant'
         APPROUVE = 'APPROUVE', 'Approuvé'
         REJETE = 'REJETE', 'Rejeté'
         EXECUTE = 'EXECUTE', 'Exécuté'
 
-    PENDING_STATUSES = (Status.EN_ATTENTE_N1, Status.EN_ATTENTE_N2, Status.EN_ATTENTE_N3)
-
-    # Cahier des charges §4.3 — bornes exactes.
-    THRESHOLD_N2 = Decimal('10000')
-    THRESHOLD_N3 = Decimal('50000')
+    PENDING_STATUSES = (Status.EN_ATTENTE_RCF, Status.EN_ATTENTE_GERANT)
 
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='disbursement_requests')
     requested_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='disbursement_requests')
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     beneficiary = models.CharField(max_length=255)
     reason = models.TextField()
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.EN_ATTENTE_N1)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.EN_ATTENTE_RCF)
     rejection_reason = models.TextField(blank=True)
+
+    # RCF : première étape. Renseigné qu'elle transmette au gérant ou
+    # rejette directement — dans les deux cas, c'est elle qui a statué.
+    rcf_decided_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='rcf_decided_disbursements')
+    rcf_decided_at = models.DateTimeField(null=True, blank=True)
+
+    # Gérant : décision finale, seulement atteinte si la RCF a transmis.
     decided_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='decided_disbursements')
     decided_at = models.DateTimeField(null=True, blank=True)
+
     executed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='executed_disbursements')
     executed_at = models.DateTimeField(null=True, blank=True)
 
@@ -68,14 +78,6 @@ class DisbursementRequest(LoggedModel):
         from django.core.exceptions import ValidationError
         if self.amount is not None and self.amount <= 0:
             raise ValidationError({'amount': 'Le montant doit être positif.'})
-
-    @classmethod
-    def initial_status_for_amount(cls, amount: Decimal) -> str:
-        if amount > cls.THRESHOLD_N3:
-            return cls.Status.EN_ATTENTE_N3
-        if amount >= cls.THRESHOLD_N2:
-            return cls.Status.EN_ATTENTE_N2
-        return cls.Status.EN_ATTENTE_N1
 
 
 class AccountingPeriod(LoggedModel):

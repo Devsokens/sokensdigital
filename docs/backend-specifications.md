@@ -338,7 +338,15 @@ n'existent pas encore.
 échéance dépassée (même limitation que `Quote.send()`, §7.2 — aucune
 librairie PDF ni backend email configuré).
 
-### 6.3 Décaissements ✅ implémenté (N1 → N2/N3 → exécution, complet)
+> ⚠️ **Circuit remplacé le 09/09/2026** — le process comptable et financier
+> officiel ("Demande de décaissement") prévoit un circuit fixe à deux étapes,
+> sans seuil de montant : examen par la Responsable Comptable et Financière,
+> puis validation ou refus par le Gérant. Cette section décrit l'ancien
+> système à trois paliers indexés sur le montant (N1/N2/N3), remplacé en
+> conséquence. Voir `finance.models.DisbursementRequest` et
+> `docs/RAPPORT_SESSION_2026-09-09.md` pour l'implémentation actuelle.
+
+### 6.3 Décaissements ✅ implémenté (N1 → N2/N3 → exécution, complet) — obsolète, voir avertissement ci-dessus
 
 **`DisbursementRequest`** ✅ — `project` (FK nullable), `requested_by`,
 `amount`, `beneficiary`, `reason`, `status` (Enum EN_ATTENTE_N1/

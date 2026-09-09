@@ -77,18 +77,16 @@ const PROCUREMENT_STATUS_COLORS: Record<ProcurementRequest["status"], string> = 
 };
 
 const DISBURSEMENT_STATUS_LABELS: Record<DisbursementRequest["status"], string> = {
-  EN_ATTENTE_N1: "En attente (N1)",
-  EN_ATTENTE_N2: "En attente (N2)",
-  EN_ATTENTE_N3: "En attente (N3)",
+  EN_ATTENTE_RCF: "En attente RCF",
+  EN_ATTENTE_GERANT: "En attente Gérant",
   APPROUVE: "Approuvé",
   REJETE: "Rejeté",
   EXECUTE: "Exécuté",
 };
 
 const DISBURSEMENT_STATUS_COLORS: Record<DisbursementRequest["status"], string> = {
-  EN_ATTENTE_N1: "bg-amber-100 text-amber-700",
-  EN_ATTENTE_N2: "bg-amber-100 text-amber-700",
-  EN_ATTENTE_N3: "bg-amber-100 text-amber-700",
+  EN_ATTENTE_RCF: "bg-amber-100 text-amber-700",
+  EN_ATTENTE_GERANT: "bg-amber-100 text-amber-700",
   APPROUVE: "bg-emerald-100 text-emerald-700",
   REJETE: "bg-destructive/10 text-destructive",
   EXECUTE: "bg-primary/10 text-primary",

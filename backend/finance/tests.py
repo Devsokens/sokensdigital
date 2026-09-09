@@ -66,28 +66,19 @@ class DisbursementRequestViewSetTests(APITestCase):
         return data
 
     def test_chef_can_initiate_for_own_project(self):
-        # 150000 > THRESHOLD_N3 (50000) -> routed straight to N3.
+        # Circuit fixe : toute demande commence par la RCF, quel que soit
+        # le montant (process comptable, "Demande de décaissement").
         response = self.client_a.post('/api/v1/finance/disbursement-requests/', self.payload(), format='json')
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.json()['status'], 'EN_ATTENTE_N3')
+        self.assertEqual(response.json()['status'], 'EN_ATTENTE_RCF')
 
-    def test_amount_under_10000_routes_to_n1(self):
-        response = self.client_a.post(
-            '/api/v1/finance/disbursement-requests/', self.payload(amount='5000'), format='json',
-        )
-        self.assertEqual(response.json()['status'], 'EN_ATTENTE_N1')
-
-    def test_amount_between_thresholds_routes_to_n2(self):
-        response = self.client_a.post(
-            '/api/v1/finance/disbursement-requests/', self.payload(amount='25000'), format='json',
-        )
-        self.assertEqual(response.json()['status'], 'EN_ATTENTE_N2')
-
-    def test_amount_over_50000_routes_to_n3(self):
-        response = self.client_a.post(
-            '/api/v1/finance/disbursement-requests/', self.payload(amount='60000'), format='json',
-        )
-        self.assertEqual(response.json()['status'], 'EN_ATTENTE_N3')
+    def test_every_amount_routes_to_rcf_first(self):
+        # Aucun seuil : une petite comme une grosse demande passe par la RCF.
+        for amount in ('5000', '25000', '600000'):
+            response = self.client_a.post(
+                '/api/v1/finance/disbursement-requests/', self.payload(amount=amount), format='json',
+            )
+            self.assertEqual(response.json()['status'], 'EN_ATTENTE_RCF')
 
     def test_chef_cannot_initiate_for_other_chefs_project(self):
         response = self.client_a.post(
@@ -152,17 +143,32 @@ class DisbursementRequestViewSetTests(APITestCase):
         response = self.client_cfo.post('/api/v1/finance/disbursement-requests/', self.payload(), format='json')
         self.assertEqual(response.status_code, 403)
 
-    def test_cfo_can_approve_then_comptable_can_execute(self):
+    def test_the_full_circuit_rcf_then_gerant_then_execution(self):
         self.comptable = User.objects.create(email='comptable@sokensdigital.com', first_name='Comptable')
         _give_role(self.comptable, ROLE_COMPTABLE)
         client_comptable = APIClient()
         client_comptable.force_authenticate(user=self.comptable)
 
+        super_admin = User.objects.create(email='gerant@sokensdigital.com', first_name='Gerant')
+        _give_role(super_admin, ROLE_SUPER_ADMIN)
+        client_gerant = APIClient()
+        client_gerant.force_authenticate(user=super_admin)
+
         disbursement = DisbursementRequest.objects.create(
             project=self.project_a, requested_by=self.chef_a, amount=1000, beneficiary='X', reason='Y',
         )
 
+        # La RCF (Directeur Financier) examine d'abord : approuver transmet
+        # au Gérant, ce n'est pas encore une approbation définitive.
         response = self.client_cfo.post(
+            f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
+            {'decision': 'APPROUVE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'EN_ATTENTE_GERANT')
+
+        # Le Gérant statue en dernier ressort.
+        response = client_gerant.post(
             f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
             {'decision': 'APPROUVE'}, format='json',
         )
@@ -195,32 +201,35 @@ class DisbursementRequestViewSetTests(APITestCase):
         response = client_comptable.post(f'/api/v1/finance/disbursement-requests/{disbursement.id}/execute/')
         self.assertEqual(response.status_code, 400)
 
-    def test_comptable_can_approve_n1(self):
-        comptable = User.objects.create(email='comptable-n1@sokensdigital.com', first_name='Comptable')
+    def test_comptable_can_act_as_rcf(self):
+        comptable = User.objects.create(email='comptable-rcf@sokensdigital.com', first_name='Comptable')
         _give_role(comptable, ROLE_COMPTABLE)
         client_comptable = APIClient()
         client_comptable.force_authenticate(user=comptable)
 
         disbursement = DisbursementRequest.objects.create(
             project=self.project_a, requested_by=self.chef_a, amount=5000, beneficiary='X', reason='Y',
-            status=DisbursementRequest.Status.EN_ATTENTE_N1,
+            status=DisbursementRequest.Status.EN_ATTENTE_RCF,
         )
         response = client_comptable.post(
             f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
             {'decision': 'APPROUVE'}, format='json',
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['status'], 'APPROUVE')
+        # La RCF ne décide pas seule : elle transmet au Gérant.
+        self.assertEqual(response.json()['status'], 'EN_ATTENTE_GERANT')
+        disbursement.refresh_from_db()
+        self.assertEqual(disbursement.rcf_decided_by_id, comptable.id)
 
-    def test_comptable_cannot_approve_n2(self):
-        comptable = User.objects.create(email='comptable-n2@sokensdigital.com', first_name='Comptable')
+    def test_comptable_cannot_act_as_gerant(self):
+        comptable = User.objects.create(email='comptable-gerant@sokensdigital.com', first_name='Comptable')
         _give_role(comptable, ROLE_COMPTABLE)
         client_comptable = APIClient()
         client_comptable.force_authenticate(user=comptable)
 
         disbursement = DisbursementRequest.objects.create(
             project=self.project_a, requested_by=self.chef_a, amount=25000, beneficiary='X', reason='Y',
-            status=DisbursementRequest.Status.EN_ATTENTE_N2,
+            status=DisbursementRequest.Status.EN_ATTENTE_GERANT,
         )
         response = client_comptable.post(
             f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
@@ -228,10 +237,12 @@ class DisbursementRequestViewSetTests(APITestCase):
         )
         self.assertEqual(response.status_code, 403)
 
-    def test_cfo_cannot_approve_n3(self):
+    def test_cfo_cannot_act_as_gerant(self):
+        # Le Directeur Financier tient lieu de RCF, pas de Gérant : une
+        # demande déjà transmise au Gérant ne lui revient pas.
         disbursement = DisbursementRequest.objects.create(
-            project=self.project_a, requested_by=self.chef_a, amount=60000, beneficiary='X', reason='Y',
-            status=DisbursementRequest.Status.EN_ATTENTE_N3,
+            project=self.project_a, requested_by=self.chef_a, amount=600000, beneficiary='X', reason='Y',
+            status=DisbursementRequest.Status.EN_ATTENTE_GERANT,
         )
         response = self.client_cfo.post(
             f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
@@ -239,15 +250,15 @@ class DisbursementRequestViewSetTests(APITestCase):
         )
         self.assertEqual(response.status_code, 403)
 
-    def test_super_admin_can_approve_n3(self):
-        super_admin = User.objects.create(email='super-n3@sokensdigital.com', first_name='Super')
+    def test_super_admin_can_act_as_gerant(self):
+        super_admin = User.objects.create(email='super-gerant@sokensdigital.com', first_name='Super')
         _give_role(super_admin, ROLE_SUPER_ADMIN)
         client_super = APIClient()
         client_super.force_authenticate(user=super_admin)
 
         disbursement = DisbursementRequest.objects.create(
-            project=self.project_a, requested_by=self.chef_a, amount=60000, beneficiary='X', reason='Y',
-            status=DisbursementRequest.Status.EN_ATTENTE_N3,
+            project=self.project_a, requested_by=self.chef_a, amount=600000, beneficiary='X', reason='Y',
+            status=DisbursementRequest.Status.EN_ATTENTE_GERANT,
         )
         response = client_super.post(
             f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
@@ -255,6 +266,37 @@ class DisbursementRequestViewSetTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'APPROUVE')
+        disbursement.refresh_from_db()
+        self.assertEqual(disbursement.decided_by_id, super_admin.id)
+
+    def test_super_admin_can_also_act_as_rcf(self):
+        # Le Super-Admin a tous les droits dans l'application : il peut
+        # intervenir à n'importe quelle étape du circuit.
+        super_admin = User.objects.create(email='super-rcf@sokensdigital.com', first_name='Super')
+        _give_role(super_admin, ROLE_SUPER_ADMIN)
+        client_super = APIClient()
+        client_super.force_authenticate(user=super_admin)
+
+        disbursement = DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=5000, beneficiary='X', reason='Y',
+        )
+        response = client_super.post(
+            f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
+            {'decision': 'APPROUVE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'EN_ATTENTE_GERANT')
+
+    def test_rcf_rejection_closes_the_request_without_reaching_gerant(self):
+        disbursement = DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=5000, beneficiary='X', reason='Y',
+        )
+        response = self.client_cfo.post(
+            f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
+            {'decision': 'REJETE', 'rejection_reason': 'Motif non justifié.'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'REJETE')
 
     def test_rejection_requires_reason(self):
         disbursement = DisbursementRequest.objects.create(
