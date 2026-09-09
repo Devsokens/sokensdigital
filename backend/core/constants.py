@@ -57,6 +57,7 @@ MODULES = [
     ('contenu', 'Gestion de contenu', 'Marketing & Commercial'),
     ('plan-editorial', 'Plan Éditorial', 'Marketing & Commercial'),
     ('leads', 'Tunnel commercial', 'Marketing & Commercial'),
+    ('projets-soumis', 'Projets soumis', 'Marketing & Commercial'),
     ('devis', 'Devis', 'Marketing & Commercial'),
     ('projets', 'Gestion de projet', 'Technique'),
     ('timesheets', 'Timesheets', 'Technique'),
@@ -122,6 +123,9 @@ DEFAULT_ROLE_PERMISSIONS = {
         {'timesheets': ['voir', 'creer', 'modifier']},
         {'decaissements': ['voir', 'creer']},
         _full('maintenance'),
+        # Analyse les demandes transmises par le marketing et les fait
+        # passer en développement une fois le client validant.
+        {'projets-soumis': ['voir', 'modifier']},
         # _accessible_clients_qs scope un Chef de Projet non-Admin aux
         # clients liés à ses propres projets — lecture seule.
         _read_only('clients'),
@@ -135,6 +139,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         # Voit les fiches et rédige des rapports ; l'attribution et les
         # accès de production restent au responsable technique.
         {'maintenance': ['voir', 'creer']},
+        {'projets-soumis': ['voir', 'modifier']},
         _full('cahier-des-charges'),
     ),
     ROLE_DIRECTEUR_FINANCIER: _merge(
@@ -165,6 +170,9 @@ DEFAULT_ROLE_PERMISSIONS = {
         _read_only('dashboard', 'marketing-dashboard'),
         {'messagerie': ['voir', 'creer']},
         _full('contenu', 'plan-editorial', 'leads', 'devis', 'cahier-des-charges'),
+        # Le marketing reçoit les demandes du portail public et les fait
+        # circuler : il lui faut le module, pas seulement la lecture.
+        _full('projets-soumis'),
     ),
     ROLE_COMMERCIAL: _merge(
         _read_only('dashboard'),
@@ -175,6 +183,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         # administration.views.ClientViewSet.get_permissions) — scoped to
         # their own assigned clients server-side (_accessible_clients_qs).
         {'clients': ['voir', 'creer', 'modifier']},
+        {'projets-soumis': ['voir', 'creer', 'modifier']},
     ),
     ROLE_CONSULTANT: _merge(
         _read_only('dashboard', 'projets'),

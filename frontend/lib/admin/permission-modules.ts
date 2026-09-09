@@ -30,6 +30,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
   { key: "contenu", label: "Gestion de contenu", section: "Marketing & Commercial" },
   { key: "plan-editorial", label: "Plan Éditorial", section: "Marketing & Commercial" },
   { key: "leads", label: "Tunnel commercial", section: "Marketing & Commercial" },
+  { key: "projets-soumis", label: "Projets soumis", section: "Marketing & Commercial" },
   { key: "devis", label: "Devis", section: "Marketing & Commercial" },
   { key: "projets", label: "Gestion de projet", section: "Technique" },
   { key: "timesheets", label: "Timesheets", section: "Technique" },

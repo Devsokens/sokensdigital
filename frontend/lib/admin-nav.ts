@@ -27,6 +27,7 @@ import {
   Wrench,
   Headset,
   Library,
+  Inbox,
   type LucideIcon,
 } from "lucide-react";
 
@@ -85,6 +86,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
     title: "Marketing & Commercial",
     items: [
       { label: "Dashboard", href: "/admin/marketing/dashboard", icon: LayoutDashboard, moduleKey: "marketing-dashboard" },
+      { label: "Projets soumis", shortLabel: "Soumis", href: "/admin/marketing/projets-soumis", icon: Inbox, moduleKey: "projets-soumis" },
       { label: "Gestion de contenu", shortLabel: "Contenu", href: "/admin/marketing/blog", icon: Newspaper, moduleKey: "contenu" },
       { label: "Plan Éditorial", shortLabel: "Éditorial", href: "/admin/marketing/plan-editorial", icon: CalendarClock, moduleKey: "plan-editorial" },
       { label: "Tunnel commercial", shortLabel: "Tunnel", href: "/admin/marketing/leads", icon: Target, moduleKey: "leads" },
@@ -96,6 +98,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
     title: "Technique",
     items: [
       { label: "Gestion de projet", shortLabel: "Projets", href: "/admin/technique/projets", icon: FolderKanban, moduleKey: "projets" },
+      { label: "Projets soumis", shortLabel: "Soumis", href: "/admin/technique/projets-soumis", icon: Inbox, moduleKey: "projets-soumis" },
       { label: "Timesheets", href: "/admin/technique/timesheets", icon: Clock, moduleKey: "timesheets" },
       { label: "Maintenance", href: "/admin/technique/maintenance", icon: Wrench, moduleKey: "maintenance" },
       { label: "Décaissements", href: "/admin/technique/decaissements", icon: Banknote, moduleKey: "decaissements" },
