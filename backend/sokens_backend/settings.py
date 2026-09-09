@@ -304,13 +304,15 @@ elif os.environ.get('EMAIL_HOST'):
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-# Gmail envoie toujours depuis le compte propriétaire du jeton : une adresse
-# d'expéditeur différente serait réécrite. On aligne donc le défaut sur
-# GMAIL_SENDER_EMAIL quand il est fourni, pour que l'en-tête annoncé
-# corresponde à l'expéditeur réel.
-DEFAULT_FROM_EMAIL = os.environ.get(
-    'DEFAULT_FROM_EMAIL',
-    os.environ.get('GMAIL_SENDER_EMAIL') or 'no-reply@sokensdigital.com',
+# Gmail — API comme SMTP — envoie toujours depuis le compte authentifié :
+# un `From` différent est réécrit, quand il n'est pas refusé. Le décalage
+# entre l'en-tête annoncé et l'expéditeur réel est aussi ce qui fait classer
+# un message en indésirable. On aligne donc le défaut sur l'expéditeur
+# effectif de la voie retenue, plutôt que sur une adresse décorative.
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL') or (
+    os.environ.get('GMAIL_SENDER_EMAIL')
+    or os.environ.get('EMAIL_HOST_USER')
+    or 'no-reply@sokensdigital.com'
 )
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
