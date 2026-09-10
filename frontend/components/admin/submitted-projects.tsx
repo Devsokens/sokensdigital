@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, FileText, Mail, Phone, ArrowRight, AlertCircle } from "lucide-react";
+import { Loader2, FileText, Mail, Phone, ArrowRight, AlertCircle, Paperclip, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import {
   listSubmittedProjects,
+  rejectLead,
   runWorkflowAction,
   type SubmittedProject,
   type WorkflowStage,
@@ -100,6 +101,36 @@ export function SubmittedProjects({
     }
   }
 
+  // Action très critique (décision du 10/09/2026) : double confirmation,
+  // motif obligatoire, notifie + e-mail les deux départements côté serveur.
+  async function reject(project: SubmittedProject) {
+    const label = project.company_name || `${project.first_name} ${project.last_name}`;
+    const reason = prompt(`Motif du rejet de « ${label} » (obligatoire) :`);
+    if (reason === null) return;
+    if (!reason.trim()) {
+      setError("Un motif de rejet est obligatoire.");
+      return;
+    }
+    if (!confirm(`Confirmer le rejet de « ${label} » ? Cette action est définitive.`)) return;
+    if (!confirm("Confirmer une seconde fois : la demande sera clôturée et les deux départements seront prévenus par e-mail.")) return;
+
+    setBusyId(project.id);
+    setError(null);
+    try {
+      await rejectLead(project.id, reason.trim());
+      await load();
+    } catch (err) {
+      const body = (err as { body?: Record<string, string[] | string> }).body;
+      const detail =
+        (typeof body?.detail === "string" && body.detail) ||
+        (Array.isArray(body?.reason) && body.reason[0]) ||
+        "Impossible de rejeter cette demande.";
+      setError(detail);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   if (!projects) {
     return (
       <div className="flex justify-center py-16">
@@ -178,7 +209,20 @@ export function SubmittedProjects({
                   {project.specification.spec_number} — {project.specification.title}
                 </span>
               )}
+              <span className="inline-flex items-center gap-1.5">{project.source_display}</span>
             </div>
+
+            {project.attachment_url && (
+              <a
+                href={project.attachment_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:border-neutral-300"
+              >
+                <Paperclip className="size-3.5 shrink-0 text-primary" />
+                {project.attachment_name || "Cahier des charges joint"}
+              </a>
+            )}
 
             {project.message && (
               <p className="mt-3 line-clamp-4 rounded-lg bg-neutral-50 px-3 py-2.5 text-xs whitespace-pre-wrap text-neutral-600">
@@ -236,8 +280,8 @@ export function SubmittedProjects({
                 </div>
               </div>
             ) : (
-              project.available_actions.length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-2">
+              (project.available_actions.length > 0 || project.can_reject) && (
+                <div className="mt-4 flex flex-wrap items-center gap-2">
                   {project.available_actions.map((action) => (
                     <Button
                       key={action.action}
@@ -255,6 +299,17 @@ export function SubmittedProjects({
                       {action.label}
                     </Button>
                   ))}
+                  {project.can_reject && (
+                    <button
+                      type="button"
+                      disabled={busyId === project.id}
+                      onClick={() => reject(project)}
+                      className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-destructive/30 px-4 py-2 text-xs font-semibold text-destructive hover:bg-destructive/5 disabled:opacity-50"
+                    >
+                      <Ban className="size-3.5" />
+                      Refuser
+                    </button>
+                  )}
                 </div>
               )
             )}

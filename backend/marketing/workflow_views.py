@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.models import AuditLog
-from core.notifications import notify
+from core.notifications import notify, notify_roles
 from core.permissions import has_role
 from marketing.models import Lead, Specification
 from marketing.workflow import BY_ACTION, MARKETING_SIDE, TECHNIQUE_SIDE, available_transitions
@@ -15,7 +15,13 @@ from marketing.workflow import BY_ACTION, MARKETING_SIDE, TECHNIQUE_SIDE, availa
 def serialize_lead(lead: Lead, user) -> dict:
     """Vue d'une demande dans le parcours, telle que les deux départements
     la lisent. Inclut les actions ouvertes à cet utilisateur, pour que
-    l'interface n'affiche pas de bouton qui échouerait."""
+    l'interface n'affiche pas de bouton qui échouerait.
+
+    Champs complets (décision du 10/09/2026) : la carte doit permettre de
+    voir toutes les informations de la demande et son cahier des charges
+    joint, dans n'importe quel département par lequel elle passe — pas
+    seulement un résumé, ce qui obligeait jusqu'ici à rouvrir la demande
+    ailleurs pour la lire en entier."""
     return {
         'id': str(lead.id),
         'reference': lead.tracking_reference,
@@ -25,10 +31,18 @@ def serialize_lead(lead: Lead, user) -> dict:
         'email': lead.email,
         'phone': lead.phone,
         'message': lead.message,
+        'source': lead.source,
+        'source_display': lead.get_source_display(),
         'estimated_value': str(lead.estimated_value) if lead.estimated_value else None,
         'created_at': lead.created_at.isoformat(),
         'workflow_stage': lead.workflow_stage,
         'workflow_stage_display': lead.get_workflow_stage_display(),
+        # Cahier des charges déjà fourni par le client via le formulaire
+        # public (bucket privé `demandes-projet`, voir core.storage et
+        # docs/ROADMAP_TECHNIQUE.md) — distinct de `specification`, qui est
+        # celui que Technique rédige/joint plus tard dans le parcours.
+        'attachment_url': lead.attachment_url or None,
+        'attachment_name': lead.attachment_name or None,
         'specification': (
             {
                 'id': str(lead.specification.id),
@@ -43,6 +57,7 @@ def serialize_lead(lead: Lead, user) -> dict:
             {'action': t.action, 'label': t.label}
             for t in available_transitions(lead, user)
         ],
+        'can_reject': has_role(user, *MARKETING_SIDE, *TECHNIQUE_SIDE),
     }
 
 
@@ -129,6 +144,62 @@ class LeadWorkflowActionView(APIView):
         )
 
         _notify_receiving_side(lead, transition, request.user)
+        return Response(serialize_lead(lead, request.user))
+
+
+class RejectLeadView(APIView):
+    """Refuse une demande soumise — depuis n'importe quel département par
+    lequel elle est passée (Marketing ou Technique), pas seulement celui
+    qui la détient à l'instant du refus : décision du 10/09/2026, la
+    demande a pu transiter par les deux avant d'être jugée non viable.
+
+    Clôture via `status = PERDU` (réutilise l'exclusion déjà en place de
+    SubmittedProjectListView) plutôt qu'un état de workflow_stage
+    supplémentaire — un rejet est une fin, pas une étape de plus dans un
+    parcours qui n'en a que pour avancer.
+
+    Double confirmation exigée côté frontend, pas ici : le backend n'a
+    aucun moyen de distinguer un deuxième clic d'un premier, c'est un choix
+    d'UX, pas d'autorisation — voir components/admin/submitted-projects.tsx.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        lead = get_object_or_404(Lead, pk=pk)
+        if not has_role(request.user, *MARKETING_SIDE, *TECHNIQUE_SIDE):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        if lead.status == Lead.Status.PERDU:
+            return Response({'detail': 'Cette demande est déjà rejetée.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        reason = (request.data.get('reason') or '').strip()
+        if not reason:
+            raise serializers.ValidationError({'reason': 'Un motif de rejet est obligatoire.'})
+
+        lead.status = Lead.Status.PERDU
+        lead.rejection_reason = reason
+        lead.save(update_fields=['status', 'rejection_reason'])
+
+        AuditLog.objects.create(
+            user=request.user, action='WORKFLOW', entity_type='Lead', entity_id=str(lead.pk),
+            details={'reference': lead.tracking_reference, 'action': 'rejeter', 'reason': reason},
+            ip_address=request.META.get('REMOTE_ADDR'),
+        )
+
+        label = lead.company_name or f'{lead.first_name} {lead.last_name}'.strip()
+        # Rejet d'un projet soumis = action très critique (décision du
+        # 10/09/2026) — e-mail aux deux départements en plus du push : ni
+        # l'un ni l'autre ne doit apprendre le refus après coup.
+        notify_roles(
+            (*MARKETING_SIDE, *TECHNIQUE_SIDE),
+            title=f'{lead.tracking_reference} — Demande rejetée',
+            message=f'La demande « {label} » a été rejetée. Motif : {reason}',
+            notification_type='GENERAL',
+            link='/admin/marketing/leads',
+            email=True,
+            exclude=request.user,
+        )
+
         return Response(serialize_lead(lead, request.user))
 
 

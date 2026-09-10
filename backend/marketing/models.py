@@ -134,6 +134,14 @@ class Lead(LoggedModel):
     attachment_url = models.URLField(max_length=1000, blank=True, default='')
     attachment_name = models.CharField(max_length=255, blank=True, default='')
 
+    # Motif du rejet — renseigné par quiconque a refusé la demande depuis le
+    # parcours (n'importe quel département par lequel elle est passée, voir
+    # marketing.workflow_views.RejectLeadView). Le rejet clôture la demande
+    # via `status = PERDU` plutôt qu'un nouvel état de workflow_stage : ça
+    # réutilise l'exclusion déjà en place des demandes « projets soumis »
+    # (SubmittedProjectListView) sans ajouter un état terminal en doublon.
+    rejection_reason = models.TextField(blank=True, default='')
+
     class Meta(LoggedModel.Meta):
         ordering = ['-created_at']
         indexes = LoggedModel.Meta.indexes + [

@@ -1,9 +1,12 @@
 """Parcours d'une demande entre Marketing et Technique."""
 
+from unittest.mock import patch
+
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
 from core.constants import (
+    ROLE_COMPTABLE,
     ROLE_DEVELOPER,
     ROLE_PROJECT_MANAGER,
     ROLE_RESPONSABLE_MARKETING,
@@ -176,5 +179,61 @@ class SubmittedProjectListTests(APITestCase):
         self.client.force_authenticate(user=self.marketing)
         response = self.client.get(self.url, {'stage': Lead.WorkflowStage.CHEZ_TECHNIQUE})
 
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [])
+
+
+class RejectLeadViewTests(APITestCase):
+    def setUp(self):
+        self.marketing = _user('marketing2@sokens.test', ROLE_RESPONSABLE_MARKETING)
+        self.technique = _user('cdp2@sokens.test', ROLE_PROJECT_MANAGER)
+        self.outsider = _user('outsider2@sokens.test', ROLE_COMPTABLE)
+        self.lead = Lead.objects.create(
+            first_name='Awa', last_name='Ndong', company_name='Ndong SARL',
+            email='awa@client.test', source=Lead.Source.FORMULAIRE_DEVIS,
+            workflow_stage=Lead.WorkflowStage.CHEZ_TECHNIQUE,
+        )
+        self.url = reverse('lead-reject', kwargs={'pk': self.lead.pk})
+
+    @patch('marketing.workflow_views.notify_roles')
+    def test_technique_can_reject_even_though_marketing_created_it(self, mock_notify):
+        # Decision du 10/09/2026 : rejet ouvert depuis n'importe quel
+        # departement par lequel la demande est passee, pas seulement celui
+        # qui la detient a l'instant du refus.
+        self.client.force_authenticate(user=self.technique)
+        response = self.client.post(self.url, {'reason': 'Hors budget'}, format='json')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.status, Lead.Status.PERDU)
+        self.assertEqual(self.lead.rejection_reason, 'Hors budget')
+        mock_notify.assert_called_once()
+        self.assertTrue(mock_notify.call_args.kwargs.get('email'))
+
+    def test_reason_is_required(self):
+        self.client.force_authenticate(user=self.marketing)
+        response = self.client.post(self.url, {}, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.lead.refresh_from_db()
+        self.assertNotEqual(self.lead.status, Lead.Status.PERDU)
+
+    def test_outsider_forbidden(self):
+        self.client.force_authenticate(user=self.outsider)
+        response = self.client.post(self.url, {'reason': 'Non'}, format='json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_cannot_reject_twice(self):
+        self.client.force_authenticate(user=self.marketing)
+        self.client.post(self.url, {'reason': 'Premier motif'}, format='json')
+        response = self.client.post(self.url, {'reason': 'Second motif'}, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.rejection_reason, 'Premier motif')
+
+    def test_rejected_lead_disappears_from_submitted_projects(self):
+        self.client.force_authenticate(user=self.marketing)
+        self.client.post(self.url, {'reason': 'Hors budget'}, format='json')
+
+        response = self.client.get(reverse('submitted-projects'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, [])

@@ -25,8 +25,10 @@ rôle en tient lieu, même logique que `_notify_receiving_side`).
 - Attribution ou retrait du rôle SUPER_ADMIN.
 - Suppression d'une facture ou d'un devis déjà validé/envoyé (un brouillon
   supprimé reste push seul).
-- Rejet d'un projet soumis (à construire — voir le chantier "cartes projets
-  soumis").
+- Rejet d'un projet soumis (`RejectLeadView`, ouvert à Marketing ET
+  Technique quelle que soit l'étape courante — la demande a pu transiter
+  par les deux avant d'être jugée non viable ; clôture via `status=PERDU`,
+  motif obligatoire, double confirmation côté frontend).
 
 **Non couvert délibérément** : suppressions mineures (tag, brouillon CMS,
 pièce jointe, etc.) — bruit sans valeur si notifié à chaque fois.

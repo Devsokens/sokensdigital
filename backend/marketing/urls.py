@@ -6,7 +6,7 @@ from marketing.tracking_views import (
     PublicTrackingByTokenView,
     PublicTrackingView,
 )
-from marketing.workflow_views import LeadWorkflowActionView, SubmittedProjectListView
+from marketing.workflow_views import LeadWorkflowActionView, RejectLeadView, SubmittedProjectListView
 from marketing.views import (
     BlogPostViewSet,
     ImageUploadView,
@@ -50,6 +50,7 @@ urlpatterns = [
     path('social-media-credentials/', SocialMediaCredentialsView.as_view(), name='social-media-credentials'),
     path('submitted-projects/', SubmittedProjectListView.as_view(), name='submitted-projects'),
     path('leads/<uuid:pk>/workflow/', LeadWorkflowActionView.as_view(), name='lead-workflow'),
+    path('leads/<uuid:pk>/reject/', RejectLeadView.as_view(), name='lead-reject'),
 ] + router.urls
 
 public_urlpatterns = [

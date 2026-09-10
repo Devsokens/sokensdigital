@@ -342,10 +342,16 @@ export interface SubmittedProject {
   email: string;
   phone: string;
   message: string;
+  source: string;
+  source_display: string;
   estimated_value: string | null;
   created_at: string;
   workflow_stage: WorkflowStage;
   workflow_stage_display: string;
+  /** Cahier des charges déjà fourni par le client via le formulaire public
+   * (distinct de `specification`, que Technique rédige plus tard). */
+  attachment_url: string | null;
+  attachment_name: string | null;
   specification: {
     id: string;
     spec_number: string;
@@ -355,6 +361,9 @@ export interface SubmittedProject {
   /** Actions que le rôle de l'utilisateur autorise à cette étape. Le serveur
    * les calcule pour que l'interface n'affiche pas de bouton qui échouerait. */
   available_actions: WorkflowAction[];
+  /** Rejet ouvert à Marketing ET Technique, quelle que soit l'étape actuelle
+   * (décision du 10/09/2026) — pas seulement au département qui la détient. */
+  can_reject: boolean;
 }
 
 export function listSubmittedProjects(stages?: WorkflowStage[]) {
@@ -373,5 +382,14 @@ export function runWorkflowAction(
       action,
       ...(specificationId ? { specification_id: specificationId } : {}),
     }),
+  });
+}
+
+/** Rejette une demande soumise — action très critique (voir
+ * docs/ROADMAP_TECHNIQUE.md) : double confirmation exigée côté appelant. */
+export function rejectLead(leadId: string, reason: string) {
+  return apiFetch<SubmittedProject>(`/api/v1/marketing/leads/${leadId}/reject/`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
   });
 }
