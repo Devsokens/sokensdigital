@@ -181,7 +181,7 @@ export function AddEmployeeSheet({
                   <span className="flex size-20 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-xl font-semibold text-primary">
                     {form.avatarUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element -- Cloudinary URL, not a local/optimizable asset
-                      <img src={form.avatarUrl} alt="" className="size-full object-cover" />
+                      <img src={form.avatarUrl} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
                     ) : (
                       initials(form.firstName, form.lastName)
                     )}

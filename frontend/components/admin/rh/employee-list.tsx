@@ -152,7 +152,7 @@ export function EmployeeList() {
                       <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-100 text-xs font-semibold text-neutral-600">
                         {e.user.avatar_url ? (
                           // eslint-disable-next-line @next/next/no-img-element -- Cloudinary URL, not a local/optimizable asset
-                          <img src={e.user.avatar_url} alt="" className="size-full object-cover" />
+                          <img src={e.user.avatar_url} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
                         ) : (
                           initials(e.user.first_name, e.user.last_name)
                         )}

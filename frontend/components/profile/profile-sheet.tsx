@@ -89,7 +89,7 @@ export function ProfileSheet() {
               <span className="flex size-20 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-xl font-semibold text-primary">
                 {avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage URL, not a local/optimizable asset
-                  <img src={avatarUrl} alt="" className="size-full object-cover" />
+                  <img src={avatarUrl} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
                 ) : (
                   initials(firstName, lastName)
                 )}

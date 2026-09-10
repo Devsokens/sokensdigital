@@ -157,7 +157,7 @@ export function SiteSettingsForm() {
                 </div>
               ) : data.logo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={data.logo_url} alt="" className="h-7 w-auto object-contain" />
+                <img src={data.logo_url} alt="" className="h-7 w-auto object-contain" loading="lazy" decoding="async" />
               ) : (
                 <span className="text-sm font-semibold text-foreground">Soken&apos;s Digital</span>
               )}

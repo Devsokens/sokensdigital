@@ -114,7 +114,7 @@ export function AdminSidebar({ collapsed = false }: { collapsed?: boolean }) {
           <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-xs font-semibold text-primary">
             {profile.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- Firebase Storage URL, not a local/optimizable asset
-              <img src={profile.avatarUrl} alt="" className="size-full object-cover" />
+              <img src={profile.avatarUrl} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
             ) : (
               initials(profile.firstName, profile.lastName)
             )}

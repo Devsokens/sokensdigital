@@ -79,25 +79,60 @@ function isShellAsset(request, url) {
   );
 }
 
+// Sur une 2G/3G dégradée, une requête sans réponse peut rester en attente
+// bien au-delà de ce qu'un utilisateur tolère — le délai par défaut du
+// navigateur se compte en dizaines de secondes, pas en millisecondes. Passé
+// ce délai, on bascule sur le cache immédiatement plutôt que de laisser
+// l'écran figé sur un chargement qui n'aboutira peut-être jamais.
+const API_NETWORK_TIMEOUT_MS = 1800;
+
+function withCacheHeader(cached) {
+  // On marque explicitement la réponse : c'est à l'interface de dire à
+  // l'utilisateur que ces chiffres datent de la dernière connexion.
+  const headers = new Headers(cached.headers);
+  headers.set("X-From-Cache", "1");
+  return new Response(cached.body, {
+    status: cached.status,
+    statusText: cached.statusText,
+    headers,
+  });
+}
+
 async function networkFirstApi(request) {
   const cache = await caches.open(API_CACHE);
-  try {
-    const response = await fetch(request);
+
+  // La requête réseau continue en arrière-plan même après qu'un timeout a
+  // fait basculer la réponse sur le cache : si elle finit par aboutir, le
+  // cache se retrouve à jour pour la prochaine consultation — c'est le même
+  // bénéfice qu'un stale-while-revalidate, obtenu sans renoncer à la
+  // fraîcheur en premier ressort tant que le réseau répond dans les temps.
+  const networkPromise = fetch(request).then((response) => {
     if (response.ok) cache.put(request, response.clone());
     return response;
-  } catch (error) {
-    const cached = await cache.match(request);
-    if (!cached) throw error;
-    // On marque explicitement la réponse : c'est à l'interface de dire à
-    // l'utilisateur que ces chiffres datent de la dernière connexion.
-    const headers = new Headers(cached.headers);
-    headers.set("X-From-Cache", "1");
-    return new Response(cached.body, {
-      status: cached.status,
-      statusText: cached.statusText,
-      headers,
-    });
+  });
+
+  const timeout = new Promise((resolve) => {
+    setTimeout(() => resolve(null), API_NETWORK_TIMEOUT_MS);
+  });
+
+  try {
+    const winner = await Promise.race([networkPromise, timeout]);
+    if (winner) return winner;
+    // Le réseau n'a pas répondu à temps : ne pas laisser l'appelant en
+    // attendre l'issue, mais ne pas l'annuler non plus (voir plus haut).
+    networkPromise.catch(() => undefined);
+  } catch {
+    // La requête a échoué (pas seulement traîné) — repli immédiat, sans
+    // attendre le timeout.
   }
+
+  const cached = await cache.match(request);
+  if (!cached) {
+    // Rien à servir : on retombe sur le réseau, même lent, plutôt que sur
+    // une erreur sans donnée du tout.
+    return networkPromise;
+  }
+  return withCacheHeader(cached);
 }
 
 async function staleWhileRevalidate(request) {

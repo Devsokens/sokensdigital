@@ -144,7 +144,7 @@ export function UserRoleList() {
                       <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-100 text-[11px] font-semibold text-neutral-600">
                         {row.avatarUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element -- Cloudinary URL, not a local/optimizable asset
-                          <img src={row.avatarUrl} alt="" className="size-full object-cover" />
+                          <img src={row.avatarUrl} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
                         ) : (
                           initials(row.name || row.email)
                         )}

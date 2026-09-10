@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { LayoutDashboard, Smartphone, Server, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { adaptiveImageUrl } from "@/lib/adaptive-image";
 
 const VIEWS = [
   { key: "dashboard", label: "Vue tableau de bord", icon: LayoutDashboard },
@@ -48,8 +49,9 @@ export function ProjectGallery({ title, images, videoSrc }: Props) {
             <AnimatePresence mode="sync">
               <motion.img
                 key={images![active]}
-                src={images![active]}
+                src={adaptiveImageUrl(images![active])}
                 alt={title}
+                decoding="async"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -75,7 +77,13 @@ export function ProjectGallery({ title, images, videoSrc }: Props) {
                 )}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt="" className="size-full object-cover" />
+                <img
+                  src={adaptiveImageUrl(url)}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className="size-full object-cover"
+                />
               </button>
             ))}
           </div>

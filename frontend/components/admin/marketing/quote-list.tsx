@@ -319,7 +319,7 @@ function StampUploadField({ value, onChange }: { value: string; onChange: (url: 
             <Loader2 className="size-4 animate-spin" />
           ) : value ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={value} alt="" className="size-full object-contain" />
+            <img src={value} alt="" className="size-full object-contain" loading="lazy" decoding="async" />
           ) : (
             <Stamp className="size-5" />
           )}

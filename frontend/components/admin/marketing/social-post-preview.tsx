@@ -46,7 +46,7 @@ export function SocialPostPreview({ platform, title, content, images }: Props) {
         <div className="relative flex aspect-square items-center justify-center bg-neutral-100">
           {imagePath ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={imagePath} alt="" className="size-full object-cover" />
+            <img src={imagePath} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
           ) : (
             <PlatformIcon platform={platform} className="size-10 text-neutral-300" />
           )}
@@ -80,7 +80,7 @@ export function SocialPostPreview({ platform, title, content, images }: Props) {
       {imagePath && (
         <div className="relative">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imagePath} alt="" className="max-h-64 w-full object-cover" />
+          <img src={imagePath} alt="" className="max-h-64 w-full object-cover" loading="lazy" decoding="async" />
           <CarouselBadge count={images.length} />
         </div>
       )}

@@ -16,6 +16,11 @@ django-cryptography-django5
 argon2-cffi
 gunicorn
 whitenoise
+# WhiteNoise ne produit des .br (Brotli) qu'avec ce paquet présent — sans
+# lui, collectstatic ne compresse qu'en gzip, en silence, et JS/CSS/fonts
+# partent ~15-20% plus lourds qu'avec Brotli niveau 11 (statique, gratuit
+# à la compilation, coût zéro au runtime).
+brotli
 django-filter
 django-redis
 Pillow

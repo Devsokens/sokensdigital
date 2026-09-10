@@ -543,7 +543,7 @@ function ShowcaseProjectForm({ project, onSaved }: { project?: ShowcaseProject; 
             <video src={form.video_src} autoPlay loop muted playsInline className="absolute inset-0 h-full w-full object-cover" />
           ) : (form.images ?? []).length > 0 ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={(form.images ?? [])[0]} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            <img src={(form.images ?? [])[0]} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
           ) : null}
           {hasCoverMedia ? (
             <span className="absolute top-3 left-3 flex size-9 items-center justify-center rounded-lg bg-black/50 text-primary">
@@ -592,7 +592,7 @@ function ShowcaseProjectForm({ project, onSaved }: { project?: ShowcaseProject; 
               {(form.images ?? []).map((url, i) => (
                 <div key={i} className="group relative aspect-video w-32 shrink-0 overflow-hidden rounded-lg border border-white/10">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="" className="size-full object-cover" />
+                  <img src={url} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
                   <button
                     type="button"
                     onClick={() => set("images", (form.images ?? []).filter((_, j) => j !== i))}

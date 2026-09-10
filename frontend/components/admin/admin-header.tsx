@@ -347,7 +347,7 @@ export function AdminHeader({ onToggleSidebar }: { onToggleSidebar?: () => void 
             <span className="flex size-7 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-xs font-semibold text-primary">
               {profile?.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element -- Firebase Storage URL, not a local/optimizable asset
-                <img src={profile.avatarUrl} alt="" className="size-full object-cover" />
+                <img src={profile.avatarUrl} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
               ) : (
                 initials(profile?.firstName, profile?.lastName)
               )}

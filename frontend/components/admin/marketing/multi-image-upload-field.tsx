@@ -64,7 +64,7 @@ export function MultiImageUploadField({
             className="group relative size-20 shrink-0 overflow-hidden rounded-lg border border-neutral-200"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} alt="" className="size-full object-cover" />
+            <img src={url} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
             {index === 0 && (
               <span className="absolute bottom-0 left-0 rounded-tr-md bg-black/60 px-1.5 py-0.5 text-[0.6rem] font-medium text-white">
                 Couverture

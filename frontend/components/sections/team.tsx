@@ -64,7 +64,7 @@ export function Team({ section }: { section?: PageSection | null }) {
             <div className="flex items-center justify-between">
               {member.photo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={member.photo_url} alt={member.name} className="size-12 rounded-full object-cover" />
+                <img src={member.photo_url} alt={member.name} className="size-12 rounded-full object-cover" loading="lazy" decoding="async" />
               ) : (
                 <span className="inline-flex size-12 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary">
                   {initials(member.name)}

@@ -17,7 +17,7 @@ export function PartnerLogos({ section }: { section?: PageSection | null }) {
         {partners.map((partner, i) => (
           partner.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={partner.logo_url} alt={partner.name} className="h-7 w-auto object-contain opacity-60 grayscale transition-opacity hover:opacity-90" />
+            <img key={i} src={partner.logo_url} alt={partner.name} className="h-7 w-auto object-contain opacity-60 grayscale transition-opacity hover:opacity-90" loading="lazy" decoding="async" />
           ) : (
             <span
               key={i}

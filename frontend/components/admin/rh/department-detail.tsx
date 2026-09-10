@@ -119,7 +119,7 @@ export function DepartmentDetail({ id }: { id: string }) {
                 <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-100 text-xs font-semibold text-neutral-600">
                   {m.avatar_url ? (
                     // eslint-disable-next-line @next/next/no-img-element -- Cloudinary URL, not a local/optimizable asset
-                    <img src={m.avatar_url} alt="" className="size-full object-cover" />
+                    <img src={m.avatar_url} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
                   ) : (
                     initials(m.first_name, m.last_name)
                   )}
@@ -144,7 +144,7 @@ export function DepartmentDetail({ id }: { id: string }) {
               <span className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-100 text-lg font-semibold text-neutral-600">
                 {selected.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element -- Cloudinary URL, not a local/optimizable asset
-                  <img src={selected.avatar_url} alt="" className="size-full object-cover" />
+                  <img src={selected.avatar_url} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
                 ) : (
                   initials(selected.first_name, selected.last_name)
                 )}

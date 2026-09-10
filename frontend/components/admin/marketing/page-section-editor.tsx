@@ -193,7 +193,7 @@ export function ImageUploadField({
           <Loader2 className="size-4 animate-spin" />
         ) : value ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="size-full object-cover" />
+          <img src={value} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
         ) : (
           <ImagePlus className="size-4" />
         )}
@@ -627,7 +627,7 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
                     <ImageUploadField value={m.photo_url ?? ""} onChange={(url) => updateItem(index, "photo_url", url)} shape="circle" />
                   ) : m.photo_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={m.photo_url} alt={m.name} className="size-10 rounded-full object-cover" />
+                    <img src={m.photo_url} alt={m.name} className="size-10 rounded-full object-cover" loading="lazy" decoding="async" />
                   ) : (
                     <span className="flex size-10 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
                       {initials(m.name || "?")}
@@ -672,7 +672,7 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
                 </>
               ) : p.logo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={p.logo_url} alt={p.name} className="h-8 w-auto object-contain opacity-70 grayscale" />
+                <img src={p.logo_url} alt={p.name} className="h-8 w-auto object-contain opacity-70 grayscale" loading="lazy" decoding="async" />
               ) : (
                 <span className="text-sm font-semibold tracking-[0.15em] text-muted-foreground/50 uppercase">{p.name}</span>
               )}
@@ -802,7 +802,7 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
                   {panel.images.map((url, i) => (
                     <div key={i} className="group relative size-12 shrink-0 overflow-hidden rounded-lg border border-white/15">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt="" className="size-full object-cover" />
+                      <img src={url} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
                       <button
                         type="button"
                         onClick={() => updatePanelImages(panel.images.filter((_, j) => j !== i))}
@@ -953,7 +953,7 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
                   <ImageUploadField value={tech.logo_url ?? ""} onChange={(url) => updateItem(index, "logo_url", url)} />
                 ) : tech.logo_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={tech.logo_url} alt={tech.name} className="h-8 w-auto object-contain" />
+                  <img src={tech.logo_url} alt={tech.name} className="h-8 w-auto object-contain" loading="lazy" decoding="async" />
                 ) : null}
                 {editing ? (
                   <EditableInput value={tech.name} onChange={(v) => updateItem(index, "name", v)} className="w-full text-center text-sm font-semibold text-foreground" placeholder="Nom" />

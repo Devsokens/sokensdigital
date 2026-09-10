@@ -138,7 +138,7 @@ export function DepartmentList() {
                       >
                         {m.avatar_url ? (
                           // eslint-disable-next-line @next/next/no-img-element -- Cloudinary URL, not a local/optimizable asset
-                          <img src={m.avatar_url} alt="" className="size-full object-cover" />
+                          <img src={m.avatar_url} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
                         ) : (
                           initials(m.first_name, m.last_name)
                         )}
