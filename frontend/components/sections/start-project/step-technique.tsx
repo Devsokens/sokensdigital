@@ -67,18 +67,18 @@ export function StepTechnique({ data, update, solutions }: Props) {
 
           <label className="block">
             <span className="mb-1.5 block text-xs text-muted-foreground">
-              Budget Estimé (EUR)
+              Budget Estimé (FCFA)
             </span>
             <span className="relative block">
               <input
                 type="number"
                 value={data.budget}
                 onChange={(e) => update({ budget: e.target.value })}
-                placeholder="Ex: 5000"
-                className={`${inputClass} pr-8`}
+                placeholder="Ex: 5 000 000"
+                className={`${inputClass} pr-16`}
               />
               <span className="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2 text-sm text-muted-foreground">
-                €
+                FCFA
               </span>
             </span>
           </label>

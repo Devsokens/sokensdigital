@@ -368,7 +368,7 @@ function LeadForm({
       </div>
 
       <label className="block">
-        <span className={labelClass}>Valeur estimée (€)</span>
+        <span className={labelClass}>Valeur estimée (FCFA)</span>
         <input type="number" min={0} value={estimatedValue} onChange={(e) => setEstimatedValue(e.target.value)} className={inputClass} />
       </label>
 

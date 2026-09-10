@@ -134,7 +134,7 @@ export function MarketingDashboardView() {
         <div data-tour="module-marketing-dashboard">
           <StatCard
             label="Pipeline pondéré"
-            value={`${formatCurrency(data.weighted_pipeline)} €`}
+            value={`${formatCurrency(data.weighted_pipeline)} FCFA`}
             sublabel="Leads actifs × score de qualification"
             icon={TrendingUp}
             accent="#06b6d4"

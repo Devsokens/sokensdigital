@@ -119,7 +119,7 @@ export function StepLogistique({ data, update, delais, canaux }: Props) {
               </span>
               {data.budget && (
                 <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-medium tracking-wide text-foreground uppercase">
-                  {data.budget} €
+                  {data.budget} FCFA
                 </span>
               )}
             </div>
