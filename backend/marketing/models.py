@@ -125,6 +125,15 @@ class Lead(LoggedModel):
     tracking_reference = models.CharField(max_length=20, unique=True, blank=True)
     tracking_token = models.CharField(max_length=64, unique=True, blank=True)
 
+    # Document optionnel joint depuis le formulaire public de démarrage de
+    # projet (cahier des charges déjà rédigé par le client, par exemple).
+    # URL signée du bucket privé `demandes-projet` — voir
+    # core.storage.upload_project_request_document et
+    # docs/ROADMAP_TECHNIQUE.md. `attachment_name` garde le nom d'origine
+    # pour l'affichage, l'URL elle-même n'étant qu'un chemin en UUID.
+    attachment_url = models.URLField(max_length=1000, blank=True, default='')
+    attachment_name = models.CharField(max_length=255, blank=True, default='')
+
     class Meta(LoggedModel.Meta):
         ordering = ['-created_at']
         indexes = LoggedModel.Meta.indexes + [

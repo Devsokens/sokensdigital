@@ -16,6 +16,9 @@ export type ProjectFormData = {
   delai: string;
   canal: string;
   nda: boolean;
+  /** Cahier des charges optionnel joint au formulaire — PDF uniquement,
+   * uploadé après la création de la demande (voir start-project-wizard). */
+  attachment: File | null;
 };
 
 /** The wizard's 4 multiple-choice "questions" — admin-editable via the

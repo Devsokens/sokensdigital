@@ -9,6 +9,7 @@ import requests
 from django.core.exceptions import ValidationError
 from django.core.files.base import File
 from django.core.files.storage import Storage
+from django.utils import timezone
 from PIL import Image, ImageOps
 
 logger = logging.getLogger(__name__)
@@ -59,25 +60,66 @@ VIDEO_MIME_BY_EXTENSION = {
     '.mov': 'video/quicktime',
 }
 
-# Pièces jointes chat — documents/images usuels uniquement. Pas d'exécutables,
-# scripts, HTML (vecteur XSS/malware si le lien Cloudinary est cliqué par un
-# collègue qui fait confiance au domaine). Étendre à la demande plutôt que
-# l'inverse si un usage légitime bloqué est signalé.
-CHAT_ATTACHMENT_MIME_BY_EXTENSION = {
-    **IMAGE_MIME_BY_EXTENSION,
-    '.pdf': 'application/pdf',
-    '.doc': 'application/msword',
-    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    '.xls': 'application/vnd.ms-excel',
-    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    '.txt': 'text/plain',
-    '.csv': 'text/csv',
-    '.zip': 'application/zip',
-}
-
 # Formats que Pillow abîmerait à la recompression : ils traversent tels quels.
 # Exprimé en extensions et non en types déclarés, pour la même raison.
 PASSTHROUGH_EXTENSIONS = {'.gif'}
+
+# ---------------------------------------------------------------------------
+# Bucket privé "pieces_jointes" — avatars et pièces jointes chat
+# ---------------------------------------------------------------------------
+# Décision du 10/09/2026 (docs/ROADMAP_TECHNIQUE.md) : tout document envoyé
+# depuis l'espace admin (photo de profil, pièce jointe de messagerie) va dans
+# ce bucket privé plutôt que le bucket public `site-content` ou Cloudinary.
+# Servi uniquement par URL signée — jamais de chemin public direct.
+ATTACHMENTS_BUCKET_NAME = 'pieces_jointes'
+MAX_ATTACHMENT_SIZE = 15 * 1024 * 1024  # 15 Mo — plafond du bucket, avatar et pièce jointe confondus
+
+# Sous-ensemble image de la liste ci-dessous : un avatar n'a pas de raison
+# d'être un PDF ou un fichier audio. Ni WebP ni GIF (contrairement à
+# IMAGE_MIME_BY_EXTENSION, pensée pour le CMS) : hors de la liste communiquée
+# pour ce bucket.
+AVATAR_MIME_BY_EXTENSION = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+}
+
+# Pièces jointes chat — liste exacte demandée pour ce bucket. Pas
+# d'exécutables ni de scripts (vecteur XSS/malware si le lien est cliqué par
+# un collègue qui fait confiance au domaine). Le SVG n'y figure pas : c'est
+# un document scriptable, pas une image, et un bucket privé ne change rien à
+# ce risque — quiconque ouvre l'URL signée exécute le script qu'elle
+# contiendrait, exactement comme si le bucket était public.
+ADMIN_ATTACHMENT_MIME_BY_EXTENSION = {
+    **AVATAR_MIME_BY_EXTENSION,
+    '.pdf': 'application/pdf',
+    '.doc': 'application/msword',
+    '.md': 'text/markdown',
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+}
+
+# URLs signées à durée longue : stockées telles quelles (User.avatar_url,
+# pièce jointe dans un message Firestore) et jamais re-signées à la lecture —
+# décision du 10/09/2026, voir docs/ROADMAP_TECHNIQUE.md. Sept jours plutôt
+# que les 5 minutes des justificatifs comptables : ceux-là s'ouvrent depuis
+# l'écran qui vient de les afficher, ceux-ci doivent rester utilisables
+# longtemps après l'upload sans mécanisme de renouvellement.
+#
+# Conséquence assumée : passé ce délai, un lien qui n'a pas été régénéré
+# (personne n'a re-uploadé, aucun job de renouvellement n'existe) cesse de
+# fonctionner en silence.
+LONG_SIGNED_URL_TTL_SECONDS = 7 * 24 * 3600
+
+# ---------------------------------------------------------------------------
+# Bucket privé "demandes-projet" — pièces jointes du formulaire public
+# ---------------------------------------------------------------------------
+# Un PDF déposé avec une demande de projet (portail public, avant tout
+# compte) : rangé par référence de suivi puis par date, pour qu'un dossier
+# se retrouve d'un coup d'œil dans Supabase sans avoir à interroger la base.
+PROJECT_REQUEST_BUCKET_NAME = 'demandes-projet'
+MAX_PROJECT_REQUEST_FILE_SIZE = 15 * 1024 * 1024  # 15 Mo
+PROJECT_REQUEST_MIME_BY_EXTENSION = {'.pdf': 'application/pdf'}
 
 
 def _resolve_upload_type(file, mime_by_extension: dict[str, str]) -> tuple[str, str]:
@@ -199,23 +241,22 @@ def _upload_to_cloudinary(data: bytes, folder: str, extension: str = '') -> str:
 
 
 def upload_avatar(file) -> str:
-    """Uploads a profile photo to Supabase Storage, returns its public URL.
+    """Uploads a profile photo to the private 'pieces_jointes' bucket,
+    returns a signed URL valid LONG_SIGNED_URL_TTL_SECONDS.
 
-    Temporairement sur Supabase plutôt que Cloudinary (choix V1 : décision
-    du 10/09/2026, voir docs/ROADMAP_TECHNIQUE.md). Cloudinary reste prévu
-    pour la V2 — même pipeline de validation/redimensionnement que
-    upload_image (IMAGE_MIME_BY_EXTENSION, _resize_and_compress), seule la
-    destination change.
+    Décision du 10/09/2026 (docs/ROADMAP_TECHNIQUE.md) : avatars et pièces
+    jointes chat vont dans ce bucket privé plutôt que Cloudinary (prévu pour
+    la V2) ou le bucket public `site-content`. Toujours recompressé — .png
+    ou .jpeg uniquement pour un avatar, jamais de passthrough GIF ici,
+    contrairement à upload_image côté CMS.
     """
-    extension, content_type = _resolve_upload_type(file, IMAGE_MIME_BY_EXTENSION)
-    if file.size > MAX_UPLOAD_SIZE:
-        raise ValidationError('Le fichier dépasse la taille maximale autorisée (5 Mo).')
+    _resolve_upload_type(file, AVATAR_MIME_BY_EXTENSION)  # valide, lève sinon
+    if file.size > MAX_ATTACHMENT_SIZE:
+        raise ValidationError('Le fichier dépasse la taille maximale autorisée (15 Mo).')
 
-    if extension in PASSTHROUGH_EXTENSIONS:
-        return _upload_bytes(file.read(), content_type, extension, 'avatars')
-
-    data, recompressed_type, recompressed_extension = _resize_and_compress(file)
-    return _upload_bytes(data, recompressed_type, recompressed_extension, 'avatars')
+    data, content_type, extension = _resize_and_compress(file)
+    path = _upload_to_private_bucket(ATTACHMENTS_BUCKET_NAME, data, content_type, extension, 'avatars')
+    return _sign_private_url(ATTACHMENTS_BUCKET_NAME, path, LONG_SIGNED_URL_TTL_SECONDS)
 
 
 def upload_image(file, folder: str) -> str:
@@ -247,25 +288,22 @@ def upload_video(file, folder: str) -> str:
 
 
 def upload_file(file, folder: str) -> str:
-    """Uploads a chat attachment (documents/images, not arbitrary files) to
-    Supabase Storage and returns its public URL. Type-restricted to
-    CHAT_ATTACHMENT_MIME_BY_EXTENSION — un fichier authentifié uploadé n'est
-    pas pour autant un fichier de confiance ; un exécutable/script partagé en
-    pièce jointe piège les collègues qui font confiance au lien.
+    """Uploads a chat attachment to the private 'pieces_jointes' bucket,
+    returns a signed URL valid LONG_SIGNED_URL_TTL_SECONDS. Type-restricted
+    to ADMIN_ATTACHMENT_MIME_BY_EXTENSION — un fichier authentifié uploadé
+    n'est pas pour autant un fichier de confiance ; un exécutable/script
+    partagé en pièce jointe piège les collègues qui font confiance au lien.
 
-    Temporairement sur Supabase plutôt que Cloudinary (choix V1 : décision
-    du 10/09/2026, voir docs/ROADMAP_TECHNIQUE.md) — Cloudinary reste prévu
-    pour la V2. Le bucket est celui du site vitrine (`BUCKET_NAME`, public) :
-    une pièce jointe chat obtient donc le même modèle de confiance qu'une
-    image marketing — URL publique, non listable sans connaître le chemin —
-    pas de contrôle d'accès par utilisateur au-delà de ça. Une pièce jointe
-    peut porter des informations plus sensibles qu'un visuel marketing ; à
-    revoir dans le même mouvement que la bascule V2.
+    Décision du 10/09/2026 (docs/ROADMAP_TECHNIQUE.md) : bucket privé plutôt
+    que Cloudinary (prévu V2) ou le bucket public `site-content`. Une pièce
+    jointe chat n'est donc plus accessible par une URL devinée ou listée —
+    seule l'URL signée, communiquée par le message lui-même, l'ouvre.
     """
-    extension, content_type = _resolve_upload_type(file, CHAT_ATTACHMENT_MIME_BY_EXTENSION)
-    if file.size > MAX_FILE_UPLOAD_SIZE:
-        raise ValidationError('Le fichier dépasse la taille maximale autorisée (20 Mo).')
-    return _upload_bytes(file.read(), content_type, extension, folder)
+    extension, content_type = _resolve_upload_type(file, ADMIN_ATTACHMENT_MIME_BY_EXTENSION)
+    if file.size > MAX_ATTACHMENT_SIZE:
+        raise ValidationError('Le fichier dépasse la taille maximale autorisée (15 Mo).')
+    path = _upload_to_private_bucket(ATTACHMENTS_BUCKET_NAME, file.read(), content_type, extension, folder)
+    return _sign_private_url(ATTACHMENTS_BUCKET_NAME, path, LONG_SIGNED_URL_TTL_SECONDS)
 
 
 def _upload_bytes(data: bytes, content_type: str, extension: str, folder: str) -> str:
@@ -287,6 +325,117 @@ def _upload_bytes(data: bytes, content_type: str, extension: str, folder: str) -
         raise RuntimeError(f"Échec de l'upload vers Supabase Storage : {response.text}")
 
     return f'{url}/storage/v1/object/public/{BUCKET_NAME}/{path}'
+
+
+# ---------------------------------------------------------------------------
+# Buckets privés génériques — `pieces_jointes` et `demandes-projet`
+# ---------------------------------------------------------------------------
+# Suivi séparé de `_private_bucket_ensured` (bucket `documents`, justificatifs
+# comptables) : cette dernière est déjà couverte par ses propres tests
+# (`PrivateBucketGuardTests`, qui posent/lisent ce booléen directement) et
+# n'a aucune raison d'être touchée pour ajouter deux buckets de plus.
+_private_buckets_ensured: set[str] = set()
+
+
+def _ensure_bucket_private_generic(bucket_name: str) -> None:
+    """Même vérification que `_ensure_private_bucket`, pour un bucket
+    quelconque : créé s'il n'existe pas, et si un bucket du même nom existe
+    déjà, on vérifie qu'il est bien privé plutôt que de le supposer — un
+    bucket créé public à la main exposerait tout ce qu'on y dépose sans que
+    rien ne le signale.
+    """
+    if bucket_name in _private_buckets_ensured:
+        return
+    url, key = _supabase_config()
+    headers = {'Authorization': f'Bearer {key}', 'apikey': key}
+
+    response = _session.post(
+        f'{url}/storage/v1/bucket',
+        headers=headers,
+        json={'name': bucket_name, 'id': bucket_name, 'public': False},
+        timeout=15,
+    )
+    if response.status_code not in (200, 201):
+        bucket = _session.get(f'{url}/storage/v1/bucket/{bucket_name}', headers=headers, timeout=15)
+        if bucket.status_code != 200:
+            raise RuntimeError(f'Bucket {bucket_name} introuvable et non créable : {response.text}')
+        if bucket.json().get('public'):
+            raise RuntimeError(
+                f'Le bucket {bucket_name} est public. Refus d\'y stocker des '
+                'fichiers destinés à un bucket privé : passez-le en privé '
+                'dans Supabase avant de réessayer.'
+            )
+
+    _private_buckets_ensured.add(bucket_name)
+
+
+def _upload_to_private_bucket(bucket_name: str, data: bytes, content_type: str, extension: str, path_prefix: str = '') -> str:
+    """Téléverse vers un bucket privé quelconque, retourne le CHEMIN de
+    l'objet — jamais une URL. C'est à l'appelant de signer ensuite avec la
+    durée qui convient à son usage (courte pour un justificatif ouvert dans
+    la foulée, longue pour un avatar destiné à rester affiché des mois)."""
+    _ensure_bucket_private_generic(bucket_name)
+    url, key = _supabase_config()
+
+    filename = f'{uuid.uuid4()}{extension}'
+    path = f'{path_prefix}/{filename}' if path_prefix else filename
+
+    response = _session.post(
+        f'{url}/storage/v1/object/{bucket_name}/{path}',
+        headers={
+            'Authorization': f'Bearer {key}',
+            'apikey': key,
+            'Content-Type': content_type,
+            # Les chemins sont des UUID, la collision est théorique — mais
+            # l'écrasement d'une pièce déjà envoyée ne doit pas en dépendre.
+            'x-upsert': 'false',
+        },
+        data=data,
+        timeout=60,
+    )
+    if response.status_code not in (200, 201):
+        raise RuntimeError(f"Échec de l'upload vers {bucket_name} : {response.text}")
+    return path
+
+
+def _sign_private_url(bucket_name: str, path: str, ttl_seconds: int) -> str:
+    """Signe une URL pour un objet d'un bucket privé quelconque.
+
+    Sans le cache de `SupabasePrivateStorage.url()` : ces URLs sont signées
+    une fois à l'upload puis stockées telles quelles (avatar_url, pièce
+    jointe Firestore, document de demande de projet) — jamais re-signées à
+    la lecture, donc rien à mettre en cache ici.
+    """
+    url, key = _supabase_config()
+    response = _session.post(
+        f'{url}/storage/v1/object/sign/{bucket_name}/{path}',
+        headers={'Authorization': f'Bearer {key}', 'apikey': key},
+        json={'expiresIn': ttl_seconds, 'download': True},
+        timeout=15,
+    )
+    if response.status_code != 200:
+        raise RuntimeError(f"Impossible de signer l'URL : {response.text}")
+    return f"{url}/storage/v1{response.json()['signedURL']}"
+
+
+def upload_project_request_document(file, tracking_reference: str) -> str:
+    """Téléverse un PDF joint à une demande de projet publique, retourne une
+    URL signée valable LONG_SIGNED_URL_TTL_SECONDS.
+
+    Rangé par référence de suivi puis par date (`{référence}/{YYYY}/{MM}/
+    {DD}/{uuid}.pdf`) : un dossier se retrouve d'un coup d'œil dans Supabase
+    sans avoir à interroger la base pour retrouver quel fichier appartient à
+    quelle demande.
+    """
+    _resolve_upload_type(file, PROJECT_REQUEST_MIME_BY_EXTENSION)  # valide, lève sinon
+    if file.size > MAX_PROJECT_REQUEST_FILE_SIZE:
+        raise ValidationError('Le fichier dépasse la taille maximale autorisée (15 Mo).')
+
+    path_prefix = f'{tracking_reference}/{timezone.now():%Y/%m/%d}'
+    path = _upload_to_private_bucket(
+        PROJECT_REQUEST_BUCKET_NAME, file.read(), 'application/pdf', '.pdf', path_prefix,
+    )
+    return _sign_private_url(PROJECT_REQUEST_BUCKET_NAME, path, LONG_SIGNED_URL_TTL_SECONDS)
 
 
 # ---------------------------------------------------------------------------

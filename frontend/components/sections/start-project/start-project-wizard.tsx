@@ -16,7 +16,7 @@ import type {
   DelaiOption,
   CanalOption,
 } from "@/components/sections/start-project/types";
-import { createLead } from "@/lib/api/public";
+import { createLead, uploadLeadAttachment } from "@/lib/api/public";
 
 function buildLeadPayload(data: ProjectFormData) {
   const notes = [
@@ -88,7 +88,11 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
     delai: delais[0]?.title ?? "",
     canal: canaux[0]?.label ?? "",
     nda: false,
+    attachment: null,
   }));
+  // Non-bloquant : la demande est déjà enregistrée quand cet upload part,
+  // un échec ici ne doit pas empêcher le client de voir sa confirmation.
+  const [attachmentWarning, setAttachmentWarning] = useState<string | null>(null);
   // Attribuée par le serveur à l'enregistrement. Elle était jusqu'ici
   // tirée au hasard dans le navigateur : le client notait une référence
   // qui n'existait nulle part, et le suivi ne pouvait rien en faire.
@@ -108,6 +112,17 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
       try {
         const created = await createLead(buildLeadPayload(data));
         setReference(created.tracking_reference);
+        if (data.attachment) {
+          try {
+            await uploadLeadAttachment(created.tracking_reference, data.email, data.attachment);
+          } catch {
+            // La demande est déjà créée et confirmée par e-mail — un échec
+            // d'upload ne doit pas bloquer la confirmation, juste prévenir.
+            setAttachmentWarning(
+              "Votre demande a bien été envoyée, mais le fichier joint n'a pas pu être transmis. Vous pourrez le renvoyer par e-mail.",
+            );
+          }
+        }
         setSubmitted(true);
       } catch (err) {
         setSubmitError(err instanceof Error ? err.message : "Impossible d'envoyer la demande.");
@@ -129,6 +144,11 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
     return (
       <section className="mx-auto max-w-5xl px-4 pt-32 pb-24 sm:px-6 sm:pt-40 lg:px-8">
         <StepSuccess data={data} reference={reference} />
+        {attachmentWarning && (
+          <p className="mt-6 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
+            {attachmentWarning}
+          </p>
+        )}
       </section>
     );
   }

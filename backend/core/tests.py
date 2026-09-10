@@ -597,6 +597,14 @@ class AvatarUploadViewTests(APITestCase):
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
+        # Court-circuite la création du bucket `pieces_jointes` : ce n'est
+        # pas ce que ces tests vérifient, et sans ça le nombre d'appels
+        # `_session.post` dépendrait de l'ordre d'exécution des tests
+        # (premier upload du process = 1 appel de plus que les suivants).
+        from core import storage
+        storage._private_buckets_ensured.add(storage.ATTACHMENTS_BUCKET_NAME)
+        self.addCleanup(storage._private_buckets_ensured.discard, storage.ATTACHMENTS_BUCKET_NAME)
+
     def image_file(self, size=None):
         if size is not None:
             content = b'\x00' * size
@@ -615,8 +623,10 @@ class AvatarUploadViewTests(APITestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_oversized_file_rejected(self):
+        # Plafond du bucket privé `pieces_jointes` : 15 Mo (voir
+        # docs/ROADMAP_TECHNIQUE.md).
         response = self.client.post(
-            '/api/v1/uploads/avatar/', {'file': self.image_file(size=6 * 1024 * 1024)}, format='multipart',
+            '/api/v1/uploads/avatar/', {'file': self.image_file(size=16 * 1024 * 1024)}, format='multipart',
         )
         self.assertEqual(response.status_code, 400)
 
@@ -625,17 +635,18 @@ class AvatarUploadViewTests(APITestCase):
     })
     @patch('core.storage._session.post')
     def test_authenticated_user_can_upload_avatar(self, mock_post):
-        # Avatars passent par Supabase en V1 (Cloudinary est prévu pour la
-        # V2 — voir docs/ROADMAP_TECHNIQUE.md) : deux réponses attendues,
-        # la création idempotente du bucket puis l'upload de l'objet.
+        # Avatars vont dans le bucket privé `pieces_jointes` (décision du
+        # 10/09/2026, voir docs/ROADMAP_TECHNIQUE.md) : deux réponses —
+        # upload de l'objet, signature de l'URL longue durée (bucket déjà
+        # "ensured" via setUp).
         mock_post.side_effect = [
             Mock(status_code=200, text='{}'),
-            Mock(status_code=200, text='{}'),
+            Mock(status_code=200, json=lambda: {'signedURL': '/object/sign/pieces_jointes/avatars/x.jpg?token=abc'}),
         ]
         response = self.client.post('/api/v1/uploads/avatar/', {'file': self.image_file()}, format='multipart')
         self.assertEqual(response.status_code, 201)
         url = response.json()['url']
-        self.assertTrue(url.startswith('https://test-project.supabase.co/storage/v1/object/public/site-content/avatars/'))
+        self.assertTrue(url.startswith('https://test-project.supabase.co/storage/v1/object/sign/pieces_jointes/avatars/'))
 
 
 class ChatAttachmentUploadViewTests(APITestCase):
@@ -643,6 +654,12 @@ class ChatAttachmentUploadViewTests(APITestCase):
         self.user = User.objects.create(email='attach@sokensdigital.com', first_name='Ada')
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)
+
+        # Même court-circuit que AvatarUploadViewTests : bucket privé partagé
+        # `pieces_jointes`, création déjà couverte ailleurs.
+        from core import storage
+        storage._private_buckets_ensured.add(storage.ATTACHMENTS_BUCKET_NAME)
+        self.addCleanup(storage._private_buckets_ensured.discard, storage.ATTACHMENTS_BUCKET_NAME)
 
     def any_file(self, size=100, content_type='application/pdf', name='doc.pdf'):
         return SimpleUploadedFile(name, b'\x00' * size, content_type=content_type)
@@ -656,8 +673,9 @@ class ChatAttachmentUploadViewTests(APITestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_oversized_file_rejected(self):
+        # Plafond du bucket privé `pieces_jointes` : 15 Mo.
         response = self.client.post(
-            '/api/v1/uploads/chat-attachment/', {'file': self.any_file(size=21 * 1024 * 1024)}, format='multipart',
+            '/api/v1/uploads/chat-attachment/', {'file': self.any_file(size=16 * 1024 * 1024)}, format='multipart',
         )
         self.assertEqual(response.status_code, 400)
 
@@ -666,21 +684,23 @@ class ChatAttachmentUploadViewTests(APITestCase):
     })
     @patch('core.storage._session.post')
     def test_authenticated_user_can_upload_allowed_file_type(self, mock_post):
-        # Pièces jointes chat sur Supabase en V1 (Cloudinary prévu V2 — voir
-        # docs/ROADMAP_TECHNIQUE.md).
+        # Pièces jointes chat dans le bucket privé `pieces_jointes` (décision
+        # du 10/09/2026, Cloudinary prévu V2 — voir docs/ROADMAP_TECHNIQUE.md) :
+        # deux réponses — upload de l'objet, signature de l'URL longue durée
+        # (bucket déjà "ensured" via setUp).
         mock_post.side_effect = [
             Mock(status_code=200, text='{}'),
-            Mock(status_code=200, text='{}'),
+            Mock(status_code=200, json=lambda: {'signedURL': '/object/sign/pieces_jointes/chat/x.pdf?token=abc'}),
         ]
         response = self.client.post('/api/v1/uploads/chat-attachment/', {'file': self.any_file()}, format='multipart')
         self.assertEqual(response.status_code, 201)
         url = response.json()['url']
-        self.assertTrue(url.startswith('https://test-project.supabase.co/storage/v1/object/public/site-content/chat-attachments/'))
+        self.assertTrue(url.startswith('https://test-project.supabase.co/storage/v1/object/sign/pieces_jointes/'))
 
     def test_disallowed_file_type_rejected(self):
-        # Défense contre la distribution de malware via un lien public de
-        # confiance en pièce jointe chat — core.storage.CHAT_ATTACHMENT_
-        # MIME_BY_EXTENSION exclut délibérément les exécutables/scripts.
+        # Défense contre la distribution de malware via un lien de confiance
+        # en pièce jointe chat — core.storage.ADMIN_ATTACHMENT_MIME_BY_
+        # EXTENSION exclut délibérément les exécutables/scripts.
         response = self.client.post(
             '/api/v1/uploads/chat-attachment/',
             {'file': self.any_file(content_type='application/x-msdownload', name='payload.exe')},

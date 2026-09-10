@@ -8,24 +8,62 @@ a été évalué contre le code existant avant d'être mis de côté.
 
 ## 1. Stockage des fichiers — état actuel et bascule V2 prévue
 
-**Décision du 10/09/2026.**
+**Décision du 10/09/2026, révisée le même jour (bascule vers des buckets
+privés dédiés).**
 
 | Contenu | Backend actuel | Backend prévu V2 |
 |---|---|---|
-| Avatars | Supabase Storage (bucket public `site-content`) | Cloudinary |
-| Pièces jointes chat | Supabase Storage (bucket public `site-content`) | Cloudinary |
-| Sections CMS, visuels vitrine, projets showcase | Supabase Storage | Supabase Storage (inchangé) |
+| Avatars | Supabase Storage, bucket **privé** `pieces_jointes`, URL signée 7 jours | Cloudinary |
+| Pièces jointes chat | Supabase Storage, bucket **privé** `pieces_jointes`, URL signée 7 jours | Cloudinary |
+| Documents joints au formulaire public de démarrage de projet | Supabase Storage, bucket **privé** `demandes-projet`, URL signée 7 jours, PDF uniquement, 15 Mo max | Inchangé |
+| Sections CMS, visuels vitrine, projets showcase | Supabase Storage, bucket **public** `site-content`, 5 Mo max | Supabase Storage (inchangé) |
 | Messages et métadonnées de chat | Firestore | Firestore (inchangé) |
-| Justificatifs comptables (chèques, bordereaux…) | Supabase Storage, **bucket privé**, URL signée | Inchangé |
+| Justificatifs comptables (chèques, bordereaux…) | Supabase Storage, bucket **privé** `documents`, URL signée 5 min | Inchangé |
 
 `core/storage.py` : `upload_avatar()` et `upload_file()` (pièces jointes
-chat) appellent désormais `_upload_bytes()` (Supabase) au lieu de
+chat) appellent désormais `_upload_to_private_bucket()` +
+`_sign_private_url()` (bucket `pieces_jointes`) au lieu de
 `_upload_to_cloudinary()`. La fonction Cloudinary elle-même **n'a pas été
 supprimée** — elle n'a plus d'appelant aujourd'hui, mais c'est exactement ce
 dont la bascule V2 aura besoin pour ces deux chemins ; inutile de la
 réécrire à ce moment-là. Un test dédié (`CloudinaryPublicIdTests`) continue
 de l'exercer directement pour qu'elle ne se dégrade pas en silence faute
 d'appelant.
+
+Le bucket `demandes-projet` est distinct du bucket `documents` existant :
+`documents` sert déjà, en production, aux justificatifs comptables (chèques,
+bordereaux) et n'a pas été touché. Un même nom pour deux usages différents
+aurait mélangé deux domaines sans rapport (finance interne / demandes
+publiques) dans le même espace de noms.
+
+### Type de fichiers acceptés par bucket privé
+
+- **`pieces_jointes`** (avatars + pièces jointes chat, 15 Mo max) :
+  `.png`, `.jpg/.jpeg`, `.pdf`, `.doc`, `.md`, `.mp3`, `.wav`.
+  **SVG délibérément exclu** — un SVG est un document scriptable (il peut
+  embarquer du JavaScript exécuté à l'ouverture). Le rendre privé ne change
+  rien à ce risque : une URL signée protège *qui* peut ouvrir le fichier, pas
+  *ce que fait* le fichier une fois ouvert. Ce risque avait déjà été fermé
+  ailleurs dans ce projet pour cette raison ; l'exception n'a pas été faite
+  ici non plus.
+- **`demandes-projet`** (pièce jointe du formulaire public, 15 Mo max) :
+  `.pdf` uniquement.
+
+### URL signée à durée longue, stockée telle quelle — compromis accepté
+
+Rendre `pieces_jointes` privé casse l'hypothèse implicite que
+`User.avatar_url` et les champs de pièce jointe Firestore contiennent une
+URL permanente. Deux options existaient : (a) un endpoint backend qui
+re-signe à la volée à chaque affichage, ou (b) signer une fois à l'upload
+avec une durée longue (7 jours) et stocker cette URL telle quelle.
+
+**Décision : option (b).** Compromis accepté explicitement : un avatar ou
+une pièce jointe non rouverte dans les 7 jours suivant son upload cessera de
+charger silencieusement (URL expirée), sans mécanisme de renouvellement
+automatique. Si ça devient un problème perceptible en usage réel, l'option
+(a) — endpoint de re-signature à la demande — est la suite logique.
+
+### Pourquoi Cloudinary avait été choisi initialement pour ces deux cas
 
 ### Pourquoi Cloudinary avait été choisi initialement pour ces deux cas
 

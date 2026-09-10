@@ -47,7 +47,9 @@ class ResolveUploadTypeTests(TestCase):
         tables = (
             storage.IMAGE_MIME_BY_EXTENSION,
             storage.VIDEO_MIME_BY_EXTENSION,
-            storage.CHAT_ATTACHMENT_MIME_BY_EXTENSION,
+            storage.AVATAR_MIME_BY_EXTENSION,
+            storage.ADMIN_ATTACHMENT_MIME_BY_EXTENSION,
+            storage.PROJECT_REQUEST_MIME_BY_EXTENSION,
         )
         for table in tables:
             for extension, mime in table.items():

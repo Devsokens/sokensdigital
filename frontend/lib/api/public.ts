@@ -91,6 +91,31 @@ export async function createLead(data: LeadPublicInput): Promise<{ tracking_refe
   return response.json();
 }
 
+/** Joint un PDF (cahier des charges, par exemple) à une demande déjà créée.
+ * Appel séparé de createLead : la référence de suivi n'existe qu'une fois
+ * la demande enregistrée. Best-effort côté appelant — la demande elle-même
+ * est déjà sauvegardée, un échec d'upload ne doit pas bloquer l'utilisateur. */
+export async function uploadLeadAttachment(
+  reference: string,
+  email: string,
+  file: File,
+): Promise<{ attachment_name: string; attachment_url: string }> {
+  const formData = new FormData();
+  formData.append("reference", reference);
+  formData.append("email", email);
+  formData.append("file", file);
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/public/leads/attachment/`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || "Impossible d'envoyer le fichier joint.");
+  }
+  return response.json();
+}
+
 /** Client-side call — the quote acceptance page runs entirely in the
  * browser, no Firebase auth (the tracking_token itself is the
  * credential, cahier des charges §4.7 "portail de validation client"). */

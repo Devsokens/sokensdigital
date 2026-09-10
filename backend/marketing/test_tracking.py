@@ -1,8 +1,10 @@
 """Suivi public d'une demande, e-mail d'accusé, et notifications push."""
 
 from unittest import mock
+from unittest.mock import Mock, patch
 
 from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
@@ -115,6 +117,99 @@ class PublicTrackingTests(APITestCase):
         statuses = [s['status'] for s in response.data['steps']]
         self.assertEqual(statuses[:3], ['done', 'done', 'done'])
         self.assertEqual(statuses[3], 'current')
+
+
+class PublicLeadAttachmentUploadTests(APITestCase):
+    """Bucket privé `demandes-projet` — voir docs/ROADMAP_TECHNIQUE.md."""
+
+    def setUp(self):
+        self.lead = _lead()
+        self.url = reverse('public-lead-attachment')
+
+        from core import storage
+        storage._private_buckets_ensured.add(storage.PROJECT_REQUEST_BUCKET_NAME)
+        self.addCleanup(storage._private_buckets_ensured.discard, storage.PROJECT_REQUEST_BUCKET_NAME)
+
+    def pdf(self, size=100, name='cahier-des-charges.pdf'):
+        return SimpleUploadedFile(name, b'%PDF-' + b'\x00' * size, content_type='application/pdf')
+
+    def test_missing_reference_or_email_rejected(self):
+        response = self.client.post(self.url, {'file': self.pdf()}, format='multipart')
+        self.assertEqual(response.status_code, 400)
+
+    def test_reference_without_matching_email_is_refused(self):
+        response = self.client.post(self.url, {
+            'reference': self.lead.tracking_reference, 'email': 'inconnu@ailleurs.test', 'file': self.pdf(),
+        }, format='multipart')
+        # Meme message que le suivi : ne pas confirmer l'existence de la
+        # reference a qui n'a pas l'adresse associee.
+        self.assertEqual(response.status_code, 404)
+
+    def test_no_file_rejected(self):
+        response = self.client.post(self.url, {
+            'reference': self.lead.tracking_reference, 'email': self.lead.email,
+        }, format='multipart')
+        self.assertEqual(response.status_code, 400)
+
+    def test_non_pdf_rejected(self):
+        response = self.client.post(self.url, {
+            'reference': self.lead.tracking_reference, 'email': self.lead.email,
+            'file': SimpleUploadedFile('cahier.docx', b'\x00' * 100, content_type='application/msword'),
+        }, format='multipart')
+        self.assertEqual(response.status_code, 400)
+
+    def test_oversized_file_rejected(self):
+        response = self.client.post(self.url, {
+            'reference': self.lead.tracking_reference, 'email': self.lead.email,
+            'file': self.pdf(size=16 * 1024 * 1024),
+        }, format='multipart')
+        self.assertEqual(response.status_code, 400)
+
+    @patch.dict('os.environ', {
+        'SUPABASE_URL': 'https://test-project.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'test-key',
+    })
+    @patch('core.storage._session.post')
+    def test_successful_upload_is_attached_to_the_lead(self, mock_post):
+        mock_post.side_effect = [
+            Mock(status_code=200, text='{}'),
+            Mock(status_code=200, json=lambda: {'signedURL': '/object/sign/demandes-projet/x.pdf?token=abc'}),
+        ]
+        response = self.client.post(self.url, {
+            'reference': self.lead.tracking_reference, 'email': self.lead.email,
+            'file': self.pdf(),
+        }, format='multipart')
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['attachment_name'], 'cahier-des-charges.pdf')
+        self.lead.refresh_from_db()
+        self.assertTrue(
+            self.lead.attachment_url.startswith(
+                'https://test-project.supabase.co/storage/v1/object/sign/demandes-projet/',
+            ),
+        )
+        self.assertEqual(self.lead.attachment_name, 'cahier-des-charges.pdf')
+
+    @patch.dict('os.environ', {
+        'SUPABASE_URL': 'https://test-project.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'test-key',
+    })
+    @patch('core.storage._session.post')
+    def test_retry_overwrites_the_previous_attachment(self, mock_post):
+        self.lead.attachment_url = 'https://stale.example/old.pdf'
+        self.lead.attachment_name = 'ancien.pdf'
+        self.lead.save(update_fields=['attachment_url', 'attachment_name'])
+
+        mock_post.side_effect = [
+            Mock(status_code=200, text='{}'),
+            Mock(status_code=200, json=lambda: {'signedURL': '/object/sign/demandes-projet/x.pdf?token=abc'}),
+        ]
+        response = self.client.post(self.url, {
+            'reference': self.lead.tracking_reference, 'email': self.lead.email,
+            'file': self.pdf(name='nouveau.pdf'),
+        }, format='multipart')
+
+        self.assertEqual(response.status_code, 201)
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.attachment_name, 'nouveau.pdf')
 
 
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
