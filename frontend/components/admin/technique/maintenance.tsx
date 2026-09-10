@@ -8,6 +8,7 @@ import { Modal, ModalTrigger, ModalContent, ModalClose } from "@/components/ui/m
 import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/ui/tabs";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { useAuth } from "@/lib/auth/auth-context";
+import { profileRoles } from "@/lib/firebase/types";
 import { listUsers } from "@/lib/api/hr";
 import {
   listMaintainedApps, createMaintainedApp, assignMaintainedApp,
@@ -68,7 +69,7 @@ export function Maintenance() {
 
 function AppsPanel() {
   const { profile } = useAuth();
-  const isLead = MAINTENANCE_LEADS.includes(profile?.role ?? "");
+  const isLead = profileRoles(profile).some((r) => MAINTENANCE_LEADS.includes(r));
   const [apps, setApps] = useState<MaintainedApp[] | null>(null);
   const [users, setUsers] = useState<UserBrief[]>([]);
   const [error, setError] = useState<string | null>(null);

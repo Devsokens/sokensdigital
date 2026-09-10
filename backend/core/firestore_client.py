@@ -44,12 +44,19 @@ def _get_client():
     return _client
 
 
-def get_profile_role(firebase_uid: str) -> str | None:
-    """The Firestore `profiles/{uid}.role` is the single source of truth
-    for a user's application role (see docs/backend-specifications.md —
-    Firestore owns identity/role, Django owns RH/Finance/Projects data).
-    Returns None if the doc doesn't exist or Firestore is unreachable —
+def get_profile_roles(firebase_uid: str) -> list[str]:
+    """The Firestore `profiles/{uid}.roles` array is the source of truth for
+    a user's application roles (see docs/backend-specifications.md —
+    Firestore owns identity/roles, Django owns RH/Finance/Projects data).
+    Returns [] if the doc doesn't exist or Firestore is unreachable —
     callers should treat that as "no role", not raise.
+
+    Reads the legacy singular `role` string field as a one-element list if
+    `roles` isn't present yet — a profile written before the cumulative-role
+    migration (décision du 10/09/2026) still has only `role`, and there is
+    no bulk backfill script; this keeps such accounts working unchanged
+    until they're next edited through SetUserRoleView (which always writes
+    `roles`).
 
     Cached for ROLE_CACHE_TTL seconds (see module docstring above) — cache
     reads/writes are wrapped so a Redis hiccup just means "cache miss",
@@ -57,7 +64,7 @@ def get_profile_role(firebase_uid: str) -> str | None:
     fallback of record.
     """
     if not firebase_uid:
-        return None
+        return []
 
     cache_key = _role_cache_key(firebase_uid)
     try:
@@ -65,21 +72,28 @@ def get_profile_role(firebase_uid: str) -> str | None:
     except Exception:
         cached = None
     if cached is not None:
-        return None if cached == _ROLE_CACHE_NONE else cached
+        return [] if cached == _ROLE_CACHE_NONE else cached
 
     try:
         snapshot = _get_client().collection('profiles').document(firebase_uid).get()
     except Exception:
         logger.exception('Could not fetch Firestore profile for uid=%s', firebase_uid)
-        return None
-    role = snapshot.to_dict().get('role') if snapshot.exists else None
+        return []
+
+    roles: list[str] = []
+    if snapshot.exists:
+        doc = snapshot.to_dict()
+        if doc.get('roles'):
+            roles = list(doc['roles'])
+        elif doc.get('role'):
+            roles = [doc['role']]
 
     try:
-        cache.set(cache_key, role if role is not None else _ROLE_CACHE_NONE, timeout=ROLE_CACHE_TTL)
+        cache.set(cache_key, roles if roles else _ROLE_CACHE_NONE, timeout=ROLE_CACHE_TTL)
     except Exception:
-        logger.exception('Could not cache role for uid=%s', firebase_uid)
+        logger.exception('Could not cache roles for uid=%s', firebase_uid)
 
-    return role
+    return roles
 
 
 def create_profile(firebase_uid: str, data: dict) -> None:

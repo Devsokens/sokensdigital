@@ -36,7 +36,9 @@ export function provisionUser(data: {
   first_name: string;
   last_name: string;
   avatar_url?: string;
-  role: string;
+  /** Décision du 10/09/2026 : un employé peut cumuler plusieurs rôles dès
+   * sa création — au moins un est requis. */
+  roles: string[];
   department_id?: string;
 }) {
   return apiFetch<UserBrief>("/api/v1/users/provision/", {
@@ -101,7 +103,7 @@ export function listUsers() {
   return apiFetch<Paginated<UserBrief>>("/api/v1/users/");
 }
 
-export function setUserRole(userId: string, data: { role: string; department_id?: string | null }) {
+export function setUserRole(userId: string, data: { roles: string[]; department_id?: string | null }) {
   return apiFetch<UserBrief>(`/api/v1/users/${userId}/role/`, {
     method: "PATCH",
     body: JSON.stringify(data),

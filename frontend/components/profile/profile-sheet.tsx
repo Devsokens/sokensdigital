@@ -10,7 +10,7 @@ import { useProfileModal } from "@/lib/admin/profile-modal-context";
 import { updateOwnProfile } from "@/lib/firebase/profile";
 import { updateMe } from "@/lib/api/me";
 import { uploadAvatar } from "@/lib/api/upload";
-import { ROLE_LABELS } from "@/lib/firebase/types";
+import { ROLE_LABELS, profileRoles } from "@/lib/firebase/types";
 
 function initials(firstName?: string, lastName?: string) {
   return `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "?";
@@ -131,8 +131,12 @@ export function ProfileSheet() {
           </label>
 
           <label className="block">
-            <span className={labelClass}>Rôle</span>
-            <input value={ROLE_LABELS[profile.role]} disabled className={readOnlyInputClass} />
+            <span className={labelClass}>Rôle{profileRoles(profile).length > 1 ? "s" : ""}</span>
+            <input
+              value={profileRoles(profile).map((r) => ROLE_LABELS[r]).join(" · ") || "—"}
+              disabled
+              className={readOnlyInputClass}
+            />
           </label>
 
           <div className="flex items-center gap-3 pt-2">

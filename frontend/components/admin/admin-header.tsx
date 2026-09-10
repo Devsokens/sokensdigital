@@ -7,7 +7,7 @@ import { Bell, BellOff, ChevronRight, HelpCircle, Home, Loader2, LogOut, PanelLe
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/lib/auth/auth-context";
 import { signOutUser } from "@/lib/firebase/auth";
-import { ROLE_LABELS, type Notification } from "@/lib/firebase/types";
+import { ROLE_LABELS, profileRoles, type Notification } from "@/lib/firebase/types";
 import { subscribeToNotifications, markNotificationRead } from "@/lib/firebase/notifications";
 import { enablePush, getPushPermission, refreshPushRegistration, type PushPermission } from "@/lib/push";
 import { ADMIN_SECTIONS, findNavMatch, type NavItem } from "@/lib/admin-nav";
@@ -362,7 +362,7 @@ export function AdminHeader({ onToggleSidebar }: { onToggleSidebar?: () => void 
                 {profile?.firstName} {profile?.lastName}
               </p>
               <p className="truncate text-xs text-neutral-400">
-                {profile ? ROLE_LABELS[profile.role] : ""}
+                {profileRoles(profile).map((r) => ROLE_LABELS[r]).join(" · ")}
               </p>
             </div>
             <div className="p-1.5">

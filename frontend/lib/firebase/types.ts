@@ -89,16 +89,34 @@ export interface Notification {
   createdAt: unknown;
 }
 
-/** Firestore doc at /profiles/{uid} — id is the Firebase Auth UID. */
+/** Firestore doc at /profiles/{uid} — id is the Firebase Auth UID.
+ *
+ * `roles` (plural, décision du 10/09/2026) replaces the old singular `role`
+ * — un employé peut cumuler plusieurs rôles applicatifs (ex: Comptable +
+ * Caissier). `role` is kept as an optional legacy field: a profile written
+ * before this change still only has it, and there's no bulk backfill —
+ * always read roles through `profileRoles()` below, never `.role`/`.roles`
+ * directly, so both shapes keep working. */
 export interface Profile {
   email: string;
   firstName: string;
   lastName: string;
   avatarUrl?: string | null;
-  role: AppRole;
+  /** @deprecated legacy singular field — use `profileRoles(profile)` */
+  role?: AppRole;
+  roles?: AppRole[];
   departmentId: string | null;
   createdAt: unknown;
   updatedAt: unknown;
+}
+
+/** Normalizes a profile's roles regardless of which shape Firestore has for
+ * it (see `Profile.roles` doc above). Always use this instead of reading
+ * `.role`/`.roles` directly. */
+export function profileRoles(profile: Pick<Profile, "roles" | "role"> | null | undefined): AppRole[] {
+  if (!profile) return [];
+  if (profile.roles && profile.roles.length > 0) return profile.roles;
+  return profile.role ? [profile.role] : [];
 }
 
 /** Firestore doc at /chatRooms/{roomId}. COMPANY/DEPARTMENT/PROJECT rooms

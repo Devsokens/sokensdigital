@@ -18,7 +18,9 @@ const EMPTY_FORM = {
   email: "",
   avatarUrl: "" as string | null,
   password: "",
-  role: "" as AppRole | "",
+  // Décision du 10/09/2026 : cumul de rôles dès la création (ex: Comptable
+  // + Caissier), pas un seul choix.
+  roles: [] as AppRole[],
   departmentId: "",
   position: "",
   hireDate: "",
@@ -76,6 +78,13 @@ export function AddEmployeeSheet({
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  function toggleRole(role: AppRole, checked: boolean) {
+    setForm((f) => ({
+      ...f,
+      roles: checked ? [...f.roles, role] : f.roles.filter((r) => r !== role),
+    }));
+  }
+
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -92,7 +101,7 @@ export function AddEmployeeSheet({
 
   function canAdvance(): boolean {
     if (step === 0) return Boolean(form.firstName && form.lastName && form.email);
-    if (step === 1) return Boolean(form.password.length >= 8 && form.role);
+    if (step === 1) return Boolean(form.password.length >= 8 && form.roles.length > 0);
     return true;
   }
 
@@ -108,7 +117,7 @@ export function AddEmployeeSheet({
         first_name: form.firstName,
         last_name: form.lastName,
         avatar_url: form.avatarUrl || undefined,
-        role: form.role as AppRole,
+        roles: form.roles,
         department_id: form.departmentId || undefined,
       });
       await createEmployee({
@@ -235,15 +244,24 @@ export function AddEmployeeSheet({
                 />
                 <span className="mt-1 block text-[0.7rem] text-neutral-400">Au moins 8 caractères — à communiquer à la personne, ou à lui faire réinitialiser.</span>
               </label>
-              <label className="block">
-                <span className={labelClass}>Rôle</span>
-                <select value={form.role} onChange={(e) => set("role", e.target.value as AppRole)} className={inputClass} required>
-                  <option value="">— Choisir —</option>
+              <fieldset className="block">
+                <legend className={labelClass}>
+                  Rôle(s) — au moins un, plusieurs possibles
+                </legend>
+                <div className="grid grid-cols-2 gap-2 rounded-lg border border-neutral-200 p-3">
                   {Object.entries(ROLE_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
+                    <label key={value} className="flex items-center gap-2 text-sm text-neutral-700">
+                      <input
+                        type="checkbox"
+                        checked={form.roles.includes(value as AppRole)}
+                        onChange={(e) => toggleRole(value as AppRole, e.target.checked)}
+                        className="size-4 rounded border-neutral-300"
+                      />
+                      {label}
+                    </label>
                   ))}
-                </select>
-              </label>
+                </div>
+              </fieldset>
               <label className="block">
                 <span className={labelClass}>Département</span>
                 <select value={form.departmentId} onChange={(e) => set("departmentId", e.target.value)} className={inputClass}>

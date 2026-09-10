@@ -20,6 +20,7 @@ import {
 } from "@/lib/api/marketing";
 import type { SocialPost, SocialPostStatus, SocialPlatform } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/auth-context";
+import { profileRoles } from "@/lib/firebase/types";
 import { PlatformBadge } from "@/components/admin/marketing/social-platform";
 import { SocialCalendar } from "@/components/admin/marketing/social-calendar";
 import { SocialPostPreview } from "@/components/admin/marketing/social-post-preview";
@@ -59,7 +60,8 @@ function todayAt9() {
 
 export function SocialPostList() {
   const { profile } = useAuth();
-  const isMarketing = profile?.role === "RESPONSABLE_MARKETING" || profile?.role === "SUPER_ADMIN";
+  const myRoles = profileRoles(profile);
+  const isMarketing = myRoles.includes("RESPONSABLE_MARKETING") || myRoles.includes("SUPER_ADMIN");
   const [posts, setPosts] = useState<SocialPost[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);

@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { formatFcfa } from "@/lib/format-currency";
 import { useAuth } from "@/lib/auth/auth-context";
+import { profileRoles } from "@/lib/firebase/types";
 import { listDepartments } from "@/lib/api/hr";
 import { listDisbursementRequests } from "@/lib/api/finance";
 import {
@@ -94,7 +95,7 @@ const DISBURSEMENT_STATUS_COLORS: Record<DisbursementRequest["status"], string> 
 
 function FichesPanel() {
   const { profile } = useAuth();
-  const canApprove = CAN_APPROVE.includes(profile?.role ?? "");
+  const canApprove = profileRoles(profile).some((r) => CAN_APPROVE.includes(r));
   const [requests, setRequests] = useState<ProcurementRequest[] | null>(null);
   const [disbursements, setDisbursements] = useState<DisbursementRequest[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -345,7 +346,7 @@ const QUOTE_STATUS_COLORS: Record<SupplierQuote["status"], string> = {
 
 function DevisPanel() {
   const { profile } = useAuth();
-  const canApprove = CAN_APPROVE.includes(profile?.role ?? "");
+  const canApprove = profileRoles(profile).some((r) => CAN_APPROVE.includes(r));
   const [quotes, setQuotes] = useState<SupplierQuote[] | null>(null);
   const [requests, setRequests] = useState<ProcurementRequest[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -510,7 +511,7 @@ const INVOICE_STATUS_COLORS: Record<SupplierInvoice["status"], string> = {
 
 function FacturesPanel() {
   const { profile } = useAuth();
-  const canValidate = CAN_VALIDATE_INVOICE.includes(profile?.role ?? "");
+  const canValidate = profileRoles(profile).some((r) => CAN_VALIDATE_INVOICE.includes(r));
   const [invoices, setInvoices] = useState<SupplierInvoice[] | null>(null);
   const [requests, setRequests] = useState<ProcurementRequest[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -663,7 +664,7 @@ function SupplierInvoiceForm({ requests, suppliers, onSaved }: { requests: Procu
 
 function FournisseursPanel() {
   const { profile } = useAuth();
-  const canManage = CAN_MANAGE_SUPPLIERS.includes(profile?.role ?? "");
+  const canManage = profileRoles(profile).some((r) => CAN_MANAGE_SUPPLIERS.includes(r));
   const [suppliers, setSuppliers] = useState<Supplier[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);

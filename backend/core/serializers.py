@@ -119,14 +119,20 @@ APP_ROLE_TO_DJANGO_ROLE = {
 class ProvisionUserSerializer(serializers.Serializer):
     """Input for core.views.ProvisionUserView — creates a Firebase Auth
     account + Firestore profile + Django User row in one call. Not a
-    ModelSerializer: no single model backs "platform access"."""
+    ModelSerializer: no single model backs "platform access".
+
+    `roles` is a list, not a single choice (décision du 10/09/2026) — un
+    employé peut cumuler plusieurs rôles applicatifs dès sa création
+    (ex: Comptable + Caissier). Au moins un rôle est requis."""
 
     email = serializers.EmailField()
     password = serializers.CharField(min_length=8, write_only=True)
     first_name = serializers.CharField(max_length=255)
     last_name = serializers.CharField(max_length=255)
     avatar_url = serializers.URLField(required=False, allow_null=True, allow_blank=True)
-    role = serializers.ChoiceField(choices=APP_ROLE_CHOICES)
+    roles = serializers.ListField(
+        child=serializers.ChoiceField(choices=APP_ROLE_CHOICES), allow_empty=False,
+    )
     department_id = serializers.PrimaryKeyRelatedField(
         source='department', queryset=Department.objects.all(), required=False, allow_null=True,
     )
@@ -134,9 +140,14 @@ class ProvisionUserSerializer(serializers.Serializer):
 
 class SetUserRoleSerializer(serializers.Serializer):
     """Input for core.views.SetUserRoleView — changes an *existing* user's
-    role/department. Super-Admin only (docs/backend-specifications.md §1.1)."""
+    roles/department. Super-Admin only (docs/backend-specifications.md §1.1).
 
-    role = serializers.ChoiceField(choices=APP_ROLE_CHOICES)
+    `roles` (plural) replaces the whole set, same idempotent-replace
+    semantics as before — just no longer capped at one value."""
+
+    roles = serializers.ListField(
+        child=serializers.ChoiceField(choices=APP_ROLE_CHOICES), allow_empty=False,
+    )
     department_id = serializers.PrimaryKeyRelatedField(
         source='department', queryset=Department.objects.all(), required=False, allow_null=True,
     )

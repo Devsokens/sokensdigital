@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { listRoles } from "@/lib/api/hr";
-import { DJANGO_ROLE_TO_APP_ROLE } from "@/lib/firebase/types";
+import { DJANGO_ROLE_TO_APP_ROLE, profileRoles } from "@/lib/firebase/types";
 
 interface PermissionsContextValue {
   loading: boolean;
@@ -33,12 +33,14 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
   const [permittedModules, setPermittedModules] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
-  const isSuperAdmin = profile?.role === "SUPER_ADMIN";
+  const myRoles = profileRoles(profile);
+  const isSuperAdmin = myRoles.includes("SUPER_ADMIN");
   // Only Super-Admin's own app-lockout aside, only a non-Super-Admin
   // profile ever needs a roles fetch — no profile yet (still resolving
   // auth) and Super-Admin both resolve to "not loading" without ever
   // touching the network.
   const needsFetch = Boolean(profile) && !isSuperAdmin;
+  const myRolesKey = myRoles.join(",");
 
   useEffect(() => {
     if (!needsFetch) return;
@@ -46,8 +48,15 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
     listRoles()
       .then((res) => {
         if (cancelled) return;
-        const roleRow = res.results.find((r) => DJANGO_ROLE_TO_APP_ROLE[r.name] === profile?.role);
-        setPermittedModules(new Set(Object.keys(roleRow?.permissions ?? {})));
+        // Cumul de rôles (décision du 10/09/2026) : union des permissions de
+        // chaque rôle de la personne, pas seulement du premier trouvé.
+        const permitted = new Set<string>();
+        for (const row of res.results) {
+          if (myRoles.includes(DJANGO_ROLE_TO_APP_ROLE[row.name])) {
+            for (const key of Object.keys(row.permissions ?? {})) permitted.add(key);
+          }
+        }
+        setPermittedModules(permitted);
       })
       .catch(() => {
         if (!cancelled) setPermittedModules(new Set());
@@ -58,7 +67,8 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
     return () => {
       cancelled = true;
     };
-  }, [profile?.role, needsFetch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myRolesKey, needsFetch]);
 
   const resolvedLoading = needsFetch ? loading : false;
 

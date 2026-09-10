@@ -35,18 +35,17 @@ from core.serializers import (
 )
 
 
-def _sync_django_role(django_user, app_role):
-    """Mirrors the Firestore-facing app role onto the Django-side RBAC
+def _sync_django_roles(django_user, app_roles):
+    """Mirrors the Firestore-facing app roles onto the Django-side RBAC
     table (core.permissions.has_role reads user.roles, not Firestore —
     see core.serializers.APP_ROLE_TO_DJANGO_ROLE for why this mapping
-    exists). Replaces the user's roles entirely — a person has exactly one
-    app role at a time, same as the Firestore profile field."""
-    role_name = APP_ROLE_TO_DJANGO_ROLE.get(app_role)
-    if role_name:
-        role, _ = Role.objects.get_or_create(name=role_name)
-        django_user.roles.set([role])
-    else:
-        django_user.roles.clear()
+    exists). Replaces the user's role set entirely with the given list —
+    a person can cumulate several app roles (décision du 10/09/2026), so
+    `app_roles` is the full set to end up with, not one to add. 'AUTRE' and
+    any other unmapped value contribute no Django role, same as before."""
+    role_names = {APP_ROLE_TO_DJANGO_ROLE[r] for r in app_roles if r in APP_ROLE_TO_DJANGO_ROLE}
+    role_objs = [Role.objects.get_or_create(name=name)[0] for name in role_names]
+    django_user.roles.set(role_objs)
 
 
 @extend_schema(
@@ -259,8 +258,10 @@ class ProvisionUserView(APIView):
 
         # RH does the day-to-day hiring, so it can assign any operational
         # role — but only a Super-Admin can grant SUPER_ADMIN itself
-        # (docs/backend-specifications.md §1.1/§1.2).
-        if data['role'] == 'SUPER_ADMIN' and not has_role(request.user, ROLE_SUPER_ADMIN):
+        # (docs/backend-specifications.md §1.1/§1.2). Checked against the
+        # whole list: cumulating SUPER_ADMIN with anything else is still
+        # granting SUPER_ADMIN.
+        if 'SUPER_ADMIN' in data['roles'] and not has_role(request.user, ROLE_SUPER_ADMIN):
             return Response(
                 {'detail': "Seul un Super-Admin peut attribuer le rôle Super-Admin."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -288,7 +289,7 @@ class ProvisionUserView(APIView):
                 'firstName': data['first_name'],
                 'lastName': data['last_name'],
                 'avatarUrl': avatar_url,
-                'role': data['role'],
+                'roles': data['roles'],
                 'departmentId': str(department.id) if department else None,
             })
 
@@ -308,7 +309,7 @@ class ProvisionUserView(APIView):
                 django_user.department = department
                 django_user.avatar_url = avatar_url
                 django_user.save(update_fields=['firebase_uid', 'department', 'avatar_url'])
-            _sync_django_role(django_user, data['role'])
+            _sync_django_roles(django_user, data['roles'])
         except Exception:
             # Roll back the Firebase account so a failed provisioning attempt
             # doesn't leave an orphaned Auth user with no profile/Django row.
@@ -349,13 +350,13 @@ class SetUserRoleView(APIView):
         department = data.get('department')
 
         update_profile_fields(django_user.firebase_uid, {
-            'role': data['role'],
+            'roles': data['roles'],
             'departmentId': str(department.id) if department else None,
         })
         invalidate_role_cache(django_user.firebase_uid)
         django_user.department = department
         django_user.save(update_fields=['department'])
-        _sync_django_role(django_user, data['role'])
+        _sync_django_roles(django_user, data['roles'])
 
         return Response(UserSerializer(django_user).data)
 

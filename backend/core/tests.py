@@ -8,7 +8,7 @@ from rest_framework.test import APIClient, APITestCase
 from core.models import AuditLog, Department, Role, User
 from core.constants import (
     ROLE_SUPER_ADMIN, ROLE_RH_MANAGER, ROLE_DEVELOPER, ROLE_COMMERCIAL,
-    ROLE_PROJECT_MANAGER, ROLE_RESPONSABLE_MARKETING, ROLE_COMPTABLE,
+    ROLE_PROJECT_MANAGER, ROLE_RESPONSABLE_MARKETING, ROLE_COMPTABLE, ROLE_CAISSIER,
 )
 
 
@@ -154,7 +154,7 @@ class ProvisionUserViewTests(APITestCase):
             'password': 'a-strong-password',
             'first_name': 'New',
             'last_name': 'Employee',
-            'role': 'DEVELOPPEUR',
+            'roles': ['DEVELOPPEUR'],
             'department_id': str(self.department.id),
         }
         data.update(overrides)
@@ -174,7 +174,7 @@ class ProvisionUserViewTests(APITestCase):
             'firstName': 'New',
             'lastName': 'Employee',
             'avatarUrl': None,
-            'role': 'DEVELOPPEUR',
+            'roles': ['DEVELOPPEUR'],
             'departmentId': str(self.department.id),
         })
         user = User.objects.get(email_hash__isnull=False, firebase_uid='firebase-uid-123')
@@ -202,7 +202,18 @@ class ProvisionUserViewTests(APITestCase):
 
     @patch('firebase_admin.auth.create_user')
     def test_rh_cannot_provision_super_admin(self, mock_create_user):
-        response = self.client_rh.post('/api/v1/users/provision/', self.payload(role='SUPER_ADMIN'), format='json')
+        response = self.client_rh.post('/api/v1/users/provision/', self.payload(roles=['SUPER_ADMIN']), format='json')
+        self.assertEqual(response.status_code, 403)
+        mock_create_user.assert_not_called()
+
+    @patch('firebase_admin.auth.create_user')
+    def test_rh_cannot_provision_super_admin_cumulated_with_another_role(self, mock_create_user):
+        # Le garde-fou porte sur la liste entiere, pas seulement un role
+        # isole en premiere position : cumuler SUPER_ADMIN avec autre chose
+        # reste l'attribution de SUPER_ADMIN.
+        response = self.client_rh.post(
+            '/api/v1/users/provision/', self.payload(roles=['COMPTABLE', 'SUPER_ADMIN']), format='json',
+        )
         self.assertEqual(response.status_code, 403)
         mock_create_user.assert_not_called()
 
@@ -215,7 +226,7 @@ class ProvisionUserViewTests(APITestCase):
         client = APIClient()
         client.force_authenticate(user=super_admin)
 
-        response = client.post('/api/v1/users/provision/', self.payload(role='SUPER_ADMIN'), format='json')
+        response = client.post('/api/v1/users/provision/', self.payload(roles=['SUPER_ADMIN']), format='json')
         self.assertEqual(response.status_code, 201)
 
     @patch('core.views.create_profile')
@@ -228,7 +239,7 @@ class ProvisionUserViewTests(APITestCase):
         mock_create_user.return_value = MagicMock(uid='firebase-uid-role-sync')
 
         response = self.client_rh.post(
-            '/api/v1/users/provision/', self.payload(role='CHEF_DE_PROJET'), format='json',
+            '/api/v1/users/provision/', self.payload(roles=['CHEF_DE_PROJET']), format='json',
         )
 
         self.assertEqual(response.status_code, 201)
@@ -237,10 +248,27 @@ class ProvisionUserViewTests(APITestCase):
 
     @patch('core.views.create_profile')
     @patch('firebase_admin.auth.create_user')
+    def test_provisioning_grants_all_cumulated_django_roles(self, mock_create_user, mock_create_profile):
+        # Decision du 10/09/2026 : un employe peut cumuler plusieurs roles
+        # applicatifs des sa creation (ex: Comptable + Caissier).
+        mock_create_user.return_value = MagicMock(uid='firebase-uid-cumul')
+
+        response = self.client_rh.post(
+            '/api/v1/users/provision/', self.payload(roles=['COMPTABLE', 'CAISSIER']), format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        user = User.objects.get(firebase_uid='firebase-uid-cumul')
+        self.assertEqual(
+            set(user.roles.values_list('name', flat=True)), {ROLE_COMPTABLE, ROLE_CAISSIER},
+        )
+
+    @patch('core.views.create_profile')
+    @patch('firebase_admin.auth.create_user')
     def test_provisioning_with_autre_grants_no_django_role(self, mock_create_user, mock_create_profile):
         mock_create_user.return_value = MagicMock(uid='firebase-uid-autre')
 
-        response = self.client_rh.post('/api/v1/users/provision/', self.payload(role='AUTRE'), format='json')
+        response = self.client_rh.post('/api/v1/users/provision/', self.payload(roles=['AUTRE']), format='json')
 
         self.assertEqual(response.status_code, 201)
         user = User.objects.get(firebase_uid='firebase-uid-autre')
@@ -270,12 +298,12 @@ class SetUserRoleViewTests(APITestCase):
     def test_super_admin_can_change_role(self, mock_update):
         response = self.client_super_admin.patch(
             f'/api/v1/users/{self.employee.id}/role/',
-            {'role': 'COMPTABLE', 'department_id': str(self.department.id)},
+            {'roles': ['COMPTABLE'], 'department_id': str(self.department.id)},
             format='json',
         )
         self.assertEqual(response.status_code, 200)
         mock_update.assert_called_once_with('firebase-uid-existing', {
-            'role': 'COMPTABLE',
+            'roles': ['COMPTABLE'],
             'departmentId': str(self.department.id),
         })
         self.employee.refresh_from_db()
@@ -283,10 +311,23 @@ class SetUserRoleViewTests(APITestCase):
         self.assertEqual(list(self.employee.roles.values_list('name', flat=True)), [ROLE_COMPTABLE])
 
     @patch('core.views.update_profile_fields')
+    def test_super_admin_can_cumulate_roles(self, mock_update):
+        # Decision du 10/09/2026 : le cumul de roles doit etre effectif des
+        # la creation ET modifiable ensuite via ce meme endpoint.
+        response = self.client_super_admin.patch(
+            f'/api/v1/users/{self.employee.id}/role/', {'roles': ['COMPTABLE', 'CAISSIER']}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.employee.refresh_from_db()
+        self.assertEqual(
+            set(self.employee.roles.values_list('name', flat=True)), {ROLE_COMPTABLE, ROLE_CAISSIER},
+        )
+
+    @patch('core.views.update_profile_fields')
     def test_changing_role_replaces_the_previous_django_role(self, mock_update):
         _give_role(self.employee, ROLE_DEVELOPER)
         self.client_super_admin.patch(
-            f'/api/v1/users/{self.employee.id}/role/', {'role': 'COMPTABLE'}, format='json',
+            f'/api/v1/users/{self.employee.id}/role/', {'roles': ['COMPTABLE']}, format='json',
         )
         self.employee.refresh_from_db()
         self.assertEqual(list(self.employee.roles.values_list('name', flat=True)), [ROLE_COMPTABLE])
@@ -294,7 +335,7 @@ class SetUserRoleViewTests(APITestCase):
     @patch('core.views.update_profile_fields')
     def test_rh_cannot_change_role(self, mock_update):
         response = self.client_rh.patch(
-            f'/api/v1/users/{self.employee.id}/role/', {'role': 'COMPTABLE'}, format='json',
+            f'/api/v1/users/{self.employee.id}/role/', {'roles': ['COMPTABLE']}, format='json',
         )
         self.assertEqual(response.status_code, 403)
         mock_update.assert_not_called()
@@ -302,7 +343,7 @@ class SetUserRoleViewTests(APITestCase):
     def test_user_without_firebase_account_rejected(self):
         no_firebase_user = User.objects.create(email='no-firebase@sokensdigital.com', first_name='NoFirebase')
         response = self.client_super_admin.patch(
-            f'/api/v1/users/{no_firebase_user.id}/role/', {'role': 'COMPTABLE'}, format='json',
+            f'/api/v1/users/{no_firebase_user.id}/role/', {'roles': ['COMPTABLE']}, format='json',
         )
         self.assertEqual(response.status_code, 400)
 
@@ -519,8 +560,8 @@ class GlobalDashboardTests(APITestCase):
         self.assertIn(response.status_code, (401, 403))
 
 
-class GetProfileRoleCacheTests(APITestCase):
-    """get_profile_role() used to hit Firestore on every call (i.e. every
+class GetProfileRolesCacheTests(APITestCase):
+    """get_profile_roles() used to hit Firestore on every call (i.e. every
     authenticated request) — this is the fix: cache the result briefly so
     repeated calls for the same uid don't each pay a Firestore round-trip."""
 
@@ -528,67 +569,87 @@ class GetProfileRoleCacheTests(APITestCase):
         from django.core.cache import cache
         cache.clear()
 
-    def _mock_snapshot(self, exists, role=None):
+    def _mock_snapshot(self, exists, roles=None, legacy_role=None):
         snapshot = MagicMock()
         snapshot.exists = exists
-        snapshot.to_dict.return_value = {'role': role} if exists else None
+        if not exists:
+            snapshot.to_dict.return_value = None
+        elif roles is not None:
+            snapshot.to_dict.return_value = {'roles': roles}
+        else:
+            snapshot.to_dict.return_value = {'role': legacy_role}
         return snapshot
 
     def test_second_call_uses_cache_not_firestore(self):
-        from core.firestore_client import get_profile_role
+        from core.firestore_client import get_profile_roles
 
         with patch('core.firestore_client._get_client') as mock_get_client:
             mock_get_client.return_value.collection.return_value.document.return_value.get.return_value = (
-                self._mock_snapshot(exists=True, role='COMMERCIAL')
+                self._mock_snapshot(exists=True, roles=['COMMERCIAL'])
             )
-            first = get_profile_role('uid-1')
-            second = get_profile_role('uid-1')
+            first = get_profile_roles('uid-1')
+            second = get_profile_roles('uid-1')
 
-        self.assertEqual(first, 'COMMERCIAL')
-        self.assertEqual(second, 'COMMERCIAL')
+        self.assertEqual(first, ['COMMERCIAL'])
+        self.assertEqual(second, ['COMMERCIAL'])
         mock_get_client.return_value.collection.return_value.document.return_value.get.assert_called_once()
 
     def test_no_role_is_cached_too_not_just_a_miss(self):
-        from core.firestore_client import get_profile_role
+        from core.firestore_client import get_profile_roles
 
         with patch('core.firestore_client._get_client') as mock_get_client:
             mock_get_client.return_value.collection.return_value.document.return_value.get.return_value = (
                 self._mock_snapshot(exists=False)
             )
-            first = get_profile_role('uid-2')
-            second = get_profile_role('uid-2')
+            first = get_profile_roles('uid-2')
+            second = get_profile_roles('uid-2')
 
-        self.assertIsNone(first)
-        self.assertIsNone(second)
+        self.assertEqual(first, [])
+        self.assertEqual(second, [])
         mock_get_client.return_value.collection.return_value.document.return_value.get.assert_called_once()
 
     def test_invalidate_forces_a_fresh_fetch(self):
-        from core.firestore_client import get_profile_role, invalidate_role_cache
+        from core.firestore_client import get_profile_roles, invalidate_role_cache
 
         with patch('core.firestore_client._get_client') as mock_get_client:
             mock_get_client.return_value.collection.return_value.document.return_value.get.side_effect = [
-                self._mock_snapshot(exists=True, role='COMMERCIAL'),
-                self._mock_snapshot(exists=True, role='RESPONSABLE_MARKETING'),
+                self._mock_snapshot(exists=True, roles=['COMMERCIAL']),
+                self._mock_snapshot(exists=True, roles=['RESPONSABLE_MARKETING']),
             ]
-            first = get_profile_role('uid-3')
+            first = get_profile_roles('uid-3')
             invalidate_role_cache('uid-3')
-            second = get_profile_role('uid-3')
+            second = get_profile_roles('uid-3')
 
-        self.assertEqual(first, 'COMMERCIAL')
-        self.assertEqual(second, 'RESPONSABLE_MARKETING')
+        self.assertEqual(first, ['COMMERCIAL'])
+        self.assertEqual(second, ['RESPONSABLE_MARKETING'])
 
     def test_cache_backend_error_falls_back_to_firestore(self):
-        from core.firestore_client import get_profile_role
+        from core.firestore_client import get_profile_roles
 
         with patch('core.firestore_client.cache.get', side_effect=ConnectionError('cache down')), \
              patch('core.firestore_client.cache.set', side_effect=ConnectionError('cache down')), \
              patch('core.firestore_client._get_client') as mock_get_client:
             mock_get_client.return_value.collection.return_value.document.return_value.get.return_value = (
-                self._mock_snapshot(exists=True, role='COMMERCIAL')
+                self._mock_snapshot(exists=True, roles=['COMMERCIAL'])
             )
-            role = get_profile_role('uid-4')
+            roles = get_profile_roles('uid-4')
 
-        self.assertEqual(role, 'COMMERCIAL')
+        self.assertEqual(roles, ['COMMERCIAL'])
+
+    def test_legacy_singular_role_field_is_read_as_a_one_item_list(self):
+        # Profil ecrit avant la bascule cumul-de-roles (decision du
+        # 10/09/2026) : encore `role` (string), pas `roles` (array). Doit
+        # continuer a fonctionner tel quel jusqu'a la prochaine edition via
+        # SetUserRoleView (qui ecrit toujours `roles`).
+        from core.firestore_client import get_profile_roles
+
+        with patch('core.firestore_client._get_client') as mock_get_client:
+            mock_get_client.return_value.collection.return_value.document.return_value.get.return_value = (
+                self._mock_snapshot(exists=True, legacy_role='COMMERCIAL')
+            )
+            roles = get_profile_roles('uid-5')
+
+        self.assertEqual(roles, ['COMMERCIAL'])
 
 
 class AvatarUploadViewTests(APITestCase):

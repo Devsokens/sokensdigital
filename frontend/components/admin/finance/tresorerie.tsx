@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { formatFcfa } from "@/lib/format-currency";
 import { useAuth } from "@/lib/auth/auth-context";
+import { profileRoles } from "@/lib/firebase/types";
 import {
   listCashEntries, createCashEntry, reconcileCashEntry,
   downloadCashVoucherPdf, downloadMonthlyCashStatement,
@@ -66,7 +67,7 @@ const CASH_SOURCE_LABELS: Record<CashEntrySource, string> = {
 
 function CaissePanel() {
   const { profile } = useAuth();
-  const canManage = CAN_MANAGE_CAISSE.includes(profile?.role ?? "");
+  const canManage = profileRoles(profile).some((r) => CAN_MANAGE_CAISSE.includes(r));
   const [entries, setEntries] = useState<CashEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -268,7 +269,7 @@ const BANK_SOURCE_LABELS: Record<BankEntrySource, string> = {
 
 function BanquePanel() {
   const { profile } = useAuth();
-  const canManage = CAN_MANAGE_BANQUE_CAPITAL.includes(profile?.role ?? "");
+  const canManage = profileRoles(profile).some((r) => CAN_MANAGE_BANQUE_CAPITAL.includes(r));
   const [entries, setEntries] = useState<BankEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -458,7 +459,7 @@ const CAPITAL_STATUS_COLORS: Record<CapitalContribution["status"], string> = {
 
 function CapitalPanel() {
   const { profile } = useAuth();
-  const canManage = CAN_MANAGE_BANQUE_CAPITAL.includes(profile?.role ?? "");
+  const canManage = profileRoles(profile).some((r) => CAN_MANAGE_BANQUE_CAPITAL.includes(r));
   const [contributions, setContributions] = useState<CapitalContribution[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);

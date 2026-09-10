@@ -8,6 +8,7 @@ import { Modal, ModalTrigger, ModalContent, ModalClose } from "@/components/ui/m
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { formatFcfa } from "@/lib/format-currency";
 import { useAuth } from "@/lib/auth/auth-context";
+import { profileRoles } from "@/lib/firebase/types";
 import {
   approveDisbursementRequest,
   createDisbursementRequest,
@@ -40,11 +41,9 @@ const STAGE_APPROVER_LABEL: Partial<Record<DisbursementStatus, string>> = {
   EN_ATTENTE_GERANT: "Gérant",
 };
 
-type Role = string | undefined;
-
-function canApproveStage(role: Role, stage: DisbursementStatus): boolean {
-  if (role === "SUPER_ADMIN") return true;
-  if (stage === "EN_ATTENTE_RCF") return role === "COMPTABLE" || role === "DIRECTEUR_FINANCIER";
+function canApproveStage(roles: string[], stage: DisbursementStatus): boolean {
+  if (roles.includes("SUPER_ADMIN")) return true;
+  if (stage === "EN_ATTENTE_RCF") return roles.includes("COMPTABLE") || roles.includes("DIRECTEUR_FINANCIER");
   return false; // Gérant : Super-Admin uniquement
 }
 
@@ -56,8 +55,9 @@ export function DisbursementList() {
   const [open, setOpen] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
 
-  const canExecute = profile?.role === "COMPTABLE" || profile?.role === "SUPER_ADMIN";
-  const canApproveAny = ["COMPTABLE", "DIRECTEUR_FINANCIER", "SUPER_ADMIN"].includes(profile?.role ?? "");
+  const myRoles = profileRoles(profile);
+  const canExecute = myRoles.includes("COMPTABLE") || myRoles.includes("SUPER_ADMIN");
+  const canApproveAny = myRoles.some((r) => ["COMPTABLE", "DIRECTEUR_FINANCIER", "SUPER_ADMIN"].includes(r));
 
   async function handleApprove(id: string, decision: "APPROUVE" | "REJETE", rejectionReason?: string) {
     setActingId(id);
@@ -140,7 +140,7 @@ export function DisbursementList() {
           <tbody className="divide-y divide-neutral-100">
             {requests.map((req) => {
               const isPending = req.status === "EN_ATTENTE_RCF" || req.status === "EN_ATTENTE_GERANT";
-              const canApproveThis = isPending && canApproveStage(profile?.role, req.status);
+              const canApproveThis = isPending && canApproveStage(myRoles, req.status);
               return (
                 <tr key={req.id}>
                   <td className="px-4 py-3">

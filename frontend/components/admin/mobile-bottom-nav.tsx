@@ -8,8 +8,9 @@ import { ADMIN_SECTIONS, SECTION_ICONS, SECTION_SHORT_LABELS, findNavMatch, filt
 import { MobileSectionArc } from "@/components/admin/mobile-section-arc";
 import { useAuth } from "@/lib/auth/auth-context";
 import { usePermissions } from "@/lib/admin/permissions-context";
-import { ROLE_QUICK_ACTIONS, type QuickAction } from "@/lib/admin/role-quick-actions";
+import { quickActionsForRoles, type QuickAction } from "@/lib/admin/role-quick-actions";
 import { useProfileModal } from "@/lib/admin/profile-modal-context";
+import { profileRoles } from "@/lib/firebase/types";
 import { cn } from "@/lib/utils";
 
 const MAIN_BUTTON_SIZE = 56;
@@ -59,7 +60,7 @@ export function MobileBottomNav() {
 
   const match = findNavMatch(pathname, sections);
   const activeSectionTitle = match?.section.title ?? null;
-  const quickActions = ROLE_QUICK_ACTIONS[profile?.role ?? "AUTRE"];
+  const quickActions = quickActionsForRoles(profileRoles(profile));
 
   /** Un département n'ayant qu'un ecran n'a rien a deployer : on y va
    * directement plutot que d'ouvrir un arc a une seule bulle. Un second tap

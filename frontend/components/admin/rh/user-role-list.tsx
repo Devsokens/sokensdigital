@@ -6,7 +6,7 @@ import { listUsers, listDepartments } from "@/lib/api/hr";
 import { listProfiles } from "@/lib/firebase/profile";
 import type { Department, UserBrief } from "@/lib/api/types";
 import type { Profile } from "@/lib/firebase/types";
-import { ROLE_LABELS, type AppRole } from "@/lib/firebase/types";
+import { ROLE_LABELS, profileRoles, type AppRole } from "@/lib/firebase/types";
 import { AddEmployeeSheet } from "@/components/admin/rh/add-employee-sheet";
 import { UserEditModal } from "@/components/admin/rh/user-edit-modal";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -18,7 +18,7 @@ interface MergedUser {
   name: string;
   email: string;
   avatarUrl: string | null;
-  role: AppRole | null;
+  roles: AppRole[];
   departmentId: string | null;
 }
 
@@ -54,7 +54,7 @@ export function UserRoleList() {
           name: `${u.first_name} ${u.last_name}`.trim(),
           email: u.email,
           avatarUrl: profile?.avatarUrl ?? u.avatar_url ?? null,
-          role: profile?.role ?? null,
+          roles: profileRoles(profile),
           departmentId: profile?.departmentId ?? null,
         };
       });
@@ -80,7 +80,7 @@ export function UserRoleList() {
     return rows.filter((r) => `${r.name} ${r.email}`.toLowerCase().includes(q));
   }, [rows, search]);
 
-  const unprovisionedCount = rows?.filter((r) => !r.role).length ?? 0;
+  const unprovisionedCount = rows?.filter((r) => r.roles.length === 0).length ?? 0;
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!rows) {
@@ -156,9 +156,13 @@ export function UserRoleList() {
                     </span>
                   </td>
                   <td className="px-5 py-3.5">
-                    {row.role ? (
-                      <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">
-                        {ROLE_LABELS[row.role]}
+                    {row.roles.length > 0 ? (
+                      <span className="flex flex-wrap gap-1">
+                        {row.roles.map((r) => (
+                          <span key={r} className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">
+                            {ROLE_LABELS[r]}
+                          </span>
+                        ))}
                       </span>
                     ) : (
                       <span className="text-xs text-neutral-400">—</span>
@@ -168,7 +172,7 @@ export function UserRoleList() {
                     {row.departmentId ? departmentNameById.get(row.departmentId) ?? "—" : "—"}
                   </td>
                   <td className="px-5 py-3.5">
-                    {row.role ? (
+                    {row.roles.length > 0 ? (
                       <Popover>
                         <PopoverTrigger
                           render={

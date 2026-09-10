@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { useProfileModal } from "@/lib/admin/profile-modal-context";
 import { usePermissions } from "@/lib/admin/permissions-context";
 import { ADMIN_SECTIONS, SECTION_ICONS, findNavMatch, filterSectionsByAccess } from "@/lib/admin-nav";
+import { ROLE_LABELS, profileRoles } from "@/lib/firebase/types";
 
 function initials(firstName?: string, lastName?: string) {
   return `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "?";
@@ -123,7 +124,9 @@ export function AdminSidebar({ collapsed = false }: { collapsed?: boolean }) {
             <span className="block truncate text-sm font-medium text-foreground">
               {profile.firstName} {profile.lastName}
             </span>
-            <span className="block truncate text-xs text-muted-foreground">{profile.role}</span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {profileRoles(profile).map((r) => ROLE_LABELS[r]).join(" · ") || "—"}
+            </span>
           </span>
           <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
         </button>

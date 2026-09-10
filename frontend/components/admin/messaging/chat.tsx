@@ -31,7 +31,7 @@ import {
   uploadChatAttachment,
 } from "@/lib/firebase/chat";
 import { listProfiles } from "@/lib/firebase/profile";
-import type { ChatMessage, ChatRoom, LinkedEntityType, Profile } from "@/lib/firebase/types";
+import { profileRoles, type ChatMessage, type ChatRoom, type LinkedEntityType, type Profile } from "@/lib/firebase/types";
 import { inputClass } from "@/components/admin/form-styles";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Sheet, SheetTrigger, SheetContent } from "@/components/ui/sheet";
@@ -146,8 +146,7 @@ export function Chat() {
   const canPostInActiveRoom =
     !activeRoom ||
     activeRoom.roomType !== "COMPANY" ||
-    profile?.role === "SUPER_ADMIN" ||
-    profile?.role === "RESPONSABLE_MARKETING";
+    profileRoles(profile).some((r) => r === "SUPER_ADMIN" || r === "RESPONSABLE_MARKETING");
 
   function roomDisplayName(room: ChatRoom) {
     if (room.roomType === "DIRECT" && user) {

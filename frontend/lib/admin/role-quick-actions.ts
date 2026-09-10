@@ -79,3 +79,23 @@ export const ROLE_QUICK_ACTIONS: Record<AppRole, QuickAction[]> = {
     { label: "Profil", action: "open-profile", icon: UserRound },
   ],
 };
+
+/** Merges the quick actions of every role someone cumulates (décision du
+ * 10/09/2026), de-duplicated by label (a Comptable+Caissier both list
+ * distinct actions, but a shared one shouldn't show twice) and capped so
+ * the FAB stays a shortcut, not a second nav menu. */
+const MAX_QUICK_ACTIONS = 4;
+
+export function quickActionsForRoles(roles: AppRole[]): QuickAction[] {
+  const merged: QuickAction[] = [];
+  const seen = new Set<string>();
+  for (const role of roles.length > 0 ? roles : (["AUTRE"] as AppRole[])) {
+    for (const action of ROLE_QUICK_ACTIONS[role] ?? []) {
+      if (seen.has(action.label)) continue;
+      seen.add(action.label);
+      merged.push(action);
+      if (merged.length >= MAX_QUICK_ACTIONS) return merged;
+    }
+  }
+  return merged;
+}

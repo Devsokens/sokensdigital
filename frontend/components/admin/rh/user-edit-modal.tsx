@@ -16,7 +16,7 @@ interface MergedUserLike {
   djangoId: string;
   name: string;
   email: string;
-  role: AppRole | null;
+  roles: AppRole[];
   departmentId: string | null;
 }
 
@@ -38,14 +38,16 @@ export function UserEditModal({
   const [error, setError] = useState<string | null>(null);
 
   const [departmentId, setDepartmentId] = useState<string | null>(user.departmentId);
-  const [selectedRole, setSelectedRole] = useState<AppRole | null>(user.role);
+  // Décision du 10/09/2026 : cumul de rôles — plusieurs sélections possibles,
+  // pas un seul bouton actif.
+  const [selectedRoles, setSelectedRoles] = useState<AppRole[]>(user.roles);
   const [modulePermissions, setModulePermissions] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     if (!open) return;
     setStep(0);
     setDepartmentId(user.departmentId);
-    setSelectedRole(user.role);
+    setSelectedRoles(user.roles);
     setError(null);
     setLoading(true);
     Promise.all([listDepartments(), listRoles()])
@@ -63,14 +65,24 @@ export function UserEditModal({
     ? ROLES_BY_DEPARTMENT[currentDepartment.name] ?? (Object.keys(ROLE_LABELS) as AppRole[])
     : [];
 
+  // Les modules/actions (étapes 3-4) éditent les permissions du Role
+  // Django lui-même (table partagée par tout le monde ayant ce rôle), pas
+  // celles de cet utilisateur seul. Avec plusieurs rôles cumulés, éditer
+  // les permissions de chacun dans le même flux demanderait un tout autre
+  // écran (répété par rôle) — hors scope ici. On édite celles du premier
+  // rôle sélectionné ; les autres restent inchangées par ce formulaire.
   const roleRow = useMemo(
-    () => (selectedRole ? roles.find((r) => DJANGO_ROLE_TO_APP_ROLE[r.name] === selectedRole) ?? null : null),
-    [roles, selectedRole]
+    () => (selectedRoles[0] ? roles.find((r) => DJANGO_ROLE_TO_APP_ROLE[r.name] === selectedRoles[0]) ?? null : null),
+    [roles, selectedRoles]
   );
 
   useEffect(() => {
     if (roleRow) setModulePermissions(roleRow.permissions ?? {});
   }, [roleRow]);
+
+  function toggleRole(role: AppRole) {
+    setSelectedRoles((prev) => (prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]));
+  }
 
   function toggleModule(key: string) {
     setModulePermissions((prev) => {
@@ -93,11 +105,11 @@ export function UserEditModal({
   }
 
   async function handleFinish() {
-    if (!selectedRole) return;
+    if (selectedRoles.length === 0) return;
     setSaving(true);
     setError(null);
     try {
-      await setUserRole(user.djangoId, { role: selectedRole, department_id: departmentId ?? undefined });
+      await setUserRole(user.djangoId, { roles: selectedRoles, department_id: departmentId ?? undefined });
       if (roleRow) {
         await updateRolePermissions(roleRow.id, modulePermissions);
       }
@@ -112,7 +124,7 @@ export function UserEditModal({
 
   function canAdvance(): boolean {
     if (step === 0) return Boolean(departmentId);
-    if (step === 1) return Boolean(selectedRole);
+    if (step === 1) return selectedRoles.length > 0;
     return true;
   }
 
@@ -173,7 +185,7 @@ export function UserEditModal({
                       <button
                         key={d.id}
                         type="button"
-                        onClick={() => { setDepartmentId(d.id); setSelectedRole(null); }}
+                        onClick={() => { setDepartmentId(d.id); setSelectedRoles([]); }}
                         className={cn(
                           "rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors",
                           departmentId === d.id
@@ -191,17 +203,17 @@ export function UserEditModal({
               {step === 1 && (
                 <div>
                   <p className="mb-3 text-sm font-semibold text-neutral-900">
-                    Rôles de {currentDepartment?.name}
+                    Rôles de {currentDepartment?.name} — plusieurs possibles
                   </p>
                   <div className="grid grid-cols-2 gap-2.5">
                     {rolesForDepartment.map((r) => (
                       <button
                         key={r}
                         type="button"
-                        onClick={() => setSelectedRole(r)}
+                        onClick={() => toggleRole(r)}
                         className={cn(
                           "rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors",
-                          selectedRole === r
+                          selectedRoles.includes(r)
                             ? "border-primary/50 bg-primary/5 text-neutral-900"
                             : "border-neutral-200 text-neutral-600 hover:border-neutral-300"
                         )}
@@ -219,8 +231,14 @@ export function UserEditModal({
               {step === 2 && (
                 <div>
                   <p className="mb-1 text-sm font-semibold text-neutral-900">
-                    Modules pour {selectedRole && ROLE_LABELS[selectedRole]}
+                    Modules pour {selectedRoles.map((r) => ROLE_LABELS[r]).join(" · ")}
                   </p>
+                  {selectedRoles.length > 1 && (
+                    <p className="mb-2 text-xs text-amber-600">
+                      Cette étape édite les permissions du rôle {ROLE_LABELS[selectedRoles[0]]} uniquement — les autres
+                      rôles cumulés gardent leurs permissions existantes.
+                    </p>
+                  )}
                   <p className="mb-3 text-xs text-neutral-500">Coche les modules auxquels ce rôle doit avoir accès.</p>
                   <div className="max-h-72 space-y-1 overflow-y-auto">
                     {PERMISSION_MODULES.map((m) => (

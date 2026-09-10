@@ -8,6 +8,7 @@ import { listProjects, listProjectTasks, listTimesheets, submitTimesheet, valida
 import { TeamTimesheet } from "@/components/admin/technique/team-timesheet";
 import type { Project, ProjectTask, Timesheet, TimesheetStatus } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/auth-context";
+import { profileRoles } from "@/lib/firebase/types";
 
 const STATUS_LABELS: Record<TimesheetStatus, string> = {
   SOUMIS: "Soumis",
@@ -23,7 +24,8 @@ const STATUS_COLORS: Record<TimesheetStatus, string> = {
 
 export function TimesheetList() {
   const { profile } = useAuth();
-  const isChefDeProjet = profile?.role === "CHEF_DE_PROJET" || profile?.role === "SUPER_ADMIN";
+  const myRoles = profileRoles(profile);
+  const isChefDeProjet = myRoles.includes("CHEF_DE_PROJET") || myRoles.includes("SUPER_ADMIN");
   const [tab, setTab] = useState<"team" | "mine">(isChefDeProjet ? "team" : "mine");
 
   if (isChefDeProjet) {

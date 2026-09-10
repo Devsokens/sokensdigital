@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/sheet";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { useAuth } from "@/lib/auth/auth-context";
+import { profileRoles } from "@/lib/firebase/types";
 import {
   downloadFecExport,
   generateTaxDeclaration,
@@ -23,7 +24,8 @@ export function TaxDeclarations() {
   const [open, setOpen] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
 
-  const canValidate = profile?.role === "DIRECTEUR_FINANCIER" || profile?.role === "SUPER_ADMIN";
+  const myRoles = profileRoles(profile);
+  const canValidate = myRoles.includes("DIRECTEUR_FINANCIER") || myRoles.includes("SUPER_ADMIN");
 
   async function load() {
     try {
