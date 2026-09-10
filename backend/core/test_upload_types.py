@@ -138,6 +138,11 @@ class CloudinaryPublicIdTests(TestCase):
 
     Sans extension, il devinait le type depuis les octets d'un fichier choisi
     par l'utilisateur.
+
+    Teste `_upload_to_cloudinary` directement plutôt que via `upload_file` :
+    les pièces jointes chat sont temporairement sur Supabase en V1 (voir
+    docs/ROADMAP_TECHNIQUE.md), mais la fonction Cloudinary elle-même reste
+    en place pour la bascule V2 et mérite sa propre couverture.
     """
 
     def test_public_id_carries_the_validated_extension(self):
@@ -146,6 +151,6 @@ class CloudinaryPublicIdTests(TestCase):
                  storage.cloudinary.uploader, 'upload',
                  return_value={'secure_url': 'https://res.cloudinary.com/x.pdf'},
              ) as upload:
-            storage.upload_file(_upload('rapport.pdf', 'text/html', b'%PDF-1.4'), folder='chat')
+            storage._upload_to_cloudinary(b'%PDF-1.4', folder='chat', extension='.pdf')
 
         self.assertTrue(upload.call_args.kwargs['public_id'].endswith('.pdf'))

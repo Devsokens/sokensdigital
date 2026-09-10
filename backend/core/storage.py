@@ -168,12 +168,16 @@ def _cloudinary_configure() -> None:
 
 
 def _upload_to_cloudinary(data: bytes, folder: str, extension: str = '') -> str:
-    """Uploads to Cloudinary, returns its public (secure) URL. Kept separate
-    from Supabase's _upload_bytes — user-driven traffic (avatars, chat
-    attachments) is deliberately routed here instead, since the Supabase
-    project is already over its free-tier egress quota. resource_type='auto'
-    lets Cloudinary route images/videos/arbitrary files correctly without
-    us tracking the distinction here.
+    """Uploads to Cloudinary, returns its public (secure) URL.
+
+    Non appelée aujourd'hui — `upload_avatar` et `upload_file` (pièces
+    jointes chat) sont temporairement repassées sur `_upload_bytes`
+    (Supabase), voir leur docstring. Gardée telle quelle : c'est
+    exactement ce dont la bascule V2 vers Cloudinary aura besoin pour ces
+    deux chemins, pas la peine de la réécrire à ce moment-là.
+
+    resource_type='auto' laisse Cloudinary distinguer image/vidéo/fichier
+    sans que l'appelant ait à le savoir à l'avance.
 
     `extension` est celle validée par _resolve_upload_type, jamais celle du
     nom d'origine. Cloudinary sert un fichier « raw » avec le type déduit de
@@ -195,19 +199,23 @@ def _upload_to_cloudinary(data: bytes, folder: str, extension: str = '') -> str:
 
 
 def upload_avatar(file) -> str:
-    """Uploads a profile photo to Cloudinary, returns its public URL.
-    Same validation/resize pipeline as upload_image (see
-    IMAGE_MIME_BY_EXTENSION, _resize_and_compress) — only the destination
-    differs."""
-    extension, _content_type = _resolve_upload_type(file, IMAGE_MIME_BY_EXTENSION)
+    """Uploads a profile photo to Supabase Storage, returns its public URL.
+
+    Temporairement sur Supabase plutôt que Cloudinary (choix V1 : décision
+    du 10/09/2026, voir docs/ROADMAP_TECHNIQUE.md). Cloudinary reste prévu
+    pour la V2 — même pipeline de validation/redimensionnement que
+    upload_image (IMAGE_MIME_BY_EXTENSION, _resize_and_compress), seule la
+    destination change.
+    """
+    extension, content_type = _resolve_upload_type(file, IMAGE_MIME_BY_EXTENSION)
     if file.size > MAX_UPLOAD_SIZE:
         raise ValidationError('Le fichier dépasse la taille maximale autorisée (5 Mo).')
 
     if extension in PASSTHROUGH_EXTENSIONS:
-        return _upload_to_cloudinary(file.read(), 'avatars', extension)
+        return _upload_bytes(file.read(), content_type, extension, 'avatars')
 
-    data, _recompressed_type, recompressed_extension = _resize_and_compress(file)
-    return _upload_to_cloudinary(data, 'avatars', recompressed_extension)
+    data, recompressed_type, recompressed_extension = _resize_and_compress(file)
+    return _upload_bytes(data, recompressed_type, recompressed_extension, 'avatars')
 
 
 def upload_image(file, folder: str) -> str:
@@ -240,14 +248,24 @@ def upload_video(file, folder: str) -> str:
 
 def upload_file(file, folder: str) -> str:
     """Uploads a chat attachment (documents/images, not arbitrary files) to
-    Cloudinary and returns its public URL. Type-restricted to
+    Supabase Storage and returns its public URL. Type-restricted to
     CHAT_ATTACHMENT_MIME_BY_EXTENSION — un fichier authentifié uploadé n'est
     pas pour autant un fichier de confiance ; un exécutable/script partagé en
-    pièce jointe piège les collègues qui font confiance au lien."""
-    extension, _content_type = _resolve_upload_type(file, CHAT_ATTACHMENT_MIME_BY_EXTENSION)
+    pièce jointe piège les collègues qui font confiance au lien.
+
+    Temporairement sur Supabase plutôt que Cloudinary (choix V1 : décision
+    du 10/09/2026, voir docs/ROADMAP_TECHNIQUE.md) — Cloudinary reste prévu
+    pour la V2. Le bucket est celui du site vitrine (`BUCKET_NAME`, public) :
+    une pièce jointe chat obtient donc le même modèle de confiance qu'une
+    image marketing — URL publique, non listable sans connaître le chemin —
+    pas de contrôle d'accès par utilisateur au-delà de ça. Une pièce jointe
+    peut porter des informations plus sensibles qu'un visuel marketing ; à
+    revoir dans le même mouvement que la bascule V2.
+    """
+    extension, content_type = _resolve_upload_type(file, CHAT_ATTACHMENT_MIME_BY_EXTENSION)
     if file.size > MAX_FILE_UPLOAD_SIZE:
         raise ValidationError('Le fichier dépasse la taille maximale autorisée (20 Mo).')
-    return _upload_to_cloudinary(file.read(), folder, extension)
+    return _upload_bytes(file.read(), content_type, extension, folder)
 
 
 def _upload_bytes(data: bytes, content_type: str, extension: str, folder: str) -> str:

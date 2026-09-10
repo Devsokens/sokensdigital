@@ -1,5 +1,5 @@
 import io
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from PIL import Image
@@ -621,15 +621,21 @@ class AvatarUploadViewTests(APITestCase):
         self.assertEqual(response.status_code, 400)
 
     @patch.dict('os.environ', {
-        'CLOUDINARY_CLOUD_NAME': 'test-cloud', 'CLOUDINARY_API_KEY': 'test-key', 'CLOUDINARY_API_SECRET': 'test-secret',
+        'SUPABASE_URL': 'https://test-project.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'test-key',
     })
-    @patch('core.storage.cloudinary.uploader.upload')
-    def test_authenticated_user_can_upload_avatar(self, mock_upload):
-        mock_upload.return_value = {'secure_url': 'https://res.cloudinary.com/test-cloud/image/upload/v1/avatars/abc.jpg'}
+    @patch('core.storage._session.post')
+    def test_authenticated_user_can_upload_avatar(self, mock_post):
+        # Avatars passent par Supabase en V1 (Cloudinary est prévu pour la
+        # V2 — voir docs/ROADMAP_TECHNIQUE.md) : deux réponses attendues,
+        # la création idempotente du bucket puis l'upload de l'objet.
+        mock_post.side_effect = [
+            Mock(status_code=200, text='{}'),
+            Mock(status_code=200, text='{}'),
+        ]
         response = self.client.post('/api/v1/uploads/avatar/', {'file': self.image_file()}, format='multipart')
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.json()['url'], 'https://res.cloudinary.com/test-cloud/image/upload/v1/avatars/abc.jpg')
-        self.assertEqual(mock_upload.call_args.kwargs['folder'], 'avatars')
+        url = response.json()['url']
+        self.assertTrue(url.startswith('https://test-project.supabase.co/storage/v1/object/public/site-content/avatars/'))
 
 
 class ChatAttachmentUploadViewTests(APITestCase):
@@ -656,20 +662,25 @@ class ChatAttachmentUploadViewTests(APITestCase):
         self.assertEqual(response.status_code, 400)
 
     @patch.dict('os.environ', {
-        'CLOUDINARY_CLOUD_NAME': 'test-cloud', 'CLOUDINARY_API_KEY': 'test-key', 'CLOUDINARY_API_SECRET': 'test-secret',
+        'SUPABASE_URL': 'https://test-project.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'test-key',
     })
-    @patch('core.storage.cloudinary.uploader.upload')
-    def test_authenticated_user_can_upload_allowed_file_type(self, mock_upload):
-        mock_upload.return_value = {'secure_url': 'https://res.cloudinary.com/test-cloud/raw/upload/v1/chat-attachments/abc.pdf'}
+    @patch('core.storage._session.post')
+    def test_authenticated_user_can_upload_allowed_file_type(self, mock_post):
+        # Pièces jointes chat sur Supabase en V1 (Cloudinary prévu V2 — voir
+        # docs/ROADMAP_TECHNIQUE.md).
+        mock_post.side_effect = [
+            Mock(status_code=200, text='{}'),
+            Mock(status_code=200, text='{}'),
+        ]
         response = self.client.post('/api/v1/uploads/chat-attachment/', {'file': self.any_file()}, format='multipart')
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.json()['url'], 'https://res.cloudinary.com/test-cloud/raw/upload/v1/chat-attachments/abc.pdf')
-        self.assertEqual(mock_upload.call_args.kwargs['folder'], 'chat-attachments')
+        url = response.json()['url']
+        self.assertTrue(url.startswith('https://test-project.supabase.co/storage/v1/object/public/site-content/chat-attachments/'))
 
     def test_disallowed_file_type_rejected(self):
-        # Défense contre la distribution de malware via un lien Cloudinary
-        # de confiance en pièce jointe chat — core.storage.ALLOWED_CHAT_
-        # ATTACHMENT_TYPES exclut délibérément les exécutables/scripts.
+        # Défense contre la distribution de malware via un lien public de
+        # confiance en pièce jointe chat — core.storage.CHAT_ATTACHMENT_
+        # MIME_BY_EXTENSION exclut délibérément les exécutables/scripts.
         response = self.client.post(
             '/api/v1/uploads/chat-attachment/',
             {'file': self.any_file(content_type='application/x-msdownload', name='payload.exe')},
