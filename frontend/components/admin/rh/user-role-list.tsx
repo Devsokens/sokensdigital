@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, MoreHorizontal, ShieldCheck, Search } from "lucide-react";
-import { listUsers, listDepartments } from "@/lib/api/hr";
+import { listUsers, listDepartments, deactivateUser } from "@/lib/api/hr";
 import { listProfiles } from "@/lib/firebase/profile";
 import type { Department, UserBrief } from "@/lib/api/types";
 import type { Profile } from "@/lib/firebase/types";
@@ -81,6 +81,21 @@ export function UserRoleList() {
   }, [rows, search]);
 
   const unprovisionedCount = rows?.filter((r) => r.roles.length === 0).length ?? 0;
+
+  // Action très critique (décision du 10/09/2026) : double confirmation
+  // plutôt qu'une seule, contrairement aux suppressions courantes de
+  // l'appli — perdre l'accès plateforme d'un collègue par un clic
+  // accidentel n'a pas le même coût qu'un brouillon supprimé par erreur.
+  async function handleDeactivate(row: MergedUser) {
+    if (!confirm(`Désactiver l'accès de ${row.name || row.email} ?`)) return;
+    if (!confirm("Confirmer une seconde fois : cette personne perdra tout accès à la plateforme.")) return;
+    try {
+      await deactivateUser(row.djangoId);
+      load();
+    } catch {
+      alert("Impossible de désactiver cet utilisateur.");
+    }
+  }
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!rows) {
@@ -184,7 +199,7 @@ export function UserRoleList() {
                             </button>
                           }
                         />
-                        <PopoverContent className="w-40 p-1" align="end">
+                        <PopoverContent className="w-44 p-1" align="end">
                           <UserEditModal
                             user={row}
                             onSaved={load}
@@ -197,6 +212,13 @@ export function UserRoleList() {
                               </button>
                             }
                           />
+                          <button
+                            type="button"
+                            onClick={() => handleDeactivate(row)}
+                            className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-destructive hover:bg-destructive/5"
+                          >
+                            Désactiver l&apos;accès
+                          </button>
                         </PopoverContent>
                       </Popover>
                     ) : (

@@ -18,6 +18,7 @@ from core.constants import (
     ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_MARKETING, ROLE_COMMERCIAL, ROLE_PROJECT_MANAGER,
     ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER, ROLE_DEVELOPER,
 )
+from core.notifications import notify_roles
 from core.permissions import has_role
 from core.storage import upload_image, upload_video
 from marketing.models import (
@@ -128,6 +129,30 @@ class LeadViewSet(viewsets.ModelViewSet):
         if has_role(self.request.user, *MARKETING_ROLES, ROLE_SUPER_ADMIN):
             return qs
         return qs.filter(assigned_to=self.request.user)
+
+    def perform_create(self, serializer):
+        lead = serializer.save()
+        label = lead.company_name or f'{lead.first_name} {lead.last_name}'.strip()
+        notify_roles(
+            MARKETING_ROLES,
+            title='Nouvelle demande créée',
+            message=f'Demande « {label} » créée manuellement.',
+            notification_type='GENERAL',
+            link='/admin/marketing/leads',
+            exclude=self.request.user,
+        )
+
+    def perform_destroy(self, instance):
+        label = instance.company_name or f'{instance.first_name} {instance.last_name}'.strip()
+        super().perform_destroy(instance)
+        notify_roles(
+            MARKETING_ROLES,
+            title='Demande supprimée',
+            message=f'Demande « {label} » supprimée.',
+            notification_type='GENERAL',
+            link='/admin/marketing/leads',
+            exclude=self.request.user,
+        )
 
 
 class IsMarketing(permissions.BasePermission):
@@ -549,7 +574,32 @@ class QuoteViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        quote = serializer.save(created_by=self.request.user)
+        notify_roles(
+            MARKETING_ROLES,
+            title='Nouveau devis créé',
+            message=f'Devis {quote.quote_number} créé.',
+            notification_type='GENERAL',
+            link='/admin/marketing/devis',
+            exclude=self.request.user,
+        )
+
+    def perform_destroy(self, instance):
+        # Suppression d'un devis déjà envoyé/accepté = action très critique
+        # (décision du 10/09/2026) — e-mail en plus du push. Un brouillon
+        # n'a encore rien d'engageant pour le client, push suffit.
+        was_validated = instance.status in (Quote.Status.ENVOYE, Quote.Status.ACCEPTE)
+        number = instance.quote_number
+        super().perform_destroy(instance)
+        notify_roles(
+            MARKETING_ROLES,
+            title='Devis supprimé',
+            message=f'Devis {number} supprimé.',
+            notification_type='GENERAL',
+            link='/admin/marketing/devis',
+            email=was_validated,
+            exclude=self.request.user,
+        )
 
     @extend_schema(
         tags=['Marketing & Commercial'],

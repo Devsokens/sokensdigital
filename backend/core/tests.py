@@ -347,6 +347,76 @@ class SetUserRoleViewTests(APITestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    @patch('core.views.notify_roles')
+    @patch('core.views.update_profile_fields')
+    def test_granting_super_admin_emails_other_super_admins(self, mock_update, mock_notify_roles):
+        # Decision du 10/09/2026 : attribuer/retirer SUPER_ADMIN est une
+        # action tres critique -> e-mail en plus du push.
+        _give_role(self.employee, ROLE_DEVELOPER)
+        self.client_super_admin.patch(
+            f'/api/v1/users/{self.employee.id}/role/', {'roles': ['SUPER_ADMIN']}, format='json',
+        )
+        mock_notify_roles.assert_called_once()
+        args, kwargs = mock_notify_roles.call_args
+        self.assertEqual(args[0], (ROLE_SUPER_ADMIN,))
+        self.assertTrue(kwargs.get('email'))
+
+    @patch('core.views.notify_roles')
+    @patch('core.views.update_profile_fields')
+    def test_non_super_admin_role_change_does_not_email(self, mock_update, mock_notify_roles):
+        self.client_super_admin.patch(
+            f'/api/v1/users/{self.employee.id}/role/', {'roles': ['COMPTABLE']}, format='json',
+        )
+        mock_notify_roles.assert_not_called()
+
+
+class DeactivateUserViewTests(APITestCase):
+    def setUp(self):
+        self.super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')
+        _give_role(self.super_admin, ROLE_SUPER_ADMIN)
+        self.other_super_admin = User.objects.create(email='super2@sokensdigital.com', first_name='Super2')
+        _give_role(self.other_super_admin, ROLE_SUPER_ADMIN)
+        self.employee = User.objects.create(
+            email='employee@sokensdigital.com', first_name='Employee', firebase_uid='firebase-uid-existing',
+        )
+        self.rh_user = User.objects.create(email='rh@sokensdigital.com', first_name='RH')
+        _give_role(self.rh_user, ROLE_RH_MANAGER)
+
+        self.client_super_admin = APIClient()
+        self.client_super_admin.force_authenticate(user=self.super_admin)
+        self.client_rh = APIClient()
+        self.client_rh.force_authenticate(user=self.rh_user)
+
+    @patch('core.views.notify_roles')
+    @patch('firebase_admin.auth.update_user')
+    def test_super_admin_can_deactivate_a_user(self, mock_update_user, mock_notify_roles):
+        response = self.client_super_admin.post(f'/api/v1/users/{self.employee.id}/deactivate/')
+        self.assertEqual(response.status_code, 200)
+        self.employee.refresh_from_db()
+        self.assertFalse(self.employee.is_active)
+        mock_update_user.assert_called_once_with('firebase-uid-existing', disabled=True)
+
+        # Suppression d'un utilisateur = action tres critique -> e-mail.
+        mock_notify_roles.assert_called_once()
+        args, kwargs = mock_notify_roles.call_args
+        self.assertEqual(args[0], (ROLE_SUPER_ADMIN,))
+        self.assertTrue(kwargs.get('email'))
+
+    def test_rh_cannot_deactivate(self):
+        response = self.client_rh.post(f'/api/v1/users/{self.employee.id}/deactivate/')
+        self.assertEqual(response.status_code, 403)
+        self.employee.refresh_from_db()
+        self.assertTrue(self.employee.is_active)
+
+    def test_cannot_deactivate_own_account(self):
+        response = self.client_super_admin.post(f'/api/v1/users/{self.super_admin.id}/deactivate/')
+        self.assertEqual(response.status_code, 400)
+
+    def test_unknown_user_404s(self):
+        import uuid
+        response = self.client_super_admin.post(f'/api/v1/users/{uuid.uuid4()}/deactivate/')
+        self.assertEqual(response.status_code, 404)
+
 
 class DepartmentViewSetTests(APITestCase):
     def setUp(self):

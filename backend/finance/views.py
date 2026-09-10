@@ -10,6 +10,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 
 from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE, ROLE_CAISSIER
+from core.notifications import notify_roles
 from core.permissions import has_role
 from decimal import Decimal as D
 from django.utils import timezone
@@ -282,13 +283,38 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     permission_classes = [IsFinanceRole]
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        invoice = serializer.save(created_by=self.request.user)
+        notify_roles(
+            DIRECTEUR_FINANCIER_ROLES,
+            title='Nouvelle facture créée',
+            message=f'Facture {invoice.invoice_number} créée.',
+            notification_type='GENERAL',
+            link='/admin/finance/facturation',
+            exclude=self.request.user,
+        )
 
     def update(self, request, *args, **kwargs):
         invoice = self.get_object()
         if invoice.status != Invoice.Status.BROUILLON:
             return Response({'detail': 'Une facture validée ne peut plus être modifiée.'}, status=status.HTTP_400_BAD_REQUEST)
         return super().update(request, *args, **kwargs)
+
+    def perform_destroy(self, instance):
+        # Suppression d'une facture déjà validée/envoyée = action très
+        # critique (décision du 10/09/2026) — e-mail en plus du push. Une
+        # facture encore BROUILLON n'est qu'un brouillon, push suffit.
+        was_validated = instance.status != Invoice.Status.BROUILLON
+        number = instance.invoice_number
+        super().perform_destroy(instance)
+        notify_roles(
+            DIRECTEUR_FINANCIER_ROLES,
+            title='Facture supprimée',
+            message=f'Facture {number} supprimée.',
+            notification_type='GENERAL',
+            link='/admin/finance/facturation',
+            email=was_validated,
+            exclude=self.request.user,
+        )
 
     @extend_schema(
         tags=['Finance & Comptabilité'],

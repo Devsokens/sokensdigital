@@ -19,6 +19,7 @@ from core.permissions import (
     IsConsultant, IsSupportClient,
 )
 from core.models import User, AuditLog, Notification
+from core.notifications import notify_roles
 from .models import (
     Project, ProjectPhase, ProjectDocument,
     Task, TimeEntry, Ticket, KnowledgeBase, ProjectStatus,
@@ -76,6 +77,26 @@ class ProjectViewSet(viewsets.ModelViewSet):
         # Ajouter le PM comme membre si pas déjà
         if instance.project_manager:
             instance.members.add(instance.project_manager)
+        notify_roles(
+            (*ADMIN_ROLES, ROLE_PROJECT_MANAGER),
+            title='Nouveau projet créé',
+            message=f'Projet « {instance.name} » créé.',
+            notification_type='GENERAL',
+            link='/admin/technique/projets',
+            exclude=self.request.user,
+        )
+
+    def perform_destroy(self, instance):
+        name = instance.name
+        super().perform_destroy(instance)
+        notify_roles(
+            (*ADMIN_ROLES, ROLE_PROJECT_MANAGER),
+            title='Projet supprimé',
+            message=f'Projet « {name} » supprimé.',
+            notification_type='GENERAL',
+            link='/admin/technique/projets',
+            exclude=self.request.user,
+        )
 
     def perform_update(self, serializer):
         user = self.request.user

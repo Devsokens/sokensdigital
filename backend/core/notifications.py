@@ -41,3 +41,31 @@ def notify(
 
     if email and user.email:
         mailer.send_mail(user.email, title, message)
+
+
+def notify_roles(
+    role_names,
+    title: str,
+    message: str,
+    notification_type: str,
+    link: str | None = None,
+    email: bool = False,
+    exclude=None,
+) -> None:
+    """Prévient tous les titulaires d'un rôle donné — la "tête de
+    département" n'existe pas comme champ (Department n'a pas de champ
+    responsable/head, voir core.models.Department) : c'est le rôle qui en
+    tient lieu, même logique que marketing.workflow_views._notify_receiving_side.
+
+    Utilisé pour les actions de création/suppression/rejet qui doivent
+    prévenir "le département concerné" plutôt qu'une seule personne
+    (décision du 10/09/2026 — notifications systématiques). `email=True`
+    pour les actions très critiques (voir docs/ROADMAP_TECHNIQUE.md).
+    """
+    from core.models import User
+
+    recipients = User.objects.filter(is_active=True, roles__name__in=role_names).distinct()
+    if exclude is not None:
+        recipients = recipients.exclude(pk=exclude.pk)
+    for user in recipients:
+        notify(user=user, title=title, message=message, notification_type=notification_type, link=link, email=email)

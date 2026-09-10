@@ -1,3 +1,4 @@
+import logging
 from decimal import Decimal
 
 from django.core.cache import cache
@@ -14,6 +15,7 @@ from rest_framework.views import APIView
 
 from core.firestore_client import create_profile, invalidate_role_cache, update_profile_fields, upsert_chat_room
 from core.models import AuditLog, Department, PushDevice, Role, User, hash_email
+from core.notifications import notify, notify_roles
 from core.permissions import has_role
 from core.storage import upload_avatar, upload_file
 from core.constants import (
@@ -33,6 +35,8 @@ from core.serializers import (
     UserBriefSerializer,
     UserSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _sync_django_roles(django_user, app_roles):
@@ -316,6 +320,29 @@ class ProvisionUserView(APIView):
             firebase_auth.delete_user(firebase_user.uid)
             raise
 
+        # Notifications systématiques (décision du 10/09/2026) : toute
+        # création de compte prévient le RH — Super-Admin en plus, par
+        # e-mail, quand le rôle accordé est lui-même SUPER_ADMIN (action
+        # très critique, voir docs/ROADMAP_TECHNIQUE.md).
+        notify_roles(
+            (ROLE_RH_MANAGER,),
+            title='Nouveau compte créé',
+            message=f"{data['first_name']} {data['last_name']} ({data['email']}) vient d'être provisionné(e).",
+            notification_type='GENERAL',
+            link='/admin/rh/utilisateurs',
+            exclude=request.user,
+        )
+        if 'SUPER_ADMIN' in data['roles']:
+            notify_roles(
+                (ROLE_SUPER_ADMIN,),
+                title='Rôle Super-Admin accordé',
+                message=f"{data['first_name']} {data['last_name']} ({data['email']}) a été créé(e) avec le rôle Super-Admin.",
+                notification_type='GENERAL',
+                link='/admin/rh/utilisateurs',
+                email=True,
+                exclude=request.user,
+            )
+
         return Response(UserSerializer(django_user).data, status=status.HTTP_201_CREATED)
 
 
@@ -349,6 +376,8 @@ class SetUserRoleView(APIView):
         data = serializer.validated_data
         department = data.get('department')
 
+        had_super_admin = has_role(django_user, ROLE_SUPER_ADMIN)
+
         update_profile_fields(django_user.firebase_uid, {
             'roles': data['roles'],
             'departmentId': str(department.id) if department else None,
@@ -357,6 +386,71 @@ class SetUserRoleView(APIView):
         django_user.department = department
         django_user.save(update_fields=['department'])
         _sync_django_roles(django_user, data['roles'])
+
+        # Attribution ou retrait du rôle Super-Admin : action très critique
+        # (décision du 10/09/2026) — e-mail aux Super-Admins en plus du push.
+        has_super_admin_now = 'SUPER_ADMIN' in data['roles']
+        if has_super_admin_now != had_super_admin:
+            verb = 'accordé' if has_super_admin_now else 'retiré'
+            notify_roles(
+                (ROLE_SUPER_ADMIN,),
+                title=f'Rôle Super-Admin {verb}',
+                message=f'Le rôle Super-Admin a été {verb} à {django_user.first_name} {django_user.last_name}.',
+                notification_type='GENERAL',
+                link='/admin/rh/utilisateurs',
+                email=True,
+                exclude=request.user,
+            )
+
+        return Response(UserSerializer(django_user).data)
+
+
+class DeactivateUserView(APIView):
+    """Révoque l'accès plateforme d'un employé — Super-Admin only, comme
+    SetUserRoleView. Pas de suppression Firebase/Django réelle (perdrait
+    l'historique — audit log, décaissements approuvés, timesheets validés,
+    tous rattachés à ce user_id) : désactivation des deux côtés à la place
+    (`is_active=False` côté Django, `disabled=True` côté Firebase Auth),
+    ce qui coupe la connexion sans casser les FK existantes."""
+
+    permission_classes = [IsSuperAdmin]
+
+    @extend_schema(
+        tags=['Administration & RH'],
+        summary="Deactivate an employee's platform access",
+        responses={200: UserSerializer},
+    )
+    def post(self, request, pk):
+        django_user = User.objects.filter(pk=pk).first()
+        if not django_user:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if django_user.pk == request.user.pk:
+            return Response(
+                {'detail': 'Vous ne pouvez pas désactiver votre propre compte.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if django_user.firebase_uid:
+            from firebase_admin import auth as firebase_auth
+            try:
+                firebase_auth.update_user(django_user.firebase_uid, disabled=True)
+            except Exception:
+                logger.exception('Désactivation Firebase impossible pour %s', django_user.firebase_uid)
+
+        django_user.is_active = False
+        django_user.save(update_fields=['is_active'])
+
+        # Suppression d'un utilisateur = action très critique (décision du
+        # 10/09/2026) — e-mail aux Super-Admins en plus du push.
+        notify_roles(
+            (ROLE_SUPER_ADMIN,),
+            title='Utilisateur désactivé',
+            message=f'{django_user.first_name} {django_user.last_name} ({django_user.email}) a été désactivé(e).',
+            notification_type='GENERAL',
+            link='/admin/rh/utilisateurs',
+            email=True,
+            exclude=request.user,
+        )
 
         return Response(UserSerializer(django_user).data)
 

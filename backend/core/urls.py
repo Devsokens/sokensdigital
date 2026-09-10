@@ -6,6 +6,7 @@ from core.views import (
     AuditLogViewSet,
     AvatarUploadView,
     ChatAttachmentUploadView,
+    DeactivateUserView,
     DepartmentViewSet,
     MeView,
     ProvisionUserView,
@@ -36,4 +37,5 @@ urlpatterns = [
     path('users/provision/', ProvisionUserView.as_view(), name='provision-user'),
     path('push/devices/', PushDeviceView.as_view(), name='push-devices'),
     path('users/<uuid:pk>/role/', SetUserRoleView.as_view(), name='set-user-role'),
+    path('users/<uuid:pk>/deactivate/', DeactivateUserView.as_view(), name='deactivate-user'),
 ] + router.urls

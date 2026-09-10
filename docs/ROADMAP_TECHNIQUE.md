@@ -6,6 +6,33 @@ a été évalué contre le code existant avant d'être mis de côté.
 
 ---
 
+## 0. Notifications systématiques création/suppression/rejet — portée retenue
+
+**Décision du 10/09/2026.** Le principe "toute création/suppression/rejet
+notifie" a été appliqué de façon ciblée plutôt que sur chaque endpoint
+DELETE/POST de l'appli (~40+ endroits) — décision explicite de l'utilisateur.
+
+**Objets couverts** (push systématique, e-mail en plus pour les actions
+très critiques listées) : utilisateurs, projets (technique et projects),
+factures, devis, demandes (leads). `core.notifications.notify_roles()`
+prévient tout titulaire d'un rôle donné (pas de champ "responsable de
+département" — Department n'en a pas, voir core.models.Department — le
+rôle en tient lieu, même logique que `_notify_receiving_side`).
+
+**Actions très critiques (push + e-mail)** :
+- Suppression d'un utilisateur (`DeactivateUserView` — désactivation, pas
+  suppression réelle, pour préserver l'historique audit/finance).
+- Attribution ou retrait du rôle SUPER_ADMIN.
+- Suppression d'une facture ou d'un devis déjà validé/envoyé (un brouillon
+  supprimé reste push seul).
+- Rejet d'un projet soumis (à construire — voir le chantier "cartes projets
+  soumis").
+
+**Non couvert délibérément** : suppressions mineures (tag, brouillon CMS,
+pièce jointe, etc.) — bruit sans valeur si notifié à chaque fois.
+
+---
+
 ## 1. Stockage des fichiers — état actuel et bascule V2 prévue
 
 **Décision du 10/09/2026, révisée le même jour (bascule vers des buckets

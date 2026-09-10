@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.firestore_client import set_chat_room_members, upsert_chat_room
+from core.notifications import notify_roles
 from core.permissions import has_role
 from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER
 from projects.models import Project, ProjectMember, ProjectTask, ProjectTaskComment, Timesheet
@@ -78,6 +79,26 @@ class ProjectViewSet(viewsets.ModelViewSet):
             'projectId': str(project.id),
         })
         self._sync_chat_room_members(project)
+        notify_roles(
+            (*MANAGER_ROLES, ROLE_SUPER_ADMIN),
+            title='Nouveau projet créé',
+            message=f'Projet « {project.name} » créé.',
+            notification_type='GENERAL',
+            link='/admin/technique/projets',
+            exclude=self.request.user,
+        )
+
+    def perform_destroy(self, instance):
+        name = instance.name
+        super().perform_destroy(instance)
+        notify_roles(
+            (*MANAGER_ROLES, ROLE_SUPER_ADMIN),
+            title='Projet supprimé',
+            message=f'Projet « {name} » supprimé.',
+            notification_type='GENERAL',
+            link='/admin/technique/projets',
+            exclude=self.request.user,
+        )
 
     def _sync_chat_room_members(self, project):
         """Pushes the current lead + team member firebase_uids to the
