@@ -278,7 +278,7 @@ export function ShowcaseProjectList() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-          <table className="w-full text-sm">
+          <table className="table-responsive w-full text-sm">
             <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
               <tr>
                 <th className="px-4 py-3 font-medium">Titre</th>
@@ -290,13 +290,13 @@ export function ShowcaseProjectList() {
             <tbody className="divide-y divide-neutral-100">
               {projects.map((project) => (
                 <tr key={project.id} className="hover:bg-neutral-50">
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" data-label="Titre">
                     <button type="button" onClick={() => edit(project)} className="text-neutral-900 hover:text-primary">
                       {project.title}
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-neutral-500">{project.sector}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-neutral-500" data-label="Secteur">{project.sector}</td>
+                  <td className="px-4 py-3" data-label="Statut">
                     <span
                       className={
                         project.is_active

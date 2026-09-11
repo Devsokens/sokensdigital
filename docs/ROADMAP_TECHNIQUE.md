@@ -6,6 +6,31 @@ a été évalué contre le code existant avant d'être mis de côté.
 
 ---
 
+## Responsive mobile-first des tableaux admin — décision du 11/09/2026
+
+Tous les tableaux de données admin (finance, rh, technique, marketing,
+support — 22 tableaux) utilisaient un pattern unique jusqu'ici : scroll
+horizontal en dessous du point de rupture, avec un cas qui forçait carrément
+`min-width: 720px` (technique/project-list.tsx). Aucun n'avait de layout
+carte empilée sur mobile.
+
+**Fix appliqué** : classe CSS `.table-responsive` (`app/globals.css`) — sous
+640px, chaque `<tr>` devient une carte empilée et chaque `<td>` affiche
+l'en-tête de sa colonne via `data-label`, sans toucher à la structure JSX
+des tableaux (juste la classe sur `<table>` + un attribut par `<td>`). Un
+seul point de définition CSS pour un rendu cohérent partout, plutôt que 22
+layouts de carte bricolés à la main.
+
+**Volontairement non converties** (2 cas — ce ne sont pas des tableaux de
+données) :
+- `technique/team-timesheet.tsx` — grille hebdomadaire (colonnes = jours).
+  Empiler les jours en liste verticale détruirait la structure calendrier
+  plutôt que l'améliorer ; le scroll horizontal reste la bonne UX ici.
+- `technique/project-task-board.tsx` — tableau kanban (colonnes = statuts),
+  horizontal par nature, pas une liste d'enregistrements.
+
+---
+
 ## 0. Notifications systématiques création/suppression/rejet — portée retenue
 
 **Décision du 10/09/2026.** Le principe "toute création/suppression/rejet

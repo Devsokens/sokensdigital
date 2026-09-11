@@ -76,7 +76,7 @@ export function AccountingPeriods() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-4 py-3 font-medium">Période</th>
@@ -88,9 +88,9 @@ export function AccountingPeriods() {
           <tbody className="divide-y divide-neutral-100">
             {periods.map((period) => (
               <tr key={period.id}>
-                <td className="px-4 py-3 text-neutral-900">{period.label}</td>
-                <td className="px-4 py-3 text-neutral-500">{period.start_date} → {period.end_date}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 text-neutral-900" data-label="Période">{period.label}</td>
+                <td className="px-4 py-3 text-neutral-500" data-label="Dates">{period.start_date} → {period.end_date}</td>
+                <td className="px-4 py-3" data-label="Statut">
                   <span
                     className={`rounded-full px-2 py-0.5 text-xs ${
                       period.status === "OUVERTE" ? "bg-emerald-100 text-emerald-700" : "bg-neutral-200 text-neutral-600"
@@ -99,7 +99,7 @@ export function AccountingPeriods() {
                     {period.status === "OUVERTE" ? "Ouverte" : "Clôturée"}
                   </span>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" data-label="Action">
                   <button
                     disabled={actingId === period.id}
                     onClick={() => toggle(period)}

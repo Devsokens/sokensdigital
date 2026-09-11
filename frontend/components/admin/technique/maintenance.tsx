@@ -436,7 +436,7 @@ function ReportsPanel() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-4 py-3 font-medium">Application</th>
@@ -449,25 +449,25 @@ function ReportsPanel() {
           <tbody className="divide-y divide-neutral-100">
             {reports.map((r) => (
               <tr key={r.id}>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" data-label="Application">
                   <p className="text-neutral-900">{r.app_name}</p>
                   <p className="max-w-xs truncate text-xs text-neutral-400">{r.summary}</p>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" data-label="Statut">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${REPORT_STATUS_COLORS[r.status]}`}>
                     {REPORT_STATUS_LABELS[r.status]}
                   </span>
                 </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1 text-[10px]">
+                <td className="px-4 py-3" data-label="Contrôles">
+                  <div className="flex flex-wrap justify-end gap-1 text-[10px] sm:justify-start">
                     <Check ok={r.site_reachable} label="En ligne" />
                     <Check ok={r.ssl_valid} label="SSL" />
                     <Check ok={r.backups_verified} label="Backups" />
                     <Check ok={r.updates_applied} label="MàJ" />
                   </div>
                 </td>
-                <td className="px-4 py-3 text-neutral-500">{r.performed_by_name ?? "—"}</td>
-                <td className="px-4 py-3 text-neutral-500">
+                <td className="px-4 py-3 text-neutral-500" data-label="Par">{r.performed_by_name ?? "—"}</td>
+                <td className="px-4 py-3 text-neutral-500" data-label="Date">
                   {new Date(r.performed_at).toLocaleDateString("fr-FR")}
                 </td>
               </tr>

@@ -67,7 +67,7 @@ export function FAQList() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-4 py-3 font-medium">Question</th>
@@ -80,14 +80,14 @@ export function FAQList() {
           <tbody className="divide-y divide-neutral-100">
             {entries.map((entry) => (
               <tr key={entry.id}>
-                <td className="px-4 py-3 text-neutral-900">{entry.question}</td>
-                <td className="px-4 py-3 text-neutral-600">{entry.category || "—"}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 text-neutral-900" data-label="Question">{entry.question}</td>
+                <td className="px-4 py-3 text-neutral-600" data-label="Catégorie">{entry.category || "—"}</td>
+                <td className="px-4 py-3" data-label="Audience">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${AUDIENCE_COLORS[entry.audience]}`}>
                     {AUDIENCE_LABELS[entry.audience]}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-neutral-500">{entry.is_published ? "Oui" : "Non"}</td>
+                <td className="px-4 py-3 text-neutral-500" data-label="Publié">{entry.is_published ? "Oui" : "Non"}</td>
                 <td className="px-4 py-3">
                   <Popover>
                     <PopoverTrigger

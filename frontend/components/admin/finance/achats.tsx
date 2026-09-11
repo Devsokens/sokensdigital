@@ -160,7 +160,7 @@ function FichesPanel() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-4 py-3 font-medium">Origine</th>
@@ -174,16 +174,16 @@ function FichesPanel() {
           <tbody className="divide-y divide-neutral-100">
             {requests.map((r) => (
               <tr key={r.id}>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" data-label="Origine">
                   <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">Fiche besoins</span>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" data-label="Titre">
                   <p className="text-neutral-900">{r.title}</p>
                   <p className="max-w-xs truncate text-xs text-neutral-400">{r.description}</p>
                 </td>
-                <td className="px-4 py-3 text-neutral-500">{r.department_name}</td>
-                <td className="px-4 py-3 font-mono text-neutral-900">{formatFcfa(r.estimated_amount)}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 text-neutral-500" data-label="Département">{r.department_name}</td>
+                <td className="px-4 py-3 font-mono text-neutral-900" data-label="Montant estimé">{formatFcfa(r.estimated_amount)}</td>
+                <td className="px-4 py-3" data-label="Statut">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${PROCUREMENT_STATUS_COLORS[r.status]}`}>
                     {PROCUREMENT_STATUS_LABELS[r.status]}
                   </span>
@@ -192,7 +192,7 @@ function FichesPanel() {
                   )}
                 </td>
                 {canApprove && (
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" data-label="Action">
                     {r.status === "EN_ATTENTE_RCF" && (
                       <div className="flex gap-2">
                         <button disabled={actingId === r.id} onClick={() => handleAction(r.id, approveProcurementRcf)} className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-700 disabled:opacity-40">Approuver (RCF)</button>
@@ -211,16 +211,16 @@ function FichesPanel() {
             ))}
             {disbursements.map((d) => (
               <tr key={d.id} className="bg-neutral-50/40">
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" data-label="Origine">
                   <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">Décaissement</span>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" data-label="Titre">
                   <p className="text-neutral-900">{d.beneficiary}</p>
                   <p className="max-w-xs truncate text-xs text-neutral-400">{d.reason}</p>
                 </td>
-                <td className="px-4 py-3 text-neutral-500">—</td>
-                <td className="px-4 py-3 font-mono text-neutral-900">{formatFcfa(d.amount)}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 text-neutral-500" data-label="Département">—</td>
+                <td className="px-4 py-3 font-mono text-neutral-900" data-label="Montant estimé">{formatFcfa(d.amount)}</td>
+                <td className="px-4 py-3" data-label="Statut">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${DISBURSEMENT_STATUS_COLORS[d.status]}`}>
                     {DISBURSEMENT_STATUS_LABELS[d.status]}
                   </span>
@@ -229,7 +229,7 @@ function FichesPanel() {
                   )}
                 </td>
                 {canApprove && (
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" data-label="Action">
                     {/* Le circuit N1/N2/N3 vit dans son propre écran — pas
                         de duplication du workflow d'approbation ici. */}
                     <a href="/admin/technique/decaissements" className="text-xs text-primary hover:underline">
@@ -392,7 +392,7 @@ function DevisPanel() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-4 py-3 font-medium">N°</th>
@@ -405,14 +405,14 @@ function DevisPanel() {
           <tbody className="divide-y divide-neutral-100">
             {quotes.map((q) => (
               <tr key={q.id}>
-                <td className="px-4 py-3 font-mono text-xs text-neutral-500">{q.quote_number}</td>
-                <td className="px-4 py-3 text-neutral-900">{q.supplier_name}</td>
-                <td className="px-4 py-3 font-mono text-neutral-900">{formatFcfa(q.amount_ttc)}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 font-mono text-xs text-neutral-500" data-label="N°">{q.quote_number}</td>
+                <td className="px-4 py-3 text-neutral-900" data-label="Fournisseur">{q.supplier_name}</td>
+                <td className="px-4 py-3 font-mono text-neutral-900" data-label="Montant TTC">{formatFcfa(q.amount_ttc)}</td>
+                <td className="px-4 py-3" data-label="Statut">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${QUOTE_STATUS_COLORS[q.status]}`}>{QUOTE_STATUS_LABELS[q.status]}</span>
                 </td>
                 {canApprove && (
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" data-label="Action">
                     {q.status === "EN_ATTENTE" && (
                       <div className="flex gap-2">
                         {!q.rcf_validated_at && (
@@ -557,7 +557,7 @@ function FacturesPanel() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-4 py-3 font-medium">N° facture</th>
@@ -570,14 +570,14 @@ function FacturesPanel() {
           <tbody className="divide-y divide-neutral-100">
             {invoices.map((inv) => (
               <tr key={inv.id}>
-                <td className="px-4 py-3 text-neutral-900">{inv.invoice_number}</td>
-                <td className="px-4 py-3 text-neutral-700">{inv.supplier_name}</td>
-                <td className="px-4 py-3 font-mono text-neutral-900">{formatFcfa(inv.amount_ttc)}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 text-neutral-900" data-label="N° facture">{inv.invoice_number}</td>
+                <td className="px-4 py-3 text-neutral-700" data-label="Fournisseur">{inv.supplier_name}</td>
+                <td className="px-4 py-3 font-mono text-neutral-900" data-label="Montant TTC">{formatFcfa(inv.amount_ttc)}</td>
+                <td className="px-4 py-3" data-label="Statut">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${INVOICE_STATUS_COLORS[inv.status]}`}>{INVOICE_STATUS_LABELS[inv.status]}</span>
                 </td>
                 {canValidate && (
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" data-label="Action">
                     {inv.status === "RECUE" && (
                       <button disabled={actingId === inv.id} onClick={() => handleValidate(inv.id)} className="rounded-full bg-primary/10 px-3 py-1 text-xs text-primary disabled:opacity-40">
                         Valider
@@ -697,7 +697,7 @@ function FournisseursPanel() {
       )}
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-4 py-3 font-medium">Nom</th>
@@ -709,10 +709,10 @@ function FournisseursPanel() {
           <tbody className="divide-y divide-neutral-100">
             {suppliers.map((s) => (
               <tr key={s.id}>
-                <td className="px-4 py-3 text-neutral-900">{s.name}</td>
-                <td className="px-4 py-3 text-neutral-700">{s.contact_person}</td>
-                <td className="px-4 py-3 text-neutral-500">{s.phone}</td>
-                <td className="px-4 py-3 text-neutral-500">{s.email}</td>
+                <td className="px-4 py-3 text-neutral-900" data-label="Nom">{s.name}</td>
+                <td className="px-4 py-3 text-neutral-700" data-label="Contact">{s.contact_person}</td>
+                <td className="px-4 py-3 text-neutral-500" data-label="Téléphone">{s.phone}</td>
+                <td className="px-4 py-3 text-neutral-500" data-label="Email">{s.email}</td>
               </tr>
             ))}
             {suppliers.length === 0 && (

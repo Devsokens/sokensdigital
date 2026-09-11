@@ -129,7 +129,7 @@ export function EmployeeList() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-[11px] font-semibold tracking-wide text-neutral-500 uppercase">
             <tr>
               <th className="px-5 py-3">Employé</th>
@@ -147,7 +147,7 @@ export function EmployeeList() {
               const isActive = e.status === "ACTIF";
               return (
                 <tr key={e.id} className={cn("transition-colors hover:bg-neutral-50", !isActive && "opacity-60")}>
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5" data-label="Employé">
                     <Link href={`/admin/rh/${e.id}`} className="flex items-center gap-3">
                       <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-100 text-xs font-semibold text-neutral-600">
                         {e.user.avatar_url ? (
@@ -165,8 +165,8 @@ export function EmployeeList() {
                       </span>
                     </Link>
                   </td>
-                  <td className="px-5 py-3.5 text-neutral-600">{e.position || "—"}</td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5 text-neutral-600" data-label="Poste">{e.position || "—"}</td>
+                  <td className="px-5 py-3.5" data-label="Contrat">
                     {contractLabel ? (
                       <span className="rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600">
                         {contractLabel}
@@ -175,9 +175,9 @@ export function EmployeeList() {
                       <span className="text-xs text-neutral-300">—</span>
                     )}
                   </td>
-                  <td className="px-5 py-3.5 text-neutral-500">{formatDate(e.hire_date)}</td>
-                  <td className="px-5 py-3.5 text-right font-mono text-neutral-600">{formatFcfa(e.base_hourly_cost)}</td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5 text-neutral-500" data-label="Embauche">{formatDate(e.hire_date)}</td>
+                  <td className="px-5 py-3.5 text-right font-mono text-neutral-600" data-label="Coût horaire">{formatFcfa(e.base_hourly_cost)}</td>
+                  <td className="px-5 py-3.5" data-label="Statut">
                     <span
                       className={cn(
                         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",

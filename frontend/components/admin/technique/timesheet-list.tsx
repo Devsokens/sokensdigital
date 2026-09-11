@@ -158,7 +158,7 @@ function MyTimesheetEntries({ isChefDeProjet }: { isChefDeProjet: boolean }) {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-          <table className="w-full text-sm">
+          <table className="table-responsive w-full text-sm">
             <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
               <tr>
                 {isChefDeProjet && <th className="px-4 py-3 font-medium">Collaborateur</th>}
@@ -174,15 +174,15 @@ function MyTimesheetEntries({ isChefDeProjet }: { isChefDeProjet: boolean }) {
               {entries.map((entry) => (
                 <tr key={entry.id}>
                   {isChefDeProjet && (
-                    <td className="px-4 py-3 text-neutral-900">
+                    <td className="px-4 py-3 text-neutral-900" data-label="Collaborateur">
                       {entry.user.first_name} {entry.user.last_name}
                     </td>
                   )}
-                  <td className="px-4 py-3 text-neutral-500">{entry.date}</td>
-                  <td className="px-4 py-3 text-neutral-500">{entry.task_title ?? "—"}</td>
-                  <td className="px-4 py-3 text-neutral-900">{entry.hours}h</td>
-                  <td className="px-4 py-3 text-neutral-500">{entry.description || "—"}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-neutral-500" data-label="Date">{entry.date}</td>
+                  <td className="px-4 py-3 text-neutral-500" data-label="Tâche">{entry.task_title ?? "—"}</td>
+                  <td className="px-4 py-3 text-neutral-900" data-label="Heures">{entry.hours}h</td>
+                  <td className="px-4 py-3 text-neutral-500" data-label="Description">{entry.description || "—"}</td>
+                  <td className="px-4 py-3" data-label="Statut">
                     <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_COLORS[entry.status]}`}>
                       {STATUS_LABELS[entry.status]}
                     </span>

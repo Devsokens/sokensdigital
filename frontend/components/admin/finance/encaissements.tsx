@@ -88,7 +88,7 @@ export function Encaissements() {
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-            <table className="w-full text-sm">
+            <table className="table-responsive w-full text-sm">
               <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
                 <tr>
                   <th className="px-4 py-3 font-medium">Origine</th>
@@ -102,21 +102,21 @@ export function Encaissements() {
               <tbody className="divide-y divide-neutral-100">
                 {data.results.map((row) => (
                   <tr key={`${row.origin}-${row.id}`}>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" data-label="Origine">
                       <span className={`rounded-full px-2 py-0.5 text-xs ${ORIGIN_COLORS[row.origin]}`}>
                         {row.origin_label}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-neutral-500">{row.reference || "—"}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 font-mono text-xs text-neutral-500" data-label="Référence">{row.reference || "—"}</td>
+                    <td className="px-4 py-3" data-label="Motif">
                       <p className="text-neutral-700">{row.label}</p>
                       {row.description && (
                         <p className="max-w-xs truncate text-xs text-neutral-400">{row.description}</p>
                       )}
                     </td>
-                    <td className="px-4 py-3 font-mono text-emerald-700">+{formatFcfa(row.amount)}</td>
-                    <td className="px-4 py-3 text-neutral-500">{row.date}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 font-mono text-emerald-700" data-label="Montant">+{formatFcfa(row.amount)}</td>
+                    <td className="px-4 py-3 text-neutral-500" data-label="Date">{row.date}</td>
+                    <td className="px-4 py-3" data-label="Rapproché">
                       {row.reconciled ? (
                         <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Oui</span>
                       ) : (

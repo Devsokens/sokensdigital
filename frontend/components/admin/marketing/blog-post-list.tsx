@@ -162,7 +162,7 @@ export function BlogPostList() {
 
       {view === "list" ? (
         <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-          <table className="w-full text-sm">
+          <table className="table-responsive w-full text-sm">
             <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
               <tr>
                 <th className="px-4 py-3 font-medium">Titre</th>
@@ -174,12 +174,12 @@ export function BlogPostList() {
             <tbody className="divide-y divide-neutral-100">
               {posts.map((post) => (
                 <tr key={post.id} className="hover:bg-neutral-50">
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" data-label="Titre">
                     <button type="button" onClick={() => edit(post)} className="text-neutral-900 hover:text-primary">
                       {post.title}
                     </button>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" data-label="Statut">
                     <span
                       className={
                         post.status === "PUBLIE"
@@ -190,7 +190,7 @@ export function BlogPostList() {
                       {post.status === "PUBLIE" ? "Publié" : "Brouillon"}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-neutral-500">
+                  <td className="px-4 py-3 text-neutral-500" data-label="Publié le">
                     {post.published_at ? new Date(post.published_at).toLocaleDateString("fr-FR") : "—"}
                   </td>
                   <td className="px-4 py-3 text-right">

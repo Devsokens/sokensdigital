@@ -211,7 +211,7 @@ export function SocialPostList() {
 
         <TabsPanel value="liste" className="pt-4">
           <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-            <table className="w-full text-sm">
+            <table className="table-responsive w-full text-sm">
               <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
                 <tr>
                   <th className="px-4 py-3 font-medium">Titre</th>
@@ -224,7 +224,7 @@ export function SocialPostList() {
               <tbody className="divide-y divide-neutral-100">
                 {posts.map((post) => (
                   <tr key={post.id}>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" data-label="Titre">
                       <button
                         type="button"
                         onClick={() => openEdit(post)}
@@ -234,15 +234,15 @@ export function SocialPostList() {
                       </button>
                       <p className="max-w-xs truncate text-xs text-neutral-400">{post.content}</p>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" data-label="Plateforme">
                       <PlatformBadge platform={post.platform} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" data-label="Statut">
                       <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_COLORS[post.status]}`}>
                         {STATUS_LABELS[post.status]}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-neutral-500">
+                    <td className="px-4 py-3 text-neutral-500" data-label="Programmé pour">
                       {post.scheduled_at ? new Date(post.scheduled_at).toLocaleString("fr-FR") : "—"}
                     </td>
                     <td className="px-4 py-3">

@@ -131,7 +131,7 @@ export function ClientList() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-[11px] font-semibold tracking-wide text-neutral-500 uppercase">
             <tr>
               <th className="px-5 py-3">Entreprise</th>
@@ -145,20 +145,20 @@ export function ClientList() {
           <tbody className="divide-y divide-neutral-100">
             {filtered.map((c) => (
               <tr key={c.id} className="transition-colors hover:bg-neutral-50">
-                <td className="px-5 py-3.5">
+                <td className="px-5 py-3.5" data-label="Entreprise">
                   <Link href={`/admin/rh/clients/${c.id}`} className="block">
                     <span className="block font-medium text-neutral-900">{c.company_name}</span>
                     <span className="block text-xs text-neutral-400">{c.siret || c.email || "—"}</span>
                   </Link>
                 </td>
-                <td className="px-5 py-3.5 text-neutral-600">{c.sector || "—"}</td>
-                <td className="px-5 py-3.5">
+                <td className="px-5 py-3.5 text-neutral-600" data-label="Secteur">{c.sector || "—"}</td>
+                <td className="px-5 py-3.5" data-label="Statut">
                   <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium", STATUS_COLORS[c.status])}>
                     {STATUS_LABELS[c.status]}
                   </span>
                 </td>
-                <td className="px-5 py-3.5"><Rating value={c.rating} /></td>
-                <td className="px-5 py-3.5 text-neutral-500">{userName(c.assigned_to)}</td>
+                <td className="px-5 py-3.5" data-label="Notation"><Rating value={c.rating} /></td>
+                <td className="px-5 py-3.5 text-neutral-500" data-label="Assigné à">{userName(c.assigned_to)}</td>
                 <td className="px-5 py-3.5">
                   <Popover>
                     <PopoverTrigger

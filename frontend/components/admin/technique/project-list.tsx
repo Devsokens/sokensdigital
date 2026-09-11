@@ -412,7 +412,7 @@ export function ProjectList() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="table-responsive w-full text-left text-sm sm:min-w-[720px]">
             <thead>
               <tr className="border-b border-neutral-100 text-xs text-neutral-400">
                 <th className="px-4 py-3 font-medium">Nom</th>
@@ -426,7 +426,7 @@ export function ProjectList() {
             <tbody>
               {visibleProjects.map((project) => (
                 <tr key={project.id} className="border-b border-neutral-50 last:border-0 hover:bg-neutral-50">
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" data-label="Nom">
                     <Link href={`/admin/technique/projets/${project.id}`} className="flex items-center gap-1.5 font-medium text-neutral-900 hover:text-primary">
                       <span>{pickCardIcon(project.id)}</span>
                       {project.name}
@@ -434,21 +434,21 @@ export function ProjectList() {
                       {!project.is_locked && project.is_pinned && <Star className="size-3.5 fill-amber-400 text-amber-400" />}
                     </Link>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" data-label="Statut">
                     <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_COLORS[project.status]}`}>
                       {STATUS_LABELS[project.status]}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" data-label="Priorité">
                     <span className={`rounded-full px-2 py-0.5 text-xs ${PRIORITY_COLORS[project.priority]}`}>
                       {PRIORITY_LABELS[project.priority]}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-neutral-500">
+                  <td className="px-4 py-3 text-neutral-500" data-label="Tâches">
                     {project.tasks_done}/{project.tasks_total}
                   </td>
-                  <td className="px-4 py-3 text-neutral-500">{project.members.length}</td>
-                  <td className="px-4 py-3 text-neutral-500">{formatDate(project.end_date)}</td>
+                  <td className="px-4 py-3 text-neutral-500" data-label="Équipe">{project.members.length}</td>
+                  <td className="px-4 py-3 text-neutral-500" data-label="Échéance">{formatDate(project.end_date)}</td>
                 </tr>
               ))}
             </tbody>

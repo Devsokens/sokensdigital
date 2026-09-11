@@ -50,7 +50,7 @@ export function TicketList() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-4 py-3 font-medium">Visiteur</th>
@@ -64,22 +64,22 @@ export function TicketList() {
           <tbody className="divide-y divide-neutral-100">
             {tickets.map((ticket) => (
               <tr key={ticket.id}>
-                <td className="px-4 py-3 text-neutral-900">
+                <td className="px-4 py-3 text-neutral-900" data-label="Visiteur">
                   <Link href={`/admin/support/tickets/${ticket.id}`} className="hover:text-primary hover:underline">
                     {ticket.visitor_name}
                   </Link>
                   <p className="text-xs text-neutral-400">{ticket.visitor_email}</p>
                 </td>
-                <td className="px-4 py-3 text-neutral-600">{ticket.subject || "—"}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 text-neutral-600" data-label="Sujet">{ticket.subject || "—"}</td>
+                <td className="px-4 py-3" data-label="Statut">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_COLORS[ticket.status]}`}>
                     {STATUS_LABELS[ticket.status]}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-neutral-600">
+                <td className="px-4 py-3 text-neutral-600" data-label="Assigné à">
                   {ticket.assigned_to ? `${ticket.assigned_to.first_name} ${ticket.assigned_to.last_name}` : "—"}
                 </td>
-                <td className="px-4 py-3 text-neutral-500">{formatDate(ticket.updated_at)}</td>
+                <td className="px-4 py-3 text-neutral-500" data-label="Mis à jour">{formatDate(ticket.updated_at)}</td>
                 <td className="px-4 py-3">
                   <Popover>
                     <PopoverTrigger

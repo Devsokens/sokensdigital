@@ -81,7 +81,7 @@ export function Invoices() {
       )}
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-4 py-3 font-medium">N°</th>
@@ -96,17 +96,17 @@ export function Invoices() {
             {invoices.map((invoice) => (
               <Fragment key={invoice.id}>
               <tr>
-                <td className="px-4 py-3 text-neutral-900">{invoice.invoice_number}</td>
-                <td className="px-4 py-3 text-neutral-700">{invoice.client_name}</td>
-                <td className="px-4 py-3 text-neutral-900">{formatFcfa(invoice.amount_ttc)}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 text-neutral-900" data-label="N°">{invoice.invoice_number}</td>
+                <td className="px-4 py-3 text-neutral-700" data-label="Client">{invoice.client_name}</td>
+                <td className="px-4 py-3 text-neutral-900" data-label="Montant TTC">{formatFcfa(invoice.amount_ttc)}</td>
+                <td className="px-4 py-3" data-label="Statut">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${
                     invoice.status === "VALIDEE" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
                   }`}>
                     {invoice.status === "VALIDEE" ? "Validée" : "Brouillon"}
                   </span>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" data-label="Action">
                   {invoice.status === "BROUILLON" && (
                     <button
                       disabled={actingId === invoice.id}

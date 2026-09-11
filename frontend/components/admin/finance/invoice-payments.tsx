@@ -130,7 +130,7 @@ export function InvoicePayments({ invoice }: { invoice: Invoice }) {
       )}
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500">
             <tr>
               <th className="px-4 py-3 font-medium">Date</th>
@@ -144,17 +144,17 @@ export function InvoicePayments({ invoice }: { invoice: Invoice }) {
           <tbody className="divide-y divide-neutral-100">
             {payments.map((payment) => (
               <tr key={payment.id}>
-                <td className="px-4 py-3 text-neutral-500">{payment.payment_date}</td>
-                <td className="px-4 py-3 font-medium text-neutral-900">
+                <td className="px-4 py-3 text-neutral-500" data-label="Date">{payment.payment_date}</td>
+                <td className="px-4 py-3 font-medium text-neutral-900" data-label="Montant">
                   {formatFcfa(payment.amount)}
                 </td>
-                <td className="px-4 py-3 text-neutral-500">{payment.payment_method_display}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 text-neutral-500" data-label="Mode">{payment.payment_method_display}</td>
+                <td className="px-4 py-3" data-label="Statut">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_COLORS[payment.status]}`}>
                     {payment.status_display}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-neutral-500">
+                <td className="px-4 py-3 text-neutral-500" data-label="Reçu">
                   {payment.receipt ? (
                     <span className="inline-flex items-center gap-1.5">
                       <FileText className="size-3.5 text-neutral-400" />

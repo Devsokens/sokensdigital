@@ -128,7 +128,7 @@ function CaissePanel() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-4 py-3 font-medium">N° pièce</th>
@@ -142,15 +142,15 @@ function CaissePanel() {
           <tbody className="divide-y divide-neutral-100">
             {entries.map((entry) => (
               <tr key={entry.id}>
-                <td className="px-4 py-3 font-mono text-xs text-neutral-500">{entry.voucher_number}</td>
-                <td className="px-4 py-3 text-neutral-700">{CASH_SOURCE_LABELS[entry.source]}</td>
-                <td className="px-4 py-3 text-neutral-900">
+                <td className="px-4 py-3 font-mono text-xs text-neutral-500" data-label="N° pièce">{entry.voucher_number}</td>
+                <td className="px-4 py-3 text-neutral-700" data-label="Motif">{CASH_SOURCE_LABELS[entry.source]}</td>
+                <td className="px-4 py-3 text-neutral-900" data-label="Montant">
                   <span className={entry.type === "ENTREE" ? "text-emerald-700" : "text-neutral-900"}>
                     {entry.type === "ENTREE" ? "+" : "−"}{formatFcfa(entry.amount)}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-neutral-500">{entry.date}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 text-neutral-500" data-label="Date">{entry.date}</td>
+                <td className="px-4 py-3" data-label="Statut">
                   {entry.reconciled_at ? (
                     <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Rapprochée</span>
                   ) : (
@@ -316,7 +316,7 @@ function BanquePanel() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-4 py-3 font-medium">Référence</th>
@@ -330,22 +330,22 @@ function BanquePanel() {
           <tbody className="divide-y divide-neutral-100">
             {entries.map((entry) => (
               <tr key={entry.id}>
-                <td className="px-4 py-3 font-mono text-xs text-neutral-500">{entry.reference}</td>
-                <td className="px-4 py-3 text-neutral-700">{BANK_SOURCE_LABELS[entry.source]}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 font-mono text-xs text-neutral-500" data-label="Référence">{entry.reference}</td>
+                <td className="px-4 py-3 text-neutral-700" data-label="Motif">{BANK_SOURCE_LABELS[entry.source]}</td>
+                <td className="px-4 py-3" data-label="Montant">
                   <span className={entry.type === "ENTREE" ? "text-emerald-700" : "text-neutral-900"}>
                     {entry.type === "ENTREE" ? "+" : "−"}{formatFcfa(entry.amount)}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-neutral-500">{entry.date}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 text-neutral-500" data-label="Date">{entry.date}</td>
+                <td className="px-4 py-3" data-label="Statut">
                   {entry.reconciled_at ? (
                     <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Rapproché</span>
                   ) : (
                     <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">En attente</span>
                   )}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" data-label="Action">
                   {!entry.reconciled_at && (
                     <button
                       disabled={actingId === entry.id}
@@ -503,7 +503,7 @@ function CapitalPanel() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-4 py-3 font-medium">Montant</th>
@@ -515,15 +515,15 @@ function CapitalPanel() {
           <tbody className="divide-y divide-neutral-100">
             {contributions.map((c) => (
               <tr key={c.id}>
-                <td className="px-4 py-3 font-mono text-neutral-900">{formatFcfa(c.amount)}</td>
-                <td className="px-4 py-3 text-neutral-500">{c.contribution_date}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 font-mono text-neutral-900" data-label="Montant">{formatFcfa(c.amount)}</td>
+                <td className="px-4 py-3 text-neutral-500" data-label="Date prévue">{c.contribution_date}</td>
+                <td className="px-4 py-3" data-label="Statut">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${CAPITAL_STATUS_COLORS[c.status]}`}>
                     {CAPITAL_STATUS_LABELS[c.status]}
                   </span>
                 </td>
                 {canManage && (
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" data-label="Action">
                     {c.status === "BROUILLON" && (
                       <button disabled={actingId === c.id} onClick={() => handleAction(c.id, validateCapitalContribution)} className="rounded-full bg-primary/10 px-3 py-1 text-xs text-primary disabled:opacity-40">
                         Valider justificatifs

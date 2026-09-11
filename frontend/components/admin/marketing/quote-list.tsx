@@ -154,7 +154,7 @@ export function QuoteList({ basePath = "/admin/marketing/devis" }: { basePath?: 
       </Sheet>
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-4 py-3 font-medium">N°</th>
@@ -168,20 +168,20 @@ export function QuoteList({ basePath = "/admin/marketing/devis" }: { basePath?: 
           <tbody className="divide-y divide-neutral-100">
             {quotes.map((quote) => (
               <tr key={quote.id}>
-                <td className="px-4 py-3 text-neutral-900">
+                <td className="px-4 py-3 text-neutral-900" data-label="N°">
                   <Link href={`${basePath}/${quote.id}`} className="hover:text-primary hover:underline">
                     {quote.quote_number}
                   </Link>
                   {quote.version > 1 && <span className="ml-1 text-xs text-neutral-400">v{quote.version}</span>}
                 </td>
-                <td className="px-4 py-3 text-neutral-600">{quote.client_name || "—"}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 text-neutral-600" data-label="Client">{quote.client_name || "—"}</td>
+                <td className="px-4 py-3" data-label="Statut">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_COLORS[quote.status]}`}>
                     {STATUS_LABELS[quote.status]}
                   </span>
                 </td>
-                <td className="px-4 py-3 font-mono text-neutral-900">{formatFcfa(quote.total_ttc)}</td>
-                <td className="px-4 py-3 text-neutral-500">{formatDate(quote.updated_at)}</td>
+                <td className="px-4 py-3 font-mono text-neutral-900" data-label="Total TTC">{formatFcfa(quote.total_ttc)}</td>
+                <td className="px-4 py-3 text-neutral-500" data-label="Mis à jour">{formatDate(quote.updated_at)}</td>
                 <td className="px-4 py-3">
                   <Popover>
                     <PopoverTrigger

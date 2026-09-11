@@ -88,7 +88,7 @@ export function BankReconciliation() {
           <div key={imp.id} className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
             <p className="mb-2 text-sm font-medium text-neutral-900">{imp.filename}</p>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="table-responsive w-full text-xs">
                 <thead className="text-left text-neutral-400 uppercase">
                   <tr>
                     <th className="py-1 font-medium">Date</th>
@@ -101,10 +101,10 @@ export function BankReconciliation() {
                 <tbody>
                   {imp.transactions.map((tx) => (
                     <tr key={tx.id} className="border-t border-neutral-100">
-                      <td className="py-1.5 text-neutral-700">{tx.date}</td>
-                      <td className="py-1.5 text-neutral-700">{tx.label}</td>
-                      <td className="py-1.5 text-right text-neutral-900">{tx.amount}</td>
-                      <td className="py-1.5">
+                      <td className="py-1.5 text-neutral-700" data-label="Date">{tx.date}</td>
+                      <td className="py-1.5 text-neutral-700" data-label="Libellé">{tx.label}</td>
+                      <td className="py-1.5 text-right text-neutral-900" data-label="Montant">{tx.amount}</td>
+                      <td className="py-1.5" data-label="Statut">
                         <span className={`rounded-full px-2 py-0.5 text-xs ${
                           tx.status === "LETTRE" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
                         }`}>

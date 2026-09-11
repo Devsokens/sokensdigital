@@ -142,7 +142,7 @@ export function UserRoleList() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="table-responsive w-full text-sm">
             <thead className="bg-neutral-50 text-left text-[11px] font-semibold tracking-wide text-neutral-500 uppercase">
               <tr>
                 <th className="px-5 py-3">Utilisateur</th>
@@ -154,7 +154,7 @@ export function UserRoleList() {
             <tbody className="divide-y divide-neutral-100">
               {filtered.map((row, index) => (
                 <tr key={row.djangoId} data-tour={index === 0 ? "module-rh-utilisateurs" : undefined}>
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5" data-label="Utilisateur">
                     <span className="flex items-center gap-3">
                       <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-100 text-[11px] font-semibold text-neutral-600">
                         {row.avatarUrl ? (
@@ -170,9 +170,9 @@ export function UserRoleList() {
                       </span>
                     </span>
                   </td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3.5" data-label="Rôle">
                     {row.roles.length > 0 ? (
-                      <span className="flex flex-wrap gap-1">
+                      <span className="flex flex-wrap justify-end gap-1 sm:justify-start">
                         {row.roles.map((r) => (
                           <span key={r} className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-700">
                             {ROLE_LABELS[r]}
@@ -183,7 +183,7 @@ export function UserRoleList() {
                       <span className="text-xs text-neutral-400">—</span>
                     )}
                   </td>
-                  <td className="px-5 py-3.5 text-neutral-500">
+                  <td className="px-5 py-3.5 text-neutral-500" data-label="Département">
                     {row.departmentId ? departmentNameById.get(row.departmentId) ?? "—" : "—"}
                   </td>
                   <td className="px-5 py-3.5">

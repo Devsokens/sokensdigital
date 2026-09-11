@@ -84,7 +84,7 @@ export function TaxDeclarations() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-4 py-3 font-medium">Période</th>
@@ -98,18 +98,18 @@ export function TaxDeclarations() {
           <tbody className="divide-y divide-neutral-100">
             {declarations.map((decl) => (
               <tr key={decl.id}>
-                <td className="px-4 py-3 text-neutral-900">{decl.period_label}</td>
-                <td className="px-4 py-3 text-neutral-700">{decl.collected_vat} €</td>
-                <td className="px-4 py-3 text-neutral-700">{decl.deductible_vat} €</td>
-                <td className="px-4 py-3 text-neutral-900">{decl.net_vat} €</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 text-neutral-900" data-label="Période">{decl.period_label}</td>
+                <td className="px-4 py-3 text-neutral-700" data-label="TVA collectée">{decl.collected_vat} FCFA</td>
+                <td className="px-4 py-3 text-neutral-700" data-label="TVA déductible">{decl.deductible_vat} FCFA</td>
+                <td className="px-4 py-3 text-neutral-900" data-label="Net">{decl.net_vat} FCFA</td>
+                <td className="px-4 py-3" data-label="Statut">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${
                     decl.status === "VALIDEE" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
                   }`}>
                     {decl.status === "VALIDEE" ? "Validée (signée)" : "Brouillon"}
                   </span>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" data-label="Actions">
                   <div className="flex items-center gap-2">
                     {canValidate && decl.status === "BROUILLON" && (
                       <button

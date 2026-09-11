@@ -93,7 +93,7 @@ export function SpecificationList({ basePath = "/admin/marketing/cahier-des-char
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-4 py-3 font-medium">N°</th>
@@ -107,23 +107,23 @@ export function SpecificationList({ basePath = "/admin/marketing/cahier-des-char
           <tbody className="divide-y divide-neutral-100">
             {specs.map((spec) => (
               <tr key={spec.id}>
-                <td className="px-4 py-3 text-neutral-900">
+                <td className="px-4 py-3 text-neutral-900" data-label="N°">
                   <Link href={`${basePath}/${spec.id}`} className="hover:text-primary hover:underline">
                     {spec.spec_number}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-neutral-600">{spec.title}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 text-neutral-600" data-label="Titre">{spec.title}</td>
+                <td className="px-4 py-3" data-label="Type">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${TYPE_COLORS[spec.spec_type]}`}>
                     {TYPE_LABELS[spec.spec_type]}
                   </span>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" data-label="Statut">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_COLORS[spec.status]}`}>
                     {STATUS_LABELS[spec.status]}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-neutral-500">{formatDate(spec.updated_at)}</td>
+                <td className="px-4 py-3 text-neutral-500" data-label="Mis à jour">{formatDate(spec.updated_at)}</td>
                 <td className="px-4 py-3">
                   <Popover>
                     <PopoverTrigger

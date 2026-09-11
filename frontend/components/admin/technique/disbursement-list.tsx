@@ -127,7 +127,7 @@ export function DisbursementList() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="w-full text-sm">
+        <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
             <tr>
               <th className="px-4 py-3 font-medium">Bénéficiaire</th>
@@ -143,12 +143,12 @@ export function DisbursementList() {
               const canApproveThis = isPending && canApproveStage(myRoles, req.status);
               return (
                 <tr key={req.id}>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" data-label="Bénéficiaire">
                     <p className="text-neutral-900">{req.beneficiary}</p>
                     <p className="max-w-xs truncate text-xs text-neutral-400">{req.reason}</p>
                   </td>
-                  <td className="px-4 py-3 font-mono text-neutral-900">{formatFcfa(req.amount)}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 font-mono text-neutral-900" data-label="Montant">{formatFcfa(req.amount)}</td>
+                  <td className="px-4 py-3" data-label="Statut">
                     <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_COLORS[req.status]}`}>
                       {STATUS_LABELS[req.status]}
                     </span>
@@ -161,7 +161,7 @@ export function DisbursementList() {
                       </p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-neutral-500">
+                  <td className="px-4 py-3 text-neutral-500" data-label="Demandé par">
                     {req.requested_by ? `${req.requested_by.first_name} ${req.requested_by.last_name}` : "—"}
                   </td>
                   {(canApproveAny || canExecute) && (
