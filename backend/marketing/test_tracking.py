@@ -107,8 +107,11 @@ class PublicTrackingTests(APITestCase):
         )
         self.assertEqual(response.status_code, 404)
 
-    def test_steps_advance_with_the_status(self):
-        self.lead.status = Lead.Status.PROPOSITION_EN_COURS
+    def test_steps_advance_with_the_workflow_stage(self):
+        # Décision du 13/09/2026 : les étapes publiques suivent workflow_stage
+        # (ce que Marketing/Technique font vraiment avancer), plus `status`
+        # (le pipeline commercial interne, indépendant).
+        self.lead.workflow_stage = Lead.WorkflowStage.SOUMIS_CLIENT
         self.lead.save()
         response = self.client.post(self.url, {
             'reference': self.lead.tracking_reference, 'email': self.lead.email,
@@ -117,6 +120,19 @@ class PublicTrackingTests(APITestCase):
         statuses = [s['status'] for s in response.data['steps']]
         self.assertEqual(statuses[:3], ['done', 'done', 'done'])
         self.assertEqual(statuses[3], 'current')
+
+    def test_workflow_stage_advances_independently_of_the_commercial_status(self):
+        # Régression : avant ce changement, une demande pouvait avancer chez
+        # Technique (workflow_stage) tout en restant affichée comme "Nouveau"
+        # côté public pendant des semaines, parce que le suivi lisait `status`.
+        self.lead.workflow_stage = Lead.WorkflowStage.CHEZ_TECHNIQUE
+        self.lead.status = Lead.Status.NOUVEAU
+        self.lead.save()
+        response = self.client.post(self.url, {
+            'reference': self.lead.tracking_reference, 'email': self.lead.email,
+        }, format='json')
+
+        self.assertEqual(response.data['state_label'], 'Analyse en cours')
 
 
 class PublicLeadAttachmentUploadTests(APITestCase):

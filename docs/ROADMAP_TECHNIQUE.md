@@ -6,6 +6,81 @@ a été évalué contre le code existant avant d'être mis de côté.
 
 ---
 
+## Notifications inertes — diagnostic du 13/09/2026 (config, pas du code)
+
+Le code de bout en bout (écriture Firestore côté backend, lecture/abonnement
+côté cloche `admin-header.tsx`, enregistrement du service worker + du
+token push) est correct et bien branché — ce n'est pas du code mort. Deux
+variables d'environnement manquent en production, avalées silencieusement
+par design (`core/firestore_client.py` — "un envoi de notification raté ne
+doit jamais faire échouer l'action métier qui l'a déclenché") :
+
+- **`NEXT_PUBLIC_FIREBASE_VAPID_KEY`** (Vercel, frontend) — absente de
+  `.env.prod` alors que `.env.example` la documente. Sans elle,
+  `frontend/lib/push.ts` refuse tout net (`getPushPermission()` renvoie
+  `"unsupported"`) : le push navigateur reste désactivé côté client, quel
+  que soit l'état du backend. À prendre dans Firebase Console → Project
+  Settings → Cloud Messaging → Web Push certificates.
+- **`FIREBASE_SERVICE_ACCOUNT_JSON`** (Render, backend) — déclarée dans
+  `render.yaml` avec `sync: false` (donc à saisir à la main dans le
+  dashboard Render, jamais synchronisée automatiquement) ; si absente ou
+  invalide, `core/apps.py` ne peut pas initialiser le SDK Admin et chaque
+  `notify()`/`notify_roles()` échoue en silence — la cloche in-app reste
+  vide sans jamais afficher d'erreur nulle part.
+
+Les deux lignes ont été ajoutées (vides, à remplir) dans `.env.prod` local
+pour qu'elles ne soient plus silencieusement absentes du template — mais
+`.env.prod` n'est qu'une référence locale (gitignored, valeurs fictives) :
+les vraies valeurs doivent être saisies directement dans Vercel et Render,
+aucun accès à ces deux tableaux de bord n'existe depuis cette session.
+
+**Vérification une fois les deux valeurs saisies** : recharger l'admin,
+ouvrir la cloche — un `notify()` déclenché (ex: créer un utilisateur) doit
+apparaître sans redéploiement supplémentaire.
+
+---
+
+## Devis accepté → projet Technique — décision du 13/09/2026
+
+Accepter un devis (portail public, e-signature) ne faisait jusqu'ici que
+changer son statut — Technique n'avait aucun moyen de savoir qu'un projet
+venait d'être vendu sans qu'on le lui dise à la main.
+
+`PublicQuoteAcceptView` crée désormais automatiquement le `projects.Project`
+correspondant (nom = `{client} — {n° devis}`, budget = total TTC du devis),
+l'associe au devis (`Quote.project`, nouveau FK), et prévient
+Marketing→Technique (`notify_roles`, push uniquement — pas encore listé
+"très critique"). `projects.Project`, pas `technique.Project` (l'autre
+modèle du même nom) : c'est celui que lit l'écran "Projets" de Technique
+(`/api/v1/projects/`), et son `lead_project_manager` est nullable — le
+projet peut donc exister avant qu'un chef de projet lui soit assigné,
+contrairement à `technique.Project` qui l'exige à la création. Idempotent :
+`PublicQuoteAcceptView` court-circuite déjà tout ré-appel une fois le devis
+`ACCEPTE`, donc aucun risque de projet dupliqué sur un double clic.
+
+---
+
+## Suivi public aligné sur le parcours réel — décision du 13/09/2026
+
+Les 5 étapes affichées au public (`Lead.TRACKING_STEPS`) étaient dérivées
+de `Lead.Status` (le pipeline commercial interne : Nouveau/Qualifié/
+Proposition en cours/Perdu/Converti) alors que Marketing et Technique
+suivent au quotidien un champ complètement différent et indépendant,
+`Lead.WorkflowStage` (Soumis→Chez Technique→CDC prêt→Soumis au
+client→Validé par le client→En développement, voir `marketing/workflow.py`
+et l'écran "projets soumis"). Une demande pouvait donc avancer réellement
+chez Technique pendant des semaines tout en restant affichée "Nouveau"
+côté client — les deux champs ne bougent pas ensemble.
+
+Les 6 étapes publiques sont maintenant dérivées de `WorkflowStage`, avec un
+vocabulaire simplifié plutôt que le jargon interne : Demande reçue /
+Analyse en cours / Proposition en préparation / Proposition envoyée /
+Proposition validée / Projet en réalisation. Le rejet (`RejectLeadView`,
+qui clôture via `status=PERDU`) garde la priorité d'affichage ("Demande
+clôturée") quelle que soit l'étape du workflow au moment du refus.
+
+---
+
 ## Responsive mobile-first des tableaux admin — décision du 11/09/2026
 
 Tous les tableaux de données admin (finance, rh, technique, marketing,

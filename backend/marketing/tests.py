@@ -787,6 +787,55 @@ class PublicQuoteAcceptViewTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'ACCEPTE')
 
+    @patch('core.storage._bucket_ensured', False)
+    @patch.dict('os.environ', {'SUPABASE_URL': 'https://test-project.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'test-key'})
+    @patch('core.storage._session.post')
+    @patch('marketing.views.notify_roles')
+    def test_accepting_creates_a_project_for_technique(self, mock_notify_roles, mock_post):
+        # Decision du 13/09/2026 : un devis accepte fait apparaitre le
+        # projet dans le gestionnaire de l'equipe technique.
+        from projects.models import Project
+
+        mock_post.side_effect = [
+            Mock(status_code=200, text='{}'),
+            Mock(status_code=200, text='{}'),
+        ]
+        self.quote.total_ttc = Decimal('1500000.00')
+        self.quote.save(update_fields=['total_ttc'])
+        anon = APIClient()
+        response = anon.post(
+            f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/',
+            {'signature': _signature_data_url()}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+
+        self.quote.refresh_from_db()
+        self.assertIsNotNone(self.quote.project_id)
+        project = Project.objects.get(pk=self.quote.project_id)
+        self.assertIn('Client X', project.name)
+        self.assertIn(self.quote.quote_number, project.name)
+        self.assertEqual(project.budget, Decimal('1500000.00'))
+        mock_notify_roles.assert_called_once()
+
+    @patch('core.storage._bucket_ensured', False)
+    @patch.dict('os.environ', {'SUPABASE_URL': 'https://test-project.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'test-key'})
+    @patch('core.storage._session.post')
+    def test_accepting_twice_does_not_create_a_second_project(self, mock_post):
+        from projects.models import Project
+
+        mock_post.side_effect = [
+            Mock(status_code=200, text='{}'),
+            Mock(status_code=200, text='{}'),
+        ]
+        anon = APIClient()
+        anon.post(
+            f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/',
+            {'signature': _signature_data_url()}, format='json',
+        )
+        anon.post(f'/api/v1/public/quotes/track/{self.quote.tracking_token}/accept/')
+
+        self.assertEqual(Project.objects.count(), 1)
+
 
 class QuoteSettingsViewTests(APITestCase):
     def setUp(self):

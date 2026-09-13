@@ -8,6 +8,7 @@ import {
   BarChart3,
   Compass,
   FileSignature,
+  ThumbsUp,
   Rocket,
   Calendar,
   Mail,
@@ -26,11 +27,13 @@ import {
 } from "@/lib/api/public";
 import { cn } from "@/lib/utils";
 
-/** Icônes des étapes, dans l'ordre de `Lead.TRACKING_STEPS` côté serveur.
- * Le serveur décide des étapes et de leur état ; on n'ajoute ici que leur
- * représentation, pour que l'ajout d'une étape ne demande pas de redéployer
- * deux listes qui se contredisent en attendant. */
-const STEP_ICONS: LucideIcon[] = [Check, BarChart3, Compass, FileSignature, Rocket];
+/** Icônes des étapes, dans l'ordre de `Lead.TRACKING_STEPS` côté serveur
+ * (alignées sur les 6 étapes de `Lead.WorkflowStage` — décision du
+ * 13/09/2026, voir docs/ROADMAP_TECHNIQUE.md). Le serveur décide des étapes
+ * et de leur état ; on n'ajoute ici que leur représentation, pour que
+ * l'ajout d'une étape ne demande pas de redéployer deux listes qui se
+ * contredisent en attendant. */
+const STEP_ICONS: LucideIcon[] = [Check, BarChart3, Compass, FileSignature, ThumbsUp, Rocket];
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("fr-FR", {
