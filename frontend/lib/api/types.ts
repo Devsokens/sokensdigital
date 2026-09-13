@@ -248,6 +248,10 @@ export interface SiteSettings {
   legal_links: SiteNavLink[];
   social_links: SiteSocialLink[];
   copyright_text: string;
+  cgu_text: string;
+  cgv_text: string;
+  mentions_legales_text: string;
+  politique_confidentialite_text: string;
 }
 
 export interface ShowcaseProjectStat {

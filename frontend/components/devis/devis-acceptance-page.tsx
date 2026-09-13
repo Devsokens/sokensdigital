@@ -158,7 +158,11 @@ export function DevisAcceptancePage({ token }: { token: string }) {
                       onChange={(e) => setChecked(e.target.checked)}
                       className="mt-0.5"
                     />
-                    J&apos;ai lu et j&apos;accepte les termes de ce devis.
+                    J&apos;ai lu et j&apos;accepte les termes de ce devis ainsi que les{" "}
+                    <a href="/cgv" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">
+                      Conditions Générales de Vente
+                    </a>
+                    .
                   </label>
 
                   <div className="mt-4">

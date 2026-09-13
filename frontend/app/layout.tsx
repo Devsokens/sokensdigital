@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import { PublicChatWidgetGate } from "@/components/public-chat-widget-gate";
+import { CookieConsentGate } from "@/components/cookie-consent-gate";
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 import "./globals.css";
 
@@ -66,6 +67,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {children}
         <PublicChatWidgetGate />
+        <CookieConsentGate />
         <ServiceWorkerRegistrar />
       </body>
     </html>

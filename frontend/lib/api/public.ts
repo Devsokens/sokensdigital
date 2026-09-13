@@ -34,14 +34,20 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     { label: "Audit & Sécurité" },
   ],
   legal_links: [
-    { label: "Politique de confidentialité", href: "#" },
-    { label: "Condition d'utilisation", href: "#" },
+    { label: "Politique de confidentialité", href: "/confidentialite" },
+    { label: "Condition d'utilisation", href: "/cgu" },
+    { label: "CGV", href: "/cgv" },
+    { label: "Mentions légales", href: "/mentions-legales" },
   ],
   social_links: [
     { icon: "globe", url: "#" },
     { icon: "at-sign", url: "mailto:contact@sokensdigital.com" },
   ],
   copyright_text: "© 2024 Soken's Digital. Sécurité. Précision. Haute Performance.",
+  cgu_text: "",
+  cgv_text: "",
+  mentions_legales_text: "",
+  politique_confidentialite_text: "",
 };
 
 /** Site-wide header/footer chrome. Falls back to the site's original

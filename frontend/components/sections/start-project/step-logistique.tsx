@@ -92,6 +92,27 @@ export function StepLogistique({ data, update, delais, canaux }: Props) {
             </span>
           </span>
         </label>
+
+        <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+          <input
+            type="checkbox"
+            checked={data.cguAccepted}
+            onChange={(e) => update({ cguAccepted: e.target.checked })}
+            required
+            className="mt-0.5 size-4 shrink-0 accent-primary"
+          />
+          <span className="text-sm text-foreground">
+            J&apos;ai lu et j&apos;accepte les{" "}
+            <a href="/cgu" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">
+              Conditions Générales d&apos;Utilisation
+            </a>{" "}
+            et les{" "}
+            <a href="/cgv" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">
+              Conditions Générales de Vente
+            </a>{" "}
+            <span className="text-destructive">*</span>
+          </span>
+        </label>
       </div>
 
       <aside className="space-y-4">

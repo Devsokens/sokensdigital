@@ -721,6 +721,18 @@ class SiteSettings(LoggedModel):
     social_links = models.JSONField(default=list, blank=True)
     copyright_text = models.CharField(max_length=255, blank=True)
 
+    # Textes légaux — décision du 13/09/2026 : édités ici plutôt que dans un
+    # PageSection, pour la même raison que le reste de ce modèle (un seul
+    # exemplaire, pas un contenu par page) et pour rester au même endroit
+    # que legal_links, qui pointe déjà vers ces pages publiques. Texte brut
+    # (pas de rich text) : rendu tel quel côté public avec un simple
+    # `whitespace-pre-wrap`, cohérent avec le reste du CMS (Quote.description
+    # notamment) qui ne fait pas non plus de HTML éditable.
+    cgu_text = models.TextField(blank=True, verbose_name="Conditions Générales d'Utilisation")
+    cgv_text = models.TextField(blank=True, verbose_name='Conditions Générales de Vente')
+    mentions_legales_text = models.TextField(blank=True, verbose_name='Mentions légales')
+    politique_confidentialite_text = models.TextField(blank=True, verbose_name='Politique de confidentialité')
+
     def __str__(self):
         return 'Paramètres du site'
 

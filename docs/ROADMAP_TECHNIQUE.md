@@ -6,6 +6,33 @@ a été évalué contre le code existant avant d'être mis de côté.
 
 ---
 
+## Conformité RGPD — textes légaux, case CGU/CGV, bandeau cookies (13/09/2026)
+
+- **Textes légaux édités depuis Paramètres** (`SiteSettings.cgu_text` /
+  `cgv_text` / `mentions_legales_text` / `politique_confidentialite_text`,
+  texte brut) — publics sur `/cgu`, `/cgv`, `/mentions-legales`,
+  `/confidentialite`. Vide tant que Marketing ne les a pas remplis (message
+  d'attente affiché, pas une page cassée) — **ces 4 champs sont vides par
+  défaut : le contenu juridique réel doit être saisi dans Paramètres avant
+  mise en production**, ceci n'est que la plomberie.
+- **Case CGU/CGV non pré-cochée, requise avant soumission** : formulaire
+  public "Démarrer un projet" (`ProjectFormData.cguAccepted`, bloque le
+  bouton final + re-vérifiée dans `goNext` en garde-fou) et portail
+  d'acceptation de devis (case déjà existante, reformulée pour citer
+  explicitement les CGV avec lien).
+- **Bandeau cookies** (`components/cookie-consent-banner.tsx`,
+  `lib/cookies/consent.ts`) : « Tout accepter » / « Tout refuser » à poids
+  visuel égal (pas de dark pattern), + « Personnaliser » pour un choix par
+  finalité (nécessaires toujours actifs, analytique, marketing). Stocké en
+  `localStorage`, rien de déposé avant un choix explicite. **Aucun traceur
+  analytique/publicitaire n'est câblé dans ce repo aujourd'hui** — le module
+  existe pour que l'obligation soit respectée dès maintenant ; un futur
+  script (Google Analytics, pixel Meta...) devra appeler `hasConsent()`
+  avant de se charger plutôt que redéfinir son propre mécanisme de
+  consentement.
+
+---
+
 ## Notifications inertes — diagnostic du 13/09/2026 (config, pas du code)
 
 Le code de bout en bout (écriture Firestore côté backend, lecture/abonnement

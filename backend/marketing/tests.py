@@ -1141,6 +1141,28 @@ class SiteSettingsViewTests(APITestCase):
         self.assertEqual(public['tagline'], 'Nouvelle signature.')
         self.assertEqual(public['services_links'], [{'label': 'Audit'}])
 
+    def test_marketing_can_update_legal_texts(self):
+        # Decision du 13/09/2026 : CGU/CGV/mentions legales/politique de
+        # confidentialite editables ici, consultables cote public.
+        response = self.client_marketing.patch(
+            '/api/v1/marketing/cms/site-settings/',
+            {
+                'cgu_text': 'Texte des CGU.',
+                'cgv_text': 'Texte des CGV.',
+                'mentions_legales_text': 'Texte des mentions legales.',
+                'politique_confidentialite_text': 'Texte de la politique de confidentialite.',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['cgu_text'], 'Texte des CGU.')
+
+        anon = APIClient()
+        public = anon.get('/api/v1/public/site-settings/').json()
+        self.assertEqual(public['cgv_text'], 'Texte des CGV.')
+        self.assertEqual(public['mentions_legales_text'], 'Texte des mentions legales.')
+        self.assertEqual(public['politique_confidentialite_text'], 'Texte de la politique de confidentialite.')
+
     def test_outsider_cannot_update_settings(self):
         response = self.client_outsider.patch(
             '/api/v1/marketing/cms/site-settings/', {'tagline': 'Hack'}, format='json',

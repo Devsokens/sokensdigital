@@ -89,6 +89,7 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
     canal: canaux[0]?.label ?? "",
     nda: false,
     attachment: null,
+    cguAccepted: false,
   }));
   // Non-bloquant : la demande est déjà enregistrée quand cet upload part,
   // un échec ici ne doit pas empêcher le client de voir sa confirmation.
@@ -107,6 +108,10 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
 
   const goNext = async () => {
     if (isLast) {
+      if (!data.cguAccepted) {
+        setSubmitError("Merci d'accepter les CGU/CGV avant de soumettre votre demande.");
+        return;
+      }
       setSubmitError(null);
       setSubmitting(true);
       try {
@@ -220,7 +225,7 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
 
         <Button
           onClick={goNext}
-          disabled={submitting}
+          disabled={submitting || (isLast && !data.cguAccepted)}
           size="lg"
           className={
             isLast
