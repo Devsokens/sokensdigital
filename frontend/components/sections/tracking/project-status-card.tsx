@@ -100,7 +100,7 @@ export function ProjectStatusCard() {
   }
 
   return (
-    <section className="mx-auto max-w-4xl px-4 pb-8 sm:px-6 lg:px-8">
+    <section className="mx-auto max-w-6xl px-4 pb-8 sm:px-6 lg:px-8">
       {!tracking && (
         <motion.form
           onSubmit={handleSubmit}

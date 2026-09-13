@@ -16,7 +16,7 @@ export function TrackingFeatures({ section }: { section?: PageSection | null }) 
   const features: Feature[] = section?.items?.length ? (section.items as Feature[]) : DEFAULT_FEATURES;
 
   return (
-    <section className="mx-auto max-w-4xl px-4 pb-20 sm:px-6 sm:pb-24 lg:px-8">
+    <section className="mx-auto max-w-6xl px-4 pb-20 sm:px-6 sm:pb-24 lg:px-8">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {features.map((feature, i) => (
           <motion.div

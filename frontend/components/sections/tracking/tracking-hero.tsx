@@ -20,7 +20,7 @@ export function TrackingHero({ section }: { section?: PageSection | null }) {
         className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,color-mix(in_oklch,var(--primary),transparent_65%),transparent_55%)]"
       />
 
-      <div className="mx-auto max-w-2xl px-4 pt-32 pb-14 text-center sm:px-6 sm:pt-40 sm:pb-16 lg:px-8">
+      <div className="mx-auto max-w-6xl px-4 pt-32 pb-14 text-center sm:px-6 sm:pt-40 sm:pb-16 lg:px-8">
         <motion.h1
           initial={{ opacity: 0, y: 22 }}
           animate={{ opacity: 1, y: 0 }}

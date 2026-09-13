@@ -39,7 +39,7 @@ export function ProcessTimeline({ section }: { section?: PageSection | null }) {
   const PHASES: Phase[] = section?.items?.length ? (section.items as Phase[]) : DEFAULT_PHASES;
 
   return (
-    <section className="mx-auto max-w-5xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
+    <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
