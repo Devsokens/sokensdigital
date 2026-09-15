@@ -17,6 +17,7 @@ import type {
   CanalOption,
 } from "@/components/sections/start-project/types";
 import { createLead, uploadLeadAttachment } from "@/lib/api/public";
+import { track } from "@/lib/analytics/posthog";
 
 function buildLeadPayload(data: ProjectFormData) {
   const notes = [
@@ -116,6 +117,15 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
       setSubmitting(true);
       try {
         const created = await createLead(buildLeadPayload(data));
+        // Jamais de nom, e-mail ou téléphone : seulement la forme de la demande.
+        track("lead_submitted", {
+          type_solution: data.typeSolution,
+          delai: data.delai,
+          canal: data.canal,
+          has_budget: Boolean(data.budget),
+          has_attachment: Boolean(data.attachment),
+          nda: data.nda,
+        });
         setReference(created.tracking_reference);
         if (data.attachment) {
           try {

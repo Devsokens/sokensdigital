@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import { PublicChatWidgetGate } from "@/components/public-chat-widget-gate";
 import { CookieConsentGate } from "@/components/cookie-consent-gate";
+import { PostHogProvider } from "@/components/analytics/posthog-provider";
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
 import "./globals.css";
 
@@ -68,6 +69,7 @@ export default function RootLayout({
         {children}
         <PublicChatWidgetGate />
         <CookieConsentGate />
+        <PostHogProvider />
         <ServiceWorkerRegistrar />
       </body>
     </html>

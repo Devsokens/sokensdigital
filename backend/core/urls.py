@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
+from core.analytics_views import MarketingAnalyticsView, TechniqueAnalyticsView
 from core.attachment_views import DocumentAttachmentViewSet
 from core.views import (
     AuditLogViewSet,
@@ -38,4 +39,6 @@ urlpatterns = [
     path('push/devices/', PushDeviceView.as_view(), name='push-devices'),
     path('users/<uuid:pk>/role/', SetUserRoleView.as_view(), name='set-user-role'),
     path('users/<uuid:pk>/deactivate/', DeactivateUserView.as_view(), name='deactivate-user'),
+    path('analytics/marketing/', MarketingAnalyticsView.as_view(), name='analytics-marketing'),
+    path('analytics/technique/', TechniqueAnalyticsView.as_view(), name='analytics-technique'),
 ] + router.urls

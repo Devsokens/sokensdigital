@@ -7,6 +7,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { Button } from "@/components/ui/button";
 import { SignaturePad, type SignaturePadHandle } from "@/components/signature-pad";
 import { getPublicQuote, acceptPublicQuote } from "@/lib/api/public";
+import { track } from "@/lib/analytics/posthog";
 import { formatFcfa } from "@/lib/format-currency";
 import type { PublicQuote } from "@/lib/api/types";
 
@@ -40,6 +41,7 @@ export function DevisAcceptancePage({ token }: { token: string }) {
     setError(null);
     try {
       setQuote(await acceptPublicQuote(token, signature));
+      track("quote_accepted");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible d'accepter ce devis.");
     } finally {

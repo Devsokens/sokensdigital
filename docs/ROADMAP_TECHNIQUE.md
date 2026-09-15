@@ -6,6 +6,48 @@ a été évalué contre le code existant avant d'être mis de côté.
 
 ---
 
+## PostHog — analytique comportementale (14/09/2026)
+
+**Collecte (site public)** — `frontend/lib/analytics/posthog.ts` :
+- Chargé **uniquement après consentement « analytique »** du bandeau cookies ;
+  le SDK n'est pas téléchargé avant (import dynamique → rien dans le bundle
+  initial). Retrait du consentement → `opt_out_capturing()` + arrêt relecture.
+- **Premier parti** : envois vers `/ingest`, relayé par Next vers PostHog UE
+  (`next.config.ts` rewrites). Aucun domaine tiers côté navigateur, CSP inchangée.
+- **Masquage avant envoi** (`before_send`) : `/devis/<jeton>` et `?t=`/`?token=`
+  (vrais secrets d'authentification) remplacés, e-mails masqués, événements
+  `/admin` écartés (on mesure les visiteurs, pas le personnel). Relecture de
+  session avec toutes les saisies masquées ; `person_profiles: identified_only`.
+- Capturé : pages vues (navigation App Router), sorties de page, autocapture,
+  exceptions JS, Core Web Vitals, + événements métier `lead_submitted` et
+  `quote_accepted` (**aucune donnée personnelle** : forme de la demande seulement).
+
+**Lecture (back-office)** — `core/analytics.py` + `core/analytics_views.py` :
+- Proxy Django authentifié vers l'API Query (HogQL) : la clé personnelle
+  (accès lecture à tout le projet) ne quitte jamais le serveur.
+- Cache 10 min par requête + plafond 60 req/min par utilisateur (quota PostHog).
+- Cloisonné : `/api/v1/analytics/marketing/` (Resp. Marketing, Commercial,
+  Admin, Super-Admin) — audience, sources, campagnes UTM, entonnoir jusqu'au
+  devis accepté ; `/api/v1/analytics/technique/` (Chef de Projet, Développeur,
+  Admin, Super-Admin) — erreurs JS, pages les plus lentes, LCP/INP/CLS p75,
+  appareils/navigateurs.
+- Écrans : Marketing → « Analytique web », Technique → « Analytique web »
+  (modules `analytique-marketing` / `analytique-technique`, migration
+  `core/0015` pour les rôles existants).
+
+**À faire côté comptes (hors code, aucun accès depuis cette session)** :
+1. Créer un projet PostHog en **région UE** (eu.posthog.com).
+2. Vercel : `NEXT_PUBLIC_POSTHOG_KEY` = clé projet `phc_...` (Project settings).
+3. Render : `POSTHOG_PERSONAL_API_KEY` (clé personnelle `phx_...`, scope
+   `query:read` seulement) et `POSTHOG_PROJECT_ID`.
+4. Optionnel : activer la relecture de session dans PostHog (désactivée côté
+   projet = enregistreur jamais téléchargé).
+5. Mettre à jour la politique de confidentialité (Paramètres) pour citer
+   PostHog (UE) comme sous-traitant de mesure d'audience.
+
+Sans ces clés : aucune collecte, et les écrans affichent « non configuré »
+plutôt qu'une erreur.
+
 ## Conformité RGPD — textes légaux, case CGU/CGV, bandeau cookies (13/09/2026)
 
 - **Textes légaux édités depuis Paramètres** (`SiteSettings.cgu_text` /
