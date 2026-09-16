@@ -54,6 +54,19 @@ page : il servira à l'étape 3b.
 5. Copier la clé, qui commence par `phx_`. **Elle n'est affichée qu'une
    fois** — si elle est perdue, il faut en créer une autre.
 
+> **Attention aux trois préfixes**, faciles à confondre :
+>
+> | Préfixe | Nom dans PostHog | Rôle | Où la mettre |
+> |---|---|---|---|
+> | `phc_` | Project API key | Envoyer des événements (publique) | Vercel, `NEXT_PUBLIC_POSTHOG_KEY` |
+> | `phx_` | Personal API key | **Lire** les données | Render, `POSTHOG_PERSONAL_API_KEY` |
+> | `phs_` | Project secret API key | Feature flags côté serveur | **Ni l'un ni l'autre ici** |
+>
+> Une clé `phs_` dans `POSTHOG_PERSONAL_API_KEY` donne un 403
+> `"Personal API key ... is invalid"`, donc l'écran « Données momentanément
+> indisponibles ». Elle est rejetée quelle que soit la région et le scope :
+> c'est le type de clé qui est faux, pas sa configuration.
+
 Cette clé lit tout le projet : elle ne doit **jamais** être préfixée
 `NEXT_PUBLIC_`, ni collée côté Vercel, ni commitée. Elle va uniquement sur
 Render, à l'étape 3b.
@@ -167,6 +180,19 @@ paragraphe du type :
 | Symptôme | Cause la plus probable |
 |---|---|
 | Écran « PostHog n'est pas encore configuré » | `POSTHOG_PERSONAL_API_KEY` ou `POSTHOG_PROJECT_ID` absent sur Render |
-| Aucun événement dans PostHog | Cookies analytiques refusés, ou `NEXT_PUBLIC_POSTHOG_KEY` absente / build non refait |
-| « Données momentanément indisponibles » | Clé personnelle invalide, mauvais scope, ou mauvais Project ID |
+| Aucun événement dans PostHog | Cookies analytiques refusés, ou `NEXT_PUBLIC_POSTHOG_KEY` absente / build non refait. **Vérifier le préfixe `NEXT_PUBLIC_`** : une variable nommée `POSTHOG_KEY` tout court n'est pas lue par le navigateur |
+| « Données momentanément indisponibles » | Le plus souvent : mauvais **type** de clé (`phs_` ou `phc_` au lieu de `phx_`, voir le tableau des préfixes). Sinon : scope sans `query:read`, mauvais Project ID, ou clé créée dans l'autre région |
+
+Pour vérifier une clé sans passer par un redéploiement, depuis n'importe quel
+terminal (remplacer `<CLE>` et `<PROJECT_ID>`) :
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" \
+  -X POST "https://eu.posthog.com/api/projects/<PROJECT_ID>/query/" \
+  -H "Authorization: Bearer <CLE>" -H "Content-Type: application/json" \
+  -d '{"query":{"kind":"HogQLQuery","query":"SELECT 1"}}'
+```
+
+`200` = la clé fonctionne. `403` = mauvais type de clé ou mauvaise région.
+`404` = mauvais Project ID.
 | Chiffres figés | Cache de 10 minutes — normal |
