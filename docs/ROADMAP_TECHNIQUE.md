@@ -35,6 +35,8 @@ a été évalué contre le code existant avant d'être mis de côté.
   (modules `analytique-marketing` / `analytique-technique`, migration
   `core/0015` pour les rôles existants).
 
+**Procédure de configuration pas à pas : `docs/POSTHOG_SETUP.md`.**
+
 **À faire côté comptes (hors code, aucun accès depuis cette session)** :
 1. Créer un projet PostHog en **région UE** (eu.posthog.com).
 2. Vercel : `NEXT_PUBLIC_POSTHOG_KEY` = clé projet `phc_...` (Project settings).

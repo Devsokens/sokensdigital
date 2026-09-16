@@ -35,6 +35,33 @@ def send_lead_acknowledgement(lead) -> bool:
     )
 
 
+def send_lead_document_received(lead, document_name: str) -> bool:
+    """Confirme la bonne réception du document joint à une demande.
+
+    Le cahier des charges part dans un second appel, après la création de la
+    demande (la référence de suivi n'existe qu'une fois celle-ci enregistrée,
+    voir PublicLeadAttachmentUploadView) : l'accusé de réception initial est
+    donc déjà envoyé quand le fichier arrive, et ne peut pas le mentionner.
+    Sans ce second message, le client n'a aucune confirmation que sa pièce
+    est bien arrivée — or c'est souvent la partie du dossier à laquelle il
+    tient le plus.
+    """
+    tracking_url = f'{settings.PUBLIC_SITE_URL}/suivi-projet?t={lead.tracking_token}'
+    body = (
+        f'Bonjour {lead.first_name},\n'
+        f'Nous confirmons la réception de votre document « {document_name} », '
+        f'joint à votre demande {lead.tracking_reference}.\n'
+        "Notre équipe en tient compte dans l'analyse de votre projet."
+    )
+    return mailer.send_mail(
+        lead.email,
+        f'Document bien reçu — {lead.tracking_reference}',
+        body,
+        action_url=tracking_url,
+        action_label='Suivre ma demande',
+    )
+
+
 def send_lead_status_update(lead) -> bool:
     """Prévient le demandeur que l'état de sa demande a changé.
 

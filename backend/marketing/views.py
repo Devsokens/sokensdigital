@@ -90,7 +90,22 @@ class PublicLeadCreateView(APIView):
         # endroit où le client la reçoit, et sans elle la page de suivi ne
         # lui sert à rien. Envoi hors transaction et sans lever : une demande
         # enregistrée doit le rester même si l'e-mail ne part pas.
-        send_lead_acknowledgement(lead)
+        if not send_lead_acknowledgement(lead):
+            # Jusqu'ici l'échec ne laissait qu'une ligne de log : personne ne
+            # savait qu'un client venait de soumettre une demande sans jamais
+            # recevoir sa référence de suivi — donc sans moyen de la suivre.
+            label = lead.company_name or f'{lead.first_name} {lead.last_name}'.strip()
+            notify_roles(
+                MARKETING_ROLES,
+                title='Accusé de réception non envoyé',
+                message=(
+                    f'La demande « {label} » ({lead.tracking_reference}) est bien enregistrée, '
+                    f"mais son accusé de réception n'a pas pu partir vers {lead.email}. "
+                    'Sa référence de suivi doit lui être communiquée manuellement.'
+                ),
+                notification_type='GENERAL',
+                link='/admin/marketing/leads',
+            )
 
         data = dict(serializer.data)
         data['tracking_reference'] = lead.tracking_reference

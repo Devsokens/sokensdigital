@@ -4,6 +4,7 @@ from unittest import mock
 from unittest.mock import Mock, patch
 
 from django.core import mail
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.urls import reverse
@@ -229,7 +230,81 @@ class PublicLeadAttachmentUploadTests(APITestCase):
 
 
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+class LeadDocumentAcknowledgementTests(APITestCase):
+    """Le cahier des charges arrive apres la creation de la demande : son
+    accuse de reception est donc un second e-mail, distinct du premier."""
+
+    def setUp(self):
+        # Le quota anti-abus par IP vit dans le cache Django, partage par
+        # tous les tests du process : sans purge, une classe qui poste
+        # plusieurs fois epuise le budget des suivantes (429 au lieu de 201).
+        cache.clear()
+        self.lead = _lead()
+        self.url = reverse('public-lead-attachment')
+        mail.outbox.clear()
+
+        from core import storage
+        storage._private_buckets_ensured.add(storage.PROJECT_REQUEST_BUCKET_NAME)
+        self.addCleanup(storage._private_buckets_ensured.discard, storage.PROJECT_REQUEST_BUCKET_NAME)
+
+    def _upload(self, name='cahier-des-charges.pdf'):
+        return self.client.post(self.url, {
+            'reference': self.lead.tracking_reference,
+            'email': self.lead.email,
+            'file': SimpleUploadedFile(name, b'%PDF-' + b'\x00' * 100, content_type='application/pdf'),
+        }, format='multipart')
+
+    @patch.dict('os.environ', {
+        'SUPABASE_URL': 'https://test-project.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'test-key',
+    })
+    @patch('core.storage._session.post')
+    def test_uploading_a_document_confirms_its_reception_by_email(self, mock_post):
+        mock_post.side_effect = [
+            Mock(status_code=200, text='{}'),
+            Mock(status_code=200, json=lambda: {'signedURL': '/object/sign/demandes-projet/x.pdf?token=abc'}),
+        ]
+        response = self._upload()
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(self.lead.tracking_reference, mail.outbox[0].subject)
+        self.assertIn('cahier-des-charges.pdf', mail.outbox[0].body)
+        self.assertEqual(mail.outbox[0].to, [self.lead.email])
+
+    @patch.dict('os.environ', {
+        'SUPABASE_URL': 'https://test-project.supabase.co', 'SUPABASE_SERVICE_ROLE_KEY': 'test-key',
+    })
+    @patch('core.storage._session.post')
+    def test_a_failing_confirmation_does_not_lose_the_document(self, mock_post):
+        mock_post.side_effect = [
+            Mock(status_code=200, text='{}'),
+            Mock(status_code=200, json=lambda: {'signedURL': '/object/sign/demandes-projet/x.pdf?token=abc'}),
+        ]
+        with mock.patch('core.mailer.EmailMultiAlternatives.send', side_effect=RuntimeError('gmail down')):
+            response = self._upload()
+
+        self.assertEqual(response.status_code, 201)
+        self.lead.refresh_from_db()
+        self.assertTrue(self.lead.attachment_url)
+
+    def test_no_confirmation_when_the_upload_is_refused(self):
+        response = self.client.post(self.url, {
+            'reference': self.lead.tracking_reference,
+            'email': self.lead.email,
+            'file': SimpleUploadedFile('note.docx', b'\x00' * 50, content_type='application/msword'),
+        }, format='multipart')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(len(mail.outbox), 0)
+
+
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
 class LeadAcknowledgementTests(APITestCase):
+    def setUp(self):
+        # Meme raison que ci-dessus : chaque test de cette classe poste sur
+        # /public/leads/, qui est limite par IP.
+        cache.clear()
+
     def test_submitting_a_request_sends_the_reference(self):
         response = self.client.post('/api/v1/public/leads/', {
             'first_name': 'Awa', 'last_name': 'Ndong', 'email': 'awa@client.test',
@@ -250,6 +325,29 @@ class LeadAcknowledgementTests(APITestCase):
 
         html = dict(mail.outbox[0].alternatives)
         self.assertTrue(any('text/html' == t for t in html.values()) or mail.outbox[0].alternatives)
+
+    @patch('marketing.views.notify_roles')
+    def test_a_failing_acknowledgement_alerts_the_team(self, mock_notify_roles):
+        # Sans cette alerte, personne ne sait que le client n'a jamais recu
+        # sa reference de suivi : la demande existe, lui ne peut pas la suivre.
+        with mock.patch('core.mailer.EmailMultiAlternatives.send', side_effect=RuntimeError('gmail down')):
+            response = self.client.post('/api/v1/public/leads/', {
+                'first_name': 'Awa', 'last_name': 'Ndong', 'email': 'awa@client.test',
+                'source': Lead.Source.FORMULAIRE_DEVIS,
+            }, format='json')
+
+        self.assertEqual(response.status_code, 201)
+        mock_notify_roles.assert_called_once()
+        message = mock_notify_roles.call_args.kwargs['message']
+        self.assertIn('awa@client.test', message)
+
+    @patch('marketing.views.notify_roles')
+    def test_no_alert_when_the_acknowledgement_goes_out(self, mock_notify_roles):
+        self.client.post('/api/v1/public/leads/', {
+            'first_name': 'Awa', 'last_name': 'Ndong', 'email': 'awa@client.test',
+            'source': Lead.Source.FORMULAIRE_DEVIS,
+        }, format='json')
+        mock_notify_roles.assert_not_called()
 
     def test_a_failing_email_does_not_lose_the_request(self):
         with mock.patch('core.mailer.EmailMultiAlternatives.send', side_effect=RuntimeError('smtp down')):
