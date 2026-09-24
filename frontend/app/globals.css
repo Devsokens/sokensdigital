@@ -169,3 +169,28 @@
     display: none;
   }
 }
+
+
+/* Thème sombre de l'espace d'administration (lib/admin/admin-theme.ts).
+ *
+ * L'admin est construite avec `white` et l'échelle `neutral-*` de Tailwind.
+ * Plutôt que de dupliquer chaque classe en variante `dark:`, on inverse ici
+ * les variables que ces utilitaires lisent : fonds clairs deviennent
+ * sombres, textes foncés deviennent clairs, bordures s'adaptent. La teinte
+ * légèrement bleutée reprend celle du site vitrine. Portée limitée à
+ * <html data-admin-theme="dark">, posé uniquement dans /admin. */
+html[data-admin-theme="dark"] {
+  color-scheme: dark;
+  --color-white: oklch(0.16 0.012 240);
+  --color-neutral-50: oklch(0.19 0.012 240);
+  --color-neutral-100: oklch(0.23 0.013 240);
+  --color-neutral-200: oklch(0.29 0.014 240);
+  --color-neutral-300: oklch(0.38 0.014 240);
+  --color-neutral-400: oklch(0.58 0.012 240);
+  --color-neutral-500: oklch(0.67 0.01 240);
+  --color-neutral-600: oklch(0.76 0.008 240);
+  --color-neutral-700: oklch(0.84 0.006 240);
+  --color-neutral-800: oklch(0.9 0.005 240);
+  --color-neutral-900: oklch(0.95 0.004 240);
+  --color-neutral-950: oklch(0.98 0.003 240);
+}

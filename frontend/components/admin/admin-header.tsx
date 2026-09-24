@@ -15,6 +15,7 @@ import { globalSearch, type SearchResult } from "@/lib/api/search";
 import { useOnboardingTour } from "@/lib/admin/onboarding-tour";
 import { useProfileModal } from "@/lib/admin/profile-modal-context";
 import { cn } from "@/lib/utils";
+import { AdminThemeToggle } from "@/components/admin/admin-theme-toggle";
 
 function initials(firstName?: string, lastName?: string) {
   return `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "?";
@@ -336,6 +337,8 @@ export function AdminHeader({ onToggleSidebar }: { onToggleSidebar?: () => void 
         >
           <HelpCircle className="size-[1.1rem]" />
         </button>
+
+        <AdminThemeToggle />
 
         <NotificationBell />
 

@@ -9,6 +9,8 @@ import { ProfileModalProvider } from "@/lib/admin/profile-modal-context";
 import { ProfileSheet } from "@/components/profile/profile-sheet";
 import { PermissionsProvider } from "@/lib/admin/permissions-context";
 import type { Viewport } from "next";
+import { ADMIN_THEME_BOOTSTRAP } from "@/lib/admin/admin-theme";
+import { AdminThemeScope } from "@/components/admin/admin-theme-toggle";
 
 import { AdminAccessGuard } from "@/components/admin/admin-access-guard";
 
@@ -31,7 +33,9 @@ import { AdminAccessGuard } from "@/components/admin/admin-access-guard";
  * et elle est présente dès le HTML initial — un effet client aurait laissé
  * un éclair sombre à chaque chargement.
  */
-const ADMIN_SURFACE_CSS = `html:root, html:root body { background-color: #ffffff; }`;
+// var(--color-white) plutôt que #ffffff : en mode sombre, globals.css
+// redéfinit cette variable, et le fond de la racine suit le thème choisi.
+const ADMIN_SURFACE_CSS = `html:root, html:root body { background-color: var(--color-white); }`;
 
 /* La couleur de thème est ce dont le système peint ses propres barres :
  * barre d'état et barre de navigation Android, et les mêmes en PWA
@@ -51,6 +55,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <AuthProvider>
       <style>{ADMIN_SURFACE_CSS}</style>
+      <script dangerouslySetInnerHTML={{ __html: ADMIN_THEME_BOOTSTRAP }} />
+      <AdminThemeScope />
       <RequireAuth>
         <PermissionsProvider>
           <OnboardingProvider>
