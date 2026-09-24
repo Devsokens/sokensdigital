@@ -1,8 +1,14 @@
 from rest_framework import serializers
 
+from core.constants import ROLE_ADMIN, ROLE_SUPER_ADMIN, ROLE_SUPPORT_CLIENT
 from core.models import User
 from core.serializers import UserBriefSerializer
 from support.models import FAQEntry, SupportTicket, TicketMessage
+
+# Longueur maximale d'un message — sans elle, l'intake public (aucune
+# authentification requise) acceptait un corps de plusieurs Mo, cumulable
+# avec le contournement du rate-limit (pentest du 24/09/2026, D2).
+MESSAGE_MAX_LENGTH = 5000
 
 
 class FAQPublicSerializer(serializers.ModelSerializer):
@@ -29,7 +35,7 @@ class SupportTicketPublicCreateSerializer(serializers.ModelSerializer):
     """Public intake — visitor_name/email/subject create the ticket, and
     `message` (write-only) becomes the first TicketMessage."""
 
-    message = serializers.CharField(write_only=True)
+    message = serializers.CharField(write_only=True, max_length=MESSAGE_MAX_LENGTH)
     access_token = serializers.UUIDField(read_only=True)
 
     class Meta:
@@ -55,7 +61,7 @@ class SupportTicketPublicDetailSerializer(serializers.ModelSerializer):
 
 
 class SupportTicketPublicReplySerializer(serializers.Serializer):
-    message = serializers.CharField()
+    message = serializers.CharField(max_length=MESSAGE_MAX_LENGTH)
 
     def create(self, validated_data):
         ticket = self.context['ticket']
@@ -70,7 +76,14 @@ class SupportTicketSerializer(serializers.ModelSerializer):
     messages = TicketMessageSerializer(many=True, read_only=True)
     assigned_to = UserBriefSerializer(read_only=True)
     assigned_to_id = serializers.PrimaryKeyRelatedField(
-        source='assigned_to', queryset=User.objects.all(), write_only=True, required=False, allow_null=True,
+        # Restreint aux agents support — sans ça, un ticket (données
+        # personnelles du visiteur comprises) pouvait être assigné à
+        # n'importe quel utilisateur de l'application, support ou pas
+        # (pentest du 24/09/2026, D3), et le champ permettait au passage
+        # d'énumérer des identifiants utilisateurs valides par essai-erreur.
+        source='assigned_to',
+        queryset=User.objects.filter(roles__name__in=(ROLE_SUPPORT_CLIENT, ROLE_ADMIN, ROLE_SUPER_ADMIN)).distinct(),
+        write_only=True, required=False, allow_null=True,
     )
 
     class Meta:
@@ -79,6 +92,15 @@ class SupportTicketSerializer(serializers.ModelSerializer):
             'id', 'visitor_name', 'visitor_email', 'subject', 'status',
             'assigned_to', 'assigned_to_id', 'messages', 'created_at', 'updated_at',
         ]
+        # 'visitor_name'/'visitor_email'/'subject' en lecture seule : ce sont
+        # les coordonnées du VISITEUR qui a ouvert le ticket, saisies une
+        # fois par lui — un agent qui les réécrit pouvait rediriger les
+        # réponses vers une autre adresse ou usurper l'identité du
+        # demandeur (pentest du 24/09/2026, D4). La doc de cette vue
+        # (extend_schema_view plus haut) dit "Update ticket status/assignee"
+        # — ce sont les deux seuls champs qu'elle a jamais eu vocation à
+        # modifier.
+        read_only_fields = ['visitor_name', 'visitor_email', 'subject']
 
 
 class SupportTicketListSerializer(serializers.ModelSerializer):

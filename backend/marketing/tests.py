@@ -84,6 +84,40 @@ class PublicLeadCreateTests(APITestCase):
         still_ok = self.client.post('/api/v1/public/leads/', self.valid_payload(), format='json', REMOTE_ADDR='2.2.2.2')
         self.assertEqual(still_ok.status_code, 201)
 
+    def test_spoofed_x_forwarded_for_does_not_bypass_the_rate_limit(self):
+        # Pentest du 24/09/2026 : get_client_ip() lisait la PREMIÈRE entrée
+        # de X-Forwarded-For — entièrement fournie par le client — ce qui
+        # suffisait à contourner toute limite en changeant cette valeur à
+        # chaque appel. Même IP physique (REMOTE_ADDR), en-tête différent.
+        for i in range(3):
+            response = self.client.post(
+                '/api/v1/public/leads/', self.valid_payload(), format='json',
+                REMOTE_ADDR='6.6.6.6', HTTP_X_FORWARDED_FOR=f'10.0.0.{i}',
+            )
+            self.assertEqual(response.status_code, 201)
+        blocked = self.client.post(
+            '/api/v1/public/leads/', self.valid_payload(), format='json',
+            REMOTE_ADDR='6.6.6.6', HTTP_X_FORWARDED_FOR='10.0.0.99',
+        )
+        self.assertEqual(blocked.status_code, 429)
+
+    def test_cf_connecting_ip_is_trusted_over_x_forwarded_for(self):
+        # CF-Connecting-IP est posé par Cloudflare lui-même à partir de la
+        # vraie connexion TCP — un client ne peut pas l'écraser (Cloudflare
+        # remplace toute valeur envoyée par le client avant que Django ne la
+        # voie). C'est donc lui, pas X-Forwarded-For, qui doit décider.
+        for i in range(3):
+            response = self.client.post(
+                '/api/v1/public/leads/', self.valid_payload(), format='json',
+                HTTP_CF_CONNECTING_IP='7.7.7.7', HTTP_X_FORWARDED_FOR=f'10.0.0.{i}',
+            )
+            self.assertEqual(response.status_code, 201)
+        blocked = self.client.post(
+            '/api/v1/public/leads/', self.valid_payload(), format='json',
+            HTTP_CF_CONNECTING_IP='7.7.7.7', HTTP_X_FORWARDED_FOR='10.0.0.99',
+        )
+        self.assertEqual(blocked.status_code, 429)
+
     @patch('marketing.ratelimit.cache.incr', side_effect=ConnectionError('Redis unreachable'))
     def test_submission_still_works_if_cache_backend_is_down(self, mock_incr):
         # is_rate_limited() must fail open — a cache/Redis outage should

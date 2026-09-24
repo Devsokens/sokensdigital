@@ -2,11 +2,30 @@ from django.core.cache import cache
 
 
 def get_client_ip(request) -> str:
-    """Render (like most PaaS) sits behind a reverse proxy — the real
-    client IP is in X-Forwarded-For, not REMOTE_ADDR (that's the proxy)."""
-    forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
-    if forwarded:
-        return forwarded.split(',')[0].strip()
+    """Cloudflare fronte ce backend (vérifié en production — chaque réponse
+    porte `Server: cloudflare`, y compris sur le domaine Render direct).
+    `CF-Connecting-IP` est posé par l'edge Cloudflare lui-même à partir de
+    la vraie connexion TCP entrante : un client ne peut pas l'écraser,
+    Cloudflare remplace toute valeur du même nom avant que Django ne la
+    voie.
+
+    Pentest du 24/09/2026 : cette fonction lisait auparavant la PREMIÈRE
+    entrée de X-Forwarded-For (`.split(',')[0]`) — un en-tête entièrement
+    fourni par le client, qui peut y écrire n'importe quoi. Un
+    `X-Forwarded-For` changé à chaque appel suffisait à contourner toute
+    limite anti-abus par IP (formulaires publics marketing ET support, qui
+    partagent cette même fonction) — sans même qu'un vrai proxy en chaîne
+    soit nécessaire pour l'exploiter. X-Forwarded-For n'est donc plus
+    utilisé du tout ici : sans certitude sur le nombre de sauts avant
+    Django, aucune position dans cette liste n'est fiable. Sans
+    CF-Connecting-IP (hors Cloudflare : dev local, tests), on retombe sur
+    REMOTE_ADDR — non falsifiable lui non plus, au prix d'un unique
+    compteur partagé par tout le trafic derrière un même proxy amont non
+    identifié.
+    """
+    cf_connecting_ip = request.META.get('HTTP_CF_CONNECTING_IP')
+    if cf_connecting_ip:
+        return cf_connecting_ip.strip()
     return request.META.get('REMOTE_ADDR', 'unknown')
 
 

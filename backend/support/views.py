@@ -1,6 +1,6 @@
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from rest_framework import generics, permissions, status, viewsets
+from rest_framework import generics, mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -134,7 +134,16 @@ class FAQViewSet(viewsets.ModelViewSet):
     retrieve=extend_schema(tags=['Support Client'], summary='Get a support ticket'),
     partial_update=extend_schema(tags=['Support Client'], summary='Update ticket status/assignee'),
 )
-class SupportTicketViewSet(viewsets.ModelViewSet):
+class SupportTicketViewSet(
+    mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet,
+):
+    """Pas de create/destroy — un ticket naît uniquement du widget public
+    (PublicTicketCreateView) et n'est jamais supprimé (historique du
+    visiteur). ModelViewSet complet exposait auparavant un POST interne
+    permettant à un agent de fabriquer de faux tickets (pentest du
+    24/09/2026, D4) ; les mixins ci-dessous ne câblent tout simplement plus
+    cette route, plutôt que de la bloquer après coup."""
+
     queryset = SupportTicket.objects.select_related('assigned_to').prefetch_related('messages__author')
     permission_classes = [IsSupportStaff]
     http_method_names = ['get', 'patch', 'post', 'head', 'options']

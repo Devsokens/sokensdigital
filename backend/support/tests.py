@@ -83,6 +83,38 @@ class PublicTicketTests(APITestCase):
         )
         self.assertEqual(response.status_code, 404)
 
+    def test_unbounded_message_body_is_refused(self):
+        # Pentest du 24/09/2026 (D2) : un message de plusieurs Mo était
+        # accepté sans authentification, combinable avec un contournement
+        # du rate-limit pour saturer la base et l'interface des agents.
+        response = self.client.post(
+            '/api/v1/public/tickets/', self.valid_payload(message='A' * 2_000_000), format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_unbounded_reply_body_is_refused(self):
+        create_response = self.client.post('/api/v1/public/tickets/', self.valid_payload(), format='json')
+        token = create_response.data['access_token']
+        response = self.client.post(
+            f'/api/v1/public/tickets/{token}/reply/', {'message': 'A' * 2_000_000}, format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_spoofed_x_forwarded_for_does_not_bypass_the_ticket_rate_limit(self):
+        # Pentest du 24/09/2026 : même défaut que côté marketing —
+        # X-Forwarded-For est entièrement fourni par le client.
+        for i in range(5):
+            response = self.client.post(
+                '/api/v1/public/tickets/', self.valid_payload(), format='json',
+                HTTP_X_FORWARDED_FOR=f'10.0.0.{i}',
+            )
+            self.assertEqual(response.status_code, 201)
+        blocked = self.client.post(
+            '/api/v1/public/tickets/', self.valid_payload(), format='json',
+            HTTP_X_FORWARDED_FOR='10.0.0.99',
+        )
+        self.assertEqual(blocked.status_code, 429)
+
 
 class StaffSupportTicketTests(APITestCase):
     def setUp(self):
@@ -129,3 +161,42 @@ class StaffSupportTicketTests(APITestCase):
     def test_unauthenticated_is_forbidden(self):
         response = self.client.get('/api/v1/support/tickets/')
         self.assertIn(response.status_code, (401, 403))
+
+    def test_cannot_assign_ticket_to_a_non_support_user(self):
+        # Pentest du 24/09/2026 (D3) : le ticket porte des données
+        # personnelles du visiteur — l'assigner à n'importe qui (pas
+        # seulement un agent support) l'exposait hors de son périmètre
+        # prévu, et permettait au passage d'énumérer des ids utilisateurs.
+        agent = User.objects.create_user(email='agent-d3@sokens.test', password='pass1234')
+        _give_role(agent, ROLE_SUPPORT_CLIENT)
+        outsider = User.objects.create_user(email='outsider-d3@sokens.test', password='pass1234')
+        _give_role(outsider, ROLE_COMMERCIAL)
+        self.client.force_authenticate(agent)
+        response = self.client.patch(
+            f'/api/v1/support/tickets/{self.ticket.id}/', {'assigned_to_id': outsider.id}, format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_cannot_rewrite_visitor_identity(self):
+        # Pentest du 24/09/2026 (D4) : un agent pouvait réécrire l'e-mail du
+        # visiteur, redirigeant ainsi les réponses vers une autre adresse.
+        agent = User.objects.create_user(email='agent-d4@sokens.test', password='pass1234')
+        _give_role(agent, ROLE_SUPPORT_CLIENT)
+        self.client.force_authenticate(agent)
+        self.client.patch(
+            f'/api/v1/support/tickets/{self.ticket.id}/', {'visitor_email': 'evil@x.com'}, format='json',
+        )
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.visitor_email, 'ada@example.com')
+
+    def test_staff_route_does_not_accept_ticket_creation(self):
+        # Pentest du 24/09/2026 (D4) : un agent pouvait fabriquer un faux
+        # ticket via la route interne, jamais prévue pour ça (un ticket ne
+        # naît que du widget public).
+        agent = User.objects.create_user(email='agent-d4b@sokens.test', password='pass1234')
+        _give_role(agent, ROLE_SUPPORT_CLIENT)
+        self.client.force_authenticate(agent)
+        response = self.client.post(
+            '/api/v1/support/tickets/', {'visitor_name': 'x', 'visitor_email': 'x@x.com'}, format='json',
+        )
+        self.assertIn(response.status_code, (403, 405))
