@@ -261,13 +261,62 @@ class SupplierQuoteViewSetTests(ProcurementTestBase):
             quote_date='2026-08-15', amount_ht=Decimal('1000'), vat_rate=Decimal('0.18'),
             status=SupplierQuote.Status.EN_ATTENTE,
         )
-        response = self.client_cfo.post(f'/api/v1/procurement/quotes/{quote.id}/validate_manager/')
+        self.assertEqual(self.client_cfo.post(f'/api/v1/procurement/quotes/{quote.id}/validate_rcf/').status_code, 200)
+        response = self.client_admin.post(f'/api/v1/procurement/quotes/{quote.id}/validate_manager/')
         self.assertEqual(response.status_code, 200)
         quote.refresh_from_db()
         self.assertEqual(quote.status, SupplierQuote.Status.VALIDE)
         # safe_dispatch() est un no-op silencieux pendant les tests (voir
         # core/celery_utils.py) — la tâche elle-même est testée séparément
         # ci-dessous, exécutée directement.
+
+    def _pending_quote(self):
+        return SupplierQuote.objects.create(
+            procurement=self.procurement, supplier=self.supplier,
+            quote_date='2026-08-15', amount_ht=Decimal('1000'), vat_rate=Decimal('0.18'),
+            status=SupplierQuote.Status.EN_ATTENTE,
+        )
+
+    def test_validate_manager_requires_rcf_first(self):
+        """Pentest du 24/09/2026 : sans RCF préalable, pas de validation finale."""
+        quote = self._pending_quote()
+        response = self.client_admin.post(f'/api/v1/procurement/quotes/{quote.id}/validate_manager/')
+        self.assertEqual(response.status_code, 400)
+        quote.refresh_from_db()
+        self.assertEqual(quote.status, SupplierQuote.Status.EN_ATTENTE)
+
+    def test_validate_manager_forbidden_to_directeur_financier(self):
+        quote = self._pending_quote()
+        self.client_comptable.post(f'/api/v1/procurement/quotes/{quote.id}/validate_rcf/')
+        response = self.client_cfo.post(f'/api/v1/procurement/quotes/{quote.id}/validate_manager/')
+        self.assertEqual(response.status_code, 403)
+        quote.refresh_from_db()
+        self.assertEqual(quote.status, SupplierQuote.Status.EN_ATTENTE)
+
+    def test_validate_manager_forbidden_to_rcf_validator(self):
+        quote = self._pending_quote()
+        self.client_admin.post(f'/api/v1/procurement/quotes/{quote.id}/validate_rcf/')
+        response = self.client_admin.post(f'/api/v1/procurement/quotes/{quote.id}/validate_manager/')
+        self.assertEqual(response.status_code, 403)
+        quote.refresh_from_db()
+        self.assertEqual(quote.status, SupplierQuote.Status.EN_ATTENTE)
+
+    def test_validate_rcf_cannot_be_overwritten(self):
+        quote = self._pending_quote()
+        self.client_comptable.post(f'/api/v1/procurement/quotes/{quote.id}/validate_rcf/')
+        response = self.client_cfo.post(f'/api/v1/procurement/quotes/{quote.id}/validate_rcf/')
+        self.assertEqual(response.status_code, 400)
+        quote.refresh_from_db()
+        self.assertEqual(quote.rcf_validated_by, self.comptable)
+
+    def test_validated_quote_cannot_be_rejected(self):
+        quote = self._pending_quote()
+        self.client_comptable.post(f'/api/v1/procurement/quotes/{quote.id}/validate_rcf/')
+        self.client_admin.post(f'/api/v1/procurement/quotes/{quote.id}/validate_manager/')
+        response = self.client_cfo.post(f'/api/v1/procurement/quotes/{quote.id}/reject/')
+        self.assertEqual(response.status_code, 400)
+        quote.refresh_from_db()
+        self.assertEqual(quote.status, SupplierQuote.Status.VALIDE)
 
 
 class SupplierInvoiceViewSetTests(ProcurementTestBase):
@@ -415,7 +464,8 @@ class ProcurementFullWorkflowIntegrationTest(ProcurementTestBase):
         quote = SupplierQuote.objects.get(id=quote_response.json()['id'])
 
         # 3. Validation devis → déclenche (en pratique) le décaissement
-        self.client_cfo.post(f'/api/v1/procurement/quotes/{quote.id}/validate_manager/')
+        self.client_comptable.post(f'/api/v1/procurement/quotes/{quote.id}/validate_rcf/')
+        self.client_admin.post(f'/api/v1/procurement/quotes/{quote.id}/validate_manager/')
         quote.refresh_from_db()
         self.assertEqual(quote.status, SupplierQuote.Status.VALIDE)
         create_disbursement_request_task.apply(args=(str(quote.id),)).get()

@@ -226,7 +226,12 @@ class SupplierQuoteViewSet(viewsets.ModelViewSet):
     filterset_fields = ['procurement', 'supplier', 'status']
 
     def get_permissions(self):
-        if self.request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
+        # Filtré sur l'action CRUD, pas sur la méthode HTTP : un filtre
+        # "POST ⇒ IsFinanceOrAdmin" écrasait aussi les permission_classes
+        # des @action (validate_rcf/validate_manager/reject, toutes en POST)
+        # — le Directeur Financier passait donc les deux paliers de
+        # validation, et le Comptable (RCF) n'en passait aucun.
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
             return [IsFinanceOrAdmin()]
         return super().get_permissions()
 
@@ -260,6 +265,9 @@ class SupplierQuoteViewSet(viewsets.ModelViewSet):
         quote = self.get_object()
         if quote.status != SupplierQuote.Status.EN_ATTENTE:
             return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+        if quote.rcf_validated_at:
+            # Pas de réécriture silencieuse de la trace d'audit du 1er palier.
+            return Response({'error': 'Devis déjà validé par la RCF.'}, status=status.HTTP_400_BAD_REQUEST)
 
         quote.rcf_validated_by = request.user
         quote.rcf_validated_at = timezone.now()
@@ -267,17 +275,43 @@ class SupplierQuoteViewSet(viewsets.ModelViewSet):
 
         return Response(self.get_serializer(quote).data)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
+    @action(detail=True, methods=['post'], permission_classes=[IsGerantOrAdmin])
     def validate_manager(self, request, pk=None):
-        """Manager validation."""
+        """Manager (Gérant) validation — second palier, après la RCF.
+
+        Pentest du 24/09/2026 : ce palier était ouvert à IsManagerOrAdmin
+        et ne vérifiait pas que validate_rcf avait eu lieu — un Directeur
+        Financier validait seul un devis et déclenchait le décaissement.
+        Désormais : Gérant/Super-Admin uniquement (même convention que
+        ProcurementRequest.approve_manager), RCF préalable obligatoire, et
+        jamais la même personne aux deux paliers.
+        """
         quote = self.get_object()
         if quote.status != SupplierQuote.Status.EN_ATTENTE:
             return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+        if not quote.rcf_validated_at:
+            return Response(
+                {'error': "Le devis doit d'abord être validé par la RCF."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if quote.rcf_validated_by_id == request.user.id:
+            return Response(
+                {'detail': 'La validation finale doit être faite par une autre personne que la RCF.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
-        quote.status = SupplierQuote.Status.VALIDE
-        quote.manager_validated_by = request.user
-        quote.manager_validated_at = timezone.now()
-        quote.save()
+        # Transition conditionnelle atomique : deux requêtes concurrentes
+        # ne peuvent pas déclencher deux décaissements.
+        updated = SupplierQuote.objects.filter(
+            pk=quote.pk, status=SupplierQuote.Status.EN_ATTENTE,
+        ).update(
+            status=SupplierQuote.Status.VALIDE,
+            manager_validated_by=request.user,
+            manager_validated_at=timezone.now(),
+        )
+        if not updated:
+            return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+        quote.refresh_from_db()
 
         safe_dispatch(create_disbursement_request_task, (str(quote.id),))
 
@@ -287,6 +321,10 @@ class SupplierQuoteViewSet(viewsets.ModelViewSet):
     def reject(self, request, pk=None):
         """Reject quote."""
         quote = self.get_object()
+        if quote.status in (SupplierQuote.Status.VALIDE, SupplierQuote.Status.REJETE):
+            # Un devis VALIDE a déjà déclenché son décaissement : le passer
+            # REJETE après coup masquerait ce paiement sans l'annuler.
+            return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
         quote.status = SupplierQuote.Status.REJETE
         quote.save()
 
