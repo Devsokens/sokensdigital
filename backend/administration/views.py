@@ -15,7 +15,7 @@ from core.models import AuditLog, Notification
 from core.constants import (
     ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PROJECT_MANAGER,
     ROLE_DEVELOPER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMMERCIAL,
-    ROLE_RH_MANAGER, ADMIN_ROLES, HR_ROLES, FINANCE_ROLES,
+    ROLE_RH_MANAGER, ROLE_SUPPORT_CLIENT, ADMIN_ROLES, HR_ROLES, FINANCE_ROLES,
 )
 from core.permissions import (
     IsSuperAdmin, IsAdmin, IsProjectManager,
@@ -38,26 +38,46 @@ def _accessible_clients_qs(user):
     """
     Clients visibles par cet utilisateur.
 
-    Admin / Directeur Financier / Commercial&Marketing (non scopé
-    ci-dessous) : tous les clients. Commercial seul : ses clients
-    assignés. Chef de Projet seul : clients liés à ses projets.
+    Admin/Super-Admin et Support Client (cahier des charges §4.8, "accès
+    aux tickets, base de connaissances, et fiches clients", non scopé) :
+    tous les clients. Commercial : ses clients assignés. Chef de Projet :
+    clients liés à ses projets. Tout le reste (Directeur Financier,
+    Comptable, RH, Développeur, Consultant, Marketing, ou pas de rôle du
+    tout) : aucun — le module "clients" ne figure pas dans leur périmètre
+    déclaré (core.constants.DEFAULT_ROLE_PERMISSIONS).
+
+    Corrige le pentest du 24/09/2026 : la version précédente renvoyait
+    TOUS les clients par défaut dès qu'un rôle ne correspondait à aucun des
+    deux cas scopés — un Consultant ou un utilisateur sans rôle lisait donc
+    l'intégralité du fichier clients (SIRET, email, notes, assigné).
     """
-    qs = Client.objects.all()
+    if user.roles.filter(name__in=[*ADMIN_ROLES, ROLE_SUPPORT_CLIENT]).exists():
+        return Client.objects.all()
 
-    if (user.roles.filter(name=ROLE_COMMERCIAL).exists()
-            and not user.roles.filter(name__in=ADMIN_ROLES).exists()):
-        return qs.filter(assigned_to=user)
-
-    if (user.roles.filter(name=ROLE_PROJECT_MANAGER).exists()
-            and not user.roles.filter(name__in=ADMIN_ROLES).exists()):
-        return qs.filter(projects__project_manager=user).distinct()
-
-    return qs
+    accessible = Client.objects.none()
+    if user.roles.filter(name=ROLE_COMMERCIAL).exists():
+        accessible |= Client.objects.filter(assigned_to=user)
+    if user.roles.filter(name=ROLE_PROJECT_MANAGER).exists():
+        accessible |= Client.objects.filter(projects__project_manager=user)
+    return accessible.distinct()
 
 
 # ---------------------------------------------------------------------------
 # CRM — Clients
 # ---------------------------------------------------------------------------
+
+# Rôles ayant une raison d'accéder au module clients, ne serait-ce que de
+# façon scopée — le reste (Directeur Financier, Comptable, RH, Développeur,
+# Consultant, Marketing, pas de rôle) n'y figure dans aucune entrée de
+# core.constants.DEFAULT_ROLE_PERMISSIONS et ne doit donc jamais recevoir
+# qu'un refus explicite plutôt qu'une liste vide silencieuse.
+CLIENT_ACCESS_ROLES = [*ADMIN_ROLES, ROLE_SUPPORT_CLIENT, ROLE_COMMERCIAL, ROLE_PROJECT_MANAGER]
+
+
+class IsHasClientAccess(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return request.user.roles.filter(name__in=CLIENT_ACCESS_ROLES).exists()
+
 
 class ClientViewSet(viewsets.ModelViewSet):
     """
@@ -78,7 +98,14 @@ class ClientViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update']:
             return [permissions.IsAuthenticated(), (IsAdmin | IsCommercial)()]
-        return [permissions.IsAuthenticated()]
+        # Pentest du 24/09/2026 : list/retrieve ne demandaient qu'un compte
+        # authentifié, en s'appuyant uniquement sur get_queryset pour filtrer
+        # — un rôle hors périmètre (Consultant, Développeur, sans rôle...)
+        # recevait un 200 vide plutôt qu'un refus explicite, et un accès
+        # direct par id à la fiche de quelqu'un d'autre n'était bloqué que
+        # par le filtrage de queryset. IsHasClientAccess rend le refus
+        # explicite (403) en plus du filtrage déjà en place.
+        return [permissions.IsAuthenticated(), IsHasClientAccess()]
 
     def destroy(self, request, *args, **kwargs):
         """Suppression interdite — utiliser l'action archive."""
@@ -516,6 +543,7 @@ class ContractGeneratorViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
         contract_type = serializer.validated_data.get('contract_type')
+        client = serializer.validated_data.get('client')
 
         # Commerciaux limités aux NDA et PRESTATION_SERVICES
         if (user.roles.filter(name=ROLE_COMMERCIAL).exists()
@@ -530,6 +558,11 @@ class ContractGeneratorViewSet(viewsets.ModelViewSet):
                     'Les commerciaux ne peuvent créer que des NDA '
                     'et des contrats de prestation de services.'
                 )
+            # Pentest du 24/09/2026 : rien ne vérifiait que le client
+            # choisi appartient bien à ce commercial — il pouvait créer un
+            # contrat (document juridique) rattaché au client d'un autre.
+            if client and not _accessible_clients_qs(user).filter(pk=client.pk).exists():
+                raise PermissionDenied("Vous n'avez pas accès à ce client.")
         serializer.save()
 
     @action(detail=True, methods=['post'], url_path='generate-pdf')

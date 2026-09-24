@@ -21,7 +21,14 @@ class ClientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Client
         fields = '__all__'
-    
+        # 'status' en lecture seule — suite au pentest du 24/09/2026 : un
+        # Commercial autorisé à PATCHer son propre client pouvait envoyer
+        # {"status": "ARCHIVE"} et contourner ainsi l'action `archive`,
+        # réservée au Super-Admin. Le statut par défaut (PROSPECT) couvre
+        # déjà la création ; toute transition passe désormais par une
+        # action dédiée, jamais par une écriture directe du champ.
+        read_only_fields = ['status']
+
     def validate(self, data):
         # We can run model clean for validation
         instance = Client(**data)
