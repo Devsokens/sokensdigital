@@ -84,12 +84,41 @@ service cloud.firestore {
       allow update, delete: if isAuth() && getUserData().role == 'SUPER_ADMIN';
 
       match /messages/{messageId} {
-        allow read: if isAuth(); // Validé automatiquement par l'évaluation du parent
+        // Corrige F1 (pentest du 24/09/2026) : Firestore n'hérite JAMAIS une
+        // règle d'un chemin parent vers une sous-collection — le commentaire
+        // précédent ("validé automatiquement par le parent") était faux, et
+        // `if isAuth()` laissait tout compte connecté lire collectionGroup
+        // 'messages' en entier, tous départements et conversations privées
+        // confondus. On reprend donc ici, explicitement, la même condition
+        // par type de salon que pour la lecture du salon lui-même et pour
+        // la création d'un message (juste en dessous).
+        allow read: if isAuth() && (
+          (
+            get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'COMPANY'
+          ) ||
+          (
+            get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'DEPARTMENT' &&
+            get(/databases/$(database)/documents/chatRooms/$(roomId)).data.departmentId == getUserData().departmentId
+          ) ||
+          (
+            get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'PROJECT' &&
+            request.auth.uid in get(/databases/$(database)/documents/chatRooms/$(roomId)).data.memberUids
+          ) ||
+          (
+            get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'DIRECT' &&
+            request.auth.uid in get(/databases/$(database)/documents/chatRooms/$(roomId)).data.memberUids
+          )
+        );
 
         // Mirrors the room-level read rule exactly, per roomType — a plain
         // "not COMPANY" check let anyone who merely guessed a room id post
         // into a DEPARTMENT/PROJECT/DIRECT room they aren't a member of.
-        allow create: if isAuth() && (
+        // Corrige aussi F2 (pentest du 24/09/2026) : la vérification
+        // d'appartenance ne suffisait pas seule — rien n'empêchait de
+        // publier un message avec `authorUid` usurpé (un autre uid que
+        // l'appelant), ce qui l'affiche comme venant de quelqu'un d'autre.
+        allow create: if isAuth() &&
+          request.resource.data.authorUid == request.auth.uid && (
           (
             get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'COMPANY' &&
             getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_MARKETING']
@@ -112,8 +141,12 @@ service cloud.firestore {
         // immutable once created — an update may only ever touch the
         // reactions/pin fields, never rewrite what was said. Reacting/
         // pinning is restricted to the same membership check as create.
+        // `pinnedBy`, quand renseigné, doit être l'appelant lui-même —
+        // sinon n'importe quel membre du salon pouvait épingler un message
+        // au nom d'un collègue (constat mineur du pentest du 24/09/2026).
         allow update: if isAuth() &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'pinned', 'pinnedBy', 'pinnedAt']) && (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'pinned', 'pinnedBy', 'pinnedAt']) &&
+          (!('pinnedBy' in request.resource.data) || request.resource.data.pinnedBy == null || request.resource.data.pinnedBy == request.auth.uid) && (
             (
               get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'COMPANY' &&
               getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_MARKETING']
@@ -142,13 +175,28 @@ service cloud.firestore {
         resource.data.authorId == request.auth.uid ||
         (resource.data.visibilityLevel == 'DEPARTMENT' && resource.data.authorDepartmentId == getUserData().departmentId)
       );
-      allow create, update: if isAuth() && request.resource.data.authorId == request.auth.uid;
+      allow create: if isAuth() && request.resource.data.authorId == request.auth.uid;
+      // Corrige F3 (pentest du 24/09/2026) : `update` ne regardait que la
+      // NOUVELLE valeur d'authorId, jamais l'actuelle — n'importe quel
+      // employé connaissant l'id d'un document (même sans droit de le lire)
+      // pouvait l'écraser en se déclarant auteur, puis le supprimer grâce à
+      // la règle `delete` ci-dessous. Il faut désormais déjà être l'auteur
+      // pour modifier, ET rester l'auteur après la modification.
+      allow update: if isAuth() &&
+        resource.data.authorId == request.auth.uid &&
+        request.resource.data.authorId == resource.data.authorId;
       allow delete: if isAuth() && resource.data.authorId == request.auth.uid;
     }
 
     // Notifications Rules (Strictement Isolation Client)
     match /notifications/{notificationId} {
-      allow read, update: if isAuth() && resource.data.recipientId == request.auth.uid;
+      allow read: if isAuth() && resource.data.recipientId == request.auth.uid;
+      // `update` restreint aux champs de lecture — sans ça (constat mineur
+      // du pentest du 24/09/2026), le destinataire pouvait réécrire le
+      // texte/lien de sa propre notification, ou changer `recipientId` pour
+      // la faire apparaître dans la boîte de quelqu'un d'autre.
+      allow update: if isAuth() && resource.data.recipientId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
       allow create, delete: if false; // Création déléguée aux scripts applicatifs (aucune Cloud Function en free tier — voir §0)
     }
 
