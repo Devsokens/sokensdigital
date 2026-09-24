@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { Hero } from "@/components/sections/hero";
@@ -11,6 +12,14 @@ import { Cta } from "@/components/sections/cta";
 import { getPageSections, findSection } from "@/lib/api/public";
 import { getShowcaseProjects } from "@/lib/projects/public";
 import { getBlogPosts } from "@/lib/blog/public";
+import { pageMetadata } from "@/lib/seo/metadata";
+
+export const metadata: Metadata = pageMetadata({
+  title: { absolute: "Soken's Digital — Agence digitale à Libreville, Gabon" },
+  description:
+    "Soken's Digital, agence digitale à Libreville (Gabon) : applications web et mobiles, logiciels sur mesure, cloud et cybersécurité pour les entreprises en Afrique.",
+  path: "/",
+});
 
 export default async function Home() {
   const [sections, homepageProjects, blogPosts] = await Promise.all([

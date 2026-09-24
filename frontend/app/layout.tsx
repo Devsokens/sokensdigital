@@ -4,6 +4,9 @@ import { PublicChatWidgetGate } from "@/components/public-chat-widget-gate";
 import { CookieConsentGate } from "@/components/cookie-consent-gate";
 import { PostHogProvider } from "@/components/analytics/posthog-provider";
 import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registrar";
+import { JsonLd } from "@/components/seo/json-ld";
+import { SITE, SITE_URL } from "@/lib/seo/site";
+import { organizationSchema, websiteSchema } from "@/lib/seo/structured-data";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -17,10 +20,52 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Soken's Digital — Excellence Digitale sur Mesure",
-  description:
-    "Soken's Digital transforme vos visions en solutions technologiques haute performance : logiciels critiques, applications cloud et infrastructures sécurisées.",
-  applicationName: "Soken's Digital",
+  // Base de toutes les URL absolues (canonique, Open Graph, images) — sans
+  // elle, les aperçus de partage pointent vers localhost ou restent vides.
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: `${SITE.name} — Agence digitale à Libreville, Gabon`,
+    template: `%s | ${SITE.name}`,
+  },
+  description: SITE.description,
+  applicationName: SITE.name,
+  keywords: [...SITE.keywords],
+  authors: [{ name: SITE.name, url: SITE_URL }],
+  creator: SITE.name,
+  publisher: SITE.name,
+  category: "technology",
+  alternates: { canonical: "/", languages: { fr: "/", "x-default": "/" } },
+  openGraph: {
+    type: "website",
+    siteName: SITE.name,
+    locale: SITE.locale,
+    url: SITE_URL,
+    title: `${SITE.name} — Agence digitale à Libreville, Gabon`,
+    description: SITE.description,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE.name} — Agence digitale à Libreville, Gabon`,
+    description: SITE.description,
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  // Ciblage régional : Libreville, Estuaire (GA-1), Gabon.
+  other: {
+    "geo.region": "GA-1",
+    "geo.placename": SITE.address.locality,
+    "geo.position": `${SITE.geo.latitude};${SITE.geo.longitude}`,
+    ICBM: `${SITE.geo.latitude}, ${SITE.geo.longitude}`,
+  },
   // iOS ignore le manifest pour ces trois réglages et n'écoute que ses
   // propres meta — sans elles, l'app ajoutée à l'écran d'accueil rouvre
   // dans Safari avec sa barre d'adresse au lieu de s'ouvrir en plein écran.
@@ -66,6 +111,7 @@ export default function RootLayout({
       className={`${jakarta.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
+        <JsonLd data={[organizationSchema(), websiteSchema()]} />
         {children}
         <PublicChatWidgetGate />
         <CookieConsentGate />

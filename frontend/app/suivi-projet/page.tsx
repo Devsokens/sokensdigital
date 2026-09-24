@@ -6,12 +6,14 @@ import { TrackingHero } from "@/components/sections/tracking/tracking-hero";
 import { ProjectStatusCard } from "@/components/sections/tracking/project-status-card";
 import { TrackingFeatures } from "@/components/sections/tracking/tracking-features";
 import { getPageSections, findSection } from "@/lib/api/public";
+import { pageMetadata } from "@/lib/seo/metadata";
 
-export const metadata: Metadata = {
-  title: "Suivi de Projet — Soken's Digital",
+export const metadata: Metadata = pageMetadata({
+  title: "Suivi de projet",
   description:
-    "Accédez en temps réel à l'état d'avancement de votre solution digitale sécurisée.",
-};
+    "Suivez en temps réel l'avancement de votre projet digital avec Soken's Digital.",
+  path: "/suivi-projet",
+});
 
 export default async function SuiviProjetPage() {
   const sections = await getPageSections("SUIVI_PROJET");

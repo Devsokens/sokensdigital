@@ -8,12 +8,15 @@ import { TechStack } from "@/components/sections/expertise/tech-stack";
 import { FeaturedCaseStudy } from "@/components/sections/expertise/featured-case-study";
 import { getPageSections, findSection } from "@/lib/api/public";
 import { getShowcaseProjects } from "@/lib/projects/public";
+import { pageMetadata } from "@/lib/seo/metadata";
 
-export const metadata: Metadata = {
-  title: "Expertise — Soken's Digital",
+export const metadata: Metadata = pageMetadata({
+  title: "Expertise : développement web, mobile, cloud et cybersécurité",
   description:
-    "Solutions digitales sur mesure : sécurité native, performance critique et scalabilité infinie pour les leaders de demain.",
-};
+    "Développement d'applications web et mobiles, logiciels sur mesure, cloud et cybersécurité à Libreville (Gabon) : une expertise technique au service des entreprises africaines.",
+  path: "/expertise",
+  keywords: ["développement sur mesure Gabon", "cybersécurité Afrique", "cloud Libreville"],
+});
 
 export default async function ExpertisePage() {
   const [sections, projects] = await Promise.all([

@@ -3,17 +3,25 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { FAQAccordion } from "@/components/sections/faq/faq-accordion";
 import { listPublicFAQ } from "@/lib/api/public";
+import { pageMetadata } from "@/lib/seo/metadata";
+import { JsonLd } from "@/components/seo/json-ld";
+import { faqSchema } from "@/lib/seo/structured-data";
 
-export const metadata: Metadata = {
-  title: "FAQ — Soken's Digital",
-  description: "Réponses aux questions les plus fréquentes sur nos services et notre fonctionnement.",
-};
+export const metadata: Metadata = pageMetadata({
+  title: "FAQ : questions fréquentes",
+  description:
+    "Réponses aux questions fréquentes sur les services, délais, tarifs et méthodes de Soken's Digital, agence digitale à Libreville (Gabon).",
+  path: "/faq",
+});
 
 export default async function FAQPage() {
   const entries = await listPublicFAQ();
 
   return (
     <>
+      {entries.length > 0 && (
+        <JsonLd data={faqSchema(entries.map((e) => ({ question: e.question, answer: e.answer })))} />
+      )}
       <SiteHeader />
       <main className="flex-1">
         <div className="mx-auto max-w-6xl px-4 pt-32 pb-20 sm:px-6 sm:pt-40 sm:pb-24 lg:px-8">

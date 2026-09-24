@@ -8,6 +8,9 @@ import { ArticleVisual } from "@/components/blog/article-visual";
 import { ArticleContent } from "@/components/blog/article-content";
 import { ArticleSidebar } from "@/components/blog/article-sidebar";
 import { getBlogPostBySlug, getBlogPosts, getRelatedBlogPosts } from "@/lib/blog/public";
+import { pageMetadata } from "@/lib/seo/metadata";
+import { JsonLd } from "@/components/seo/json-ld";
+import { articleSchema, breadcrumbSchema } from "@/lib/seo/structured-data";
 
 export async function generateStaticParams() {
   const posts = await getBlogPosts();
@@ -22,10 +25,14 @@ export async function generateMetadata({
   const { slug } = await params;
   const post = await getBlogPostBySlug(slug);
   if (!post) return {};
-  return {
-    title: `${post.title} — Soken's Digital`,
+  return pageMetadata({
+    title: post.title,
     description: post.excerpt,
-  };
+    path: `/blog/${post.slug}`,
+    image: post.coverImage,
+    type: "article",
+    publishedTime: post.publishedAt ?? undefined,
+  });
 }
 
 export default async function BlogArticlePage({
@@ -44,6 +51,23 @@ export default async function BlogArticlePage({
 
   return (
     <>
+      <JsonLd
+        data={[
+          articleSchema({
+            title: post.title,
+            description: post.excerpt,
+            path: `/blog/${post.slug}`,
+            image: post.coverImage,
+            author: post.author,
+            publishedAt: post.publishedAt,
+          }),
+          breadcrumbSchema([
+            { name: "Accueil", path: "/" },
+            { name: "Blog", path: "/blog" },
+            { name: post.title, path: `/blog/${post.slug}` },
+          ]),
+        ]}
+      />
       <SiteHeader />
       <main className="flex-1">
         <article className="mx-auto max-w-6xl px-4 pt-28 pb-20 sm:px-6 sm:pt-32 sm:pb-24 lg:px-8">

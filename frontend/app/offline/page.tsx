@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import { WifiOff } from "lucide-react";
 
-export const metadata = { title: "Hors ligne — Soken's Digital" };
+export const metadata: Metadata = {
+  title: "Hors ligne",
+  description: "Page hors ligne.",
+  robots: { index: false, follow: false },
+};
 
 /**
  * Page servie par le service worker quand une navigation échoue faute de

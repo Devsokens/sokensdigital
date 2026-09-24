@@ -3,12 +3,14 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { BlogExplorer } from "@/components/blog/blog-explorer";
 import { getBlogPosts } from "@/lib/blog/public";
+import { pageMetadata } from "@/lib/seo/metadata";
 
-export const metadata: Metadata = {
-  title: "Blog — Soken's Digital",
+export const metadata: Metadata = pageMetadata({
+  title: "Blog : développement, cybersécurité et cloud en Afrique",
   description:
-    "Analyses techniques sur la cybersécurité, l'architecture logicielle et les infrastructures cloud.",
-};
+    "Analyses techniques et conseils sur la cybersécurité, l'architecture logicielle, le cloud et la transformation digitale des entreprises en Afrique.",
+  path: "/blog",
+});
 
 export default async function BlogIndexPage() {
   const posts = await getBlogPosts();

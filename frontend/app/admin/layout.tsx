@@ -8,7 +8,7 @@ import { MobileBottomNav } from "@/components/admin/mobile-bottom-nav";
 import { ProfileModalProvider } from "@/lib/admin/profile-modal-context";
 import { ProfileSheet } from "@/components/profile/profile-sheet";
 import { PermissionsProvider } from "@/lib/admin/permissions-context";
-import type { Viewport } from "next";
+import type { Metadata, Viewport } from "next";
 import { ADMIN_THEME_BOOTSTRAP } from "@/lib/admin/admin-theme";
 import { AdminThemeScope } from "@/components/admin/admin-theme-toggle";
 
@@ -47,6 +47,12 @@ const ADMIN_SURFACE_CSS = `html:root, html:root body { background-color: var(--c
  * Un viewport exporté depuis un layout imbriqué remplace celui du parent
  * pour ce segment : l'administration est claire, ses barres système aussi,
  * et la vitrine garde la sienne. */
+// Portail interne : jamais indexé, même si une URL fuite (déjà exclu de
+// robots.txt, doublé ici par une balise noindex sur chaque page).
+export const metadata: Metadata = {
+  robots: { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } },
+};
+
 export const viewport: Viewport = {
   themeColor: "#ffffff",
 };

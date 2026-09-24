@@ -3,11 +3,14 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ContactForm } from "@/components/sections/contact/contact-form";
 import { getSiteSettings } from "@/lib/api/public";
+import { pageMetadata } from "@/lib/seo/metadata";
 
-export const metadata: Metadata = {
-  title: "Contact — Soken's Digital",
-  description: "Une question, un projet ? Contactez l'équipe Soken's Digital.",
-};
+export const metadata: Metadata = pageMetadata({
+  title: "Contact : agence digitale à Libreville",
+  description:
+    "Contactez Soken's Digital à Libreville (Gabon) : téléphone 060 00 13 33, e-mail ou formulaire. Réponse rapide pour vos projets web, mobiles et cloud partout en Afrique.",
+  path: "/contact",
+});
 
 export default async function ContactPage() {
   const settings = await getSiteSettings();

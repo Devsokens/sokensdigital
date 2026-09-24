@@ -9,12 +9,15 @@ import type {
   DelaiOption,
   CanalOption,
 } from "@/components/sections/start-project/types";
+import { pageMetadata } from "@/lib/seo/metadata";
 
-export const metadata: Metadata = {
-  title: "Démarrer un Projet — Soken's Digital",
+export const metadata: Metadata = pageMetadata({
+  title: "Démarrer un projet : demande de devis",
   description:
-    "Parlez-nous de votre vision : informations, configuration technique et logistique pour lancer votre projet avec Soken's Digital.",
-};
+    "Décrivez votre projet d'application web, mobile ou de logiciel sur mesure et recevez un devis de Soken's Digital, agence digitale basée à Libreville, Gabon.",
+  path: "/demarrer-un-projet",
+  keywords: ["devis application mobile Gabon", "devis site web Libreville"],
+});
 
 const DEFAULT_OBJECTIFS: ObjectifOption[] = [
   { icon: "rocket", title: "Transformation Digitale", description: "Modernisez vos processus internes et votre stack technologique." },
