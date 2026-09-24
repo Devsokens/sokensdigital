@@ -1,6 +1,7 @@
+from django.utils import timezone
 from rest_framework.test import APITestCase
 from django.urls import reverse
-from technique.models import TimeEntry
+from technique.models import MaintainedApp, MaintenanceReport, TimeEntry
 from .factories import (
     UserFactory, ProjectFactory, RoleFactory, ProjectPhaseFactory,
     ProjectDocumentFactory, TaskFactory, TimeEntryFactory, TicketFactory, KnowledgeBaseFactory
@@ -388,3 +389,101 @@ class TimeEntryValidationTests(APITestCase):
         self.client.force_authenticate(user=self.dev)
         patch = self.client.patch(self._url('detail'), {'hours': '5.00'}, format='json')
         self.assertEqual(patch.status_code, 200)
+
+
+class ProjectAccessPentestTests(APITestCase):
+    """Régression du pentest du 24/09/2026 — les vues nested sous un projet
+    (documents, tâches, entrées de temps) filtraient par project_pk/task_pk
+    seul, sans jamais vérifier que l'utilisateur a un rapport avec CE
+    projet précis : n'importe quel compte authentifié lisait le cahier des
+    charges de n'importe quel projet, et n'importe quel Chef de Projet
+    pouvait agir sur le projet d'un autre."""
+
+    def setUp(self):
+        pm_role = RoleFactory(name=ROLE_PROJECT_MANAGER)
+        dev_role = RoleFactory(name=ROLE_DEVELOPER)
+        self.pm_a = UserFactory()
+        self.pm_a.roles.add(pm_role)
+        self.pm_b = UserFactory()
+        self.pm_b.roles.add(pm_role)
+        self.dev_in = UserFactory()
+        self.dev_in.roles.add(dev_role)
+        self.dev_out = UserFactory()
+        self.dev_out.roles.add(dev_role)
+        self.plain = UserFactory()
+
+        self.project_a = ProjectFactory(project_manager=self.pm_a)
+        self.project_a.members.add(self.pm_a, self.dev_in)
+        self.project_b = ProjectFactory(project_manager=self.pm_b)
+        self.doc_b = ProjectDocumentFactory(
+            project=self.project_b, file_path='gs://secret/cdc.pdf', uploaded_by=self.pm_b,
+        )
+        self.task_b = TaskFactory(project=self.project_b)
+
+    def test_plain_user_cannot_list_or_read_foreign_project_documents(self):
+        self.client.force_authenticate(user=self.plain)
+        list_url = reverse('project-documents-list', kwargs={'project_pk': self.project_b.pk})
+        response = self.client.get(list_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('gs://secret/cdc.pdf', str(response.data))
+
+        detail_url = reverse('project-documents-detail', kwargs={'project_pk': self.project_b.pk, 'pk': self.doc_b.pk})
+        response = self.client.get(detail_url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_outside_developer_cannot_read_foreign_project_document(self):
+        self.client.force_authenticate(user=self.dev_out)
+        detail_url = reverse('project-documents-detail', kwargs={'project_pk': self.project_b.pk, 'pk': self.doc_b.pk})
+        response = self.client.get(detail_url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_pm_a_cannot_modify_or_delete_pm_b_document(self):
+        self.client.force_authenticate(user=self.pm_a)
+        detail_url = reverse('project-documents-detail', kwargs={'project_pk': self.project_b.pk, 'pk': self.doc_b.pk})
+        response = self.client.patch(detail_url, {'file_path': 'https://evil/x.pdf'}, format='json')
+        self.assertEqual(response.status_code, 403)
+        response = self.client.delete(detail_url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_pm_a_cannot_create_task_in_pm_b_project(self):
+        self.client.force_authenticate(user=self.pm_a)
+        url = reverse('project-tasks-list', kwargs={'project_pk': self.project_b.pk})
+        response = self.client.post(url, {
+            'name': 'injected', 'estimated_hours': '5', 'due_date': str(timezone.now().date()),
+        }, format='json')
+        self.assertEqual(response.status_code, 403)
+
+    def test_outside_developer_cannot_log_time_on_foreign_task(self):
+        self.client.force_authenticate(user=self.dev_out)
+        url = reverse('task-timeentries-list', kwargs={'task_pk': self.task_b.pk})
+        response = self.client.post(url, {
+            'hours': '8', 'date': str(timezone.now().date()), 'description': 'x',
+        }, format='json')
+        self.assertEqual(response.status_code, 403)
+        self.task_b.refresh_from_db()
+        self.assertEqual(float(self.task_b.actual_hours or 0), 0.0)
+
+    def test_member_developer_cannot_change_project_status(self):
+        self.client.force_authenticate(user=self.dev_in)
+        url = reverse('project-change-status', kwargs={'pk': self.project_a.pk})
+        response = self.client.post(url, {'status': 'CLOS'}, format='json')
+        self.assertEqual(response.status_code, 403)
+        self.project_a.refresh_from_db()
+        self.assertNotEqual(self.project_a.status, 'CLOS')
+
+    def test_pm_b_cannot_change_project_a_status(self):
+        # 404, pas 403 : project_a est hors du queryset de pm_b (ni
+        # manager, ni membre) — get_object() le rejette avant même
+        # d'atteindre le contrôle de gestion.
+        self.client.force_authenticate(user=self.pm_b)
+        url = reverse('project-change-status', kwargs={'pk': self.project_a.pk})
+        response = self.client.post(url, {'status': 'CLOS'}, format='json')
+        self.assertEqual(response.status_code, 404)
+
+    def test_outsider_cannot_delete_someone_elses_maintenance_report(self):
+        app = MaintainedApp.objects.create(name='App')
+        report = MaintenanceReport.objects.create(app=app, performed_by=self.dev_in, summary='ok')
+        self.client.force_authenticate(user=self.dev_out)
+        response = self.client.delete(f'/api/technique/maintenance/reports/{report.pk}/')
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(MaintenanceReport.objects.filter(pk=report.pk).exists())
