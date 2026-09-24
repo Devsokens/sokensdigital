@@ -165,7 +165,11 @@ class ProcurementRequestViewSetTests(ProcurementTestBase):
         response = self.client_outsider.post(f'/api/v1/procurement/procurements/{pr.id}/approve_rcf/')
         self.assertEqual(response.status_code, 403)
 
-    def test_comptable_can_approve_rcf_then_manager_can_approve(self):
+    def test_comptable_can_approve_rcf_then_admin_approves_as_gerant(self):
+        # Le palier Gérant est réservé au Super-Admin (pentest du 24/09/2026,
+        # P3) : la RCF (Comptable/Directeur Financier) ne peut plus statuer
+        # aussi sur ce second palier, même sur une fiche qu'elle a déjà
+        # transmise — sinon une seule personne validerait tout le circuit.
         pr = ProcurementRequest.objects.create(
             title='x', description='y', estimated_amount=Decimal('1000'),
             department=self.department, requested_by=self.outsider,
@@ -177,9 +181,24 @@ class ProcurementRequestViewSetTests(ProcurementTestBase):
         self.assertEqual(pr.status, ProcurementRequest.Status.EN_ATTENTE_MANAGER)
 
         response = self.client_cfo.post(f'/api/v1/procurement/procurements/{pr.id}/approve_manager/')
+        self.assertEqual(response.status_code, 403)
+
+        response = self.client_admin.post(f'/api/v1/procurement/procurements/{pr.id}/approve_manager/')
         self.assertEqual(response.status_code, 200)
         pr.refresh_from_db()
         self.assertEqual(pr.status, ProcurementRequest.Status.APPROUVEE)
+
+    def test_requester_cannot_approve_own_request_even_with_the_right_role(self):
+        # F1/P3 (pentest du 24/09/2026) : quelqu'un qui cumule le rôle
+        # demandeur et un rôle d'approbation ne doit jamais pouvoir valider
+        # sa propre demande.
+        pr = ProcurementRequest.objects.create(
+            title='x', description='y', estimated_amount=Decimal('1000'),
+            department=self.department, requested_by=self.comptable,
+            status=ProcurementRequest.Status.EN_ATTENTE_RCF,
+        )
+        response = self.client_comptable.post(f'/api/v1/procurement/procurements/{pr.id}/approve_rcf/')
+        self.assertEqual(response.status_code, 403)
 
     def test_wrong_status_transition_rejected(self):
         pr = ProcurementRequest.objects.create(
@@ -379,7 +398,8 @@ class ProcurementFullWorkflowIntegrationTest(ProcurementTestBase):
             status=ProcurementRequest.Status.EN_ATTENTE_RCF,
         )
         self.client_comptable.post(f'/api/v1/procurement/procurements/{pr.id}/approve_rcf/')
-        self.client_cfo.post(f'/api/v1/procurement/procurements/{pr.id}/approve_manager/')
+        # Palier Gérant réservé au Super-Admin (pentest du 24/09/2026, P3).
+        self.client_admin.post(f'/api/v1/procurement/procurements/{pr.id}/approve_manager/')
         pr.refresh_from_db()
         self.assertEqual(pr.status, ProcurementRequest.Status.APPROUVEE)
 
@@ -401,14 +421,22 @@ class ProcurementFullWorkflowIntegrationTest(ProcurementTestBase):
         create_disbursement_request_task.apply(args=(str(quote.id),)).get()
         self.assertEqual(DisbursementRequest.objects.filter(amount=quote.amount_ttc).count(), 1)
 
-        # 4. Facture fournisseur
-        invoice_response = self.client_outsider.post('/api/v1/procurement/invoices/', {
+        # 4. Facture fournisseur — création réservée à Finance/Admin
+        # (pentest du 24/09/2026, P6 : n'importe quel utilisateur pouvait
+        # sinon créer une facture fournisseur, montant négatif compris).
+        response = self.client_outsider.post('/api/v1/procurement/invoices/', {
+            'supplier': str(self.supplier.id), 'procurement': str(pr.id),
+            'invoice_number': 'FF-099', 'invoice_date': '2026-08-16', 'amount_ht': '5000',
+        }, format='json')
+        self.assertEqual(response.status_code, 403)
+
+        invoice_response = self.client_cfo.post('/api/v1/procurement/invoices/', {
             'supplier': str(self.supplier.id), 'procurement': str(pr.id),
             'invoice_number': 'FF-100', 'invoice_date': '2026-08-16', 'amount_ht': '5000',
         }, format='json')
         self.assertEqual(invoice_response.status_code, 201)
         invoice = SupplierInvoice.objects.get(id=invoice_response.json()['id'])
-        self.assertEqual(invoice.received_by, self.outsider)
+        self.assertEqual(invoice.received_by, self.cfo)
 
         # 5. Validation facture → écriture comptable auto
         self.client_cfo.post(f'/api/v1/procurement/invoices/{invoice.id}/validate/')

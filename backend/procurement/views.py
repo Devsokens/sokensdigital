@@ -39,17 +39,49 @@ class IsFinanceOrAdmin(permissions.BasePermission):
 
 
 class IsManagerOrAdmin(permissions.BasePermission):
-    """RCF (Responsable Comptable et Financière) ou Gérant.
+    """RCF (Responsable Comptable et Financière).
 
-    Pas de rôle dédié "RCF"/"Gérant" dans core.constants.py — même
-    raisonnement que DisbursementRequest.Status.EN_ATTENTE_N3 (finance/
-    models.py) : Comptable/Directeur Financier tiennent lieu de RCF,
-    Super-Admin tient lieu de Gérant/Direction Générale.
+    Pas de rôle dédié "RCF" dans core.constants.py — même raisonnement que
+    DisbursementRequest.Status.EN_ATTENTE_N3 (finance/models.py) : Comptable/
+    Directeur Financier tiennent lieu de RCF.
     """
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
         return has_role(request.user, ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN)
+
+
+class IsGerantOrAdmin(permissions.BasePermission):
+    """Gérant/Direction Générale — Super-Admin uniquement.
+
+    Pentest du 24/09/2026 (P3) : cette étape utilisait la même permission
+    que l'étape RCF (IsManagerOrAdmin), donc le même Comptable pouvait
+    valider les deux paliers du circuit à lui seul — la séparation des
+    tâches voulue par le process n'existait pas. Même convention que
+    finance._can_decide_stage pour DisbursementRequest.Status.
+    EN_ATTENTE_GERANT : seul le Gérant (Super-Admin) statue en dernier
+    ressort, jamais la RCF elle-même.
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return has_role(request.user, ROLE_SUPER_ADMIN)
+
+
+class IsOwnerOrFinanceOrAdmin(permissions.BasePermission):
+    """Le demandeur d'une fiche non encore approuvée, ou Finance/Admin.
+
+    Pentest du 24/09/2026 (P2) : sans ce contrôle, n'importe quel utilisateur
+    authentifié pouvait PATCHer la fiche de quelqu'un d'autre (gonfler le
+    montant, par exemple) — seul le statut APPROUVEE était protégé, pas
+    l'appartenance de la fiche elle-même.
+    """
+    def has_object_permission(self, request, view, obj):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return obj.requested_by_id == request.user.id or has_role(
+            request.user, ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN,
+        )
 
 
 class SupplierViewSet(viewsets.ModelViewSet):
@@ -73,12 +105,15 @@ class ProcurementRequestViewSet(viewsets.ModelViewSet):
         'department', 'requested_by', 'rcf_approved_by', 'manager_approved_by',
     )
     serializer_class = ProcurementRequestSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsOwnerOrFinanceOrAdmin]
     filterset_fields = ['department', 'status']
     ordering_fields = ['created_at', 'estimated_amount']
 
     def perform_create(self, serializer):
-        serializer.save(requested_by=self.request.user)
+        # Statut fixé ici, jamais accepté du client (voir 'status' en
+        # read_only dans le serializer) — une fiche entre toujours dans le
+        # circuit à la première étape, jamais pré-approuvée.
+        serializer.save(requested_by=self.request.user, status=ProcurementRequest.Status.EN_ATTENTE_RCF)
 
     def _reject_if_approved(self, procurement):
         # Immutabilité une fois approuvée — cf. audit VERIFICATION_STATUT_
@@ -104,12 +139,27 @@ class ProcurementRequestViewSet(viewsets.ModelViewSet):
             return blocked
         return super().destroy(request, *args, **kwargs)
 
+    def _reject_if_requester(self, procurement, request):
+        # Séparation des tâches (pentest du 24/09/2026, F1 côté finance,
+        # même défaut ici) : quelqu'un qui cumule le rôle demandeur et un
+        # rôle d'approbation (ex: Comptable qui a lui-même créé la fiche)
+        # ne doit jamais pouvoir valider sa propre demande.
+        if procurement.requested_by_id == request.user.id:
+            return Response(
+                {'detail': 'Vous ne pouvez pas approuver votre propre demande.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return None
+
     @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
     def approve_rcf(self, request, pk=None):
         """RCF validation."""
         procurement = self.get_object()
         if procurement.status != ProcurementRequest.Status.EN_ATTENTE_RCF:
             return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+        blocked = self._reject_if_requester(procurement, request)
+        if blocked:
+            return blocked
 
         procurement.status = ProcurementRequest.Status.EN_ATTENTE_MANAGER
         procurement.rcf_approved_by = request.user
@@ -133,12 +183,15 @@ class ProcurementRequestViewSet(viewsets.ModelViewSet):
 
         return Response(self.get_serializer(procurement).data)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
+    @action(detail=True, methods=['post'], permission_classes=[IsGerantOrAdmin])
     def approve_manager(self, request, pk=None):
         """Manager (Gérant) validation."""
         procurement = self.get_object()
         if procurement.status != ProcurementRequest.Status.EN_ATTENTE_MANAGER:
             return Response({'error': 'Invalid status'}, status=status.HTTP_400_BAD_REQUEST)
+        blocked = self._reject_if_requester(procurement, request)
+        if blocked:
+            return blocked
 
         procurement.status = ProcurementRequest.Status.APPROUVEE
         procurement.manager_approved_by = request.user
@@ -147,7 +200,7 @@ class ProcurementRequestViewSet(viewsets.ModelViewSet):
 
         return Response(self.get_serializer(procurement).data)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
+    @action(detail=True, methods=['post'], permission_classes=[IsGerantOrAdmin])
     def reject_manager(self, request, pk=None):
         """Manager reject."""
         procurement = self.get_object()
@@ -251,7 +304,11 @@ class SupplierInvoiceViewSet(viewsets.ModelViewSet):
     ordering_fields = ['invoice_date', 'due_date', 'amount_ttc']
 
     def get_permissions(self):
-        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
+        # 'POST' ajouté suite au pentest du 24/09/2026 (P6) : la création
+        # n'était protégée par aucun rôle, seules les modifications/suppressions
+        # l'étaient — n'importe quel utilisateur authentifié pouvait donc
+        # créer une facture fournisseur, montant négatif compris.
+        if self.request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
             return [IsFinanceOrAdmin()]
         return super().get_permissions()
 

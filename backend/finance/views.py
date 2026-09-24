@@ -122,6 +122,15 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
             return Response({'detail': 'Cette demande a déjà été traitée.'}, status=status.HTTP_400_BAD_REQUEST)
         if not _can_decide_stage(request.user, disbursement.status):
             return Response(status=status.HTTP_403_FORBIDDEN)
+        # Séparation des tâches (pentest du 24/09/2026, F1) : quelqu'un qui
+        # cumule le rôle demandeur et un rôle d'approbation (ex: Chef de
+        # Projet qui est aussi Comptable) ne doit jamais pouvoir valider sa
+        # propre demande, à aucun des deux paliers.
+        if disbursement.requested_by_id == request.user.id:
+            return Response(
+                {'detail': 'Vous ne pouvez pas approuver votre propre demande.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         decision = request.data.get('decision')
         if decision not in ('APPROUVE', 'REJETE'):
