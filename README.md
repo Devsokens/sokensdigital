@@ -1,6 +1,7 @@
 # Soken's Digital — Plateforme interne
 
-Site vitrine public + back-office multi-départements (RH, Finance, Technique, Marketing) pour Soken's Digital.
+Site vitrine public + back-office multi-départements (RH, Finance, Technique, Marketing) pour Soken's Digital. Fait en 2026
+
 
 ## Architecture
 
