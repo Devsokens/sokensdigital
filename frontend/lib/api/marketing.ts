@@ -318,6 +318,45 @@ export function updateSiteSettings(data: Partial<SiteSettings>) {
   });
 }
 
+// --- Modération des commentaires de blog (département Marketing & Communication) ---
+// Les commentaires vivent dans Firestore (pas Postgres), voir
+// backend/core/firestore_client.py — cette liste n'est donc pas paginée
+// comme le reste de l'admin (pas de curseur Firestore exposé ici).
+
+export type BlogCommentStatus = "VISIBLE" | "MASQUE";
+
+export interface BlogCommentAdmin {
+  id: string;
+  slug: string;
+  pseudo: string;
+  text: string;
+  status: BlogCommentStatus;
+  flag_reason: "MOTS_INTERDITS" | "SIGNALEMENTS" | null;
+  report_count: number;
+  created_at: string | null;
+  moderated_at: string | null;
+  moderated_by: string | null;
+}
+
+export function listBlogComments(filters: { status?: BlogCommentStatus; slug?: string } = {}) {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  if (filters.slug) params.set("slug", filters.slug);
+  const qs = params.toString();
+  return apiFetch<BlogCommentAdmin[]>(`/api/v1/marketing/cms/blog-comments/${qs ? `?${qs}` : ""}`);
+}
+
+export function moderateBlogComment(id: string, newStatus: BlogCommentStatus) {
+  return apiFetch<{ status: BlogCommentStatus }>(`/api/v1/marketing/cms/blog-comments/${id}/moderate/`, {
+    method: "POST",
+    body: JSON.stringify({ status: newStatus }),
+  });
+}
+
+export function deleteBlogComment(id: string) {
+  return apiFetch<void>(`/api/v1/marketing/cms/blog-comments/${id}/`, { method: "DELETE" });
+}
+
 // --- Parcours des projets soumis (Marketing <-> Technique) ---
 
 export type WorkflowStage =

@@ -8,7 +8,7 @@ SITE=${2:-"http://localhost:3000"}
 REPORT="security_report_$(date +%Y%m%d_%H%M%S).txt"
 
 {
-echo "🔒 Soken's Digital — Security Scan"
+echo " Soken's Digital — Security Scan"
 echo "API: $API | Site: $SITE"
 echo "Date: $(date)"
 echo "======================================"
@@ -47,4 +47,4 @@ echo -e "\n[6/6] HTTPS"
 
 } | tee "$REPORT"
 
-echo -e "\n📄 Rapport: $REPORT"
+echo -e "\n Rapport: $REPORT"

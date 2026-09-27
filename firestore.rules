@@ -200,6 +200,30 @@ service cloud.firestore {
       allow create, delete: if false; // Création déléguée aux scripts applicatifs (aucune Cloud Function en free tier — voir §0)
     }
 
+    // Blog Comments & Likes (public site vitrine, pseudo libre, sans compte)
+    //
+    // Écrites UNIQUEMENT par Django via l'Admin SDK (marketing/views.py →
+    // core/firestore_client.py), jamais par le client Firestore — c'est ce
+    // qui garantit que le filtre anti-injures/anti-spam
+    // (marketing.moderation.screen_comment), la limitation de débit par IP
+    // et le contrôle serveur du compteur de likes (transaction, jamais
+    // négatif) s'appliquent réellement : un appel Firestore direct depuis
+    // le navigateur ne pourrait de toute façon rien écrire ici.
+    match /blogComments/{commentId} {
+      // Un visiteur ne voit que les commentaires approuvés/non signalés —
+      // un commentaire MASQUE (filtré à la création ou masqué après
+      // signalements/modération) reste dans la base pour la relecture du
+      // département Marketing & Communication, mais jamais exposé au public.
+      allow read: if resource.data.status == 'VISIBLE';
+      allow write: if false;
+    }
+
+    match /blogLikes/{slug} {
+      // Juste un compteur public — aucune donnée personnelle dedans.
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Audit trail for Django-managed entities lives in Postgres
     // (core.AuditLog, immutable by construction — see LoggedModel). Only
     // Firestore-native writes (chat, notifications...) would ever need an

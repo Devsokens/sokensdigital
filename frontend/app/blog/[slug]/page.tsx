@@ -7,6 +7,8 @@ import { SiteFooter } from "@/components/site-footer";
 import { ArticleVisual } from "@/components/blog/article-visual";
 import { ArticleContent } from "@/components/blog/article-content";
 import { ArticleSidebar } from "@/components/blog/article-sidebar";
+import { LikeButton } from "@/components/blog/like-button";
+import { CommentsSection } from "@/components/blog/comments-section";
 import { getBlogPostBySlug, getBlogPosts, getRelatedBlogPosts } from "@/lib/blog/public";
 import { pageMetadata } from "@/lib/seo/metadata";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -94,7 +96,8 @@ export default async function BlogArticlePage({
                 <ArticleContent html={post.content} />
               </div>
 
-              <div className="mt-10 flex justify-end">
+              <div className="mt-8 flex items-center justify-between border-t border-white/10 pt-6">
+                <LikeButton slug={post.slug} />
                 <Link
                   href="/blog"
                   aria-label="Retour aux articles"
@@ -103,9 +106,13 @@ export default async function BlogArticlePage({
                   <ArrowLeft className="size-4" />
                 </Link>
               </div>
+
+              <div className="mt-12">
+                <CommentsSection slug={post.slug} />
+              </div>
             </div>
 
-            <ArticleSidebar relatedPosts={relatedPosts} />
+            <ArticleSidebar relatedPosts={relatedPosts} currentPost={post} />
           </div>
         </article>
       </main>

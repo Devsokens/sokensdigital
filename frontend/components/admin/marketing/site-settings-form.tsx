@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api/client";
@@ -9,6 +10,39 @@ import { IconPicker, SectionIcon } from "@/components/admin/marketing/icon-picke
 import { NAV_LINKS } from "@/lib/site-nav";
 import { getSiteSettingsAdmin, updateSiteSettings } from "@/lib/api/marketing";
 import type { SiteServiceLink, SiteSettings, SiteSocialLink } from "@/lib/api/types";
+
+// Même éditeur que le blog (rich text, HTML sanitizé côté serveur) — voir
+// blog-post-list.tsx pour l'explication du chargement à la demande.
+const RichTextEditor = dynamic(
+  () => import("@/components/admin/marketing/rich-text-editor").then((m) => m.RichTextEditor),
+  { ssr: false, loading: () => <div className="h-40 animate-pulse rounded-lg bg-neutral-100" /> }
+);
+
+/** Champ de texte légal (CGU/CGV/mentions/confidentialité) : éditeur riche
+ * en mode édition, aperçu HTML en lecture seule sinon — Tiptap n'a pas de
+ * mode "lecture" agréable, un aperçu statique est plus lisible qu'un
+ * éditeur désactivé. */
+function LegalTextField({
+  label, value, editing, onChange,
+}: { label: string; value: string; editing: boolean; onChange: (html: string) => void }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-medium text-neutral-600">{label}</span>
+      {editing ? (
+        <RichTextEditor value={value} onChange={onChange} />
+      ) : value ? (
+        <div
+          className="prose-sm max-w-none rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 py-3 text-sm text-neutral-600 [&_a]:text-primary [&_a]:underline [&_h2]:mt-2 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:text-sm [&_h3]:font-semibold [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5"
+          dangerouslySetInnerHTML={{ __html: value }}
+        />
+      ) : (
+        <p className="rounded-lg border border-dashed border-neutral-200 px-3.5 py-3 text-sm text-neutral-400">
+          Pas encore renseigné.
+        </p>
+      )}
+    </label>
+  );
+}
 
 function RemoveDot({ onClick }: { onClick: () => void }) {
   return (
@@ -279,54 +313,34 @@ export function SiteSettingsForm() {
         <div className="mt-8 border-t border-neutral-200 pt-6">
           <h3 className="text-sm font-semibold text-neutral-900">Textes légaux</h3>
           <p className="mt-1 text-xs text-neutral-500">
-            Consultables publiquement sur /mentions-legales, /cgu, /cgv et /confidentialite. Texte brut, sans mise en
-            forme — un paragraphe par ligne suffit.
+            Consultables publiquement sur /mentions-legales, /cgu, /cgv et /confidentialite. Mise en forme riche
+            (titres, listes, liens) — le HTML est nettoyé côté serveur avant stockage.
           </p>
           <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-neutral-600">
-                Conditions Générales d&apos;Utilisation (CGU)
-              </span>
-              <textarea
-                value={data.cgu_text}
-                onChange={(e) => set("cgu_text", e.target.value)}
-                readOnly={!editing}
-                rows={8}
-                className="w-full resize-y rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 read-only:bg-neutral-50 read-only:text-neutral-500 focus:border-primary/50 focus:outline-none"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-neutral-600">
-                Conditions Générales de Vente (CGV)
-              </span>
-              <textarea
-                value={data.cgv_text}
-                onChange={(e) => set("cgv_text", e.target.value)}
-                readOnly={!editing}
-                rows={8}
-                className="w-full resize-y rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 read-only:bg-neutral-50 read-only:text-neutral-500 focus:border-primary/50 focus:outline-none"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-neutral-600">Mentions légales</span>
-              <textarea
-                value={data.mentions_legales_text}
-                onChange={(e) => set("mentions_legales_text", e.target.value)}
-                readOnly={!editing}
-                rows={8}
-                className="w-full resize-y rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 read-only:bg-neutral-50 read-only:text-neutral-500 focus:border-primary/50 focus:outline-none"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-neutral-600">Politique de confidentialité</span>
-              <textarea
-                value={data.politique_confidentialite_text}
-                onChange={(e) => set("politique_confidentialite_text", e.target.value)}
-                readOnly={!editing}
-                rows={8}
-                className="w-full resize-y rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 read-only:bg-neutral-50 read-only:text-neutral-500 focus:border-primary/50 focus:outline-none"
-              />
-            </label>
+            <LegalTextField
+              label="Conditions Générales d'Utilisation (CGU)"
+              value={data.cgu_text}
+              editing={editing}
+              onChange={(v) => set("cgu_text", v)}
+            />
+            <LegalTextField
+              label="Conditions Générales de Vente (CGV)"
+              value={data.cgv_text}
+              editing={editing}
+              onChange={(v) => set("cgv_text", v)}
+            />
+            <LegalTextField
+              label="Mentions légales"
+              value={data.mentions_legales_text}
+              editing={editing}
+              onChange={(v) => set("mentions_legales_text", v)}
+            />
+            <LegalTextField
+              label="Politique de confidentialité"
+              value={data.politique_confidentialite_text}
+              editing={editing}
+              onChange={(v) => set("politique_confidentialite_text", v)}
+            />
           </div>
         </div>
       </div>

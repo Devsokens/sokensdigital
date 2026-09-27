@@ -18,16 +18,28 @@ from core.constants import (
     ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_MARKETING, ROLE_COMMERCIAL, ROLE_PROJECT_MANAGER,
     ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER, ROLE_DEVELOPER,
 )
+from core.firestore_client import (
+    adjust_blog_like_count,
+    create_blog_comment,
+    delete_blog_comment,
+    get_blog_like_count,
+    list_blog_comments,
+    moderate_blog_comment,
+    report_blog_comment,
+)
 from core.notifications import notify_roles
 from core.permissions import has_role
+from core.sanitize import sanitize_plain_text
 from core.storage import upload_image, upload_video
 from marketing.models import (
     BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject,
     SiteSettings, SocialMediaCredentials, SocialPost, Specification,
 )
 from marketing.emails import send_lead_acknowledgement
+from marketing.moderation import screen_comment
 from marketing.ratelimit import get_client_ip, is_rate_limited
 from marketing.serializers import (
+    BlogCommentCreateSerializer,
     BlogPostPublicSerializer,
     BlogPostSerializer,
     LeadPublicCreateSerializer,
@@ -57,6 +69,12 @@ SPECIFICATION_ROLES = (ROLE_RESPONSABLE_MARKETING, ROLE_PROJECT_MANAGER, ROLE_DE
 
 PUBLIC_LEAD_RATE_LIMIT = 3  # per IP
 PUBLIC_LEAD_RATE_WINDOW = 60  # seconds
+PUBLIC_COMMENT_RATE_LIMIT = 5  # per IP
+PUBLIC_COMMENT_RATE_WINDOW = 60  # seconds
+PUBLIC_LIKE_RATE_LIMIT = 20  # per IP — un simple bouton like, plafond large
+PUBLIC_LIKE_RATE_WINDOW = 60  # seconds
+PUBLIC_REPORT_RATE_LIMIT = 10  # per IP
+PUBLIC_REPORT_RATE_WINDOW = 60  # seconds
 
 
 @extend_schema(
@@ -455,6 +473,163 @@ class PublicBlogDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
     lookup_field = 'slug'
+
+
+def _serialize_comment(comment: dict) -> dict:
+    """Forme publique d'un commentaire — jamais reportCount/flagReason/
+    moderatedBy, réservés à la file de modération (voir
+    _serialize_comment_admin)."""
+    created_at = comment.get('createdAt')
+    return {
+        'id': comment['id'],
+        'pseudo': comment.get('pseudo', ''),
+        'text': comment.get('text', ''),
+        'created_at': created_at.isoformat() if created_at else None,
+    }
+
+
+def _serialize_comment_admin(comment: dict) -> dict:
+    created_at = comment.get('createdAt')
+    moderated_at = comment.get('moderatedAt')
+    return {
+        'id': comment['id'],
+        'slug': comment.get('slug', ''),
+        'pseudo': comment.get('pseudo', ''),
+        'text': comment.get('text', ''),
+        'status': comment.get('status', 'VISIBLE'),
+        'flag_reason': comment.get('flagReason'),
+        'report_count': comment.get('reportCount', 0),
+        'created_at': created_at.isoformat() if created_at else None,
+        'moderated_at': moderated_at.isoformat() if moderated_at else None,
+        'moderated_by': comment.get('moderatedBy'),
+    }
+
+
+class PublicBlogCommentListCreateView(APIView):
+    """Commentaires publics d'un article — stockés dans Firestore
+    (blogComments), pas Postgres : voir core.firestore_client. Pseudo
+    libre, pas de compte requis."""
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get(self, request, slug):
+        comments = list_blog_comments(slug=slug, statuses=['VISIBLE'])
+        return Response([_serialize_comment(c) for c in comments])
+
+    def post(self, request, slug):
+        ip = get_client_ip(request)
+        if is_rate_limited(f'commentrate:{ip}', PUBLIC_COMMENT_RATE_LIMIT, PUBLIC_COMMENT_RATE_WINDOW):
+            return Response(
+                {'detail': 'Trop de commentaires envoyés. Réessayez dans une minute.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        serializer = BlogCommentCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        pseudo = sanitize_plain_text(serializer.validated_data['pseudo'])
+        text = sanitize_plain_text(serializer.validated_data['text'])
+        if not pseudo or not text:
+            return Response({'detail': 'Pseudo et commentaire requis.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Filtre automatique (marketing.moderation) : un commentaire suspect
+        # (insulte, propos haineux, menace, lien brut) part masqué, en
+        # attente de relecture par le département Marketing & Communication
+        # — jamais publié directement, jamais supprimé automatiquement.
+        flagged = screen_comment(text) or screen_comment(pseudo)
+        comment_status = 'MASQUE' if flagged else 'VISIBLE'
+        flag_reason = 'MOTS_INTERDITS' if flagged else None
+
+        try:
+            comment = create_blog_comment(slug, pseudo, text, comment_status, flag_reason)
+        except Exception:
+            return Response(
+                {'detail': "Le commentaire n'a pas pu être enregistré, réessayez."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        if flagged:
+            return Response(
+                {'detail': 'Commentaire envoyé, en attente de validation.', 'pending': True},
+                status=status.HTTP_202_ACCEPTED,
+            )
+        return Response(_serialize_comment({**comment, 'createdAt': timezone.now()}), status=status.HTTP_201_CREATED)
+
+
+class PublicBlogCommentReportView(APIView):
+    """« Signaler » façon Facebook — un lecteur marque un commentaire
+    existant comme problématique. Masqué automatiquement au-delà de
+    core.firestore_client.REPORT_AUTO_HIDE_THRESHOLD signalements, en
+    attendant la relecture d'un modérateur."""
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request, slug, comment_id):
+        ip = get_client_ip(request)
+        if is_rate_limited(f'reportrate:{ip}', PUBLIC_REPORT_RATE_LIMIT, PUBLIC_REPORT_RATE_WINDOW):
+            return Response({'detail': 'Trop de signalements.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        new_count = report_blog_comment(comment_id)
+        if new_count is None:
+            return Response({'detail': 'Commentaire introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'report_count': new_count})
+
+
+class PublicBlogLikeView(APIView):
+    """Like d'article façon Facebook — pas de compte visiteur : l'état
+    "j'ai déjà liké" est géré côté client (localStorage), ce endpoint ne
+    fait qu'incrémenter/décrémenter un compteur partagé stocké dans
+    Firestore (blogLikes/{slug})."""
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get(self, request, slug):
+        return Response({'like_count': get_blog_like_count(slug)})
+
+    def post(self, request, slug):
+        ip = get_client_ip(request)
+        if is_rate_limited(f'likerate:{ip}', PUBLIC_LIKE_RATE_LIMIT, PUBLIC_LIKE_RATE_WINDOW):
+            return Response({'detail': 'Trop de requêtes.'}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        liked = bool(request.data.get('liked', True))
+        delta = 1 if liked else -1
+        try:
+            new_count = adjust_blog_like_count(slug, delta)
+        except Exception:
+            return Response({'detail': 'Le like n\'a pas pu être enregistré.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response({'like_count': new_count})
+
+
+class BlogCommentModerationViewSet(viewsets.ViewSet):
+    """File de modération des commentaires de blog — Responsable
+    Marketing/Super-Admin (département Marketing & Communication), même
+    permission que le reste du CMS blog (voir IsMarketing). Les
+    commentaires vivent dans Firestore, pas Postgres : pas de ModelViewSet
+    possible ici, on expose juste list/moderate/destroy à la main."""
+
+    permission_classes = [IsMarketing]
+
+    def list(self, request):
+        status_param = request.query_params.get('status')
+        slug_param = request.query_params.get('slug') or None
+        statuses = [status_param] if status_param else None
+        comments = list_blog_comments(slug=slug_param, statuses=statuses, limit=500)
+        return Response([_serialize_comment_admin(c) for c in comments])
+
+    @action(detail=True, methods=['post'])
+    def moderate(self, request, pk=None):
+        target_status = request.data.get('status')
+        if target_status not in ('VISIBLE', 'MASQUE'):
+            return Response({'detail': "status doit être 'VISIBLE' ou 'MASQUE'."}, status=status.HTTP_400_BAD_REQUEST)
+        ok = moderate_blog_comment(pk, target_status, request.user.email)
+        if not ok:
+            return Response({'detail': 'Commentaire introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'status': target_status})
+
+    def destroy(self, request, pk=None):
+        ok = delete_blog_comment(pk)
+        if not ok:
+            return Response({'detail': 'Commentaire introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class IsMarketingOrOwnCommercialSocialPost(permissions.BasePermission):
