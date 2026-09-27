@@ -90,7 +90,22 @@ class PublicLeadCreateView(APIView):
         # endroit où le client la reçoit, et sans elle la page de suivi ne
         # lui sert à rien. Envoi hors transaction et sans lever : une demande
         # enregistrée doit le rester même si l'e-mail ne part pas.
-        send_lead_acknowledgement(lead)
+        if not send_lead_acknowledgement(lead):
+            # Jusqu'ici l'échec ne laissait qu'une ligne de log : personne ne
+            # savait qu'un client venait de soumettre une demande sans jamais
+            # recevoir sa référence de suivi — donc sans moyen de la suivre.
+            label = lead.company_name or f'{lead.first_name} {lead.last_name}'.strip()
+            notify_roles(
+                MARKETING_ROLES,
+                title='Accusé de réception non envoyé',
+                message=(
+                    f'La demande « {label} » ({lead.tracking_reference}) est bien enregistrée, '
+                    f"mais son accusé de réception n'a pas pu partir vers {lead.email}. "
+                    'Sa référence de suivi doit lui être communiquée manuellement.'
+                ),
+                notification_type='GENERAL',
+                link='/admin/marketing/leads',
+            )
 
         data = dict(serializer.data)
         data['tracking_reference'] = lead.tracking_reference
@@ -838,7 +853,48 @@ class PublicQuoteAcceptView(APIView):
         quote.accepted_ip = ip
         quote.signature_url = signature_url
         quote.save(update_fields=['status', 'signed_at', 'accepted_ip', 'signature_url'])
+
+        _create_project_for_accepted_quote(quote)
+
         return Response(QuoteTrackSerializer(quote).data)
+
+
+def _create_project_for_accepted_quote(quote: 'Quote') -> None:
+    """Décision du 13/09/2026 : un devis accepté fait apparaître le projet
+    correspondant dans le gestionnaire de l'équipe technique — jusqu'ici,
+    accepter un devis ne faisait rien de plus que changer son statut, et
+    Technique n'avait aucun moyen de savoir qu'un projet venait d'être
+    vendu sans qu'on le lui dise à la main.
+
+    `projects.Project` (pas `technique.Project`, l'autre modèle du même nom)
+    parce que c'est celui que lit l'écran "Projets" de Technique
+    (/api/v1/projects/, voir frontend/lib/api/projects.ts) — son
+    lead_project_manager est nullable, donc le projet peut exister avant
+    qu'un chef de projet lui soit assigné, contrairement à technique.Project
+    qui l'exige à la création.
+
+    Idempotent par construction : PublicQuoteAcceptView court-circuite déjà
+    tout appel une fois `quote.status == ACCEPTE` (retour anticipé plus
+    haut), donc cette fonction ne s'exécute qu'une fois par devis.
+    """
+    from projects.models import Project
+
+    label = quote.client_name or (quote.lead.company_name if quote.lead else '') or quote.quote_number
+    project = Project.objects.create(
+        name=f'{label} — {quote.quote_number}',
+        budget=quote.total_ttc,
+    )
+    quote.project = project
+    quote.save(update_fields=['project'])
+
+    from marketing.workflow import TECHNIQUE_SIDE
+    notify_roles(
+        TECHNIQUE_SIDE,
+        title='Nouveau projet à démarrer',
+        message=f'Le devis {quote.quote_number} a été accepté — le projet « {project.name} » est prêt à être pris en charge.',
+        notification_type='GENERAL',
+        link='/admin/technique/projets',
+    )
 
 
 @extend_schema(

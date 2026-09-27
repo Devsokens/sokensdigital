@@ -28,9 +28,9 @@ export default async function Home() {
         <RecentProjects section={findSection(sections, "recent_projects")} projects={homepageProjects} />
         <Testimonials section={findSection(sections, "testimonials")} />
         <Team section={findSection(sections, "team")} />
-        <PartnerLogos section={findSection(sections, "partner_logos")} />
         <BlogInsights section={findSection(sections, "blog_insights")} posts={blogPosts} />
         <Cta section={findSection(sections, "cta")} />
+        <PartnerLogos section={findSection(sections, "partner_logos")} />
       </main>
       <SiteFooter />
     </>

@@ -248,6 +248,10 @@ export interface SiteSettings {
   legal_links: SiteNavLink[];
   social_links: SiteSocialLink[];
   copyright_text: string;
+  cgu_text: string;
+  cgv_text: string;
+  mentions_legales_text: string;
+  politique_confidentialite_text: string;
 }
 
 export interface ShowcaseProjectStat {
@@ -508,14 +512,25 @@ export interface ProjectMember {
   created_at: string;
 }
 
+export interface ProjectDocument {
+  id: string;
+  original_filename: string;
+  uploaded_by: ProjectUserBrief | null;
+  url: string;
+  created_at: string;
+}
+
 export interface Project {
   id: string;
   name: string;
+  description: string;
+  cover_image_url: string;
   status: ProjectStatus;
   priority: ProjectPriority;
   category: string;
   lead_project_manager: ProjectUserBrief | null;
   members: ProjectMember[];
+  documents: ProjectDocument[];
   start_date: string | null;
   end_date: string | null;
   budget: string | null;
@@ -532,6 +547,7 @@ export type ProjectTaskStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
 export interface ProjectTask {
   id: string;
   title: string;
+  description: string;
   status: ProjectTaskStatus;
   due_date: string | null;
   progress: number;

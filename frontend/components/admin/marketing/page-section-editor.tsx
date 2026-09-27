@@ -6,7 +6,6 @@ import {
   Diamond,
   ImagePlus,
   Loader2,
-  Mail,
   Plus,
   Sparkles,
   Trash2,
@@ -52,10 +51,15 @@ const SECTION_NOTES: Partial<Record<SectionKey, string>> = {
   recent_projects: "Le carrousel lui-même reste géré par le module Projets vitrine (à venir).",
   blog_insights: "Les articles affichés viennent automatiquement du Blog.",
   tracking_hero: "Le formulaire de recherche de référence n'est pas éditable ici.",
+  testimonials: "Sur le site public, ces cartes défilent seules et un bouton \"Laisser un témoignage\" ouvre un formulaire de soumission — non reproduits ici, seul le contenu se modifie.",
+  team: "Sur le site public, ces cartes défilent seules et se retournent (photo/texte) au survol ou au glisser — non reproduit ici, seul le contenu se modifie.",
+  process_timeline: "Sur le site public, la colonne de gauche reste fixe pendant le défilement et chaque repère se remplit d'une coche au passage — non reproduit ici, seul le contenu se modifie.",
 };
 
 const PAGE_SECTION_ORDER: Record<SitePage, SectionKey[]> = {
-  ACCUEIL: ["hero", "services", "recent_projects", "testimonials", "team", "partner_logos", "blog_insights", "cta"],
+  // Même ordre que app/page.tsx : partner_logos est maintenant juste avant
+  // le footer, plus entre Équipe et Aperçu blog.
+  ACCUEIL: ["hero", "services", "recent_projects", "testimonials", "team", "blog_insights", "cta", "partner_logos"],
   EXPERTISE: ["expertise_hero", "strategic_advantages", "process_timeline", "tech_stack", "featured_case_study"],
   SUIVI_PROJET: ["tracking_hero", "tracking_features"],
   DEMARRER_PROJET: ["start_project_objectifs", "start_project_solutions", "start_project_delais", "start_project_canaux"],
@@ -566,13 +570,13 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
       return (
         <div>
           {editing ? (
-            <EditableInput value={field(data, "title")} onChange={(v) => setForm((p) => ({ ...p, title: v }))} className="mx-auto block w-full text-center text-xl font-semibold text-foreground" placeholder="Titre" />
+            <EditableInput value={field(data, "title")} onChange={(v) => setForm((p) => ({ ...p, title: v }))} className="block w-full text-xl font-semibold text-foreground" placeholder="Titre" />
           ) : (
-            <h2 className="text-center text-xl font-semibold tracking-tight text-foreground">{data.title}</h2>
+            <h2 className="text-xl font-semibold tracking-tight text-foreground">{data.title}</h2>
           )}
           <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
             {testimonials.map((t, index) => (
-              <figure key={index} className="group relative rounded-2xl border border-white/10 bg-card/60 p-5">
+              <figure key={index} className="group relative rounded-2xl border border-white/15 bg-card/60 p-5">
                 {editing && <RemoveItemButton onClick={() => removeItem(index)} />}
                 {editing ? (
                   <EditableTextarea value={t.quote} onChange={(v) => updateItem(index, "quote", v)} rows={3} className="text-xs text-foreground/90" placeholder="Citation" />
@@ -618,30 +622,31 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
           ) : (
             <p className="mt-1.5 max-w-lg text-sm text-muted-foreground">{data.subtitle}</p>
           )}
+          {/* Miroir statique de la carte "capsule" du site public (photo
+           * ronde en tête, nom/rôle centrés dessous) — sans le survol qui
+           * fait glisser la photo, ni le défilement automatique, qui n'ont
+           * pas leur place dans un formulaire d'édition. */}
           <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {team.map((m, index) => (
-              <div key={index} className="group relative rounded-2xl border border-white/10 bg-card/60 p-5">
+              <div key={index} className="group relative flex flex-col items-center rounded-[2rem] border border-white/15 bg-card/60 p-5 text-center">
                 {editing && <RemoveItemButton onClick={() => removeItem(index)} />}
-                <div className="flex items-center justify-between">
-                  {editing ? (
-                    <ImageUploadField value={m.photo_url ?? ""} onChange={(url) => updateItem(index, "photo_url", url)} shape="circle" />
-                  ) : m.photo_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={m.photo_url} alt={m.name} className="size-10 rounded-full object-cover" loading="lazy" decoding="async" />
-                  ) : (
-                    <span className="flex size-10 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
-                      {initials(m.name || "?")}
-                    </span>
-                  )}
-                  <Mail className="size-3.5 text-muted-foreground" />
-                </div>
                 {editing ? (
-                  <EditableInput value={m.name} onChange={(v) => updateItem(index, "name", v)} className="mt-3 block w-full text-sm font-semibold text-foreground" placeholder="Nom" />
+                  <ImageUploadField value={m.photo_url ?? ""} onChange={(url) => updateItem(index, "photo_url", url)} shape="circle" />
+                ) : m.photo_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={m.photo_url} alt={m.name} className="size-16 rounded-full object-cover" loading="lazy" decoding="async" />
+                ) : (
+                  <span className="flex size-16 items-center justify-center rounded-full bg-primary/15 text-base font-semibold text-primary">
+                    {initials(m.name || "?")}
+                  </span>
+                )}
+                {editing ? (
+                  <EditableInput value={m.name} onChange={(v) => updateItem(index, "name", v)} className="mx-auto mt-3 block w-full text-center text-sm font-semibold text-foreground" placeholder="Nom" />
                 ) : (
                   <h3 className="mt-3 text-sm font-semibold text-foreground">{m.name}</h3>
                 )}
                 {editing ? (
-                  <EditableInput value={m.role} onChange={(v) => updateItem(index, "role", v)} className="mt-1 block w-full text-[0.65rem] font-semibold tracking-[0.08em] text-primary uppercase" placeholder="Poste" />
+                  <EditableInput value={m.role} onChange={(v) => updateItem(index, "role", v)} className="mx-auto mt-1 block w-full text-center text-[0.65rem] font-semibold tracking-[0.08em] text-primary uppercase" placeholder="Poste" />
                 ) : (
                   <span className="text-[0.65rem] font-semibold tracking-[0.08em] text-primary uppercase">{m.role}</span>
                 )}
@@ -661,8 +666,14 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
     case "partner_logos": {
       const partners = items as { name: string; logo_url?: string }[];
       return (
-        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 border-y border-white/10 py-6">
-          {partners.map((p, index) => (
+        <div>
+          {editing ? (
+            <EditableInput value={field(data, "title")} onChange={(v) => setForm((p) => ({ ...p, title: v }))} className="mx-auto block w-full text-center text-sm font-semibold tracking-[0.1em] text-muted-foreground uppercase" placeholder="Titre" />
+          ) : (
+            <h2 className="text-center text-sm font-semibold tracking-[0.1em] text-muted-foreground uppercase">{data.title}</h2>
+          )}
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
+            {partners.map((p, index) => (
             <span key={index} className="group relative flex flex-col items-center gap-1.5">
               {editing && <RemoveItemButton onClick={() => removeItem(index)} />}
               {editing ? (
@@ -677,12 +688,13 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
                 <span className="text-sm font-semibold tracking-[0.15em] text-muted-foreground/50 uppercase">{p.name}</span>
               )}
             </span>
-          ))}
-          {editing && (
-            <button onClick={() => addItem({ name: "", logo_url: "" })} className="flex items-center gap-1 rounded-full border border-dashed border-white/15 px-3 py-1 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary">
-              <Plus className="size-3" /> Ajouter
-            </button>
-          )}
+            ))}
+            {editing && (
+              <button onClick={() => addItem({ name: "", logo_url: "" })} className="flex items-center gap-1 rounded-full border border-dashed border-white/15 px-3 py-1 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary">
+                <Plus className="size-3" /> Ajouter
+              </button>
+            )}
+          </div>
         </div>
       );
     }
@@ -886,29 +898,41 @@ function SectionBody({ sectionKey, data, editing, setForm, items, updateItem, ad
       return (
         <div>
           {editing ? (
-            <EditableInput value={field(data, "title")} onChange={(v) => setForm((p) => ({ ...p, title: v }))} className="mx-auto block w-full text-center text-xl font-semibold text-foreground" placeholder="Titre" />
+            <EditableInput value={field(data, "title")} onChange={(v) => setForm((p) => ({ ...p, title: v }))} className="w-full text-xl font-extrabold text-primary uppercase" placeholder="Titre" />
           ) : (
-            <h2 className="text-center text-xl font-semibold tracking-tight text-foreground">{data.title}</h2>
+            <h2 className="text-xl font-extrabold tracking-tight text-primary uppercase">{data.title}</h2>
           )}
-          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {editing ? (
+            <EditableTextarea value={field(data, "subtitle")} onChange={(v) => setForm((p) => ({ ...p, subtitle: v }))} rows={2} className="mt-1.5 max-w-lg text-sm text-muted-foreground" placeholder="Sous-titre" />
+          ) : (
+            <p className="mt-1.5 max-w-lg text-sm text-muted-foreground">{data.subtitle}</p>
+          )}
+          {/* Miroir du grand numéro + ligne verticale de la timeline
+           * publique — en une seule colonne ici, la mise en page sticky
+           * (colonne fixe + défilement) n'ayant pas de sens dans ce
+           * formulaire d'édition. */}
+          <div className="mt-6 space-y-3">
             {phases.map((phase, index) => (
-              <div key={index} className="group relative rounded-xl border-l-2 border-primary bg-card/60 p-5">
+              <div key={index} className="group relative flex items-start gap-4 rounded-xl border border-white/15 bg-card/60 p-5">
                 {editing && <RemoveItemButton onClick={() => removeItem(index)} />}
-                {editing ? (
-                  <EditableInput value={phase.phase} onChange={(v) => updateItem(index, "phase", v)} className="w-32 text-[11px] font-semibold tracking-[0.15em] text-primary uppercase" placeholder="Phase 0X" />
-                ) : (
-                  <span className="text-[11px] font-semibold tracking-[0.15em] text-primary uppercase">{phase.phase}</span>
-                )}
-                {editing ? (
-                  <EditableInput value={phase.title} onChange={(v) => updateItem(index, "title", v)} className="mt-1.5 block w-full text-lg font-semibold text-foreground" placeholder="Titre" />
-                ) : (
-                  <h3 className="mt-1.5 text-lg font-semibold text-foreground">{phase.title}</h3>
-                )}
-                {editing ? (
-                  <EditableTextarea value={phase.description} onChange={(v) => updateItem(index, "description", v)} rows={2} className="mt-2 text-sm text-muted-foreground" placeholder="Description" />
-                ) : (
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{phase.description}</p>
-                )}
+                <span className="shrink-0 text-3xl font-extrabold text-primary">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <div className="min-w-0 flex-1">
+                  {editing ? (
+                    <EditableInput value={phase.title} onChange={(v) => updateItem(index, "title", v)} className="block w-full text-base font-semibold text-foreground" placeholder="Titre" />
+                  ) : (
+                    <h3 className="text-base font-semibold text-foreground">{phase.title}</h3>
+                  )}
+                  {editing ? (
+                    <EditableTextarea value={phase.description} onChange={(v) => updateItem(index, "description", v)} rows={2} className="mt-1.5 text-sm text-muted-foreground" placeholder="Description" />
+                  ) : (
+                    <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{phase.description}</p>
+                  )}
+                  {editing && (
+                    <EditableInput value={phase.phase} onChange={(v) => updateItem(index, "phase", v)} className="mt-1.5 block w-40 text-[10px] tracking-[0.1em] text-muted-foreground/60 uppercase" placeholder="Repère interne (Phase 0X)" />
+                  )}
+                </div>
               </div>
             ))}
             {editing && <AddItemButton label="Ajouter une phase" onClick={() => addItem({ phase: `Phase 0${phases.length + 1}`, title: "", description: "" })} />}

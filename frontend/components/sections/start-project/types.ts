@@ -19,6 +19,9 @@ export type ProjectFormData = {
   /** Cahier des charges optionnel joint au formulaire — PDF uniquement,
    * uploadé après la création de la demande (voir start-project-wizard). */
   attachment: File | null;
+  /** Case à cocher explicite et non pré-cochée (décision du 13/09/2026) —
+   * requise pour soumettre, contrairement au NDA qui reste optionnel. */
+  cguAccepted: boolean;
 };
 
 /** The wizard's 4 multiple-choice "questions" — admin-editable via the

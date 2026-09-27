@@ -6,6 +6,152 @@ a été évalué contre le code existant avant d'être mis de côté.
 
 ---
 
+## PostHog — analytique comportementale (14/09/2026)
+
+**Collecte (site public)** — `frontend/lib/analytics/posthog.ts` :
+- Chargé **uniquement après consentement « analytique »** du bandeau cookies ;
+  le SDK n'est pas téléchargé avant (import dynamique → rien dans le bundle
+  initial). Retrait du consentement → `opt_out_capturing()` + arrêt relecture.
+- **Premier parti** : envois vers `/ingest`, relayé par Next vers PostHog UE
+  (`next.config.ts` rewrites). Aucun domaine tiers côté navigateur, CSP inchangée.
+- **Masquage avant envoi** (`before_send`) : `/devis/<jeton>` et `?t=`/`?token=`
+  (vrais secrets d'authentification) remplacés, e-mails masqués, événements
+  `/admin` écartés (on mesure les visiteurs, pas le personnel). Relecture de
+  session avec toutes les saisies masquées ; `person_profiles: identified_only`.
+- Capturé : pages vues (navigation App Router), sorties de page, autocapture,
+  exceptions JS, Core Web Vitals, + événements métier `lead_submitted` et
+  `quote_accepted` (**aucune donnée personnelle** : forme de la demande seulement).
+
+**Lecture (back-office)** — `core/analytics.py` + `core/analytics_views.py` :
+- Proxy Django authentifié vers l'API Query (HogQL) : la clé personnelle
+  (accès lecture à tout le projet) ne quitte jamais le serveur.
+- Cache 10 min par requête + plafond 60 req/min par utilisateur (quota PostHog).
+- Cloisonné : `/api/v1/analytics/marketing/` (Resp. Marketing, Commercial,
+  Admin, Super-Admin) — audience, sources, campagnes UTM, entonnoir jusqu'au
+  devis accepté ; `/api/v1/analytics/technique/` (Chef de Projet, Développeur,
+  Admin, Super-Admin) — erreurs JS, pages les plus lentes, LCP/INP/CLS p75,
+  appareils/navigateurs.
+- Écrans : Marketing → « Analytique web », Technique → « Analytique web »
+  (modules `analytique-marketing` / `analytique-technique`, migration
+  `core/0015` pour les rôles existants).
+
+**Procédure de configuration pas à pas : `docs/POSTHOG_SETUP.md`.**
+
+**À faire côté comptes (hors code, aucun accès depuis cette session)** :
+1. Créer un projet PostHog en **région UE** (eu.posthog.com).
+2. Vercel : `NEXT_PUBLIC_POSTHOG_KEY` = clé projet `phc_...` (Project settings).
+3. Render : `POSTHOG_PERSONAL_API_KEY` (clé personnelle `phx_...`, scope
+   `query:read` seulement) et `POSTHOG_PROJECT_ID`.
+4. Optionnel : activer la relecture de session dans PostHog (désactivée côté
+   projet = enregistreur jamais téléchargé).
+5. Mettre à jour la politique de confidentialité (Paramètres) pour citer
+   PostHog (UE) comme sous-traitant de mesure d'audience.
+
+Sans ces clés : aucune collecte, et les écrans affichent « non configuré »
+plutôt qu'une erreur.
+
+## Conformité RGPD — textes légaux, case CGU/CGV, bandeau cookies (13/09/2026)
+
+- **Textes légaux édités depuis Paramètres** (`SiteSettings.cgu_text` /
+  `cgv_text` / `mentions_legales_text` / `politique_confidentialite_text`,
+  texte brut) — publics sur `/cgu`, `/cgv`, `/mentions-legales`,
+  `/confidentialite`. Vide tant que Marketing ne les a pas remplis (message
+  d'attente affiché, pas une page cassée) — **ces 4 champs sont vides par
+  défaut : le contenu juridique réel doit être saisi dans Paramètres avant
+  mise en production**, ceci n'est que la plomberie.
+- **Case CGU/CGV non pré-cochée, requise avant soumission** : formulaire
+  public "Démarrer un projet" (`ProjectFormData.cguAccepted`, bloque le
+  bouton final + re-vérifiée dans `goNext` en garde-fou) et portail
+  d'acceptation de devis (case déjà existante, reformulée pour citer
+  explicitement les CGV avec lien).
+- **Bandeau cookies** (`components/cookie-consent-banner.tsx`,
+  `lib/cookies/consent.ts`) : « Tout accepter » / « Tout refuser » à poids
+  visuel égal (pas de dark pattern), + « Personnaliser » pour un choix par
+  finalité (nécessaires toujours actifs, analytique, marketing). Stocké en
+  `localStorage`, rien de déposé avant un choix explicite. **Aucun traceur
+  analytique/publicitaire n'est câblé dans ce repo aujourd'hui** — le module
+  existe pour que l'obligation soit respectée dès maintenant ; un futur
+  script (Google Analytics, pixel Meta...) devra appeler `hasConsent()`
+  avant de se charger plutôt que redéfinir son propre mécanisme de
+  consentement.
+
+---
+
+## Notifications inertes — diagnostic du 13/09/2026 (config, pas du code)
+
+Le code de bout en bout (écriture Firestore côté backend, lecture/abonnement
+côté cloche `admin-header.tsx`, enregistrement du service worker + du
+token push) est correct et bien branché — ce n'est pas du code mort. Deux
+variables d'environnement manquent en production, avalées silencieusement
+par design (`core/firestore_client.py` — "un envoi de notification raté ne
+doit jamais faire échouer l'action métier qui l'a déclenché") :
+
+- **`NEXT_PUBLIC_FIREBASE_VAPID_KEY`** (Vercel, frontend) — absente de
+  `.env.prod` alors que `.env.example` la documente. Sans elle,
+  `frontend/lib/push.ts` refuse tout net (`getPushPermission()` renvoie
+  `"unsupported"`) : le push navigateur reste désactivé côté client, quel
+  que soit l'état du backend. À prendre dans Firebase Console → Project
+  Settings → Cloud Messaging → Web Push certificates.
+- **`FIREBASE_SERVICE_ACCOUNT_JSON`** (Render, backend) — déclarée dans
+  `render.yaml` avec `sync: false` (donc à saisir à la main dans le
+  dashboard Render, jamais synchronisée automatiquement) ; si absente ou
+  invalide, `core/apps.py` ne peut pas initialiser le SDK Admin et chaque
+  `notify()`/`notify_roles()` échoue en silence — la cloche in-app reste
+  vide sans jamais afficher d'erreur nulle part.
+
+Les deux lignes ont été ajoutées (vides, à remplir) dans `.env.prod` local
+pour qu'elles ne soient plus silencieusement absentes du template — mais
+`.env.prod` n'est qu'une référence locale (gitignored, valeurs fictives) :
+les vraies valeurs doivent être saisies directement dans Vercel et Render,
+aucun accès à ces deux tableaux de bord n'existe depuis cette session.
+
+**Vérification une fois les deux valeurs saisies** : recharger l'admin,
+ouvrir la cloche — un `notify()` déclenché (ex: créer un utilisateur) doit
+apparaître sans redéploiement supplémentaire.
+
+---
+
+## Devis accepté → projet Technique — décision du 13/09/2026
+
+Accepter un devis (portail public, e-signature) ne faisait jusqu'ici que
+changer son statut — Technique n'avait aucun moyen de savoir qu'un projet
+venait d'être vendu sans qu'on le lui dise à la main.
+
+`PublicQuoteAcceptView` crée désormais automatiquement le `projects.Project`
+correspondant (nom = `{client} — {n° devis}`, budget = total TTC du devis),
+l'associe au devis (`Quote.project`, nouveau FK), et prévient
+Marketing→Technique (`notify_roles`, push uniquement — pas encore listé
+"très critique"). `projects.Project`, pas `technique.Project` (l'autre
+modèle du même nom) : c'est celui que lit l'écran "Projets" de Technique
+(`/api/v1/projects/`), et son `lead_project_manager` est nullable — le
+projet peut donc exister avant qu'un chef de projet lui soit assigné,
+contrairement à `technique.Project` qui l'exige à la création. Idempotent :
+`PublicQuoteAcceptView` court-circuite déjà tout ré-appel une fois le devis
+`ACCEPTE`, donc aucun risque de projet dupliqué sur un double clic.
+
+---
+
+## Suivi public aligné sur le parcours réel — décision du 13/09/2026
+
+Les 5 étapes affichées au public (`Lead.TRACKING_STEPS`) étaient dérivées
+de `Lead.Status` (le pipeline commercial interne : Nouveau/Qualifié/
+Proposition en cours/Perdu/Converti) alors que Marketing et Technique
+suivent au quotidien un champ complètement différent et indépendant,
+`Lead.WorkflowStage` (Soumis→Chez Technique→CDC prêt→Soumis au
+client→Validé par le client→En développement, voir `marketing/workflow.py`
+et l'écran "projets soumis"). Une demande pouvait donc avancer réellement
+chez Technique pendant des semaines tout en restant affichée "Nouveau"
+côté client — les deux champs ne bougent pas ensemble.
+
+Les 6 étapes publiques sont maintenant dérivées de `WorkflowStage`, avec un
+vocabulaire simplifié plutôt que le jargon interne : Demande reçue /
+Analyse en cours / Proposition en préparation / Proposition envoyée /
+Proposition validée / Projet en réalisation. Le rejet (`RejectLeadView`,
+qui clôture via `status=PERDU`) garde la priorité d'affichage ("Demande
+clôturée") quelle que soit l'étape du workflow au moment du refus.
+
+---
+
 ## Responsive mobile-first des tableaux admin — décision du 11/09/2026
 
 Tous les tableaux de données admin (finance, rh, technique, marketing,

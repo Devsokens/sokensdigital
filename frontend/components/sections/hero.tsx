@@ -72,7 +72,7 @@ export function Hero({ section }: { section?: PageSection | null }) {
         variants={container}
         initial="hidden"
         animate="show"
-        className="pointer-events-none mx-auto max-w-5xl px-4 pt-28 pb-16 text-center sm:px-6 sm:pt-36 sm:pb-20 lg:px-8"
+        className="pointer-events-none mx-auto max-w-6xl px-4 pt-28 pb-16 text-center sm:px-6 sm:pt-36 sm:pb-20 lg:px-8"
       >
         <motion.div
           variants={item}

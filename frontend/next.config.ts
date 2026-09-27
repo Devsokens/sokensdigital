@@ -71,6 +71,11 @@ const SECURITY_HEADERS = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), interest-cohort=()" },
 ];
 
+// Région UE par défaut : données hébergées en Europe, cohérent avec la
+// politique de confidentialité du site.
+const POSTHOG_INGEST_HOST = process.env.POSTHOG_INGEST_HOST ?? "https://eu.i.posthog.com";
+const POSTHOG_ASSETS_HOST = process.env.POSTHOG_ASSETS_HOST ?? "https://eu-assets.i.posthog.com";
+
 const nextConfig: NextConfig = {
   images: {
     // Sans ça, next/image refuse toute image distante (Cloudinary,
@@ -91,6 +96,19 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },
+
+  // PostHog en premier parti (voir lib/analytics/posthog.ts) : le navigateur
+  // n'envoie qu'à /ingest sur ce domaine, Next relaie vers PostHog. Pas de
+  // domaine tiers à autoriser dans la CSP, et les bloqueurs qui filtrent les
+  // domaines d'analytics connus ne faussent plus les chiffres.
+  async rewrites() {
+    return [
+      { source: "/ingest/static/:path*", destination: `${POSTHOG_ASSETS_HOST}/static/:path*` },
+      { source: "/ingest/:path*", destination: `${POSTHOG_INGEST_HOST}/:path*` },
+    ];
+  },
+  // L'API PostHog attend certains chemins avec slash final.
+  skipTrailingSlashRedirect: true,
 };
 
 export default nextConfig;

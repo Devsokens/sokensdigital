@@ -16,8 +16,11 @@ type Props = {
 export function StepConcept({ data, update, objectifs }: Props) {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_18rem]">
-      <div className="space-y-6">
-        <div className="rounded-2xl border border-white/10 bg-card/60 p-6 sm:p-7">
+      {/* space-y-8 + bordure un peu plus visible (white/15 au lieu de
+       * white/10) : les deux cartes se distinguaient trop peu l'une de
+       * l'autre et du fond, au point de se lire comme un seul bloc continu. */}
+      <div className="space-y-8">
+        <div className="rounded-2xl border border-white/15 bg-card/60 p-6 shadow-sm shadow-black/20 sm:p-7">
           <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
             <User className="size-5 text-primary" />
             Informations Personnelles
@@ -96,7 +99,7 @@ export function StepConcept({ data, update, objectifs }: Props) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-card/60 p-6 sm:p-7">
+        <div className="rounded-2xl border border-white/15 bg-card/60 p-6 shadow-sm shadow-black/20 sm:p-7">
           <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
             <Lightbulb className="size-5 text-primary" />
             Objectif du Projet

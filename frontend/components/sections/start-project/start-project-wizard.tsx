@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import type {
   CanalOption,
 } from "@/components/sections/start-project/types";
 import { createLead, uploadLeadAttachment } from "@/lib/api/public";
+import { track } from "@/lib/analytics/posthog";
 
 function buildLeadPayload(data: ProjectFormData) {
   const notes = [
@@ -89,6 +91,7 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
     canal: canaux[0]?.label ?? "",
     nda: false,
     attachment: null,
+    cguAccepted: false,
   }));
   // Non-bloquant : la demande est déjà enregistrée quand cet upload part,
   // un échec ici ne doit pas empêcher le client de voir sa confirmation.
@@ -107,10 +110,23 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
 
   const goNext = async () => {
     if (isLast) {
+      if (!data.cguAccepted) {
+        setSubmitError("Merci d'accepter les CGU/CGV avant de soumettre votre demande.");
+        return;
+      }
       setSubmitError(null);
       setSubmitting(true);
       try {
         const created = await createLead(buildLeadPayload(data));
+        // Jamais de nom, e-mail ou téléphone : seulement la forme de la demande.
+        track("lead_submitted", {
+          type_solution: data.typeSolution,
+          delai: data.delai,
+          canal: data.canal,
+          has_budget: Boolean(data.budget),
+          has_attachment: Boolean(data.attachment),
+          nda: data.nda,
+        });
         setReference(created.tracking_reference);
         if (data.attachment) {
           try {
@@ -142,7 +158,7 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
 
   if (submitted) {
     return (
-      <section className="mx-auto max-w-5xl px-4 pt-32 pb-24 sm:px-6 sm:pt-40 lg:px-8">
+      <section className="mx-auto max-w-6xl px-4 pt-32 pb-24 sm:px-6 sm:pt-40 lg:px-8">
         <StepSuccess data={data} reference={reference} />
         {attachmentWarning && (
           <p className="mt-6 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
@@ -154,7 +170,7 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
   }
 
   return (
-    <section className="mx-auto max-w-5xl px-4 pt-32 pb-24 sm:px-6 sm:pt-40 lg:px-8">
+    <section className="mx-auto max-w-6xl px-4 pt-32 pb-24 sm:px-6 sm:pt-40 lg:px-8">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
@@ -198,15 +214,19 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
         </p>
       )}
 
-      <div className="mt-10 flex items-center justify-between">
+      {/* rounded-2xl border bg-card/60 : mêmes codes que les cartes du
+       * contenu au-dessus, avec une marge réduite (mt-6 au lieu de mt-10) —
+       * le bouton flottait auparavant sur le fond nu, visiblement détaché
+       * du bloc qu'il valide. */}
+      <div className="mt-6 flex items-center justify-between rounded-2xl border border-white/15 bg-card/60 p-4 shadow-sm shadow-black/20 sm:p-5">
         {isFirst ? (
-          <a
+          <Link
             href="/"
             className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="size-4" />
             Annuler
-          </a>
+          </Link>
         ) : (
           <button
             type="button"
@@ -220,7 +240,7 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
 
         <Button
           onClick={goNext}
-          disabled={submitting}
+          disabled={submitting || (isLast && !data.cguAccepted)}
           size="lg"
           className={
             isLast

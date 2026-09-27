@@ -59,11 +59,13 @@ MODULES = [
     ('leads', 'Tunnel commercial', 'Marketing & Commercial'),
     ('projets-soumis', 'Projets soumis', 'Marketing & Commercial'),
     ('devis', 'Devis', 'Marketing & Commercial'),
+    ('analytique-marketing', 'Analytique web', 'Marketing & Commercial'),
     ('projets', 'Gestion de projet', 'Technique'),
     ('timesheets', 'Timesheets', 'Technique'),
     ('maintenance', 'Maintenance', 'Technique'),
     ('decaissements', 'Décaissements', 'Technique'),
     ('cahier-des-charges', 'Cahier des charges', 'Technique'),
+    ('analytique-technique', 'Analytique web', 'Technique'),
     ('finance-dashboard', 'Analytique', 'Finance & Comptabilité'),
     ('cloture', 'Clôture comptable', 'Finance & Comptabilité'),
     ('grand-livre', 'Grand Livre', 'Finance & Comptabilité'),
@@ -117,7 +119,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         {'utilisateurs': ['voir', 'creer']},
     ),
     ROLE_PROJECT_MANAGER: _merge(
-        _read_only('dashboard', 'devis'),
+        _read_only('dashboard', 'devis', 'analytique-technique'),
         {'messagerie': ['voir', 'creer']},
         _full('projets'),
         {'timesheets': ['voir', 'creer', 'modifier']},
@@ -132,7 +134,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         _full('cahier-des-charges'),
     ),
     ROLE_DEVELOPER: _merge(
-        _read_only('dashboard'),
+        _read_only('dashboard', 'analytique-technique'),
         {'messagerie': ['voir', 'creer']},
         {'projets': ['voir', 'modifier']},
         {'timesheets': ['voir', 'creer']},
@@ -167,7 +169,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         _read_only('encaissements'),
     ),
     ROLE_RESPONSABLE_MARKETING: _merge(
-        _read_only('dashboard', 'marketing-dashboard'),
+        _read_only('dashboard', 'marketing-dashboard', 'analytique-marketing'),
         {'messagerie': ['voir', 'creer']},
         _full('contenu', 'plan-editorial', 'leads', 'devis', 'cahier-des-charges'),
         # Le marketing reçoit les demandes du portail public et les fait
@@ -175,7 +177,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         _full('projets-soumis'),
     ),
     ROLE_COMMERCIAL: _merge(
-        _read_only('dashboard'),
+        _read_only('dashboard', 'analytique-marketing'),
         {'messagerie': ['voir', 'creer']},
         {'leads': ['voir', 'creer', 'modifier']},
         {'devis': ['voir', 'creer', 'modifier']},

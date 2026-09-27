@@ -5,10 +5,13 @@ import Link from "next/link";
 import { ArrowLeft, CalendarDays, Loader2, Plus, Shield, Trash2, Users, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/ui/tabs";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { getProject, addProjectMember, removeProjectMember } from "@/lib/api/projects";
 import { listUsers } from "@/lib/api/hr";
 import { ProjectTaskBoard } from "@/components/admin/technique/project-task-board";
+import { ProjectStatsTab } from "@/components/admin/technique/project-stats-tab";
+import { AmbientVideoBackground } from "@/components/admin/technique/ambient-video-background";
 import { formatFcfa } from "@/lib/format-currency";
 import type { Project, ProjectPriority, ProjectStatus, UserBrief } from "@/lib/api/types";
 
@@ -122,18 +125,33 @@ export function ProjectDetail({ id }: { id: string }) {
   const availableUsers = users.filter((u) => !project.members.some((m) => m.user.id === u.id));
 
   return (
-    <div className="space-y-6">
+    // Même vidéo d'ambiance que la liste des projets (project-list.tsx),
+    // demandée aussi ici — même structure (marges négatives pour aller
+    // jusqu'aux bords du layout admin).
+    <div className="relative isolate -mx-6 -mt-8 min-h-[calc(100dvh-4rem)] space-y-6 px-6 pt-8 lg:-mx-10 lg:px-10">
+      <AmbientVideoBackground />
       {/* Top navigation & Project Header */}
       <div>
         <Link
           href="/admin/technique/projets"
-          className="group mb-3 inline-flex items-center gap-2 text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-900"
+          className="group mb-3 inline-flex items-center gap-2 text-sm font-medium text-neutral-700 transition-colors hover:text-neutral-900"
         >
           <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-0.5" />
           <span>Retour aux projets</span>
         </Link>
 
-        <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+          {/* Image de couverture : posée mais jamais affichée nulle part
+           * jusqu'ici, uniquement stockée. */}
+          {project.cover_image_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={project.cover_image_url}
+              alt=""
+              className="h-40 w-full object-cover sm:h-52"
+            />
+          )}
+          <div className="flex flex-wrap items-start justify-between gap-4 p-5">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2.5">
               <h1 className="text-2xl font-bold text-neutral-900">{project.name}</h1>
@@ -150,7 +168,7 @@ export function ProjectDetail({ id }: { id: string }) {
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-4 text-xs text-neutral-500">
+            <div className="flex flex-wrap items-center gap-4 text-xs text-neutral-800">
               <span className="flex items-center gap-1.5">
                 <Shield className="size-3.5 text-neutral-400" />
                 Dirigé par{" "}
@@ -199,13 +217,16 @@ export function ProjectDetail({ id }: { id: string }) {
             <Popover open={memberPopoverOpen} onOpenChange={setMemberPopoverOpen}>
               <PopoverTrigger
                 render={
-                  <Button variant="outline" size="sm" className="gap-1.5 rounded-full px-3 text-xs">
+                  // Même correction que le bouton Filtre de project-list.tsx :
+                  // variant="outline" hérite des tokens du thème sombre, invisible
+                  // sur le fond clair de l'admin.
+                  <Button size="sm" className="gap-1.5 rounded-full border border-neutral-200 bg-white px-3 text-xs text-neutral-700 hover:bg-neutral-50">
                     <Users className="size-3.5" /> Équipe ({project.members.length})
                   </Button>
                 }
               />
               <PopoverContent className="w-80 p-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-500">Membres du projet</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-800">Membres du projet</p>
                 <div className="mb-3 max-h-48 space-y-1.5 overflow-y-auto">
                   {project.members.map((m) => (
                     <div key={m.id} className="flex items-center justify-between rounded-lg bg-neutral-50 px-2.5 py-1.5 text-xs">
@@ -249,11 +270,34 @@ export function ProjectDetail({ id }: { id: string }) {
               </PopoverContent>
             </Popover>
           </div>
+          </div>
+
+          {/* Description : posée dans le formulaire (éditeur riche) mais
+           * jamais affichée nulle part jusqu'ici non plus. */}
+          {project.description && (
+            <div
+              className="prose-sm max-w-none border-t border-neutral-100 px-5 py-4 text-sm text-neutral-800 [&_a]:text-primary [&_a]:underline [&_h2]:mt-2 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mt-2 [&_h3]:text-sm [&_h3]:font-semibold [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5"
+              dangerouslySetInnerHTML={{ __html: project.description }}
+            />
+          )}
         </div>
       </div>
 
-      {/* Main task board */}
-      <ProjectTaskBoard project={project} />
+      {/* Onglets Tâches / Statistiques — la page n'en avait aucun avant,
+       * le tableau des tâches s'affichait directement. */}
+      <Tabs defaultValue="taches">
+        <TabsList>
+          <TabsTab value="taches">Tâches</TabsTab>
+          <TabsTab value="stats">Statistiques</TabsTab>
+          <TabsIndicator />
+        </TabsList>
+        <TabsPanel value="taches" className="pt-5">
+          <ProjectTaskBoard project={project} />
+        </TabsPanel>
+        <TabsPanel value="stats" className="pt-5">
+          <ProjectStatsTab projectId={project.id} />
+        </TabsPanel>
+      </Tabs>
     </div>
   );
 }

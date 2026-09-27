@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { motion } from "motion/react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -14,6 +15,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Modal, ModalTrigger, ModalClose, ModalContent } from "@/components/ui/modal";
+import { MultiSelectSearch } from "@/components/admin/multi-select-search";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import {
   listProjectTasks,
@@ -158,50 +161,109 @@ function TaskCard({ task, onOpen, onDragStart }: {
   );
 }
 
-function AddTaskInline({ onAdd }: { onAdd: (title: string) => void }) {
+/** Remplace l'ancien ajout inline (un simple champ titre) par une modale
+ * centrée animée — nom, description et assignation dès la création, comme
+ * demandé, plutôt qu'un titre seul suivi d'une édition à part. Le
+ * mouvement motion design demandé s'ajoute par-dessus la transition déjà
+ * posée par ModalContent (fondu + zoom, components/ui/modal.tsx) : bouton
+ * qui réagit au survol/clic, et les champs qui arrivent en cascade à
+ * l'ouverture. */
+function AddTaskModal({
+  members,
+  onAdd,
+}: {
+  members: ProjectUserBrief[];
+  onAdd: (data: { title: string; description: string; assignee_ids: string[] }) => Promise<void>;
+}) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-neutral-200 py-2 text-xs text-neutral-400 transition-colors hover:border-primary/40 hover:text-primary"
-      >
-        <Plus className="size-3.5" /> Ajouter une tâche
-      </button>
-    );
+  const memberOptions = members.map((m) => ({ id: m.id, label: `${m.first_name} ${m.last_name}`.trim() }));
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim() || saving) return;
+    setSaving(true);
+    try {
+      await onAdd({ title: title.trim(), description: description.trim(), assignee_ids: assigneeIds });
+      setTitle("");
+      setDescription("");
+      setAssigneeIds([]);
+      setOpen(false);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!title.trim()) return;
-        onAdd(title.trim());
-        setTitle("");
-        setOpen(false);
-      }}
-      className="space-y-1.5"
-    >
-      <input
-        autoFocus
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onBlur={() => { if (!title.trim()) setOpen(false); }}
-        placeholder="Titre de la tâche…"
-        className={inputClass}
+    <Modal open={open} onOpenChange={setOpen}>
+      <ModalTrigger
+        render={
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.96 }}
+            className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-neutral-200 py-2 text-xs text-neutral-400 transition-colors hover:border-primary/40 hover:text-primary"
+          >
+            <Plus className="size-3.5" /> Ajouter une tâche
+          </motion.button>
+        }
       />
-      <div className="flex items-center gap-2">
-        <button type="submit" className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground">
-          Ajouter
-        </button>
-        <button type="button" onClick={() => { setOpen(false); setTitle(""); }} className="text-xs text-neutral-400">
-          Annuler
-        </button>
-      </div>
-    </form>
+      <ModalContent title="Nouvelle tâche">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <motion.label
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="block"
+          >
+            <span className={labelClass}>Nom de la tâche</span>
+            <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} required />
+          </motion.label>
+
+          <motion.label
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="block"
+          >
+            <span className={labelClass}>Description</span>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className={inputClass}
+              placeholder="Décrit ce qui est attendu…"
+            />
+          </motion.label>
+
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+            <span className={labelClass}>Assigner à</span>
+            <MultiSelectSearch
+              options={memberOptions}
+              values={assigneeIds}
+              onChange={setAssigneeIds}
+              placeholder="Rechercher un membre du projet…"
+              emptyLabel="Aucun membre sur ce projet."
+            />
+          </motion.div>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <ModalClose render={<button type="button" className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-50">Annuler</button>} />
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50"
+            >
+              {saving && <Loader2 className="size-3.5 animate-spin" />} Créer la tâche
+            </button>
+          </div>
+        </form>
+      </ModalContent>
+    </Modal>
   );
 }
 
@@ -393,8 +455,11 @@ export function ProjectTaskBoard({ project }: { project: Project }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
-  async function handleAdd(status: ProjectTaskStatus, title: string) {
-    const task = await createProjectTask(project.id, { title, status });
+  async function handleAdd(
+    status: ProjectTaskStatus,
+    data: { title: string; description: string; assignee_ids: string[] },
+  ) {
+    const task = await createProjectTask(project.id, { ...data, status });
     setTasks((prev) => (prev ? [...prev, task] : [task]));
   }
 
@@ -470,7 +535,7 @@ export function ProjectTaskBoard({ project }: { project: Project }) {
                       onDragStart={(e) => e.dataTransfer.setData("text/plain", task.id)}
                     />
                   ))}
-                  <AddTaskInline onAdd={(title) => handleAdd(status, title)} />
+                  <AddTaskModal members={members} onAdd={(data) => handleAdd(status, data)} />
                 </div>
               </div>
             );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -27,14 +27,21 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/sheet";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
+import { AmbientVideoBackground } from "@/components/admin/technique/ambient-video-background";
+import { RichTextEditor } from "@/components/admin/marketing/rich-text-editor";
+import { ImageUploadField } from "@/components/admin/marketing/page-section-editor";
+import { SelectSearch, MultiSelectSearch } from "@/components/admin/multi-select-search";
 import {
   listProjects,
   createProject,
   updateProject,
   deleteProject,
   toggleProjectPin,
+  addProjectMember,
+  uploadProjectDocument,
 } from "@/lib/api/projects";
-import type { Project, ProjectPriority, ProjectStatus } from "@/lib/api/types";
+import { listUsers } from "@/lib/api/hr";
+import type { Project, ProjectPriority, ProjectStatus, UserBrief } from "@/lib/api/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   EN_COURS: "En cours",
@@ -102,41 +109,6 @@ function initials(firstName?: string, lastName?: string) {
 function formatDate(value: string | null) {
   if (!value) return "—";
   return new Date(value).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
-}
-
-/** Looping muted video behind the whole module — spans the full height of
- * the content column (grows with it, via `inset-0` on a `relative isolate`
- * parent) rather than just the header band, so it reads as the page's
- * background rather than a strip. Cards sit on their own opaque white
- * background so they stay perfectly legible on top of it regardless; the
- * title/tabs row gets a light scrim just for contrast. Paused under
- * prefers-reduced-motion instead of using CSS (no CSS-only way to stop a
- * <video>'s own playback). */
-function AmbientBackground() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      videoRef.current?.pause();
-    }
-  }, []);
-
-  return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-      <video
-        ref={videoRef}
-        autoPlay
-        loop
-        muted
-        playsInline
-        preload="auto"
-        className="size-full object-cover opacity-70"
-      >
-        <source src="/assets/projects-bg.mp4" type="video/mp4" />
-      </video>
-      <div className="absolute inset-0 bg-gradient-to-b from-white/70 via-white/20 to-white/40" />
-    </div>
-  );
 }
 
 export function ProjectList() {
@@ -279,7 +251,7 @@ export function ProjectList() {
 
   return (
     <div className="relative isolate -mx-6 -mt-8 min-h-[calc(100dvh-4rem)] lg:-mx-10">
-      <AmbientBackground />
+      <AmbientVideoBackground />
 
       <div className="px-6 pt-8 lg:px-10">
       <div className="mb-5 rounded-2xl bg-white/75 p-4 backdrop-blur-md">
@@ -317,7 +289,10 @@ export function ProjectList() {
                   </Button>
                 }
               />
-              <SheetContent title="Nouveau projet">
+              {/* max-w-2xl (au lieu du max-w-lg par défaut) : les nouveaux
+               * champs (éditeur riche, sélection avec recherche, liste de
+               * documents) tenaient trop à l'étroit dans le panneau standard. */}
+              <SheetContent title="Nouveau projet" className="max-w-2xl">
                 <NewProjectForm onSaved={() => { setOpen(false); load(); }} />
               </SheetContent>
             </Sheet>
@@ -355,7 +330,14 @@ export function ProjectList() {
             <Popover>
               <PopoverTrigger
                 render={
-                  <Button variant="outline" className="gap-1.5 rounded-full px-4">
+                  // variant="outline" du Button partagé s'appuie sur les tokens du
+                  // thème sombre du site vitrine (--border/--background) : sur le
+                  // fond clair de l'admin (qui ne redéfinit que background-color,
+                  // pas ces tokens — voir app/admin/layout.tsx), la bordure devient
+                  // quasi invisible et les couleurs incohérentes. Classes claires
+                  // explicites à la place, mêmes codes que la barre de recherche
+                  // juste au-dessus.
+                  <Button className="gap-1.5 rounded-full border border-neutral-200 bg-white px-4 text-neutral-700 shadow-none hover:bg-neutral-50">
                     <SlidersHorizontal className="size-3.5" /> Filtre
                     {priorityFilter.size > 0 && (
                       <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
@@ -512,7 +494,14 @@ function ProjectCard({
 
   return (
     <>
-      <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm transition-colors hover:border-primary/40">
+      <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm transition-colors hover:border-primary/40">
+        {/* Miniature de couverture : posée à la création mais jamais
+         * affichée nulle part jusqu'ici. */}
+        {project.cover_image_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={project.cover_image_url} alt="" className="h-24 w-full object-cover" />
+        )}
+        <div className="p-4">
         <div className="mb-3 flex items-center justify-between">
           <Link href={`/admin/technique/projets/${project.id}`} className="flex min-w-0 flex-1 items-center gap-1.5 text-sm font-medium text-neutral-900 hover:text-primary">
             <span className="shrink-0">{pickCardIcon(project.id)}</span>
@@ -633,10 +622,11 @@ function ProjectCard({
             {STATUS_LABELS[project.status]}
           </span>
         </div>
+        </div>
       </div>
 
       <Sheet open={editOpen} onOpenChange={setEditOpen}>
-        <SheetContent title={`Modifier ${project.name}`}>
+        <SheetContent title={`Modifier ${project.name}`} className="max-w-2xl">
           <EditProjectForm
             project={project}
             onSaved={() => {
@@ -652,6 +642,8 @@ function ProjectCard({
 
 function EditProjectForm({ project, onSaved }: { project: Project; onSaved: () => void }) {
   const [name, setName] = useState(project.name);
+  const [description, setDescription] = useState(project.description || "");
+  const [coverImageUrl, setCoverImageUrl] = useState(project.cover_image_url || "");
   const [status, setStatus] = useState<ProjectStatus>(project.status);
   const [priority, setPriority] = useState<ProjectPriority>(project.priority);
   const [category, setCategory] = useState(project.category || "");
@@ -668,6 +660,8 @@ function EditProjectForm({ project, onSaved }: { project: Project; onSaved: () =
     try {
       await updateProject(project.id, {
         name,
+        description,
+        cover_image_url: coverImageUrl,
         status,
         priority,
         category: category || undefined,
@@ -691,8 +685,18 @@ function EditProjectForm({ project, onSaved }: { project: Project; onSaved: () =
         </p>
       )}
       <label className="block">
+        <span className={labelClass}>Image de couverture</span>
+        <ImageUploadField value={coverImageUrl} onChange={setCoverImageUrl} />
+      </label>
+
+      <label className="block">
         <span className={labelClass}>Nom du projet</span>
         <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
+      </label>
+
+      <label className="block">
+        <span className={labelClass}>Description</span>
+        <RichTextEditor value={description} onChange={setDescription} />
       </label>
 
       <div className="grid grid-cols-2 gap-4">
@@ -741,7 +745,7 @@ function EditProjectForm({ project, onSaved }: { project: Project; onSaved: () =
       </label>
 
       <div className="flex items-center justify-between pt-2">
-        <SheetClose render={<Button type="button" variant="outline" className="rounded-full px-4">Annuler</Button>} />
+        <SheetClose render={<Button type="button" className="rounded-full border border-neutral-200 bg-white px-4 text-neutral-700 hover:bg-neutral-50">Annuler</Button>} />
         <Button type="submit" disabled={saving} className="rounded-full px-5">
           {saving ? <Loader2 className="size-4 animate-spin" /> : "Enregistrer"}
         </Button>
@@ -752,27 +756,55 @@ function EditProjectForm({ project, onSaved }: { project: Project; onSaved: () =
 
 function NewProjectForm({ onSaved }: { onSaved: () => void }) {
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [coverImageUrl, setCoverImageUrl] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [budget, setBudget] = useState("");
   const [priority, setPriority] = useState<ProjectPriority>("MOYENNE");
   const [category, setCategory] = useState("");
+  // null = pas de sélection → le backend assigne automatiquement le
+  // créateur comme chef de projet (voir ProjectViewSet.perform_create).
+  const [leadId, setLeadId] = useState<string | null>(null);
+  const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [documents, setDocuments] = useState<File[]>([]);
+  const [users, setUsers] = useState<UserBrief[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    listUsers().then((data) => setUsers(data.results)).catch(() => setUsers([]));
+  }, []);
+
+  const userOptions = users.map((u) => ({
+    id: u.id,
+    label: `${u.first_name} ${u.last_name}`.trim(),
+    sublabel: u.department_name || undefined,
+  }));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSaving(true);
     try {
-      await createProject({
+      const project = await createProject({
         name,
+        description: description || undefined,
+        cover_image_url: coverImageUrl || undefined,
         start_date: startDate || undefined,
         end_date: endDate || undefined,
         budget: budget || undefined,
         priority,
         category: category || undefined,
+        lead_project_manager_id: leadId || undefined,
       });
+      // Deux étapes séparées après la création (comme uploadLeadAttachment
+      // pour les demandes publiques) : membres et documents ont besoin de
+      // l'id du projet, qui n'existe qu'une fois celui-ci enregistré.
+      await Promise.all([
+        ...memberIds.map((userId) => addProjectMember(project.id, userId)),
+        ...documents.map((file) => uploadProjectDocument(project.id, file)),
+      ]);
       onSaved();
     } catch {
       setError("Impossible de créer le projet.");
@@ -788,10 +820,22 @@ function NewProjectForm({ onSaved }: { onSaved: () => void }) {
           {error}
         </p>
       )}
+
+      <label className="block">
+        <span className={labelClass}>Image de couverture</span>
+        <ImageUploadField value={coverImageUrl} onChange={setCoverImageUrl} />
+      </label>
+
       <label className="block">
         <span className={labelClass}>Nom</span>
         <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
       </label>
+
+      <label className="block">
+        <span className={labelClass}>Description</span>
+        <RichTextEditor value={description} onChange={setDescription} />
+      </label>
+
       <div className="grid grid-cols-2 gap-4">
         <label className="block">
           <span className={labelClass}>Priorité</span>
@@ -825,9 +869,45 @@ function NewProjectForm({ onSaved }: { onSaved: () => void }) {
         <span className={labelClass}>Budget</span>
         <input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} className={inputClass} />
       </label>
-      <p className="text-xs text-neutral-400">Tu deviens automatiquement le chef de ce projet.</p>
+
+      <label className="block">
+        <span className={labelClass}>Chef de projet</span>
+        <SelectSearch options={userOptions} value={leadId} onChange={setLeadId} placeholder="Toi (par défaut)" />
+      </label>
+
+      <label className="block">
+        <span className={labelClass}>Assigner à des employés</span>
+        <MultiSelectSearch options={userOptions} values={memberIds} onChange={setMemberIds} placeholder="Rechercher un employé…" />
+      </label>
+
+      <label className="block">
+        <span className={labelClass}>Documents sources</span>
+        <input
+          type="file"
+          multiple
+          onChange={(e) => setDocuments((prev) => [...prev, ...Array.from(e.target.files ?? [])])}
+          className={`${inputClass} cursor-pointer file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary`}
+        />
+        {documents.length > 0 && (
+          <ul className="mt-2 space-y-1">
+            {documents.map((file, i) => (
+              <li key={i} className="flex items-center justify-between rounded-lg bg-neutral-50 px-2.5 py-1.5 text-xs text-neutral-700">
+                <span className="truncate">{file.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setDocuments((prev) => prev.filter((_, j) => j !== i))}
+                  className="ml-2 shrink-0 text-neutral-400 hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </label>
+
       <div className="flex items-center justify-between pt-2">
-        <SheetClose render={<Button type="button" variant="outline" className="rounded-full px-4">Annuler</Button>} />
+        <SheetClose render={<Button type="button" className="rounded-full border border-neutral-200 bg-white px-4 text-neutral-700 hover:bg-neutral-50">Annuler</Button>} />
         <Button type="submit" disabled={saving} className="rounded-full px-5">
           {saving ? <Loader2 className="size-4 animate-spin" /> : "Créer"}
         </Button>

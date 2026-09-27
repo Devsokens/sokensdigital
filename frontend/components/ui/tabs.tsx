@@ -21,7 +21,7 @@ export function TabsTab({ value, children }: { value: string; children: React.Re
     <TabsPrimitive.Tab
       value={value}
       className={cn(
-        "relative shrink-0 px-4 py-2.5 text-sm font-medium text-neutral-500 transition-colors",
+        "relative shrink-0 px-4 py-2.5 text-sm font-medium text-neutral-900 transition-colors",
         "hover:text-neutral-900",
         "data-[selected]:text-primary"
       )}

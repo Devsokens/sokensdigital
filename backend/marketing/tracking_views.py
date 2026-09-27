@@ -27,6 +27,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.storage import upload_project_request_document
+from marketing.emails import send_lead_document_received
 from marketing.models import Lead
 from marketing.ratelimit import get_client_ip, is_rate_limited
 
@@ -183,6 +184,12 @@ class PublicLeadAttachmentUploadView(APIView):
         lead.attachment_url = url
         lead.attachment_name = uploaded.name[:255]
         lead.save(update_fields=['attachment_url', 'attachment_name'])
+
+        # Second accusé de réception : l'accusé initial est parti à la
+        # création de la demande, avant que ce fichier n'existe. Ne lève
+        # jamais (mailer.send_mail avale ses erreurs) — un e-mail manqué ne
+        # doit pas faire échouer un téléversement déjà enregistré.
+        send_lead_document_received(lead, lead.attachment_name)
 
         return Response(
             {'attachment_name': lead.attachment_name, 'attachment_url': lead.attachment_url},

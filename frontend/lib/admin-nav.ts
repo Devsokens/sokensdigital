@@ -29,6 +29,7 @@ import {
   Library,
   Inbox,
   type LucideIcon,
+  Activity,
 } from "lucide-react";
 
 export interface NavItem {
@@ -91,6 +92,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
       { label: "Plan Éditorial", shortLabel: "Éditorial", href: "/admin/marketing/plan-editorial", icon: CalendarClock, moduleKey: "plan-editorial" },
       { label: "Tunnel commercial", shortLabel: "Tunnel", href: "/admin/marketing/leads", icon: Target, moduleKey: "leads" },
       { label: "Devis", href: "/admin/marketing/devis", icon: FileText, moduleKey: "devis" },
+      { label: "Analytique web", shortLabel: "Analytique", href: "/admin/marketing/analytique", icon: Activity, moduleKey: "analytique-marketing" },
       { label: "Cahier des charges", shortLabel: "Cahier", href: "/admin/marketing/cahier-des-charges", icon: ClipboardList, moduleKey: "cahier-des-charges" },
     ],
   },
@@ -104,6 +106,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
       { label: "Décaissements", href: "/admin/technique/decaissements", icon: Banknote, moduleKey: "decaissements" },
       { label: "Devis", href: "/admin/technique/devis", icon: FileText, moduleKey: "devis" },
       { label: "Cahier des charges", shortLabel: "Cahier", href: "/admin/technique/cahier-des-charges", icon: ClipboardList, moduleKey: "cahier-des-charges" },
+      { label: "Analytique web", shortLabel: "Analytique", href: "/admin/technique/analytique", icon: Activity, moduleKey: "analytique-technique" },
     ],
   },
   {

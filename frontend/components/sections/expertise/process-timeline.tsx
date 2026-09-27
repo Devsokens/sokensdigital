@@ -1,12 +1,17 @@
 "use client";
 
 import { motion } from "motion/react";
+import { Check, Workflow } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PageSection } from "@/lib/api/types";
+
+const EASE = [0.16, 1, 0.3, 1] as const;
 
 type Phase = { phase: string; title: string; description: string };
 
 const DEFAULT_TITLE = "Notre Processus";
+const DEFAULT_SUBTITLE =
+  "Une méthode éprouvée, en quatre étapes, pour transformer votre vision en un actif numérique robuste et mesurable.";
 const DEFAULT_PHASES: Phase[] = [
   {
     phase: "Phase 01",
@@ -34,69 +39,97 @@ const DEFAULT_PHASES: Phase[] = [
   },
 ];
 
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
+
 export function ProcessTimeline({ section }: { section?: PageSection | null }) {
   const title = section?.title || DEFAULT_TITLE;
+  const subtitle = section?.subtitle || DEFAULT_SUBTITLE;
   const PHASES: Phase[] = section?.items?.length ? (section.items as Phase[]) : DEFAULT_PHASES;
 
   return (
-    <section className="mx-auto max-w-5xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.5 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] as const }}
-        className="flex flex-col items-center text-center"
-      >
-        <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-          {title}
-        </h2>
-        <span className="mt-3 h-0.5 w-10 rounded-full bg-primary" />
-      </motion.div>
+    <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
+      <div className="grid grid-cols-1 gap-12 lg:grid-cols-[380px_1fr] lg:gap-16">
+        {/* Colonne gauche : reste visible pendant que la timeline défile
+         * (lg:sticky) — sur mobile, elle redevient un simple bloc en tête
+         * de section, la position sticky n'ayant pas grand sens sans place
+         * pour défiler à côté. */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.5 }}
+          transition={{ duration: 0.6, ease: EASE }}
+          className="lg:sticky lg:top-28 lg:self-start"
+        >
+          <h2 className="text-3xl font-extrabold tracking-tight text-primary uppercase sm:text-4xl">
+            {title}
+          </h2>
+          <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted-foreground sm:text-base">
+            {subtitle}
+          </p>
 
-      <div className="relative mt-16">
-        <div className="absolute inset-y-0 left-1/2 hidden w-px -translate-x-1/2 bg-white/10 md:block" />
+          <div className="relative mt-8 overflow-hidden rounded-3xl border border-white/10 bg-card/60 p-8">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -top-10 -right-10 size-40 rounded-full bg-primary/15 blur-3xl"
+            />
+            <span className="relative inline-flex size-14 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+              <Workflow className="size-7" />
+            </span>
+            <p className="relative mt-5 text-sm leading-relaxed text-foreground/80">
+              Chaque étape est cadrée, livrée et validée avant de passer à la
+              suivante — aucune surprise de calendrier ou de périmètre.
+            </p>
+          </div>
+        </motion.div>
 
-        <div className="space-y-8 md:space-y-0">
-          {PHASES.map((phase, i) => {
-            const isLeft = i % 2 === 0;
-            return (
-              <div
-                key={phase.phase}
-                className={cn("relative md:grid md:grid-cols-2 md:gap-x-16", i > 0 && "md:-mt-6")}
-              >
-                <motion.div
-                  initial={{ opacity: 0, y: 24 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, amount: 0.5 }}
-                  transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] as const }}
-                  className={cn("relative", isLeft ? "md:col-start-1" : "md:col-start-2")}
+        {/* Colonne droite : timeline verticale, un repère qui se remplit
+         * (coche) au fil du défilement, à la place des demi-cercles
+         * centrés d'avant qui n'avaient de sens qu'en disposition 2
+         * colonnes symétrique. */}
+        <div className="relative">
+          <div className="absolute top-3 bottom-3 left-3 w-px bg-white/10" />
+
+          {PHASES.map((phase, i) => (
+            <motion.div
+              key={phase.phase || i}
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.5 }}
+              transition={{ duration: 0.6, delay: 0.08, ease: EASE }}
+              className={cn("relative flex gap-5 sm:gap-7", i > 0 && "mt-10 sm:mt-12")}
+            >
+              <div className="relative z-10 mt-1 flex size-6 shrink-0 items-center justify-center rounded-full border border-white/15 bg-background">
+                {/* Vide au repos ; se remplit (coche + fond primaire) une
+                 * fois l'étape défilée dans la vue — le repère "où j'en
+                 * suis" que ne rendait pas le simple point centré d'avant. */}
+                <motion.span
+                  initial={{ scale: 0.4, opacity: 0 }}
+                  whileInView={{ scale: 1, opacity: 1 }}
+                  viewport={{ once: true, amount: 0.6 }}
+                  transition={{ duration: 0.35, delay: 0.15, ease: EASE }}
+                  className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground"
                 >
-                  <div
-                    className={cn(
-                      "rounded-xl border-l-2 border-primary bg-card/60 p-5",
-                      isLeft ? "md:mr-6" : "md:ml-6"
-                    )}
-                  >
-                    <span className="text-[11px] font-semibold tracking-[0.15em] text-primary uppercase">
-                      {phase.phase}
-                    </span>
-                    <h3 className="mt-1.5 text-lg font-semibold text-foreground">
-                      {phase.title}
-                    </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                      {phase.description}
-                    </p>
-                  </div>
-                  <span
-                    className={cn(
-                      "absolute top-8 hidden size-2.5 -translate-y-1/2 rounded-full bg-primary ring-4 ring-background md:block",
-                      isLeft ? "-right-[3.05rem]" : "-left-[3.05rem]"
-                    )}
-                  />
-                </motion.div>
+                  <Check className="size-3.5" />
+                </motion.span>
               </div>
-            );
-          })}
+
+              <div className="flex flex-1 gap-4 sm:gap-6">
+                <span className="text-4xl font-extrabold leading-none tracking-tight text-primary sm:text-5xl">
+                  {pad(i + 1)}
+                </span>
+                <div className="pt-1">
+                  <h3 className="text-lg font-semibold text-foreground sm:text-xl">
+                    {phase.title}
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {phase.description}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          ))}
         </div>
       </div>
     </section>

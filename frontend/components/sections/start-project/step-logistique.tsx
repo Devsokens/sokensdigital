@@ -23,7 +23,7 @@ export function StepLogistique({ data, update, delais, canaux }: Props) {
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_20rem]">
-      <div className="rounded-2xl border border-white/10 bg-card/60 p-6 sm:p-7">
+      <div className="rounded-2xl border border-white/15 bg-card/60 p-6 shadow-sm shadow-black/20 sm:p-7">
         <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
           <Clock className="size-5 text-primary" />
           Détails Logistiques
@@ -90,6 +90,27 @@ export function StepLogistique({ data, update, delais, canaux }: Props) {
               J&apos;accepte les conditions de confidentialité de Soken&apos;s
               Digital pour protéger les données stratégiques échangées.
             </span>
+          </span>
+        </label>
+
+        <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+          <input
+            type="checkbox"
+            checked={data.cguAccepted}
+            onChange={(e) => update({ cguAccepted: e.target.checked })}
+            required
+            className="mt-0.5 size-4 shrink-0 accent-primary"
+          />
+          <span className="text-sm text-foreground">
+            J&apos;ai lu et j&apos;accepte les{" "}
+            <a href="/cgu" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">
+              Conditions Générales d&apos;Utilisation
+            </a>{" "}
+            et les{" "}
+            <a href="/cgv" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">
+              Conditions Générales de Vente
+            </a>{" "}
+            <span className="text-destructive">*</span>
           </span>
         </label>
       </div>

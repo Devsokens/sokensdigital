@@ -34,14 +34,20 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
     { label: "Audit & Sécurité" },
   ],
   legal_links: [
-    { label: "Politique de confidentialité", href: "#" },
-    { label: "Condition d'utilisation", href: "#" },
+    { label: "Politique de confidentialité", href: "/confidentialite" },
+    { label: "Condition d'utilisation", href: "/cgu" },
+    { label: "CGV", href: "/cgv" },
+    { label: "Mentions légales", href: "/mentions-legales" },
   ],
   social_links: [
     { icon: "globe", url: "#" },
     { icon: "at-sign", url: "mailto:contact@sokensdigital.com" },
   ],
   copyright_text: "© 2024 Soken's Digital. Sécurité. Précision. Haute Performance.",
+  cgu_text: "",
+  cgv_text: "",
+  mentions_legales_text: "",
+  politique_confidentialite_text: "",
 };
 
 /** Site-wide header/footer chrome. Falls back to the site's original
@@ -206,6 +212,29 @@ export async function createSupportTicket(data: CreateTicketInput): Promise<{ id
     throw new Error("Impossible d'envoyer le message. Réessaie dans un instant.");
   }
   return response.json();
+}
+
+export interface TestimonialSubmissionInput {
+  name: string;
+  role?: string;
+  company_name?: string;
+  email?: string;
+  quote: string;
+}
+
+/** Client-side call — le bouton "Laisser un témoignage" de l'accueil.
+ * Pas d'authentification : la soumission arrive en EN_ATTENTE côté serveur,
+ * relue à la main par le marketing avant de rejoindre la section publique. */
+export async function submitTestimonial(data: TestimonialSubmissionInput): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/public/testimonials/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    if (response.status === 429) throw new Error("Trop de tentatives. Réessaie dans une minute.");
+    throw new Error("Impossible d'envoyer ton témoignage pour l'instant. Réessaie dans un instant.");
+  }
 }
 
 export async function getSupportTicket(accessToken: string): Promise<PublicTicket> {

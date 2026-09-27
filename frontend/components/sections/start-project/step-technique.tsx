@@ -40,7 +40,7 @@ export function StepTechnique({ data, update, solutions }: Props) {
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_18rem]">
-      <div className="rounded-2xl border border-white/10 bg-card/60 p-6 sm:p-7">
+      <div className="rounded-2xl border border-white/15 bg-card/60 p-6 shadow-sm shadow-black/20 sm:p-7">
         <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
           <Cog className="size-5 text-primary" />
           Configuration Technique

@@ -1,7 +1,9 @@
+import { auth } from "@/lib/firebase/config";
 import { apiFetch } from "@/lib/api/client";
 import type {
   Paginated,
   Project,
+  ProjectDocument,
   ProjectMember,
   ProjectTask,
   ProjectTaskComment,
@@ -9,6 +11,8 @@ import type {
   TeamTimesheetResponse,
   Timesheet,
 } from "@/lib/api/types";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 export function listProjects(params?: { search?: string }) {
   const query = params?.search ? `?search=${encodeURIComponent(params.search)}` : "";
@@ -19,29 +23,27 @@ export function getProject(id: string) {
   return apiFetch<Project>(`/api/v1/projects/${id}/`);
 }
 
-export function createProject(data: {
+export interface ProjectInput {
   name: string;
+  description?: string;
+  cover_image_url?: string;
   start_date?: string;
   end_date?: string;
   budget?: string;
   priority?: string;
   category?: string;
   lead_project_manager_id?: string;
-}) {
+}
+
+export function createProject(data: ProjectInput) {
   return apiFetch<Project>("/api/v1/projects/", {
     method: "POST",
     body: JSON.stringify(data),
   });
 }
 
-export function updateProject(id: string, data: Partial<{
-  name: string;
+export function updateProject(id: string, data: Partial<ProjectInput & {
   status: string;
-  priority: string;
-  category: string;
-  start_date: string;
-  end_date: string;
-  budget: string;
   is_archived: boolean;
   is_locked: boolean;
 }>) {
@@ -65,6 +67,7 @@ export function listProjectTasks(projectId: string) {
 
 export function createProjectTask(projectId: string, data: {
   title: string;
+  description?: string;
   status?: ProjectTaskStatus;
   due_date?: string;
   progress?: number;
@@ -78,6 +81,7 @@ export function createProjectTask(projectId: string, data: {
 
 export function updateProjectTask(projectId: string, taskId: string, data: Partial<{
   title: string;
+  description: string;
   status: ProjectTaskStatus;
   due_date: string | null;
   progress: number;
@@ -143,4 +147,49 @@ export function setTeamTimesheetDayStatus(userId: string, date: string, status: 
     method: "POST",
     body: JSON.stringify({ user_id: userId, date, status }),
   });
+}
+
+export function listProjectDocuments(projectId: string) {
+  return apiFetch<ProjectDocument[]>(`/api/v1/projects/${projectId}/documents/`);
+}
+
+/** Pas apiFetch() — même raison que uploadImage() (lib/api/upload.ts) :
+ * il force Content-Type: application/json, incompatible avec le corps
+ * multipart d'un FormData. */
+export async function uploadProjectDocument(projectId: string, file: File): Promise<ProjectDocument> {
+  const user = auth.currentUser;
+  const token = user ? await user.getIdToken() : null;
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/documents/`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+
+  if (!response.ok) {
+    let detail = `Échec de l'envoi (${response.status})`;
+    try {
+      const body = await response.json();
+      if (body.detail) detail = body.detail;
+    } catch {
+      // pas de corps JSON
+    }
+    throw new Error(detail);
+  }
+
+  return response.json();
+}
+
+export interface ProjectMemberStats {
+  user: { id: string; first_name: string; last_name: string; avatar_url: string | null };
+  tasks_assigned: number;
+  tasks_done: number;
+  hours_logged: number;
+}
+
+export function getProjectStats(projectId: string) {
+  return apiFetch<{ members: ProjectMemberStats[] }>(`/api/v1/projects/${projectId}/stats/`);
 }

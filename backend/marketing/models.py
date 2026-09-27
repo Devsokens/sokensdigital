@@ -165,28 +165,58 @@ class Lead(LoggedModel):
         year = timezone.now().year
         return f'SKN-{year}-{LeadReferenceSequence.next_value(year):04d}'
 
-    # Étapes présentées au client, dans l'ordre. Volontairement plus grossier
-    # que le pipeline commercial interne : le prospect n'a pas à lire nos
-    # statuts de qualification, et « Perdu » ne s'affiche pas comme une étape.
-    TRACKING_STEPS = ['Soumis', 'Analyse', 'Cadrage', 'Proposition', 'Validé']
+    # Étapes présentées au client, dans l'ordre — décision du 13/09/2026 :
+    # alignées 1:1 sur WorkflowStage (ce que Marketing/Technique suivent
+    # réellement au quotidien, voir marketing.workflow), avec un vocabulaire
+    # simplifié pour le grand public plutôt que le jargon interne
+    # ("Cahier des charges prêt" → "Proposition en préparation"). Basé sur
+    # `status` avant ce changement, ce qui pouvait laisser une demande
+    # affichée comme "Nouveau" pendant des semaines alors qu'elle avançait
+    # réellement chez Technique — les deux champs sont indépendants (voir
+    # WorkflowStage plus haut).
+    TRACKING_STEPS = [
+        'Demande reçue',
+        'Analyse en cours',
+        'Proposition en préparation',
+        'Proposition envoyée',
+        'Proposition validée',
+        'Projet en réalisation',
+    ]
+
+    # Ordre d'affichage public — même ordre que WorkflowStage.choices, gardé
+    # explicite ici plutôt que dérivé dynamiquement : un futur réordonnancement
+    # des choices ne doit pas silencieusement dérégler cette liste tournée
+    # vers le client.
+    _WORKFLOW_STAGE_ORDER = [
+        WorkflowStage.SOUMIS,
+        WorkflowStage.CHEZ_TECHNIQUE,
+        WorkflowStage.CDC_PRET,
+        WorkflowStage.SOUMIS_CLIENT,
+        WorkflowStage.VALIDE_CLIENT,
+        WorkflowStage.EN_DEVELOPPEMENT,
+    ]
 
     @property
     def tracking_step_index(self) -> int:
-        return {
-            self.Status.NOUVEAU: 1,
-            self.Status.QUALIFIE: 2,
-            self.Status.PROPOSITION_EN_COURS: 3,
-            self.Status.CONVERTI: 4,
-            self.Status.PERDU: 1,
-        }.get(self.status, 0)
+        try:
+            return self._WORKFLOW_STAGE_ORDER.index(self.workflow_stage)
+        except ValueError:
+            return 0
 
     @property
     def tracking_state_label(self) -> str:
+        # Le rejet (RejectLeadView) clôture via `status`, pas `workflow_stage`
+        # — voir marketing.workflow_views.RejectLeadView — donc ce cas prime
+        # sur l'étape affichée quelle qu'elle soit.
         if self.status == self.Status.PERDU:
             return 'Demande clôturée'
-        if self.status == self.Status.CONVERTI:
-            return 'Projet validé'
-        return f'{self.TRACKING_STEPS[self.tracking_step_index]} en cours'
+        if self.workflow_stage == self.WorkflowStage.EN_DEVELOPPEMENT:
+            return 'Projet en cours de réalisation'
+        # Les libellés de TRACKING_STEPS se lisent déjà comme un état courant
+        # ("Analyse en cours", "Proposition envoyée") — pas de suffixe à
+        # ajouter, contrairement à l'ancienne liste de noms courts qui en
+        # avait besoin ("Soumis" + "en cours").
+        return self.TRACKING_STEPS[self.tracking_step_index]
 
     def __str__(self):
         return f'{self.first_name} {self.last_name} ({self.company_name or "particulier"})'
@@ -381,6 +411,19 @@ class Quote(LoggedModel):
     # fixed palette in the frontend (see COLOR_SWATCHES), stored as the
     # hex value so quote-print-view.tsx doesn't need to know the palette.
     document_color = models.CharField(max_length=7, default='#123f91')
+
+    # Décision du 13/09/2026 : un devis accepté crée automatiquement le
+    # projet correspondant dans le gestionnaire de l'équipe technique (voir
+    # marketing.views.PublicQuoteAcceptView) — string ref vers `projects.Project`
+    # (pas `technique.Project`, l'autre modèle du même nom : c'est celui-là
+    # que lit l'écran "Projets" de Technique, projects.Project a un
+    # lead_project_manager nullable qui permet de créer le projet avant
+    # qu'un chef de projet lui soit assigné). SET_NULL plutôt que CASCADE :
+    # supprimer le devis a posteriori ne doit pas emporter le projet déjà en
+    # cours de réalisation.
+    project = models.ForeignKey(
+        'projects.Project', on_delete=models.SET_NULL, null=True, blank=True, related_name='quotes',
+    )
 
     class Meta(LoggedModel.Meta):
         ordering = ['-created_at']
@@ -677,6 +720,18 @@ class SiteSettings(LoggedModel):
     legal_links = models.JSONField(default=list, blank=True)
     social_links = models.JSONField(default=list, blank=True)
     copyright_text = models.CharField(max_length=255, blank=True)
+
+    # Textes légaux — décision du 13/09/2026 : édités ici plutôt que dans un
+    # PageSection, pour la même raison que le reste de ce modèle (un seul
+    # exemplaire, pas un contenu par page) et pour rester au même endroit
+    # que legal_links, qui pointe déjà vers ces pages publiques. Texte brut
+    # (pas de rich text) : rendu tel quel côté public avec un simple
+    # `whitespace-pre-wrap`, cohérent avec le reste du CMS (Quote.description
+    # notamment) qui ne fait pas non plus de HTML éditable.
+    cgu_text = models.TextField(blank=True, verbose_name="Conditions Générales d'Utilisation")
+    cgv_text = models.TextField(blank=True, verbose_name='Conditions Générales de Vente')
+    mentions_legales_text = models.TextField(blank=True, verbose_name='Mentions légales')
+    politique_confidentialite_text = models.TextField(blank=True, verbose_name='Politique de confidentialité')
 
     def __str__(self):
         return 'Paramètres du site'

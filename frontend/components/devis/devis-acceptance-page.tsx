@@ -7,6 +7,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { Button } from "@/components/ui/button";
 import { SignaturePad, type SignaturePadHandle } from "@/components/signature-pad";
 import { getPublicQuote, acceptPublicQuote } from "@/lib/api/public";
+import { track } from "@/lib/analytics/posthog";
 import { formatFcfa } from "@/lib/format-currency";
 import type { PublicQuote } from "@/lib/api/types";
 
@@ -40,6 +41,7 @@ export function DevisAcceptancePage({ token }: { token: string }) {
     setError(null);
     try {
       setQuote(await acceptPublicQuote(token, signature));
+      track("quote_accepted");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible d'accepter ce devis.");
     } finally {
@@ -158,7 +160,11 @@ export function DevisAcceptancePage({ token }: { token: string }) {
                       onChange={(e) => setChecked(e.target.checked)}
                       className="mt-0.5"
                     />
-                    J&apos;ai lu et j&apos;accepte les termes de ce devis.
+                    J&apos;ai lu et j&apos;accepte les termes de ce devis ainsi que les{" "}
+                    <a href="/cgv" target="_blank" rel="noopener noreferrer" className="underline hover:text-primary">
+                      Conditions Générales de Vente
+                    </a>
+                    .
                   </label>
 
                   <div className="mt-4">

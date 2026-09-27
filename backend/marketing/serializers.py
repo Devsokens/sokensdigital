@@ -258,6 +258,7 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
         fields = [
             'logo_url', 'tagline', 'services_links',
             'legal_links', 'social_links', 'copyright_text',
+            'cgu_text', 'cgv_text', 'mentions_legales_text', 'politique_confidentialite_text',
         ]
 
 
