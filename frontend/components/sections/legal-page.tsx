@@ -1,9 +1,9 @@
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 
-/** Texte brut (pas de rich text côté CMS, voir site-settings-form.tsx) —
- * `whitespace-pre-wrap` reproduit les sauts de ligne saisis dans l'admin
- * sans avoir besoin de parser du Markdown/HTML. */
+/** HTML riche saisi dans l'admin (site-settings-form.tsx, éditeur Tiptap),
+ * nettoyé côté serveur avant stockage (core.sanitize.sanitize_html) — même
+ * frontière de confiance que components/blog/article-content.tsx. */
 export function LegalPage({
   kicker,
   title,
@@ -25,9 +25,10 @@ export function LegalPage({
 
           <div className="mt-10 max-w-3xl">
             {text ? (
-              <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground sm:text-base">
-                {text}
-              </p>
+              <div
+                className="space-y-4 text-sm leading-relaxed text-muted-foreground sm:text-base [&_a]:text-primary [&_a]:underline [&_h2]:pt-2 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:text-foreground [&_h3]:pt-2 [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-foreground [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:leading-relaxed [&_strong]:text-foreground [&_ul]:list-disc [&_ul]:pl-5"
+                dangerouslySetInnerHTML={{ __html: text }}
+              />
             ) : (
               <p className="text-sm text-muted-foreground">{emptyMessage}</p>
             )}

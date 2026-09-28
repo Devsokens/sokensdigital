@@ -193,3 +193,137 @@ def create_notification(
         })
     except Exception:
         logger.exception('Could not create Firestore notification for uid=%s', recipient_uid)
+
+
+# --- Commentaires & likes du blog public (marketing/views.py) ---------------
+#
+# À la différence de create_notification()/upsert_chat_room() ci-dessus, ces
+# fonctions NE swallow PAS leurs exceptions : elles sont appelées depuis une
+# requête publique dont la réponse dépend directement du résultat (un
+# commentaire "enregistré avec succès" qui ne l'a en fait pas été serait pire
+# qu'une erreur 503 explicite). C'est à l'appelant (marketing/views.py) de
+# décider quoi répondre au visiteur si Firestore est indisponible.
+#
+# firestore.rules interdit toute écriture cliente sur `blogComments` et
+# `blogLikes` (allow write: if false) — seul ce module, via l'Admin SDK,
+# peut y écrire. C'est ce qui permet le filtrage anti-spam/anti-injures
+# (marketing.moderation.screen_comment) et la limitation de débit
+# (marketing.ratelimit) à s'appliquer avant tout écriture, sans qu'un appel
+# direct au SDK Firestore côté navigateur puisse les contourner.
+
+def create_blog_comment(slug: str, pseudo: str, text: str, status: str, flag_reason: str | None = None) -> dict:
+    """Crée un commentaire de blog. `status` vaut 'VISIBLE' ou 'MASQUE'
+    (mis en file d'attente par le filtre automatique — voir
+    marketing.moderation.screen_comment)."""
+    from firebase_admin import firestore
+
+    ref = _get_client().collection('blogComments').document()
+    data = {
+        'slug': slug,
+        'pseudo': pseudo,
+        'text': text,
+        'status': status,
+        'flagReason': flag_reason,
+        'reportCount': 0,
+        'createdAt': firestore.SERVER_TIMESTAMP,
+        'moderatedAt': None,
+        'moderatedBy': None,
+    }
+    ref.set(data)
+    return {'id': ref.id, **data, 'createdAt': None}
+
+
+def list_blog_comments(slug: str | None = None, statuses: list[str] | None = None, limit: int = 200) -> list[dict]:
+    """Lit blogComments, du plus récent au plus ancien. Sans `statuses`,
+    retourne tous les statuts (file de modération complète) ; avec
+    `slug` seul (chemin public), l'appelant est censé filtrer sur
+    statuses=['VISIBLE'] pour ne jamais exposer un commentaire masqué."""
+    from firebase_admin import firestore
+
+    query = _get_client().collection('blogComments')
+    if slug:
+        query = query.where('slug', '==', slug)
+    if statuses:
+        query = query.where('status', 'in', list(statuses))
+    query = query.order_by('createdAt', direction=firestore.Query.DESCENDING).limit(limit)
+    return [{'id': doc.id, **doc.to_dict()} for doc in query.stream()]
+
+
+def moderate_blog_comment(comment_id: str, new_status: str, moderator_email: str) -> bool:
+    """Bascule un commentaire en 'VISIBLE' (approuvé) ou 'MASQUE' (retiré).
+    Ne supprime jamais le texte — un modérateur doit pouvoir revenir sur sa
+    décision. Retourne False si le commentaire n'existe plus (déjà
+    supprimé entre-temps)."""
+    from firebase_admin import firestore
+
+    ref = _get_client().collection('blogComments').document(comment_id)
+    if not ref.get().exists:
+        return False
+    ref.update({
+        'status': new_status,
+        'moderatedAt': firestore.SERVER_TIMESTAMP,
+        'moderatedBy': moderator_email,
+    })
+    return True
+
+
+def delete_blog_comment(comment_id: str) -> bool:
+    """Suppression définitive (contenu réellement illégal/nuisible, par
+    opposition à moderate_blog_comment() qui ne fait que masquer)."""
+    ref = _get_client().collection('blogComments').document(comment_id)
+    if not ref.get().exists:
+        return False
+    ref.delete()
+    return True
+
+
+# Au-delà de ce seuil de signalements par les lecteurs, le commentaire est
+# automatiquement masqué en attendant la relecture d'un modérateur — même
+# logique que le filtre à la création, mais déclenchée par le public plutôt
+# que par des motifs de texte.
+REPORT_AUTO_HIDE_THRESHOLD = 3
+
+
+def report_blog_comment(comment_id: str) -> int | None:
+    """Incrémente le compteur de signalements ; masque automatiquement le
+    commentaire au-delà de REPORT_AUTO_HIDE_THRESHOLD. Retourne le nouveau
+    compteur, ou None si le commentaire n'existe pas/plus."""
+    from firebase_admin import firestore
+
+    ref = _get_client().collection('blogComments').document(comment_id)
+    snapshot = ref.get()
+    if not snapshot.exists:
+        return None
+    new_count = (snapshot.to_dict().get('reportCount') or 0) + 1
+    updates: dict = {'reportCount': firestore.Increment(1)}
+    if new_count >= REPORT_AUTO_HIDE_THRESHOLD and snapshot.to_dict().get('status') == 'VISIBLE':
+        updates['status'] = 'MASQUE'
+        updates['flagReason'] = 'SIGNALEMENTS'
+    ref.update(updates)
+    return new_count
+
+
+def get_blog_like_count(slug: str) -> int:
+    snapshot = _get_client().collection('blogLikes').document(slug).get()
+    return int((snapshot.to_dict() or {}).get('count', 0)) if snapshot.exists else 0
+
+
+def adjust_blog_like_count(slug: str, delta: int) -> int:
+    """+1/-1 sur le compteur de likes d'un article, jamais sous zéro — fait
+    dans une transaction pour éviter qu'un double-clic ou deux visiteurs
+    simultanés ne fassent dériver le compteur (lecture-puis-écriture sans
+    transaction serait sujette à une condition de course classique)."""
+    from firebase_admin import firestore
+
+    client = _get_client()
+    ref = client.collection('blogLikes').document(slug)
+
+    @firestore.transactional
+    def _apply(transaction):
+        snapshot = ref.get(transaction=transaction)
+        current = (snapshot.to_dict() or {}).get('count', 0) if snapshot.exists else 0
+        new_value = max(0, current + delta)
+        transaction.set(ref, {'count': new_value}, merge=True)
+        return new_value
+
+    return _apply(client.transaction())

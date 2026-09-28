@@ -196,3 +196,16 @@ class MaintenanceReportViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
         return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        # Pentest du 24/09/2026 (finding #6) : ce même contrôle existait
+        # pour update() mais pas pour destroy() — n'importe quel membre de
+        # l'équipe technique pouvait donc supprimer le rapport de
+        # quelqu'un d'autre.
+        report = self.get_object()
+        if report.performed_by_id != request.user.id and not has_role(request.user, *MAINTENANCE_LEAD_ROLES):
+            return Response(
+                {'detail': "Seul l'auteur du rapport (ou un responsable) peut le supprimer."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return super().destroy(request, *args, **kwargs)

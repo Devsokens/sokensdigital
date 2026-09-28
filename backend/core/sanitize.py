@@ -40,3 +40,15 @@ def sanitize_html(raw_html: str) -> str:
         attributes=ALLOWED_ATTRIBUTES,
         url_schemes=ALLOWED_URL_SCHEMES,
     )
+
+
+def sanitize_plain_text(raw: str) -> str:
+    """Nettoie un champ texte libre saisi par le public (pseudo, commentaire
+    de blog) : aucune balise autorisée, contrairement à sanitize_html — ce
+    contenu n'est jamais injecté en HTML côté client (texte brut React, pas
+    de dangerouslySetInnerHTML), donc pas besoin d'allowlist éditoriale,
+    seulement d'empêcher toute balise de survivre au stockage, en défense
+    en profondeur si un futur affichage venait à changer."""
+    if not raw:
+        return raw
+    return nh3.clean(raw, tags=set(), attributes={}).strip()

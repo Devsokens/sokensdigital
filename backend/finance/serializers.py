@@ -146,6 +146,15 @@ class InvoiceSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Le montant HT doit être positif.')
         return value
 
+    def validate_vat_rate(self, value):
+        # Pentest du 24/09/2026 (F2) : un taux négatif (ex: -0.99) faisait
+        # ressortir un TTC très inférieur au HT — une facture de 1 000 000
+        # HT sortait à 10 000 TTC, sous-facturant le client et rendant la
+        # TVA collectée négative dans la déclaration.
+        if not (0 <= value <= 1):
+            raise serializers.ValidationError('Le taux de TVA doit être compris entre 0 et 1.')
+        return value
+
 
 class BankTransactionSerializer(serializers.ModelSerializer):
     class Meta:

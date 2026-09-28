@@ -3,6 +3,8 @@ export type BlogPost = {
   title: string;
   author: string;
   date: string;
+  /** Date ISO brute (SEO : sitemap, datePublished JSON-LD). */
+  publishedAt?: string | null;
   coverImage?: string;
   /** Plain-text snippet derived from `content`, for card previews. */
   excerpt: string;

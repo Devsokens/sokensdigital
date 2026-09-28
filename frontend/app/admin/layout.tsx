@@ -8,7 +8,9 @@ import { MobileBottomNav } from "@/components/admin/mobile-bottom-nav";
 import { ProfileModalProvider } from "@/lib/admin/profile-modal-context";
 import { ProfileSheet } from "@/components/profile/profile-sheet";
 import { PermissionsProvider } from "@/lib/admin/permissions-context";
-import type { Viewport } from "next";
+import type { Metadata, Viewport } from "next";
+import { ADMIN_THEME_BOOTSTRAP } from "@/lib/admin/admin-theme";
+import { AdminThemeScope } from "@/components/admin/admin-theme-toggle";
 
 import { AdminAccessGuard } from "@/components/admin/admin-access-guard";
 
@@ -31,7 +33,9 @@ import { AdminAccessGuard } from "@/components/admin/admin-access-guard";
  * et elle est présente dès le HTML initial — un effet client aurait laissé
  * un éclair sombre à chaque chargement.
  */
-const ADMIN_SURFACE_CSS = `html:root, html:root body { background-color: #ffffff; }`;
+// var(--color-white) plutôt que #ffffff : en mode sombre, globals.css
+// redéfinit cette variable, et le fond de la racine suit le thème choisi.
+const ADMIN_SURFACE_CSS = `html:root, html:root body { background-color: var(--color-white); }`;
 
 /* La couleur de thème est ce dont le système peint ses propres barres :
  * barre d'état et barre de navigation Android, et les mêmes en PWA
@@ -43,6 +47,12 @@ const ADMIN_SURFACE_CSS = `html:root, html:root body { background-color: #ffffff
  * Un viewport exporté depuis un layout imbriqué remplace celui du parent
  * pour ce segment : l'administration est claire, ses barres système aussi,
  * et la vitrine garde la sienne. */
+// Portail interne : jamais indexé, même si une URL fuite (déjà exclu de
+// robots.txt, doublé ici par une balise noindex sur chaque page).
+export const metadata: Metadata = {
+  robots: { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } },
+};
+
 export const viewport: Viewport = {
   themeColor: "#ffffff",
 };
@@ -51,6 +61,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <AuthProvider>
       <style>{ADMIN_SURFACE_CSS}</style>
+      <script dangerouslySetInnerHTML={{ __html: ADMIN_THEME_BOOTSTRAP }} />
+      <AdminThemeScope />
       <RequireAuth>
         <PermissionsProvider>
           <OnboardingProvider>

@@ -179,6 +179,26 @@ class DisbursementRequestViewSetTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'EXECUTE')
 
+    def test_requester_cannot_approve_own_request_even_as_comptable(self):
+        # Pentest du 24/09/2026 (F1) : quelqu'un qui cumule le rôle Chef de
+        # Projet (demandeur) et Comptable (peut décider au palier RCF) ne
+        # doit jamais pouvoir valider sa propre demande.
+        chef_comptable = User.objects.create(email='chef-compta@sokensdigital.com', first_name='ChefCompta')
+        _give_role(chef_comptable, ROLE_PROJECT_MANAGER)
+        _give_role(chef_comptable, ROLE_COMPTABLE)
+        client = APIClient()
+        client.force_authenticate(user=chef_comptable)
+        project = Project.objects.create(name='Auto-approbation', lead_project_manager=chef_comptable)
+
+        disbursement = DisbursementRequest.objects.create(
+            project=project, requested_by=chef_comptable, amount=1000, beneficiary='X', reason='Y',
+        )
+        response = client.post(
+            f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
+            {'decision': 'APPROUVE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+
     def test_chef_cannot_approve(self):
         disbursement = DisbursementRequest.objects.create(
             project=self.project_a, requested_by=self.chef_a, amount=1000, beneficiary='X', reason='Y',
@@ -424,6 +444,21 @@ class InvoiceViewSetTests(APITestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(Decimal(response.json()['amount_ttc']), Decimal('1180.00'))
         self.assertEqual(response.json()['status'], 'BROUILLON')
+
+    def test_negative_vat_rate_is_refused(self):
+        # Pentest du 24/09/2026 (F2) : un taux négatif faisait ressortir un
+        # TTC très inférieur au HT (1 000 000 HT -> 10 000 TTC avec -0.99),
+        # sous-facturant le client et faussant la TVA collectée.
+        response = self.client_comptable.post('/api/v1/finance/invoices/', {
+            'client_name': 'Acme SARL', 'issue_date': '2026-07-15', 'amount_ht': '1000000', 'vat_rate': '-0.99',
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_vat_rate_over_one_is_refused(self):
+        response = self.client_comptable.post('/api/v1/finance/invoices/', {
+            'client_name': 'Acme SARL', 'issue_date': '2026-07-15', 'amount_ht': '1000', 'vat_rate': '1.5',
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
 
     def test_validate_posts_balanced_journal_entry(self):
         invoice = Invoice.objects.create(client_name='Acme SARL', issue_date=datetime.date(2026, 7, 15), amount_ht=Decimal('1000'))

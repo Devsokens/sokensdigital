@@ -8,8 +8,9 @@ from django.urls import reverse
 from core.models import User, Role
 from core.constants import (
     ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_COMMERCIAL, ROLE_RH_MANAGER,
-    ROLE_DIRECTEUR_FINANCIER,
+    ROLE_DIRECTEUR_FINANCIER, ROLE_CONSULTANT, ROLE_DEVELOPER,
 )
+from administration.models import Client, ContractGenerator
 from .factories import (
     ClientFactory, UserFactory, ContactFactory, ClientDocumentFactory, ClientInteractionFactory,
     EmployeeDocumentFactory, LeaveRequestFactory, CompanyAssetFactory,
@@ -60,8 +61,16 @@ class ClientViewSetTest(APITestCase):
 
 class ClientDocumentViewSetTest(APITestCase):
     def setUp(self):
+        # Un simple utilisateur sans rôle n'a plus aucun accès au fichier
+        # clients depuis le pentest du 24/09/2026 (voir _accessible_clients_qs)
+        # — ce test vérifie le masquage des CONTRAT pour quelqu'un qui VOIT
+        # légitimement ce client (Commercial assigné) mais n'est ni Admin ni
+        # Directeur Financier, pas l'absence totale d'accès (couverte par
+        # test_plain_user_has_no_access_at_all ci-dessous).
+        self.commercial_role = _role(ROLE_COMMERCIAL)
         self.normal_user = UserFactory()
-        self.client_model = ClientFactory()
+        self.normal_user.roles.add(self.commercial_role)
+        self.client_model = ClientFactory(assigned_to=self.normal_user)
         self.doc_contrat = ClientDocumentFactory(client=self.client_model, file_type='CONTRAT')
         self.doc_autre = ClientDocumentFactory(client=self.client_model, file_type='AUTRE_JURIDIQUE')
 
@@ -73,6 +82,17 @@ class ClientDocumentViewSetTest(APITestCase):
         results = response.data['results'] if isinstance(response.data, dict) and 'results' in response.data else response.data
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]['file_type'], 'AUTRE_JURIDIQUE')
+
+    def test_plain_user_has_no_access_at_all(self):
+        # Pentest du 24/09/2026 : un utilisateur sans aucun rôle lisait
+        # auparavant le fichier clients dans son intégralité.
+        outsider = UserFactory()
+        self.client.force_authenticate(user=outsider)
+        url = reverse('client-documents-list', kwargs={'client_pk': self.client_model.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data['results'] if isinstance(response.data, dict) and 'results' in response.data else response.data
+        self.assertEqual(len(results), 0)
 
 class AdditionalViewTests(APITestCase):
     def setUp(self):
@@ -290,3 +310,69 @@ class PayrollValidationViewTests(APITestCase):
         response = self.client.post(url, {'period_month': 1, 'period_year': 2026}, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['imported_count'], 0)
+
+
+class CRMAccessPentestTests(APITestCase):
+    """Régression du pentest du 24/09/2026 — `_accessible_clients_qs`
+    renvoyait TOUS les clients par défaut dès qu'un rôle ne correspondait à
+    aucun des deux cas scopés (Commercial/Chef de Projet), donnant à
+    n'importe quel rôle hors périmètre (voire sans rôle du tout) une lecture
+    intégrale du fichier clients — et les vues rattachées (contacts,
+    interactions, contrats) n'ajoutaient aucun contrôle propre."""
+
+    def setUp(self):
+        self.com_a = UserFactory()
+        self.com_a.roles.add(_role(ROLE_COMMERCIAL))
+        self.com_b = UserFactory()
+        self.com_b.roles.add(_role(ROLE_COMMERCIAL))
+        self.client_a = ClientFactory(assigned_to=self.com_a)
+        self.client_b = ClientFactory(assigned_to=self.com_b)
+
+    def test_consultant_cannot_list_clients(self):
+        consultant = UserFactory()
+        consultant.roles.add(_role(ROLE_CONSULTANT))
+        self.client.force_authenticate(user=consultant)
+        response = self.client.get(reverse('client-list'))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_no_role_cannot_read_client_detail(self):
+        outsider = UserFactory()
+        self.client.force_authenticate(user=outsider)
+        response = self.client.get(reverse('client-detail', kwargs={'pk': self.client_b.pk}))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_developer_cannot_create_contact_on_any_client(self):
+        developer = UserFactory()
+        developer.roles.add(_role(ROLE_DEVELOPER))
+        self.client.force_authenticate(user=developer)
+        response = self.client.post(
+            reverse('client-contacts-list', kwargs={'client_pk': self.client_b.pk}),
+            {'first_name': 'Evil', 'last_name': 'X'},
+        )
+        self.assertIn(response.status_code, (403, 404))
+
+    def test_consultant_cannot_create_interaction_on_any_client(self):
+        consultant = UserFactory()
+        consultant.roles.add(_role(ROLE_CONSULTANT))
+        self.client.force_authenticate(user=consultant)
+        response = self.client.post(
+            reverse('client-interactions-list', kwargs={'client_pk': self.client_b.pk}),
+            {'interaction_type': 'CALL', 'subject': 'x', 'notes': 'x'},
+        )
+        self.assertIn(response.status_code, (403, 404))
+
+    def test_commercial_cannot_archive_own_client_via_patch(self):
+        self.client.force_authenticate(user=self.com_a)
+        self.client.patch(
+            reverse('client-detail', kwargs={'pk': self.client_a.pk}), {'status': 'ARCHIVE'}, format='json',
+        )
+        self.client_a.refresh_from_db()
+        self.assertNotEqual(self.client_a.status, Client.Status.ARCHIVE)
+
+    def test_commercial_cannot_create_contract_on_other_commercials_client(self):
+        self.client.force_authenticate(user=self.com_a)
+        self.client.post(
+            reverse('contract-list'),
+            {'contract_type': 'NDA', 'client': str(self.client_b.pk)}, format='json',
+        )
+        self.assertFalse(ContractGenerator.objects.filter(client=self.client_b).exists())

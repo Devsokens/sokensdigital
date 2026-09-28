@@ -37,6 +37,7 @@ function toPost(p: ApiBlogPost): BlogPost {
     title: p.title,
     author: authorName(p.author),
     date: formatDate(p.published_at),
+    publishedAt: p.published_at,
     coverImage: p.cover_image || undefined,
     excerpt: excerptFromHtml(p.content),
     content: p.content,

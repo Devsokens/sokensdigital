@@ -8,11 +8,15 @@ from marketing.tracking_views import (
 )
 from marketing.workflow_views import LeadWorkflowActionView, RejectLeadView, SubmittedProjectListView
 from marketing.views import (
+    BlogCommentModerationViewSet,
     BlogPostViewSet,
     ImageUploadView,
     LeadViewSet,
     PageSectionViewSet,
+    PublicBlogCommentListCreateView,
+    PublicBlogCommentReportView,
     PublicBlogDetailView,
+    PublicBlogLikeView,
     PublicBlogListView,
     PublicLeadCreateView,
     PublicPageSectionListView,
@@ -41,6 +45,7 @@ router.register('cms/showcase-projects', ShowcaseProjectViewSet, basename='showc
 router.register('social-posts', SocialPostViewSet, basename='social-post')
 router.register('quotes', QuoteViewSet, basename='quote')
 router.register('specifications', SpecificationViewSet, basename='specification')
+router.register('cms/blog-comments', BlogCommentModerationViewSet, basename='blog-comment-moderation')
 
 urlpatterns = [
     path('dashboard/', marketing_dashboard, name='marketing-dashboard'),
@@ -61,6 +66,13 @@ public_urlpatterns = [
     path('leads/', PublicLeadCreateView.as_view(), name='public-lead-create'),
     path('cms/blog/', PublicBlogListView.as_view(), name='public-blog-list'),
     path('cms/blog/<slug:slug>/', PublicBlogDetailView.as_view(), name='public-blog-detail'),
+    path('cms/blog/<slug:slug>/like/', PublicBlogLikeView.as_view(), name='public-blog-like'),
+    path('cms/blog/<slug:slug>/comments/', PublicBlogCommentListCreateView.as_view(), name='public-blog-comments'),
+    path(
+        'cms/blog/<slug:slug>/comments/<str:comment_id>/report/',
+        PublicBlogCommentReportView.as_view(),
+        name='public-blog-comment-report',
+    ),
     path('cms/page-sections/', PublicPageSectionListView.as_view(), name='public-page-sections'),
     path('showcase-projects/', PublicShowcaseProjectListView.as_view(), name='public-showcase-project-list'),
     path('showcase-projects/<slug:slug>/', PublicShowcaseProjectDetailView.as_view(), name='public-showcase-project-detail'),

@@ -3,8 +3,9 @@ import { LoginForm } from "@/components/auth/login-form";
 import { AuthVisualPanel } from "@/components/auth/auth-visual-panel";
 
 export const metadata: Metadata = {
-  title: "Connexion — Soken's Digital",
+  title: "Connexion",
   description: "Accédez à votre espace client Soken's Digital.",
+  robots: { index: false, follow: false },
 };
 
 export default function ConnexionPage() {

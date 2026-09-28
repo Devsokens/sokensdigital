@@ -1,34 +1,30 @@
 import Link from "next/link";
-import { Share2 } from "lucide-react";
 import type { BlogPost } from "@/lib/blog/types";
 import { ProjectCardMedia } from "@/components/projects/card-media";
-import { CopyLinkButton } from "@/components/blog/copy-link-button";
+import { ShareButtons } from "@/components/blog/share-buttons";
 import { NewsletterForm } from "@/components/blog/newsletter-form";
+import { absoluteUrl } from "@/lib/seo/site";
 
 type Props = {
   relatedPosts: BlogPost[];
+  /** Article courant — absent sur les usages génériques de la sidebar,
+   * présent sur la page d'article pour activer le bloc de partage. */
+  currentPost?: BlogPost;
 };
 
-export function ArticleSidebar({ relatedPosts }: Props) {
+export function ArticleSidebar({ relatedPosts, currentPost }: Props) {
   return (
     <aside className="space-y-6">
-      <div>
-        <span className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">
-          Partager cet article
-        </span>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <a
-            href="https://www.linkedin.com/sharing/share-offsite/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
-          >
-            <Share2 className="size-3.5" />
-            LinkedIn
-          </a>
-          <CopyLinkButton />
+      {currentPost && (
+        <div>
+          <span className="text-xs font-semibold tracking-[0.1em] text-muted-foreground uppercase">
+            Partager cet article
+          </span>
+          <div className="mt-3">
+            <ShareButtons url={absoluteUrl(`/blog/${currentPost.slug}`)} title={currentPost.title} />
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="rounded-2xl border border-white/10 bg-card/60 p-5">
         <h3 className="text-base font-semibold text-foreground">Restez Sécurisé</h3>

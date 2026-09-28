@@ -117,10 +117,20 @@ class ProjectViewSet(viewsets.ModelViewSet):
         instance._audit_user = user
         serializer.save()
 
-    @action(detail=True, methods=['post'], url_path='change-status')
+    @action(
+        detail=True, methods=['post'], url_path='change-status',
+        # Pentest du 24/09/2026 (finding #5) : sans permission_classes
+        # propre, cette action retombait sur le défaut IsAuthenticated —
+        # n'importe quel membre simple du projet (développeur compris)
+        # pouvait donc clore ou rouvrir le projet lui-même, pas seulement
+        # ses propres tâches.
+        permission_classes=[permissions.IsAuthenticated, (IsAdmin | IsProjectManager)],
+    )
     def change_status(self, request, pk=None):
         """Change le statut du projet avec audit trail."""
         project = self.get_object()
+        if not _is_project_manager_of(request.user, project.pk):
+            raise PermissionDenied('Vous ne gérez pas ce projet.')
         new_status = request.data.get('status')
         if not new_status:
             return Response(
@@ -239,11 +249,40 @@ class ProjectPhaseViewSet(viewsets.ModelViewSet):
         serializer.save()
 
 
+def _can_access_project(user, project_id):
+    """Même périmètre que ProjectViewSet.get_queryset, pour un seul projet —
+    Admin/Directeur Financier : tout ; Chef de Projet/Développeur : gérant,
+    membre, ou (pour le PM) rien d'autre. Réutilisé par les vues nested
+    (documents, tâches) qui filtraient jusqu'ici par project_pk seul, sans
+    jamais vérifier que CET utilisateur a un rapport avec CE projet
+    (pentest du 24/09/2026)."""
+    if user.roles.filter(name__in=[*ADMIN_ROLES, ROLE_DIRECTEUR_FINANCIER]).exists():
+        return True
+    return Project.objects.filter(
+        models.Q(pk=project_id) & (models.Q(project_manager=user) | models.Q(members=user))
+    ).exists()
+
+
+def _is_project_manager_of(user, project_id):
+    """Admin, ou le Chef de Projet qui gère précisément ce projet — pas
+    n'importe quel Chef de Projet (pentest du 24/09/2026, finding #2)."""
+    if user.roles.filter(name__in=ADMIN_ROLES).exists():
+        return True
+    return Project.objects.filter(pk=project_id, project_manager=user).exists()
+
+
 class ProjectDocumentViewSet(viewsets.ModelViewSet):
     """Documents d'un projet (nested sous /projects/{id}/documents/)."""
     serializer_class = ProjectDocumentSerializer
 
     def get_queryset(self):
+        # Pentest du 24/09/2026 (finding #1) : filtrait uniquement par
+        # project_pk, sans jamais vérifier que l'utilisateur a un rapport
+        # avec ce projet — n'importe quel compte authentifié lisait donc le
+        # cahier des charges et les autres documents de n'importe quel
+        # projet.
+        if not _can_access_project(self.request.user, self.kwargs['project_pk']):
+            return ProjectDocument.objects.none()
         return ProjectDocument.objects.filter(
             project_id=self.kwargs['project_pk']
         )
@@ -254,6 +293,22 @@ class ProjectDocumentViewSet(viewsets.ModelViewSet):
         if self.action in ['update', 'partial_update', 'destroy']:
             return [permissions.IsAuthenticated(), (IsAdmin | IsProjectManager)()]
         return [permissions.IsAuthenticated()]
+
+    def _reject_if_not_managing(self, request):
+        # Pentest du 24/09/2026 (finding #2) : IsProjectManager n'importe
+        # quel Chef de Projet, pas seulement celui qui gère CE projet —
+        # n'importe lequel pouvait donc modifier/supprimer le document d'un
+        # projet qu'il ne gère pas.
+        if not _is_project_manager_of(request.user, self.kwargs['project_pk']):
+            raise PermissionDenied('Vous ne gérez pas ce projet.')
+
+    def update(self, request, *args, **kwargs):
+        self._reject_if_not_managing(request)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        self._reject_if_not_managing(request)
+        return super().destroy(request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         data = _with_injected_fields(request, project=self.kwargs['project_pk'])
@@ -331,6 +386,12 @@ class TaskViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def perform_create(self, serializer):
+        # Pentest du 24/09/2026 (finding #3) : IsProjectManager passait
+        # n'importe quel Chef de Projet, pas seulement celui qui gère ce
+        # projet — n'importe lequel pouvait donc créer des tâches dans le
+        # projet d'un autre.
+        if not _is_project_manager_of(self.request.user, self.kwargs['project_pk']):
+            raise PermissionDenied('Vous ne gérez pas ce projet.')
         serializer.save()
 
     def perform_update(self, serializer):
@@ -387,6 +448,23 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         return [permissions.IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
+        # Pentest du 24/09/2026 (finding #4) : `user` est bien forcé
+        # serveur (pas d'usurpation possible), mais rien ne vérifiait que
+        # l'auteur a un rapport avec le PROJET de la tâche visée — un
+        # développeur totalement extérieur pouvait saisir des heures sur la
+        # tâche de n'importe quel projet, faussant actual_hours et le coût
+        # du projet visé.
+        task = Task.objects.filter(pk=self.kwargs['task_pk']).select_related('project').first()
+        if not task:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        user = request.user
+        is_authorized = (
+            task.assigned_to_id == user.pk
+            or _can_access_project(user, task.project_id)
+        )
+        if not is_authorized:
+            raise PermissionDenied("Vous n'avez pas accès à cette tâche.")
+
         data = _with_injected_fields(
             request, task=self.kwargs['task_pk'], user=request.user.pk,
         )

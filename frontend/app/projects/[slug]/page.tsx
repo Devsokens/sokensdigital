@@ -10,6 +10,9 @@ import { TechnicalSpecs } from "@/components/projects/technical-specs";
 import { ProjectStats } from "@/components/projects/project-stats";
 import { RelatedProjects } from "@/components/projects/related-projects";
 import { getShowcaseProjectBySlug, getShowcaseProjects, getRelatedShowcaseProjects } from "@/lib/projects/public";
+import { pageMetadata } from "@/lib/seo/metadata";
+import { JsonLd } from "@/components/seo/json-ld";
+import { breadcrumbSchema, projectSchema } from "@/lib/seo/structured-data";
 
 export async function generateStaticParams() {
   const projects = await getShowcaseProjects();
@@ -24,10 +27,12 @@ export async function generateMetadata({
   const { slug } = await params;
   const project = await getShowcaseProjectBySlug(slug);
   if (!project) return {};
-  return {
-    title: `${project.title} — Soken's Digital`,
+  return pageMetadata({
+    title: project.title,
     description: project.description,
-  };
+    path: `/projects/${project.slug}`,
+    image: project.images?.[0],
+  });
 }
 
 export default async function ProjectDetailPage({
@@ -46,6 +51,21 @@ export default async function ProjectDetailPage({
 
   return (
     <>
+      <JsonLd
+        data={[
+          projectSchema({
+            title: project.title,
+            description: project.description,
+            path: `/projects/${project.slug}`,
+            image: project.images?.[0],
+          }),
+          breadcrumbSchema([
+            { name: "Accueil", path: "/" },
+            { name: "Projets", path: "/projects" },
+            { name: project.title, path: `/projects/${project.slug}` },
+          ]),
+        ]}
+      />
       <SiteHeader />
       <main className="flex-1">
         <article className="mx-auto max-w-6xl px-4 pt-28 pb-20 sm:px-6 sm:pt-32 sm:pb-24 lg:px-8">

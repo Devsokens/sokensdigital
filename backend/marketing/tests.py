@@ -84,6 +84,40 @@ class PublicLeadCreateTests(APITestCase):
         still_ok = self.client.post('/api/v1/public/leads/', self.valid_payload(), format='json', REMOTE_ADDR='2.2.2.2')
         self.assertEqual(still_ok.status_code, 201)
 
+    def test_spoofed_x_forwarded_for_does_not_bypass_the_rate_limit(self):
+        # Pentest du 24/09/2026 : get_client_ip() lisait la PREMIÈRE entrée
+        # de X-Forwarded-For — entièrement fournie par le client — ce qui
+        # suffisait à contourner toute limite en changeant cette valeur à
+        # chaque appel. Même IP physique (REMOTE_ADDR), en-tête différent.
+        for i in range(3):
+            response = self.client.post(
+                '/api/v1/public/leads/', self.valid_payload(), format='json',
+                REMOTE_ADDR='6.6.6.6', HTTP_X_FORWARDED_FOR=f'10.0.0.{i}',
+            )
+            self.assertEqual(response.status_code, 201)
+        blocked = self.client.post(
+            '/api/v1/public/leads/', self.valid_payload(), format='json',
+            REMOTE_ADDR='6.6.6.6', HTTP_X_FORWARDED_FOR='10.0.0.99',
+        )
+        self.assertEqual(blocked.status_code, 429)
+
+    def test_cf_connecting_ip_is_trusted_over_x_forwarded_for(self):
+        # CF-Connecting-IP est posé par Cloudflare lui-même à partir de la
+        # vraie connexion TCP — un client ne peut pas l'écraser (Cloudflare
+        # remplace toute valeur envoyée par le client avant que Django ne la
+        # voie). C'est donc lui, pas X-Forwarded-For, qui doit décider.
+        for i in range(3):
+            response = self.client.post(
+                '/api/v1/public/leads/', self.valid_payload(), format='json',
+                HTTP_CF_CONNECTING_IP='7.7.7.7', HTTP_X_FORWARDED_FOR=f'10.0.0.{i}',
+            )
+            self.assertEqual(response.status_code, 201)
+        blocked = self.client.post(
+            '/api/v1/public/leads/', self.valid_payload(), format='json',
+            HTTP_CF_CONNECTING_IP='7.7.7.7', HTTP_X_FORWARDED_FOR='10.0.0.99',
+        )
+        self.assertEqual(blocked.status_code, 429)
+
     @patch('marketing.ratelimit.cache.incr', side_effect=ConnectionError('Redis unreachable'))
     def test_submission_still_works_if_cache_backend_is_down(self, mock_incr):
         # is_rate_limited() must fail open — a cache/Redis outage should
@@ -1174,6 +1208,18 @@ class SiteSettingsViewTests(APITestCase):
         response = anon.patch('/api/v1/marketing/cms/site-settings/', {'tagline': 'Hack'}, format='json')
         self.assertIn(response.status_code, (401, 403))
 
+    def test_legal_texts_are_sanitized_html(self):
+        # Passés en rich text (éditeur Tiptap) depuis le 27/09/2026 — un
+        # <script> injecté doit être retiré au stockage, pas seulement à
+        # l'affichage (défense contre XSS stocké, cf. core.sanitize).
+        response = self.client_marketing.patch(
+            '/api/v1/marketing/cms/site-settings/',
+            {'cgu_text': '<p>Bonjour</p><script>alert(1)</script>'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['cgu_text'], '<p>Bonjour</p>')
+
 
 def _mock_response(status_code=200, json_data=None):
     response = Mock()
@@ -1511,3 +1557,199 @@ class SpecificationViewSetTests(APITestCase):
         response = self.client_marketing.get('/api/v1/marketing/specifications/')
         self.assertEqual(response.status_code, 200)
         self.assertNotIn('lines', response.json()['results'][0])
+
+
+class BlogModerationFilterTests(TestCase):
+    """marketing.moderation.screen_comment — pas de dépendance Firestore."""
+
+    def test_flags_insult(self):
+        from marketing.moderation import screen_comment
+        self.assertTrue(screen_comment("Espèce de connard, ton article est nul."))
+
+    def test_flags_raw_link_as_spam(self):
+        from marketing.moderation import screen_comment
+        self.assertTrue(screen_comment("Visitez https://spam.example pour gagner de l'argent"))
+
+    def test_lets_normal_comment_through(self):
+        from marketing.moderation import screen_comment
+        self.assertFalse(screen_comment("Super article, merci pour ces explications claires !"))
+
+
+class PublicBlogCommentTests(APITestCase):
+    """Firestore est mocké au niveau des fonctions importées dans
+    marketing.views — même approche que ProvisionUserViewTests
+    (core/tests.py) pour create_profile."""
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+
+    @patch('marketing.views.create_blog_comment')
+    def test_public_can_post_comment(self, mock_create):
+        mock_create.return_value = {
+            'id': 'abc123', 'slug': 'mon-article', 'pseudo': 'Visiteur42',
+            'text': 'Super article !', 'status': 'VISIBLE', 'flagReason': None,
+            'reportCount': 0, 'createdAt': None, 'moderatedAt': None, 'moderatedBy': None,
+        }
+        response = self.client.post(
+            '/api/v1/public/cms/blog/mon-article/comments/',
+            {'pseudo': 'Visiteur42', 'text': 'Super article !'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['pseudo'], 'Visiteur42')
+        mock_create.assert_called_once_with('mon-article', 'Visiteur42', 'Super article !', 'VISIBLE', None)
+
+    @patch('marketing.views.create_blog_comment')
+    def test_offensive_comment_is_queued_not_published(self, mock_create):
+        mock_create.return_value = {'id': 'x', 'createdAt': None}
+        response = self.client.post(
+            '/api/v1/public/cms/blog/mon-article/comments/',
+            {'pseudo': 'Anonyme', 'text': 'Espèce de connard'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 202)
+        self.assertTrue(response.json()['pending'])
+        mock_create.assert_called_once_with('mon-article', 'Anonyme', 'Espèce de connard', 'MASQUE', 'MOTS_INTERDITS')
+
+    def test_pseudo_too_short_rejected(self):
+        response = self.client.post(
+            '/api/v1/public/cms/blog/mon-article/comments/',
+            {'pseudo': 'A', 'text': 'Commentaire valide.'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_html_in_comment_is_stripped(self):
+        with patch('marketing.views.create_blog_comment') as mock_create:
+            mock_create.return_value = {'id': 'x', 'createdAt': None}
+            self.client.post(
+                '/api/v1/public/cms/blog/mon-article/comments/',
+                {'pseudo': 'Visiteur', 'text': '<script>alert(1)</script>Bonjour'},
+                format='json',
+            )
+            called_text = mock_create.call_args[0][2]
+            self.assertNotIn('<script>', called_text)
+
+    def test_rate_limited_after_too_many_comments(self):
+        with patch('marketing.views.create_blog_comment') as mock_create:
+            mock_create.return_value = {'id': 'x', 'createdAt': None}
+            for _ in range(5):
+                self.client.post(
+                    '/api/v1/public/cms/blog/mon-article/comments/',
+                    {'pseudo': 'Visiteur', 'text': 'Un commentaire tout à fait normal.'},
+                    format='json',
+                )
+            response = self.client.post(
+                '/api/v1/public/cms/blog/mon-article/comments/',
+                {'pseudo': 'Visiteur', 'text': 'Encore un autre commentaire normal.'},
+                format='json',
+            )
+        self.assertEqual(response.status_code, 429)
+
+    @patch('marketing.views.list_blog_comments')
+    def test_public_list_only_requests_visible_status(self, mock_list):
+        mock_list.return_value = []
+        self.client.get('/api/v1/public/cms/blog/mon-article/comments/')
+        mock_list.assert_called_once_with(slug='mon-article', statuses=['VISIBLE'])
+
+    @patch('marketing.views.report_blog_comment')
+    def test_report_comment(self, mock_report):
+        mock_report.return_value = 2
+        response = self.client.post('/api/v1/public/cms/blog/mon-article/comments/abc123/report/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['report_count'], 2)
+
+    @patch('marketing.views.report_blog_comment')
+    def test_report_unknown_comment_404(self, mock_report):
+        mock_report.return_value = None
+        response = self.client.post('/api/v1/public/cms/blog/mon-article/comments/ghost/report/')
+        self.assertEqual(response.status_code, 404)
+
+
+class PublicBlogLikeTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+
+    @patch('marketing.views.get_blog_like_count')
+    def test_get_like_count(self, mock_get):
+        mock_get.return_value = 7
+        response = self.client.get('/api/v1/public/cms/blog/mon-article/like/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['like_count'], 7)
+
+    @patch('marketing.views.adjust_blog_like_count')
+    def test_like_increments(self, mock_adjust):
+        mock_adjust.return_value = 8
+        response = self.client.post('/api/v1/public/cms/blog/mon-article/like/', {'liked': True}, format='json')
+        self.assertEqual(response.status_code, 200)
+        mock_adjust.assert_called_once_with('mon-article', 1)
+
+    @patch('marketing.views.adjust_blog_like_count')
+    def test_unlike_decrements(self, mock_adjust):
+        mock_adjust.return_value = 6
+        response = self.client.post('/api/v1/public/cms/blog/mon-article/like/', {'liked': False}, format='json')
+        self.assertEqual(response.status_code, 200)
+        mock_adjust.assert_called_once_with('mon-article', -1)
+
+
+class BlogCommentModerationViewSetTests(APITestCase):
+    def setUp(self):
+        self.marketing_user = User.objects.create(email='modo-mkt@sokensdigital.com', first_name='Marketing')
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        self.outsider = User.objects.create(email='modo-dev@sokensdigital.com', first_name='Dev')
+        _give_role(self.outsider, ROLE_DEVELOPER)
+        self.client_marketing = APIClient()
+        self.client_marketing.force_authenticate(user=self.marketing_user)
+        self.client_outsider = APIClient()
+        self.client_outsider.force_authenticate(user=self.outsider)
+
+    @patch('marketing.views.list_blog_comments')
+    def test_marketing_can_list_all_statuses(self, mock_list):
+        mock_list.return_value = [{
+            'id': '1', 'slug': 'a', 'pseudo': 'X', 'text': 'insulte', 'status': 'MASQUE',
+            'flagReason': 'MOTS_INTERDITS', 'reportCount': 0, 'createdAt': None,
+            'moderatedAt': None, 'moderatedBy': None,
+        }]
+        response = self.client_marketing.get('/api/v1/marketing/cms/blog-comments/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[0]['status'], 'MASQUE')
+        mock_list.assert_called_once_with(slug=None, statuses=None, limit=500)
+
+    def test_outsider_forbidden(self):
+        response = self.client_outsider.get('/api/v1/marketing/cms/blog-comments/')
+        self.assertEqual(response.status_code, 403)
+
+    def test_anonymous_forbidden(self):
+        response = APIClient().get('/api/v1/marketing/cms/blog-comments/')
+        self.assertIn(response.status_code, (401, 403))
+
+    @patch('marketing.views.moderate_blog_comment')
+    def test_approve_comment(self, mock_moderate):
+        mock_moderate.return_value = True
+        response = self.client_marketing.post(
+            '/api/v1/marketing/cms/blog-comments/abc123/moderate/', {'status': 'VISIBLE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        mock_moderate.assert_called_once_with('abc123', 'VISIBLE', self.marketing_user.email)
+
+    @patch('marketing.views.moderate_blog_comment')
+    def test_invalid_status_rejected(self, mock_moderate):
+        response = self.client_marketing.post(
+            '/api/v1/marketing/cms/blog-comments/abc123/moderate/', {'status': 'AUTRE'}, format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        mock_moderate.assert_not_called()
+
+    @patch('marketing.views.delete_blog_comment')
+    def test_delete_comment(self, mock_delete):
+        mock_delete.return_value = True
+        response = self.client_marketing.delete('/api/v1/marketing/cms/blog-comments/abc123/')
+        self.assertEqual(response.status_code, 204)
+
+    @patch('marketing.views.delete_blog_comment')
+    def test_outsider_cannot_delete_comment(self, mock_delete):
+        response = self.client_outsider.delete('/api/v1/marketing/cms/blog-comments/abc123/')
+        self.assertEqual(response.status_code, 403)
+        mock_delete.assert_not_called()

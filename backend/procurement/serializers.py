@@ -38,10 +38,21 @@ class ProcurementRequestSerializer(serializers.ModelSerializer):
             'created_at'
         ]
         read_only_fields = [
-            'rcf_approved_at', 'rcf_approved_by', 'manager_approved_at',
+            # 'status' ajouté ici suite au pentest du 24/09/2026 (faille P1/P2) :
+            # n'importe quel utilisateur authentifié pouvait créer une fiche
+            # directement au statut APPROUVEE, ou PATCHer celle de quelqu'un
+            # d'autre pour l'approuver soi-même, en envoyant simplement
+            # `status` dans le payload. Le statut ne bouge désormais que via
+            # les actions dédiées (approve_rcf/approve_manager/...) ci-dessous.
+            'status', 'rcf_approved_at', 'rcf_approved_by', 'manager_approved_at',
             'manager_approved_by', 'requested_by_name', 'rcf_approved_by_name',
             'manager_approved_by_name', 'department_name', 'status_display'
         ]
+
+    def validate_estimated_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError('Le montant doit être positif.')
+        return value
 
 
 class SupplierQuoteSerializer(serializers.ModelSerializer):
@@ -70,6 +81,16 @@ class SupplierQuoteSerializer(serializers.ModelSerializer):
     def get_vat_amount(self, obj):
         return obj.amount_ht * obj.vat_rate
 
+    def validate_amount_ht(self, value):
+        if value <= 0:
+            raise serializers.ValidationError('Le montant HT doit être positif.')
+        return value
+
+    def validate_vat_rate(self, value):
+        if not (0 <= value <= 1):
+            raise serializers.ValidationError('Le taux de TVA doit être compris entre 0 et 1.')
+        return value
+
 
 class SupplierInvoiceSerializer(serializers.ModelSerializer):
     supplier_name = serializers.CharField(source='supplier.name', read_only=True)
@@ -89,9 +110,24 @@ class SupplierInvoiceSerializer(serializers.ModelSerializer):
             'validated_by', 'validated_by_name', 'validated_at', 'created_at'
         ]
         read_only_fields = [
-            'amount_ttc', 'received_by_name', 'validated_by_name',
+            # 'status' ajouté suite au pentest du 24/09/2026 (P6) : sans ça,
+            # une facture fournisseur pouvait être créée directement au
+            # statut souhaité par le client plutôt que RECUE (le statut de
+            # départ voulu — validate() ci-dessous est l'unique porte vers
+            # VALIDEE, qui poste une écriture au Grand Livre).
+            'status', 'amount_ttc', 'received_by_name', 'validated_by_name',
             'supplier_name', 'status_display', 'received_at'
         ]
 
     def get_vat_amount(self, obj):
         return obj.amount_ht * obj.vat_rate
+
+    def validate_amount_ht(self, value):
+        if value <= 0:
+            raise serializers.ValidationError('Le montant HT doit être positif.')
+        return value
+
+    def validate_vat_rate(self, value):
+        if not (0 <= value <= 1):
+            raise serializers.ValidationError('Le taux de TVA doit être compris entre 0 et 1.')
+        return value

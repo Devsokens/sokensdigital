@@ -103,6 +103,58 @@ class CashEntryViewSetTests(TreasuryTestBase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_negative_amount_rejected_by_api(self):
+        # Pentest du 24/09/2026 (T1) : un montant négatif était accepté et
+        # faussait le solde de caisse — clean() du modèle n'est jamais
+        # appelée par DRF, seul un validateur de serializer l'empêche.
+        response = self.client_caissier.post('/api/v1/treasury/cash-entries/', {
+            'type': 'SORTIE', 'source': 'DEPENSE_OPERATIONNELLE', 'amount': '-100000', 'date': '2026-08-15',
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_caissier_cannot_forge_reconciliation_on_create(self):
+        # Pentest du 24/09/2026 (T3) : un Caissier pouvait se faire passer
+        # pour rapproché par le Directeur Financier, à la date de son choix,
+        # rendant la pièce immuable sans qu'aucune écriture ne parte au
+        # Grand Livre.
+        response = self.client_caissier.post('/api/v1/treasury/cash-entries/', {
+            'type': 'ENTREE', 'source': 'CLIENT_ESPECES', 'amount': '100', 'date': '2026-08-15',
+            'reconciled_by': str(self.cfo.id), 'reconciled_at': '2026-01-01T00:00:00Z',
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+        entry = CashEntry.objects.get(id=response.json()['id'])
+        self.assertIsNone(entry.reconciled_at)
+        self.assertIsNone(entry.reconciled_by)
+
+    def test_cannot_cash_out_an_unapproved_disbursement(self):
+        # Pentest du 24/09/2026 (T2) : un décaissement jamais approuvé
+        # (encore EN_ATTENTE_RCF par défaut) pouvait être réglé en caisse.
+        disbursement = DisbursementRequest.objects.create(amount=100000, beneficiary='X', reason='Y')
+        response = self.client_caissier.post('/api/v1/treasury/cash-entries/', {
+            'type': 'SORTIE', 'source': 'DEPENSE_OPERATIONNELLE', 'amount': '100000',
+            'date': '2026-08-15', 'disbursement': str(disbursement.id),
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_cannot_cash_out_the_same_disbursement_twice(self):
+        # Même faille (T2) : même approuvé, un décaissement ne doit être
+        # réglé qu'une seule fois — sinon c'est un double paiement réel.
+        disbursement = DisbursementRequest.objects.create(
+            amount=100000, beneficiary='X', reason='Y', status=DisbursementRequest.Status.APPROUVE,
+        )
+        first = self.client_caissier.post('/api/v1/treasury/cash-entries/', {
+            'type': 'SORTIE', 'source': 'DEPENSE_OPERATIONNELLE', 'amount': '100000',
+            'date': '2026-08-15', 'disbursement': str(disbursement.id),
+        }, format='json')
+        self.assertEqual(first.status_code, 201)
+
+        second = self.client_caissier.post('/api/v1/treasury/cash-entries/', {
+            'type': 'SORTIE', 'source': 'DEPENSE_OPERATIONNELLE', 'amount': '100000',
+            'date': '2026-08-15', 'disbursement': str(disbursement.id),
+        }, format='json')
+        self.assertEqual(second.status_code, 400)
+        self.assertEqual(CashEntry.objects.filter(disbursement=disbursement).count(), 1)
+
     def test_reconciled_entry_cannot_be_deleted(self):
         entry = CashEntry.objects.create(
             type=CashEntry.Type.ENTREE, source=CashEntry.Source.CLIENT_ESPECES,

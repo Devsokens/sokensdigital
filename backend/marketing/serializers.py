@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from core.models import User
-from core.sanitize import sanitize_html
+from core.sanitize import sanitize_html, sanitize_plain_text
 from core.serializers import UserBriefSerializer
 from marketing.models import (
     BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject,
@@ -271,6 +271,44 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
             'legal_links', 'social_links', 'copyright_text',
             'cgu_text', 'cgv_text', 'mentions_legales_text', 'politique_confidentialite_text',
         ]
+
+    # Ces 4 champs sont désormais du HTML produit par l'éditeur Tiptap admin
+    # (voir site-settings-form.tsx) et rendu tel quel sur le site public via
+    # dangerouslySetInnerHTML (components/sections/legal-page.tsx) — même
+    # frontière de sécurité que BlogPostSerializer.validate_content
+    # ci-dessus : la restriction de l'éditeur n'en est pas une, un appel API
+    # direct la contournerait entièrement.
+    def validate_cgu_text(self, value):
+        return sanitize_html(value)
+
+    def validate_cgv_text(self, value):
+        return sanitize_html(value)
+
+    def validate_mentions_legales_text(self, value):
+        return sanitize_html(value)
+
+    def validate_politique_confidentialite_text(self, value):
+        return sanitize_html(value)
+
+
+class BlogCommentCreateSerializer(serializers.Serializer):
+    """Commentaire public sur un article de blog — pseudo libre (pas de
+    compte), texte court. Ni l'un ni l'autre n'est du HTML : sanitize_plain_text
+    (dans la vue, après is_valid()) retire toute balise en défense en
+    profondeur, même si le rendu React ne les interprète jamais."""
+
+    pseudo = serializers.CharField(max_length=40, trim_whitespace=True)
+    text = serializers.CharField(max_length=1000, trim_whitespace=True)
+
+    def validate_pseudo(self, value):
+        if len(sanitize_plain_text(value)) < 2:
+            raise serializers.ValidationError('Pseudo trop court (2 caractères minimum).')
+        return value
+
+    def validate_text(self, value):
+        if len(sanitize_plain_text(value)) < 2:
+            raise serializers.ValidationError('Commentaire trop court.')
+        return value
 
 
 class ShowcaseProjectSerializer(serializers.ModelSerializer):

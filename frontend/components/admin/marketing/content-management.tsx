@@ -3,6 +3,7 @@
 import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/ui/tabs";
 import { PageSectionEditor } from "@/components/admin/marketing/page-section-editor";
 import { BlogPostList } from "@/components/admin/marketing/blog-post-list";
+import { CommentModeration } from "@/components/admin/marketing/comment-moderation";
 import { ShowcaseProjectList } from "@/components/admin/marketing/showcase-project-list";
 import { SiteSettingsForm } from "@/components/admin/marketing/site-settings-form";
 
@@ -22,6 +23,7 @@ export function ContentManagement() {
           <TabsTab value="expertise">Expertise</TabsTab>
           <TabsTab value="projets">Projets</TabsTab>
           <TabsTab value="blog">Blog</TabsTab>
+          <TabsTab value="commentaires">Commentaires</TabsTab>
           <TabsTab value="demarrer">Démarrer un projet</TabsTab>
           <TabsTab value="suivi">Suivi de projet</TabsTab>
           <TabsTab value="header-footer">Header & Footer</TabsTab>
@@ -42,6 +44,10 @@ export function ContentManagement() {
 
         <TabsPanel value="blog" className="pt-6">
           <BlogPostList />
+        </TabsPanel>
+
+        <TabsPanel value="commentaires" className="pt-6">
+          <CommentModeration />
         </TabsPanel>
 
         <TabsPanel value="demarrer" className="pt-6">
