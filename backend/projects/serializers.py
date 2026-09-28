@@ -1,7 +1,9 @@
 from rest_framework import serializers
 
 from core.models import User
-from projects.models import Project, ProjectMember, ProjectTask, ProjectTaskComment, Timesheet
+from core.sanitize import sanitize_html
+from core.storage import sign_private_path
+from projects.models import Project, ProjectDocument, ProjectMember, ProjectTask, ProjectTaskComment, Timesheet
 
 
 class ProjectUserBriefSerializer(serializers.ModelSerializer):
@@ -44,7 +46,7 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProjectTask
         fields = [
-            'id', 'title', 'status', 'due_date', 'progress',
+            'id', 'title', 'description', 'status', 'due_date', 'progress',
             'assignees', 'assignee_ids', 'comments_count', 'created_at', 'updated_at',
         ]
 
@@ -54,6 +56,20 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
         return value
 
 
+class ProjectDocumentSerializer(serializers.ModelSerializer):
+    uploaded_by = ProjectUserBriefSerializer(read_only=True)
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProjectDocument
+        fields = ['id', 'original_filename', 'uploaded_by', 'url', 'created_at']
+
+    def get_url(self, obj):
+        # Signée à chaque lecture plutôt que stockée : voir
+        # ProjectDocument.storage_path.
+        return sign_private_path(obj.storage_path)
+
+
 class ProjectSerializer(serializers.ModelSerializer):
     lead_project_manager = ProjectUserBriefSerializer(read_only=True)
     lead_project_manager_id = serializers.PrimaryKeyRelatedField(
@@ -61,6 +77,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         write_only=True, required=False, allow_null=True,
     )
     members = ProjectMemberSerializer(source='memberships', many=True, read_only=True)
+    documents = ProjectDocumentSerializer(many=True, read_only=True)
     is_pinned = serializers.SerializerMethodField()
     tasks_total = serializers.SerializerMethodField()
     tasks_done = serializers.SerializerMethodField()
@@ -68,9 +85,9 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = [
-            'id', 'name', 'status', 'priority', 'category',
+            'id', 'name', 'description', 'cover_image_url', 'status', 'priority', 'category',
             'lead_project_manager', 'lead_project_manager_id',
-            'members', 'start_date', 'end_date', 'budget', 'created_at',
+            'members', 'documents', 'start_date', 'end_date', 'budget', 'created_at',
             'is_archived', 'is_locked', 'is_pinned', 'tasks_total', 'tasks_done',
         ]
 
@@ -88,6 +105,14 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     def get_tasks_done(self, obj):
         return sum(1 for t in obj.tasks.all() if t.status == ProjectTask.Status.TERMINE)
+
+    def validate_description(self, value):
+        # Défense contre XSS stockée : le HTML produit par l'éditeur Tiptap
+        # admin est rendu tel quel côté détail projet
+        # (dangerouslySetInnerHTML) — même raisonnement que
+        # BlogPostSerializer.validate_content, la restriction de l'éditeur
+        # n'étant pas une frontière de sécurité.
+        return sanitize_html(value)
 
     def validate(self, attrs):
         start = attrs.get('start_date', getattr(self.instance, 'start_date', None))

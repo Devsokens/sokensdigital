@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
-from django.db.models import Q
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import Q, Sum
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import mixins, permissions, status, viewsets
@@ -11,11 +12,15 @@ from rest_framework.views import APIView
 from core.firestore_client import set_chat_room_members, upsert_chat_room
 from core.notifications import notify_roles
 from core.permissions import has_role
+from core.storage import upload_project_document
 from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER
-from projects.models import Project, ProjectMember, ProjectTask, ProjectTaskComment, Timesheet
+from projects.emails import (
+    send_project_created_email, send_project_member_added_email, send_task_assigned_email,
+)
+from projects.models import Project, ProjectDocument, ProjectMember, ProjectTask, ProjectTaskComment, Timesheet
 from projects.serializers import (
-    ProjectMemberSerializer, ProjectSerializer, ProjectTaskCommentSerializer, ProjectTaskSerializer,
-    ProjectUserBriefSerializer, TimesheetSerializer,
+    ProjectDocumentSerializer, ProjectMemberSerializer, ProjectSerializer, ProjectTaskCommentSerializer,
+    ProjectTaskSerializer, ProjectUserBriefSerializer, TimesheetSerializer,
 )
 
 MANAGER_ROLES = (ROLE_PROJECT_MANAGER,)
@@ -87,6 +92,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
             link='/admin/technique/projets',
             exclude=self.request.user,
         )
+        # Le chef de projet est prévenu par e-mail dès la création — les
+        # membres d'équipe le sont individuellement à mesure qu'ils sont
+        # ajoutés (add_member ci-dessous), le formulaire de création les
+        # ajoutant chacun dans un appel séparé une fois le projet créé.
+        send_project_created_email(project, to_user=lead)
 
     def perform_destroy(self, instance):
         name = instance.name
@@ -128,8 +138,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
             return Response(status=status.HTTP_403_FORBIDDEN)
         serializer = ProjectMemberSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save(project=project)
+        membership = serializer.save(project=project)
         self._sync_chat_room_members(project)
+        send_project_member_added_email(project, to_user=membership.user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @extend_schema(tags=['Technique & Projets'], summary='Remove a member from the project')
@@ -247,7 +258,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
         if request.method == 'POST':
             serializer = ProjectTaskSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            serializer.save(project=project)
+            task = serializer.save(project=project)
+            for assignee in task.assignees.all():
+                send_task_assigned_email(task, to_user=assignee)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         qs = project.tasks.prefetch_related('assignees')
@@ -277,9 +290,14 @@ class ProjectViewSet(viewsets.ModelViewSet):
             task.delete(user=request.user)
             return Response(status=status.HTTP_204_NO_CONTENT)
 
+        # Assignés avant modification, pour ne notifier par e-mail que les
+        # nouveaux — pas ceux qui étaient déjà sur la tâche.
+        previous_assignee_ids = set(task.assignees.values_list('id', flat=True))
         serializer = ProjectTaskSerializer(task, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        task = serializer.save()
+        for assignee in task.assignees.exclude(id__in=previous_assignee_ids):
+            send_task_assigned_email(task, to_user=assignee)
         return Response(serializer.data)
 
     @extend_schema(
@@ -310,6 +328,71 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
         qs = task.comments.select_related('author')
         return Response(ProjectTaskCommentSerializer(qs, many=True).data)
+
+    @extend_schema(
+        tags=['Technique & Projets'],
+        summary='Upload / list source documents',
+        description='Documents sources du projet (cahier des charges, contrats...) — bucket privé, URL signée à la lecture.',
+        request={'multipart/form-data': {'type': 'object', 'properties': {'file': {'type': 'string', 'format': 'binary'}}}},
+        responses={200: ProjectDocumentSerializer(many=True), 201: ProjectDocumentSerializer},
+    )
+    @action(detail=True, methods=['get', 'post'], url_path='documents', permission_classes=[permissions.IsAuthenticated])
+    def documents(self, request, pk=None):
+        project = self.get_object()
+        if not self._is_project_member(request, project):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        if request.method == 'POST':
+            uploaded = request.FILES.get('file')
+            if not uploaded:
+                return Response({'detail': 'Fichier manquant.'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                storage_path = upload_project_document(uploaded, str(project.id))
+            except DjangoValidationError as exc:
+                return Response({'detail': exc.messages[0] if exc.messages else str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            document = ProjectDocument.objects.create(
+                project=project, storage_path=storage_path,
+                original_filename=uploaded.name, uploaded_by=request.user,
+            )
+            return Response(ProjectDocumentSerializer(document).data, status=status.HTTP_201_CREATED)
+
+        return Response(ProjectDocumentSerializer(project.documents.select_related('uploaded_by'), many=True).data)
+
+    @extend_schema(
+        tags=['Technique & Projets'],
+        summary='Per-member productivity stats',
+        description=(
+            'Pour chaque membre de l\'équipe : tâches assignées/terminées et heures loguées '
+            '(Timesheet) — alimente l\'onglet Statistiques du détail projet.'
+        ),
+    )
+    @action(detail=True, methods=['get'], url_path='stats', permission_classes=[permissions.IsAuthenticated])
+    def stats(self, request, pk=None):
+        project = self.get_object()
+        if not self._is_project_member(request, project):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        tasks = list(project.tasks.prefetch_related('assignees').all())
+        hours_qs = project.timesheets.values('user_id').annotate(total_hours=Sum('hours'))
+        hours_by_user = {row['user_id']: float(row['total_hours'] or 0) for row in hours_qs}
+
+        members = [project.lead_project_manager] if project.lead_project_manager else []
+        members += [m.user for m in project.memberships.select_related('user').all()]
+        seen_ids = set()
+        rows = []
+        for user in members:
+            if not user or user.id in seen_ids:
+                continue
+            seen_ids.add(user.id)
+            assigned = [t for t in tasks if any(a.id == user.id for a in t.assignees.all())]
+            done = [t for t in assigned if t.status == ProjectTask.Status.TERMINE]
+            rows.append({
+                'user': ProjectUserBriefSerializer(user).data,
+                'tasks_assigned': len(assigned),
+                'tasks_done': len(done),
+                'hours_logged': hours_by_user.get(user.id, 0),
+            })
+        return Response({'members': rows})
 
 
 def _visible_projects_for(user):

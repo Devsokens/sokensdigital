@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from projects.models import Project, ProjectMember, ProjectTask, Timesheet
+from projects.models import Project, ProjectDocument, ProjectMember, ProjectTask, Timesheet
 
 
 class ProjectMemberInline(admin.TabularInline):
@@ -14,12 +14,19 @@ class ProjectTaskInline(admin.TabularInline):
     fields = ('title', 'status', 'due_date', 'progress')
 
 
+class ProjectDocumentInline(admin.TabularInline):
+    model = ProjectDocument
+    extra = 0
+    fields = ('original_filename', 'uploaded_by', 'created_at')
+    readonly_fields = ('created_at',)
+
+
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
     list_display = ('name', 'status', 'priority', 'category', 'lead_project_manager', 'is_archived', 'start_date', 'end_date')
     list_filter = ('status', 'priority', 'is_archived', 'is_locked')
     search_fields = ('name', 'category')
-    inlines = [ProjectMemberInline, ProjectTaskInline]
+    inlines = [ProjectMemberInline, ProjectTaskInline, ProjectDocumentInline]
 
 
 @admin.register(Timesheet)

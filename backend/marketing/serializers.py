@@ -6,6 +6,7 @@ from core.serializers import UserBriefSerializer
 from marketing.models import (
     BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject,
     SiteSettings, SocialMediaCredentials, SocialPost, Specification, SpecificationLine,
+    TestimonialSubmission,
 )
 
 
@@ -20,6 +21,16 @@ class LeadPublicCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lead
         fields = ['first_name', 'last_name', 'company_name', 'email', 'phone', 'source', 'message', 'estimated_value']
+
+
+class TestimonialSubmissionPublicCreateSerializer(serializers.ModelSerializer):
+    """Public intake — bouton « Laisser un témoignage » de l'accueil. Pas de
+    `status` : reste EN_ATTENTE par défaut, décidé en revue, jamais par le
+    visiteur lui-même."""
+
+    class Meta:
+        model = TestimonialSubmission
+        fields = ['name', 'role', 'company_name', 'email', 'quote']
 
 
 class LeadSerializer(serializers.ModelSerializer):

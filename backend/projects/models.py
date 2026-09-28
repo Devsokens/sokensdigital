@@ -17,6 +17,12 @@ class Project(LoggedModel):
         HAUTE = 'HAUTE', 'Haute'
 
     name = models.CharField(max_length=255)
+    # HTML riche (Tiptap côté admin, comme BlogPost.content) — pas de
+    # sanitisation ici : seuls des utilisateurs authentifiés avec droit
+    # d'édition du projet peuvent l'écrire, même niveau de confiance que le
+    # reste du CMS interne.
+    description = models.TextField(blank=True)
+    cover_image_url = models.URLField(max_length=1000, blank=True, default='')
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.EN_COURS)
     priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MOYENNE)
     category = models.CharField(max_length=100, blank=True)
@@ -55,6 +61,7 @@ class ProjectTask(LoggedModel):
 
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
     title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.A_FAIRE)
     due_date = models.DateField(null=True, blank=True)
     progress = models.PositiveSmallIntegerField(default=0)
@@ -90,6 +97,28 @@ class ProjectTaskComment(LoggedModel):
 
     def __str__(self):
         return f'{self.author} on {self.task}'
+
+
+class ProjectDocument(LoggedModel):
+    """Document source déposé sur un projet (cahier des charges, maquette,
+    contrat...) — bucket privé `pieces_jointes`, dossier `projets/{project_id}/`
+    (voir core.storage.upload_file). On stocke le CHEMIN de stockage, jamais
+    une URL : une URL signée à l'upload expirerait en silence après
+    LONG_SIGNED_URL_TTL_SECONDS (7 jours) sans que rien ne la renouvelle —
+    le chemin, lui, permet de resigner à la demande à chaque lecture, comme
+    core.storage.SupabasePrivateStorage.url() le fait déjà pour les
+    justificatifs comptables."""
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='documents')
+    storage_path = models.CharField(max_length=500)
+    original_filename = models.CharField(max_length=255)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='+')
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.original_filename} ({self.project})'
 
 
 class ProjectMember(LoggedModel):

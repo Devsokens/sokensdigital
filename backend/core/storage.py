@@ -155,23 +155,49 @@ def _supabase_config() -> tuple[str, str]:
     return url.rstrip('/'), key
 
 
+# Types acceptés par le bucket lui-même, en plus de la validation déjà faite
+# côté serveur (_resolve_upload_type) — les deux tables qui transitent par
+# _upload_bytes vers ce bucket : IMAGE_MIME_BY_EXTENSION et
+# VIDEO_MIME_BY_EXTENSION. Sans ce paramètre à la création, Supabase pose une
+# liste vide par défaut (aucun type autorisé) plutôt que "tout autoriser" —
+# c'est ce qui provoquait le 415 invalid_mime_type sur chaque upload d'image,
+# quel que soit le type, dès que le bucket existait déjà sans cette liste.
+BUCKET_ALLOWED_MIME_TYPES = sorted({*IMAGE_MIME_BY_EXTENSION.values(), *VIDEO_MIME_BY_EXTENSION.values()})
+
+
 def _ensure_bucket() -> None:
     """Idempotent, once per process — creates the public bucket if it
-    doesn't exist yet. Public: these are marketing-site assets (partner
-    logos, team photos) meant to be served directly to site visitors, same
-    trust level as a static image in the frontend repo."""
+    doesn't exist yet, and (re)asserts its allowed MIME types either way,
+    even on an already-existing bucket : une restriction posée à la main
+    dans le tableau de bord Supabase (ou jamais définie à la création)
+    survivait sinon indéfiniment, aucun appel ne la corrigeant plus une fois
+    le bucket créé. Public: these are marketing-site assets (partner logos,
+    team photos) meant to be served directly to site visitors, same trust
+    level as a static image in the frontend repo."""
     global _bucket_ensured
     if _bucket_ensured:
         return
     url, key = _supabase_config()
     headers = {'Authorization': f'Bearer {key}', 'apikey': key}
+    payload = {
+        'id': BUCKET_NAME, 'name': BUCKET_NAME, 'public': True,
+        'allowed_mime_types': BUCKET_ALLOWED_MIME_TYPES,
+    }
     response = _session.post(
-        f'{url}/storage/v1/bucket',
-        json={'id': BUCKET_NAME, 'name': BUCKET_NAME, 'public': True},
-        headers=headers, timeout=10,
+        f'{url}/storage/v1/bucket', json=payload, headers=headers, timeout=10,
     )
-    if response.status_code not in (200, 201) and 'already exists' not in response.text:
-        logger.warning('Could not ensure Supabase bucket %s: %s', BUCKET_NAME, response.text)
+    if response.status_code not in (200, 201):
+        if 'already exists' not in response.text:
+            logger.warning('Could not create Supabase bucket %s: %s', BUCKET_NAME, response.text)
+        # Bucket déjà là — POST ne le met pas à jour, il faut un PUT explicite
+        # pour corriger une liste de types restée vide ou trop étroite.
+        update = _session.put(
+            f'{url}/storage/v1/bucket/{BUCKET_NAME}',
+            json={'public': True, 'allowed_mime_types': BUCKET_ALLOWED_MIME_TYPES},
+            headers=headers, timeout=10,
+        )
+        if update.status_code not in (200, 201):
+            logger.warning('Could not update Supabase bucket %s: %s', BUCKET_NAME, update.text)
     _bucket_ensured = True
 
 
@@ -451,6 +477,29 @@ PRIVATE_BUCKET_NAME = 'documents'
 # Durée d'une URL signée. Assez pour ouvrir ou télécharger la pièce depuis
 # l'interface, trop court pour qu'un lien copié dans un e-mail reste utile.
 SIGNED_URL_TTL_SECONDS = 300
+
+
+def upload_project_document(file, project_id: str) -> str:
+    """Téléverse un document source de projet (cahier des charges, maquette,
+    contrat...) dans le bucket privé `pieces_jointes`, dossier
+    `projets/{project_id}/` — retourne le CHEMIN de stockage, jamais une URL :
+    voir ProjectDocument.storage_path (backend/projects/models.py) pour le
+    raisonnement (une URL signée à l'upload expirerait en silence après
+    LONG_SIGNED_URL_TTL_SECONDS, sans qu'aucun job ne la renouvelle)."""
+    extension, content_type = _resolve_upload_type(file, ADMIN_ATTACHMENT_MIME_BY_EXTENSION)
+    if file.size > MAX_ATTACHMENT_SIZE:
+        raise ValidationError('Le fichier dépasse la taille maximale autorisée (15 Mo).')
+    return _upload_to_private_bucket(
+        ATTACHMENTS_BUCKET_NAME, file.read(), content_type, extension, f'projets/{project_id}',
+    )
+
+
+def sign_private_path(path: str, ttl_seconds: int = SIGNED_URL_TTL_SECONDS) -> str:
+    """Signe à la demande un chemin du bucket `pieces_jointes` — pour tout
+    objet dont le chemin (pas une URL) est gardé en base, comme
+    ProjectDocument.storage_path, pour pouvoir le resigner indéfiniment
+    plutôt que de dépendre d'une URL figée à l'upload."""
+    return _sign_private_url(ATTACHMENTS_BUCKET_NAME, path, ttl_seconds)
 
 # Type MIME deduit de l'extension, cote serveur. `UploadedFile.content_type`
 # est l'en-tete multipart envoye par le client : Django ne le valide pas et

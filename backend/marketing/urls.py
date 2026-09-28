@@ -21,6 +21,7 @@ from marketing.views import (
     PublicShowcaseProjectDetailView,
     PublicShowcaseProjectListView,
     PublicSiteSettingsView,
+    PublicTestimonialSubmitView,
     QuoteSettingsView,
     QuoteViewSet,
     ShowcaseProjectViewSet,
@@ -66,4 +67,5 @@ public_urlpatterns = [
     path('quotes/track/<uuid:tracking_token>/', PublicQuoteTrackView.as_view(), name='public-quote-track'),
     path('quotes/track/<uuid:tracking_token>/accept/', PublicQuoteAcceptView.as_view(), name='public-quote-accept'),
     path('site-settings/', PublicSiteSettingsView.as_view(), name='public-site-settings'),
+    path('testimonials/', PublicTestimonialSubmitView.as_view(), name='public-testimonial-submit'),
 ]

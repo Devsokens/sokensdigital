@@ -23,7 +23,7 @@ from core.permissions import has_role
 from core.storage import upload_image, upload_video
 from marketing.models import (
     BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject,
-    SiteSettings, SocialMediaCredentials, SocialPost, Specification,
+    SiteSettings, SocialMediaCredentials, SocialPost, Specification, TestimonialSubmission,
 )
 from marketing.emails import send_lead_acknowledgement
 from marketing.ratelimit import get_client_ip, is_rate_limited
@@ -44,6 +44,7 @@ from marketing.serializers import (
     SocialPostSerializer,
     SpecificationListSerializer,
     SpecificationSerializer,
+    TestimonialSubmissionPublicCreateSerializer,
 )
 
 MARKETING_ROLES = (ROLE_RESPONSABLE_MARKETING,)
@@ -57,6 +58,9 @@ SPECIFICATION_ROLES = (ROLE_RESPONSABLE_MARKETING, ROLE_PROJECT_MANAGER, ROLE_DE
 
 PUBLIC_LEAD_RATE_LIMIT = 3  # per IP
 PUBLIC_LEAD_RATE_WINDOW = 60  # seconds
+
+PUBLIC_TESTIMONIAL_RATE_LIMIT = 3  # per IP
+PUBLIC_TESTIMONIAL_RATE_WINDOW = 60  # seconds
 
 
 @extend_schema(
@@ -110,6 +114,51 @@ class PublicLeadCreateView(APIView):
         data = dict(serializer.data)
         data['tracking_reference'] = lead.tracking_reference
         return Response(data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(
+    tags=['Marketing & Commercial'],
+    summary='Submit a testimonial (public site form)',
+    description=(
+        "Public — no auth. Rate-limited to 3 requests/minute/IP (Redis-backed "
+        "fixed window). Stored as EN_ATTENTE — nothing is published automatically; "
+        "Marketing reviews submissions in the Django admin and, if approved, copies "
+        "the quote by hand into PageSection(section_key=TESTIMONIALS).items."
+    ),
+    request=TestimonialSubmissionPublicCreateSerializer,
+    responses={201: None, 429: None},
+)
+class PublicTestimonialSubmitView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        ip = get_client_ip(request)
+        if is_rate_limited(f'testimonialrate:{ip}', PUBLIC_TESTIMONIAL_RATE_LIMIT, PUBLIC_TESTIMONIAL_RATE_WINDOW):
+            return Response(
+                {'detail': 'Trop de requêtes. Réessayez dans une minute.'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        serializer = TestimonialSubmissionPublicCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        submission = serializer.save()
+
+        notify_roles(
+            MARKETING_ROLES,
+            title='Nouveau témoignage à valider',
+            message=(
+                f'{submission.name} a laissé un témoignage depuis le site public. '
+                "À valider dans l'admin Django avant de l'ajouter à la section "
+                "Témoignages de l'accueil."
+            ),
+            notification_type='GENERAL',
+            link='/admin/marketing/dashboard',
+        )
+
+        return Response(
+            {'detail': 'Merci ! Ton témoignage a bien été reçu et sera examiné par notre équipe.'},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class IsMarketingOrOwnCommercial(permissions.BasePermission):

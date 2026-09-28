@@ -773,3 +773,38 @@ class QuoteSettings(LoggedModel):
     def load(cls) -> 'QuoteSettings':
         obj = cls.objects.first()
         return obj if obj is not None else cls.objects.create()
+
+
+class TestimonialSubmission(models.Model):
+    """Témoignage envoyé depuis le formulaire public de l'accueil (bouton
+    « Laisser un témoignage »). Reste en EN_ATTENTE jusqu'à revue manuelle
+    par le marketing (notifié à la création, cf. views.PublicTestimonialSubmitView)
+    — rien ne s'affiche seul sur le site : un admin qui approuve recopie la
+    citation à la main dans PageSection(section_key=TESTIMONIALS).items via
+    l'éditeur de section existant. Pas de FK vers PageSection : ce n'est pas
+    du contenu structuré du site, mais une boîte de réception à trier, comme
+    Lead pour les demandes de devis."""
+
+    class Status(models.TextChoices):
+        EN_ATTENTE = 'EN_ATTENTE', 'En attente'
+        APPROUVE = 'APPROUVE', 'Approuvé'
+        REJETE = 'REJETE', 'Rejeté'
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    name = models.CharField(max_length=255)
+    role = models.CharField(max_length=255, blank=True)
+    company_name = models.CharField(max_length=255, blank=True)
+    email = models.EmailField(blank=True)
+    quote = models.TextField()
+    status = models.CharField(max_length=15, choices=Status.choices, default=Status.EN_ATTENTE)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['created_at']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return f'{self.name} — {self.get_status_display()}'

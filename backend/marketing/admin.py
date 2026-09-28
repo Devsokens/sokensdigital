@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, SocialPost
+from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, SocialPost, TestimonialSubmission
 
 
 @admin.register(Lead)
@@ -43,3 +43,11 @@ class QuoteAdmin(admin.ModelAdmin):
     list_filter = ('status',)
     search_fields = ('quote_number',)
     inlines = [QuoteLineInline]
+
+
+@admin.register(TestimonialSubmission)
+class TestimonialSubmissionAdmin(admin.ModelAdmin):
+    list_display = ('name', 'role', 'company_name', 'status', 'created_at')
+    list_filter = ('status',)
+    search_fields = ('name', 'company_name', 'email', 'quote')
+    readonly_fields = ('created_at',)
