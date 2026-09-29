@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { cardClass } from "@/components/admin/form-styles";
 import { getFinanceDashboard } from "@/lib/api/finance";
+import { formatFcfa } from "@/lib/format-currency";
 import type { FinanceDashboard as FinanceDashboardData } from "@/lib/api/types";
 
 export function FinanceDashboard() {
@@ -40,7 +41,7 @@ export function FinanceDashboard() {
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div data-tour="module-finance-dashboard" className={cardClass}>
           <p className="text-xs text-neutral-500">Trésorerie brute (compte 512)</p>
-          <p className="mt-1 text-2xl font-semibold text-neutral-900">{data.cash_balance} €</p>
+          <p className="mt-1 text-2xl font-semibold text-neutral-900">{formatFcfa(data.cash_balance)}</p>
         </div>
         <div className={cardClass}>
           <p className="text-xs text-neutral-500">Résultat brut (produits − charges)</p>

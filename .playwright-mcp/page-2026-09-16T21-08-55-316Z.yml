@@ -1,0 +1,121 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - link [ref=e4] [cursor=pointer]:
+        - /url: /
+        - img "Soken's Digital" [ref=e5]
+      - navigation [ref=e6]:
+        - link "Accueil" [ref=e7] [cursor=pointer]:
+          - /url: /
+        - link "Expertise" [ref=e8] [cursor=pointer]:
+          - /url: /expertise
+        - link "Projets" [ref=e9] [cursor=pointer]:
+          - /url: /projects
+        - link "Blog" [ref=e10] [cursor=pointer]:
+          - /url: /blog
+        - link "contact" [ref=e11] [cursor=pointer]:
+          - /url: "#contact"
+      - button "Démarrer un Projet" [ref=e13] [cursor=pointer]
+  - main [ref=e14]:
+    - generic [ref=e345]:
+      - heading "Demande Envoyée avec Succès !" [level=1] [ref=e349]
+      - paragraph [ref=e350]: Merci de nous avoir fait confiance. Nos experts analysent déjà votre projet pour définir la stratégie technologique la plus performante.
+      - generic [ref=e351]:
+        - generic [ref=e352]:
+          - text: Récapitulatif
+          - paragraph [ref=e353]: Votre Projet
+          - generic [ref=e354]:
+            - generic [ref=e355]:
+              - generic [ref=e356]: Référence
+              - generic [ref=e357]: SKN-2026-0008
+              - generic [ref=e358]: Gardez ce code pour le suivi
+            - generic [ref=e359]:
+              - generic [ref=e360]: Délai estimé
+              - generic [ref=e361]: Moins de 24 heures
+        - generic [ref=e362]:
+          - paragraph [ref=e366]: "Statut : Sécurisé"
+          - paragraph [ref=e367]: Votre demande a été cryptée et transmise à notre cellule d'analyse.
+      - generic [ref=e368]:
+        - heading "Prochaines Étapes" [level=3] [ref=e369]
+        - list [ref=e375]:
+          - listitem [ref=e376]:
+            - generic [ref=e377]: "1"
+            - generic [ref=e378]:
+              - paragraph [ref=e379]: Analyse technique approfondie
+              - paragraph [ref=e380]: Nos ingénieurs examinent vos spécifications pour valider la faisabilité technique.
+          - listitem [ref=e381]:
+            - generic [ref=e382]: "2"
+            - generic [ref=e383]:
+              - paragraph [ref=e384]: Session de cadrage (Workshop)
+              - paragraph [ref=e385]: Un consultant senior vous contactera pour planifier un appel de 45 minutes.
+          - listitem [ref=e386]:
+            - generic [ref=e387]: "3"
+            - generic [ref=e388]:
+              - paragraph [ref=e389]: Proposition finale & Kick-off
+              - paragraph [ref=e390]: Validation du devis détaillé et lancement de la phase de développement agile.
+      - generic [ref=e391]:
+        - button "Retour à l'Accueil" [ref=e392] [cursor=pointer]
+        - button "Suivre l'avancement avec mon code" [ref=e393] [cursor=pointer]
+        - button "Consulter nos Insights" [ref=e394] [cursor=pointer]
+  - contentinfo [ref=e119]:
+    - generic [ref=e121]:
+      - generic [ref=e122]:
+        - link [ref=e123] [cursor=pointer]:
+          - /url: /connexion
+          - img "Soken's Digital" [ref=e124]
+        - paragraph [ref=e125]: Architectes de solutions numériques haute performance. Sécurité. Précision. Innovation.
+        - generic [ref=e126]:
+          - link "globe" [ref=e127] [cursor=pointer]:
+            - /url: "#"
+          - link "at-sign" [ref=e128] [cursor=pointer]:
+            - /url: mailto:contact@sokensdigital.com
+      - generic [ref=e129]:
+        - heading "Services" [level=3] [ref=e130]
+        - list [ref=e131]:
+          - listitem [ref=e132]:
+            - link "Logiciel client" [ref=e133] [cursor=pointer]:
+              - /url: "#expertise"
+          - listitem [ref=e134]:
+            - link "App Web & Mobile" [ref=e135] [cursor=pointer]:
+              - /url: "#expertise"
+          - listitem [ref=e136]:
+            - link "Digitalisation" [ref=e137] [cursor=pointer]:
+              - /url: "#expertise"
+          - listitem [ref=e138]:
+            - link "Audit & Sécurité" [ref=e139] [cursor=pointer]:
+              - /url: "#expertise"
+      - generic [ref=e140]:
+        - heading "Navigation" [level=3] [ref=e141]
+        - list [ref=e142]:
+          - listitem [ref=e143]:
+            - link "Accueil" [ref=e144] [cursor=pointer]:
+              - /url: /
+          - listitem [ref=e145]:
+            - link "Expertise" [ref=e146] [cursor=pointer]:
+              - /url: /expertise
+          - listitem [ref=e147]:
+            - link "Projets" [ref=e148] [cursor=pointer]:
+              - /url: /projects
+          - listitem [ref=e149]:
+            - link "Blog" [ref=e150] [cursor=pointer]:
+              - /url: /blog
+          - listitem [ref=e151]:
+            - link "contact" [ref=e152] [cursor=pointer]:
+              - /url: "#contact"
+      - generic [ref=e153]:
+        - heading "Légal" [level=3] [ref=e154]
+        - list [ref=e155]:
+          - listitem [ref=e156]:
+            - link "Politique de confidentialité" [ref=e157] [cursor=pointer]:
+              - /url: "#"
+          - listitem [ref=e158]:
+            - link "Condition d'utilisation" [ref=e159] [cursor=pointer]:
+              - /url: "#"
+          - listitem [ref=e160]:
+            - link "Suivre un projet" [ref=e161] [cursor=pointer]:
+              - /url: /suivi-projet
+    - generic [ref=e163]:
+      - paragraph [ref=e164]: © 2024 Soken's Digital. Sécurité. Précision. Haute Performance.
+      - paragraph [ref=e165]: Tous les systèmes sont opérationnels
+  - button "Ouvrir le chat" [ref=e168]
+  - alert [ref=e187]
