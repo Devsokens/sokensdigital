@@ -1,3 +1,4 @@
+import { auth } from "@/lib/firebase/config";
 import { apiFetch } from "@/lib/api/client";
 import type {
   Client,
@@ -11,6 +12,8 @@ import type {
 // every other app (backend/sokens_backend/urls.py:33) — not our
 // convention to fix here, just the endpoint as it actually exists.
 const BASE = "/api/administration";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 export interface ClientInput {
   company_name: string;
@@ -93,14 +96,42 @@ export function listClientDocuments(clientId: string) {
   return apiFetch<Paginated<ClientDocumentEntry>>(`${BASE}/clients/${clientId}/documents/`);
 }
 
-export function createClientDocument(
+/** Multipart, pas apiFetch() (qui force Content-Type: application/json) —
+ * le fichier est envoyé directement à cet endpoint, qui fait l'upload
+ * lui-même côté serveur (core.storage.upload_client_document) et retourne
+ * le document avec une URL signée à la demande. Avant, le fichier était
+ * uploadé à part via uploadChatFile() puis son URL signée postée comme
+ * file_path — cette URL expirait en silence après 7 jours. */
+export async function createClientDocument(
   clientId: string,
-  data: { name: string; file_path: string; file_type: string; is_sensitive?: boolean }
-) {
-  return apiFetch<ClientDocumentEntry>(`${BASE}/clients/${clientId}/documents/`, {
+  file: File,
+  data: { name?: string; file_type: string; is_sensitive?: boolean }
+): Promise<ClientDocumentEntry> {
+  const user = auth.currentUser;
+  const token = user ? await user.getIdToken() : null;
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("file_type", data.file_type);
+  if (data.name) formData.append("name", data.name);
+  if (data.is_sensitive) formData.append("is_sensitive", "true");
+
+  const response = await fetch(`${API_BASE_URL}${BASE}/clients/${clientId}/documents/`, {
     method: "POST",
-    body: JSON.stringify(data),
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
   });
+  if (!response.ok) {
+    let detail = `Échec de l'envoi (${response.status})`;
+    try {
+      const body = await response.json();
+      if (body.detail) detail = body.detail;
+    } catch {
+      // pas de corps JSON
+    }
+    throw new Error(detail);
+  }
+  return response.json();
 }
 
 export function deleteClientDocument(clientId: string, documentId: string) {

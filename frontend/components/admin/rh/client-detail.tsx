@@ -15,7 +15,6 @@ import {
   deleteClientDocument,
 } from "@/lib/api/administration";
 import { listUsers } from "@/lib/api/hr";
-import { uploadChatFile } from "@/lib/api/upload";
 import type { Client, ClientContact, ClientDocumentEntry, ClientInteractionEntry, ClientStatus, UserBrief } from "@/lib/api/types";
 import { ClientFormModal } from "@/components/admin/rh/client-form-modal";
 import { ConfirmModal } from "@/components/admin/confirm-modal";
@@ -329,8 +328,7 @@ function DocumentsPanel({ clientId, documents, onChange }: { clientId: string; d
     setUploading(true);
     setError(null);
     try {
-      const url = await uploadChatFile(file);
-      await createClientDocument(clientId, { name: file.name, file_path: url, file_type: fileType });
+      await createClientDocument(clientId, file, { name: file.name, file_type: fileType });
       onChange();
     } catch {
       setError("Échec de l'upload.");
@@ -344,7 +342,7 @@ function DocumentsPanel({ clientId, documents, onChange }: { clientId: string; d
     <div className="space-y-3">
       {documents.map((doc) => (
         <div key={doc.id} className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white p-4">
-          <a href={doc.file_path} target="_blank" rel="noreferrer" className="flex items-center gap-2.5 text-sm text-neutral-900 hover:text-primary">
+          <a href={doc.url} target="_blank" rel="noreferrer" className="flex items-center gap-2.5 text-sm text-neutral-900 hover:text-primary">
             <FileText className="size-4 text-neutral-400" />
             <span>{doc.name}</span>
             <span className="rounded-md bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">{DOCUMENT_TYPE_LABELS[doc.file_type] ?? doc.file_type}</span>

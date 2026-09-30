@@ -90,7 +90,7 @@ export interface ClientDocumentEntry {
   id: string;
   client: string;
   name: string;
-  file_path: string;
+  url: string;
   file_type: ClientDocumentType;
   uploaded_by: string | null;
   is_sensitive: boolean;

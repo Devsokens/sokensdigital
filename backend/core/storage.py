@@ -494,6 +494,23 @@ def upload_project_document(file, project_id: str) -> str:
     )
 
 
+def upload_client_document(file, client_id: str) -> str:
+    """Téléverse un document de référence client (contrat, devis, facture...)
+    dans le bucket privé `pieces_jointes`, dossier `clients/{client_id}/` —
+    retourne le CHEMIN de stockage, jamais une URL. Même raisonnement que
+    upload_project_document : ClientDocument.file_path stockait jusqu'ici
+    l'URL signée renvoyée par le upload générique (core.storage.upload_file,
+    via l'endpoint pièce-jointe chat) — une URL figée qui expire en silence
+    après LONG_SIGNED_URL_TTL_SECONDS (7 jours), sans qu'aucun job ne la
+    renouvelle."""
+    extension, content_type = _resolve_upload_type(file, ADMIN_ATTACHMENT_MIME_BY_EXTENSION)
+    if file.size > MAX_ATTACHMENT_SIZE:
+        raise ValidationError('Le fichier dépasse la taille maximale autorisée (15 Mo).')
+    return _upload_to_private_bucket(
+        ATTACHMENTS_BUCKET_NAME, file.read(), content_type, extension, f'clients/{client_id}',
+    )
+
+
 def sign_private_path(path: str, ttl_seconds: int = SIGNED_URL_TTL_SECONDS) -> str:
     """Signe à la demande un chemin du bucket `pieces_jointes` — pour tout
     objet dont le chemin (pas une URL) est gardé en base, comme

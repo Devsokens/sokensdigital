@@ -2,9 +2,11 @@ import hashlib
 import hmac
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -12,6 +14,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from core.models import AuditLog, Notification
+from core.storage import upload_client_document
 from core.constants import (
     ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PROJECT_MANAGER,
     ROLE_DEVELOPER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMMERCIAL,
@@ -226,8 +229,18 @@ class ClientDocumentViewSet(viewsets.ModelViewSet):
     Documents clients (nested sous /clients/{id}/documents/).
 
     Les documents de type CONTRAT sont masqués aux rôles non autorisés.
+
+    create() est entièrement réécrit : avant, le client uploadait le fichier
+    à part (endpoint générique pièce-jointe chat) puis postait l'URL signée
+    obtenue comme `file_path` — cette URL expirait en silence après 7 jours
+    (LONG_SIGNED_URL_TTL_SECONDS), sans renouvellement. Le fichier est
+    maintenant reçu ici directement (multipart), stocké via
+    core.storage.upload_client_document (qui retourne un CHEMIN, pas une
+    URL), resigné à la demande par ClientDocumentSerializer.get_url — même
+    principe que ProjectDocument (backend/projects/).
     """
     serializer_class = ClientDocumentSerializer
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
@@ -265,13 +278,33 @@ class ClientDocumentViewSet(viewsets.ModelViewSet):
             "Les commerciaux ne peuvent ajouter que des documents de type DEVIS."
         )
 
-    def perform_create(self, serializer):
+    def create(self, request, *args, **kwargs):
         client_pk = self.kwargs.get('client_pk')
-        if not _accessible_clients_qs(self.request.user).filter(pk=client_pk).exists():
+        if not _accessible_clients_qs(request.user).filter(pk=client_pk).exists():
             raise PermissionDenied("Vous n'avez pas accès à ce client.")
-        self._check_write_scope(serializer.validated_data.get('file_type'))
+
+        file_type = request.data.get('file_type')
+        self._check_write_scope(file_type)
+
+        uploaded = request.FILES.get('file')
+        if not uploaded:
+            return Response({'detail': 'Fichier manquant.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            storage_path = upload_client_document(uploaded, client_pk)
+        except DjangoValidationError as exc:
+            return Response({'detail': exc.messages[0] if exc.messages else str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
         client = get_object_or_404(Client, pk=client_pk)
-        serializer.save(client=client, uploaded_by=self.request.user)
+        is_sensitive = str(request.data.get('is_sensitive', '')).lower() in ('true', '1')
+        document = ClientDocument.objects.create(
+            client=client,
+            name=request.data.get('name') or uploaded.name,
+            file_path=storage_path,
+            file_type=file_type,
+            uploaded_by=request.user,
+            is_sensitive=is_sensitive,
+        )
+        return Response(self.get_serializer(document).data, status=status.HTTP_201_CREATED)
 
     def perform_update(self, serializer):
         self._check_write_scope(serializer.instance.file_type)

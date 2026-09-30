@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.utils import timezone
 from datetime import timedelta
+from core.storage import sign_private_path
 from .models import (
     Client, Contact, ClientInteraction, ClientDocument, EmployeeDocument,
     LeaveRequest, CompanyAsset, AdministrativeRecord, ContractGenerator
@@ -49,16 +50,21 @@ class ClientInteractionSerializer(serializers.ModelSerializer):
         return data
 
 class ClientDocumentSerializer(serializers.ModelSerializer):
+    # Signée à chaque lecture plutôt que stockée : voir
+    # ClientDocument.file_path / core.storage.upload_client_document.
+    # file_path lui-même n'est jamais exposé (chemin de stockage interne,
+    # pas une URL utilisable côté client).
+    url = serializers.SerializerMethodField()
+
     class Meta:
         model = ClientDocument
-        fields = '__all__'
-        # 'client' est fixé par la vue nested (perform_create), jamais
-        # attendu dans le payload — sinon POST échoue en 400 "champ requis".
+        fields = ['id', 'client', 'name', 'file_type', 'uploaded_by', 'is_sensitive', 'url', 'created_at', 'updated_at']
+        # 'client'/'uploaded_by' sont fixés par la vue nested (create()),
+        # jamais attendus dans le payload.
         read_only_fields = ['uploaded_by', 'client']
 
-    def to_representation(self, instance):
-        # We handle hiding CONTRAT in views, but we can also handle it here if needed
-        return super().to_representation(instance)
+    def get_url(self, obj):
+        return sign_private_path(obj.file_path)
 
 class EmployeeDocumentSerializer(serializers.ModelSerializer):
     class Meta:
