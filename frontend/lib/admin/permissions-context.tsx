@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { listRoles } from "@/lib/api/hr";
+import { getMe } from "@/lib/api/me";
 import { DJANGO_ROLE_TO_APP_ROLE, profileRoles } from "@/lib/firebase/types";
 
 interface PermissionsContextValue {
@@ -45,16 +46,26 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (!needsFetch) return;
     let cancelled = false;
-    listRoles()
-      .then((res) => {
+    // Deux sources : les rôles (partagées par tous ceux qui ont ce rôle) et
+    // la surcharge personnelle (User.permission_overrides, propre à cette
+    // personne — voir backend/core/models.py::User). La surcharge REMPLACE
+    // le résultat du rôle module par module : un tableau d'actions vide
+    // pour un module y retire l'accès même si un rôle l'accorderait,
+    // un module absent de la surcharge retombe sur l'union des rôles.
+    Promise.all([listRoles(), getMe().catch(() => null)])
+      .then(([rolesRes, me]) => {
         if (cancelled) return;
         // Cumul de rôles (décision du 10/09/2026) : union des permissions de
         // chaque rôle de la personne, pas seulement du premier trouvé.
         const permitted = new Set<string>();
-        for (const row of res.results) {
+        for (const row of rolesRes.results) {
           if (myRoles.includes(DJANGO_ROLE_TO_APP_ROLE[row.name])) {
             for (const key of Object.keys(row.permissions ?? {})) permitted.add(key);
           }
+        }
+        for (const [key, actions] of Object.entries(me?.permission_overrides ?? {})) {
+          if (actions.length > 0) permitted.add(key);
+          else permitted.delete(key);
         }
         setPermittedModules(permitted);
       })

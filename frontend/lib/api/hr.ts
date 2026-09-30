@@ -131,3 +131,28 @@ export function updateRolePermissions(roleId: string, permissions: Record<string
     body: JSON.stringify({ permissions }),
   });
 }
+
+/** Surcharge les permissions d'UNE personne précisément — indépendant des
+ * autres utilisateurs ayant le même rôle (contrairement à
+ * updateRolePermissions, qui édite le rôle partagé). Voir
+ * backend/core/views.py::SetUserPermissionsView. */
+export function setUserPermissions(userId: string, permissions: Record<string, string[]>) {
+  return apiFetch<UserBrief>(`/api/v1/users/${userId}/permissions/`, {
+    method: "PATCH",
+    body: JSON.stringify({ permissions }),
+  });
+}
+
+export function getUserPermissions(userId: string) {
+  return apiFetch<{ permissions: Record<string, string[]> }>(`/api/v1/users/${userId}/permissions/`);
+}
+
+/** Définit/réinitialise le mot de passe Firebase Auth de n'importe quel
+ * utilisateur — Super-Admin only, voir
+ * backend/core/views.py::SetUserPasswordView. */
+export function setUserPassword(userId: string, password: string) {
+  return apiFetch<void>(`/api/v1/users/${userId}/set-password/`, {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+}

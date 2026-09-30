@@ -13,6 +13,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.emails import send_user_invitation_email
 from core.firestore_client import create_profile, invalidate_role_cache, update_profile_fields, upsert_chat_room
 from core.models import AuditLog, Department, PushDevice, Role, User, hash_email
 from core.notifications import notify, notify_roles
@@ -31,6 +32,8 @@ from core.serializers import (
     MeUpdateSerializer,
     ProvisionUserSerializer,
     RoleSerializer,
+    SetUserPasswordSerializer,
+    SetUserPermissionsSerializer,
     SetUserRoleSerializer,
     UserBriefSerializer,
     UserSerializer,
@@ -343,7 +346,124 @@ class ProvisionUserView(APIView):
                 exclude=request.user,
             )
 
+        # E-mail d'invitation dès que le compte existe (demande explicite) :
+        # identifiants + bouton "Se connecter". Best-effort — la création du
+        # compte reste acquise même si l'envoi échoue (comme les autres
+        # accusés de réception e-mail de l'appli) ; un échec silencieux
+        # laisserait juste le nouvel employé sans son mot de passe par mail,
+        # donc on prévient RH si ça arrive.
+        if not send_user_invitation_email(django_user, data['password']):
+            notify_roles(
+                (ROLE_RH_MANAGER,),
+                title="E-mail d'invitation non envoyé",
+                message=(
+                    f"Le compte de {data['first_name']} {data['last_name']} est bien créé, "
+                    f"mais l'e-mail d'invitation n'a pas pu partir vers {data['email']}. "
+                    'Ses identifiants doivent lui être communiqués manuellement.'
+                ),
+                notification_type='GENERAL',
+                link='/admin/rh/utilisateurs',
+            )
+
         return Response(UserSerializer(django_user).data, status=status.HTTP_201_CREATED)
+
+
+class SetUserPermissionsView(APIView):
+    """Surcharge les permissions d'UN utilisateur précis
+    (User.permission_overrides) — indépendamment des autres personnes
+    ayant le même rôle. Même niveau de restriction que SetUserRoleView :
+    modifier ce qu'une personne peut voir/faire est aussi sensible que
+    modifier son rôle.
+
+    Le GET existe à part de UserListView/UserBriefSerializer (qui sert
+    aussi HR/Finance/Projects pour "choisir un utilisateur" — pas de raison
+    d'y exposer les permissions de tout le monde) : seul celui qui a le
+    droit d'écrire peut lire, restriction identique des deux côtés."""
+
+    permission_classes = [IsSuperAdmin]
+
+    @extend_schema(
+        tags=['Administration & RH'],
+        summary="Permissions surchargées d'un utilisateur",
+        responses={200: SetUserPermissionsSerializer},
+    )
+    def get(self, request, pk):
+        django_user = User.objects.filter(pk=pk).first()
+        if not django_user:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response({'permissions': django_user.permission_overrides})
+
+    @extend_schema(
+        tags=['Administration & RH'],
+        summary="Surcharge les permissions d'un utilisateur",
+        request=SetUserPermissionsSerializer,
+        responses={200: UserSerializer},
+    )
+    def patch(self, request, pk):
+        django_user = User.objects.filter(pk=pk).first()
+        if not django_user:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        serializer = SetUserPermissionsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        django_user.permission_overrides = serializer.validated_data['permissions']
+        django_user.save(update_fields=['permission_overrides'])
+        return Response(UserSerializer(django_user).data)
+
+
+class SetUserPasswordView(APIView):
+    """Définit/réinitialise le mot de passe Firebase Auth d'un utilisateur
+    existant, pour n'importe qui — jusqu'ici, seule la console Firebase le
+    permettait (aucun resetPassword/updatePassword n'existait dans
+    l'application). Même restriction que SetUserRoleView : action très
+    sensible, Super-Admin uniquement."""
+
+    permission_classes = [IsSuperAdmin]
+
+    @extend_schema(
+        tags=['Administration & RH'],
+        summary="Définit le mot de passe d'un utilisateur",
+        request=SetUserPasswordSerializer,
+        responses={200: None},
+    )
+    def post(self, request, pk):
+        django_user = User.objects.filter(pk=pk).first()
+        if not django_user:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if not django_user.firebase_uid:
+            return Response(
+                {'detail': "Cet utilisateur n'a pas encore de compte Firebase associé."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = SetUserPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        from firebase_admin import auth as firebase_auth
+        try:
+            firebase_auth.update_user(django_user.firebase_uid, password=serializer.validated_data['password'])
+        except Exception:
+            logger.exception('Changement de mot de passe Firebase impossible pour %s', django_user.firebase_uid)
+            return Response(
+                {'detail': 'Impossible de mettre à jour le mot de passe.'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        # Action très critique (même convention que le reste du module) —
+        # e-mail aux Super-Admins, pas à la personne elle-même (elle sait
+        # déjà que son mot de passe vient d'être changé si c'est elle qui
+        # l'a demandé ; sinon c'est justement ce que cette notification sert
+        # à détecter).
+        notify_roles(
+            (ROLE_SUPER_ADMIN,),
+            title='Mot de passe modifié',
+            message=f'Le mot de passe de {django_user.first_name} {django_user.last_name} a été réinitialisé.',
+            notification_type='GENERAL',
+            link='/admin/rh/utilisateurs',
+            email=True,
+            exclude=request.user,
+        )
+        return Response(status=status.HTTP_200_OK)
 
 
 class SetUserRoleView(APIView):

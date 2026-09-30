@@ -78,6 +78,7 @@ class UserSerializer(serializers.ModelSerializer):
             'is_staff',
             'mfa_enabled',
             'department',
+            'permission_overrides',
             'created_at',
             'updated_at',
             'last_login',
@@ -136,6 +137,23 @@ class ProvisionUserSerializer(serializers.Serializer):
     department_id = serializers.PrimaryKeyRelatedField(
         source='department', queryset=Department.objects.all(), required=False, allow_null=True,
     )
+
+
+class SetUserPermissionsSerializer(serializers.Serializer):
+    """Input for core.views.SetUserPermissionsView — surcharge les
+    permissions d'UNE personne (User.permission_overrides), indépendamment
+    des autres personnes ayant le même rôle. Même forme que Role.permissions."""
+
+    permissions = serializers.DictField(child=serializers.ListField(child=serializers.CharField()))
+
+
+class SetUserPasswordSerializer(serializers.Serializer):
+    """Input for core.views.SetUserPasswordView — définit/réinitialise le
+    mot de passe Firebase Auth d'un utilisateur existant, pour n'importe qui
+    (demande explicite : un Super-Admin doit pouvoir le faire sans passer
+    par la console Firebase)."""
+
+    password = serializers.CharField(min_length=8, write_only=True)
 
 
 class SetUserRoleSerializer(serializers.Serializer):

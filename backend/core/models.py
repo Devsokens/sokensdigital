@@ -161,6 +161,18 @@ class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
     roles = models.ManyToManyField(Role, blank=True)
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True)
 
+    # Surcharge des permissions du rôle, pour CETTE personne précisément —
+    # même forme que Role.permissions ({module_key: ['voir', 'creer', ...]}).
+    # Un module présent ici REMPLACE (pas n'étend) ce que le rôle accorderait
+    # pour ce module — y compris pour le retirer explicitement à quelqu'un
+    # qui l'aurait via son rôle. Un module absent d'ici retombe sur l'union
+    # des rôles de la personne, comme avant (voir
+    # frontend/lib/admin/permissions-context.tsx). Comme Role.permissions,
+    # ceci reste déclaratif pour l'instant — les vues restent protégées par
+    # has_role() (core.permissions), pas par ce champ (même limite déjà
+    # documentée dans core/constants.py pour Role.permissions).
+    permission_overrides = models.JSONField(default=dict, blank=True)
+
     objects = UserManager()
 
     USERNAME_FIELD = 'email'

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/sheet";
-import { listDepartments, listRoles, setUserRole, updateRolePermissions } from "@/lib/api/hr";
+import { listDepartments, listRoles, setUserRole, setUserPermissions, getUserPermissions } from "@/lib/api/hr";
 import type { Department, Role } from "@/lib/api/types";
 import { ROLE_LABELS, ROLES_BY_DEPARTMENT, DJANGO_ROLE_TO_APP_ROLE, type AppRole } from "@/lib/firebase/types";
 import { PERMISSION_MODULES, MODULE_ACTIONS, ACTION_LABELS } from "@/lib/admin/permission-modules";
@@ -42,6 +42,20 @@ export function UserEditModal({
   // pas un seul bouton actif.
   const [selectedRoles, setSelectedRoles] = useState<AppRole[]>(user.roles);
   const [modulePermissions, setModulePermissions] = useState<Record<string, string[]>>({});
+  const [savedOverrides, setSavedOverrides] = useState<Record<string, string[]> | null>(null);
+
+  // Permissions par défaut des rôles sélectionnés (union) — le point de
+  // départ affiché avant toute surcharge personnelle, pour ne pas repartir
+  // d'un écran vide à chaque édition.
+  const roleDefaults = useMemo(() => {
+    const merged: Record<string, string[]> = {};
+    for (const r of roles) {
+      if (selectedRoles.includes(DJANGO_ROLE_TO_APP_ROLE[r.name])) {
+        for (const [key, actions] of Object.entries(r.permissions ?? {})) merged[key] = actions;
+      }
+    }
+    return merged;
+  }, [roles, selectedRoles]);
 
   useEffect(() => {
     if (!open) return;
@@ -50,35 +64,33 @@ export function UserEditModal({
     setSelectedRoles(user.roles);
     setError(null);
     setLoading(true);
-    Promise.all([listDepartments(), listRoles()])
-      .then(([deptRes, roleRes]) => {
+    // Les modules/actions (étapes 3-4) surchargent les permissions de CETTE
+    // personne (User.permission_overrides) — plus le rôle partagé par tout
+    // le monde l'ayant. Point de départ affiché : la surcharge déjà
+    // enregistrée si elle existe, sinon ce que les rôles sélectionnés
+    // accordent par défaut (fusionné une fois les rôles chargés, voir
+    // l'effet séparé ci-dessous).
+    Promise.all([listDepartments(), listRoles(), getUserPermissions(user.djangoId).catch(() => null)])
+      .then(([deptRes, roleRes, permRes]) => {
         setDepartments(deptRes.results);
         setRoles(roleRes.results);
+        setSavedOverrides(permRes?.permissions ?? null);
       })
       .catch(() => setError("Impossible de charger les départements/rôles."))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  useEffect(() => {
+    if (roles.length === 0) return;
+    setModulePermissions(savedOverrides ?? roleDefaults);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roles, savedOverrides]);
+
   const currentDepartment = departments.find((d) => d.id === departmentId) ?? null;
   const rolesForDepartment: AppRole[] = currentDepartment
     ? ROLES_BY_DEPARTMENT[currentDepartment.name] ?? (Object.keys(ROLE_LABELS) as AppRole[])
     : [];
-
-  // Les modules/actions (étapes 3-4) éditent les permissions du Role
-  // Django lui-même (table partagée par tout le monde ayant ce rôle), pas
-  // celles de cet utilisateur seul. Avec plusieurs rôles cumulés, éditer
-  // les permissions de chacun dans le même flux demanderait un tout autre
-  // écran (répété par rôle) — hors scope ici. On édite celles du premier
-  // rôle sélectionné ; les autres restent inchangées par ce formulaire.
-  const roleRow = useMemo(
-    () => (selectedRoles[0] ? roles.find((r) => DJANGO_ROLE_TO_APP_ROLE[r.name] === selectedRoles[0]) ?? null : null),
-    [roles, selectedRoles]
-  );
-
-  useEffect(() => {
-    if (roleRow) setModulePermissions(roleRow.permissions ?? {});
-  }, [roleRow]);
 
   function toggleRole(role: AppRole) {
     setSelectedRoles((prev) => (prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]));
@@ -110,9 +122,7 @@ export function UserEditModal({
     setError(null);
     try {
       await setUserRole(user.djangoId, { roles: selectedRoles, department_id: departmentId ?? undefined });
-      if (roleRow) {
-        await updateRolePermissions(roleRow.id, modulePermissions);
-      }
+      await setUserPermissions(user.djangoId, modulePermissions);
       onSaved();
       setOpen(false);
     } catch {
@@ -231,15 +241,12 @@ export function UserEditModal({
               {step === 2 && (
                 <div>
                   <p className="mb-1 text-sm font-semibold text-neutral-900">
-                    Modules pour {selectedRoles.map((r) => ROLE_LABELS[r]).join(" · ")}
+                    Modules pour {user.name || user.email}
                   </p>
-                  {selectedRoles.length > 1 && (
-                    <p className="mb-2 text-xs text-amber-600">
-                      Cette étape édite les permissions du rôle {ROLE_LABELS[selectedRoles[0]]} uniquement — les autres
-                      rôles cumulés gardent leurs permissions existantes.
-                    </p>
-                  )}
-                  <p className="mb-3 text-xs text-neutral-500">Coche les modules auxquels ce rôle doit avoir accès.</p>
+                  <p className="mb-3 text-xs text-neutral-500">
+                    Propre à cette personne — modifier ces permissions n&apos;affecte personne d&apos;autre, même avec
+                    le même rôle.
+                  </p>
                   <div className="max-h-72 space-y-1 overflow-y-auto">
                     {PERMISSION_MODULES.map((m) => (
                       <label
