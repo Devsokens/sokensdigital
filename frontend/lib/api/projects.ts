@@ -14,6 +14,29 @@ import type {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
+// backend/projects/models.py::ProjectTask.Status est en français
+// (A_FAIRE/EN_COURS/EN_REVISION/TERMINE) ; le board (project-task-board.tsx)
+// utilise des libellés anglais (ProjectTaskStatus). Sans cette conversion,
+// chaque création/mise à jour de tâche envoyait un statut ("TODO"...) que le
+// serializer Django rejette (pas une valeur valide du champ), donc la tâche
+// n'était jamais créée.
+const STATUS_TO_BACKEND: Record<ProjectTaskStatus, string> = {
+  TODO: "A_FAIRE",
+  IN_PROGRESS: "EN_COURS",
+  IN_REVIEW: "EN_REVISION",
+  DONE: "TERMINE",
+};
+const STATUS_FROM_BACKEND: Record<string, ProjectTaskStatus> = {
+  A_FAIRE: "TODO",
+  EN_COURS: "IN_PROGRESS",
+  EN_REVISION: "IN_REVIEW",
+  TERMINE: "DONE",
+};
+
+function taskFromBackend(task: ProjectTask): ProjectTask {
+  return { ...task, status: STATUS_FROM_BACKEND[task.status as unknown as string] ?? task.status };
+}
+
 export function listProjects(params?: { search?: string }) {
   const query = params?.search ? `?search=${encodeURIComponent(params.search)}` : "";
   return apiFetch<Paginated<Project>>(`/api/v1/projects/${query}`);
@@ -61,11 +84,12 @@ export function toggleProjectPin(id: string) {
   return apiFetch<{ is_pinned: boolean }>(`/api/v1/projects/${id}/pin/`, { method: "POST" });
 }
 
-export function listProjectTasks(projectId: string) {
-  return apiFetch<ProjectTask[]>(`/api/v1/projects/${projectId}/tasks/`);
+export async function listProjectTasks(projectId: string) {
+  const tasks = await apiFetch<ProjectTask[]>(`/api/v1/projects/${projectId}/tasks/`);
+  return tasks.map(taskFromBackend);
 }
 
-export function createProjectTask(projectId: string, data: {
+export async function createProjectTask(projectId: string, data: {
   title: string;
   description?: string;
   status?: ProjectTaskStatus;
@@ -73,13 +97,14 @@ export function createProjectTask(projectId: string, data: {
   progress?: number;
   assignee_ids?: string[];
 }) {
-  return apiFetch<ProjectTask>(`/api/v1/projects/${projectId}/tasks/`, {
+  const task = await apiFetch<ProjectTask>(`/api/v1/projects/${projectId}/tasks/`, {
     method: "POST",
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, status: data.status ? STATUS_TO_BACKEND[data.status] : undefined }),
   });
+  return taskFromBackend(task);
 }
 
-export function updateProjectTask(projectId: string, taskId: string, data: Partial<{
+export async function updateProjectTask(projectId: string, taskId: string, data: Partial<{
   title: string;
   description: string;
   status: ProjectTaskStatus;
@@ -87,10 +112,11 @@ export function updateProjectTask(projectId: string, taskId: string, data: Parti
   progress: number;
   assignee_ids: string[];
 }>) {
-  return apiFetch<ProjectTask>(`/api/v1/projects/${projectId}/tasks/${taskId}/`, {
+  const task = await apiFetch<ProjectTask>(`/api/v1/projects/${projectId}/tasks/${taskId}/`, {
     method: "PATCH",
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, status: data.status ? STATUS_TO_BACKEND[data.status] : undefined }),
   });
+  return taskFromBackend(task);
 }
 
 export function deleteProjectTask(projectId: string, taskId: string) {

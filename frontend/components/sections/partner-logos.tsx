@@ -22,11 +22,11 @@ export function PartnerLogos({ section }: { section?: PageSection | null }) {
       <h2 className="text-center text-sm font-semibold tracking-[0.1em] text-muted-foreground uppercase">
         {title}
       </h2>
-      <div className="mt-8 flex flex-wrap items-center justify-center gap-x-12 gap-y-6 sm:justify-between">
+      <div className="mt-8 flex flex-wrap items-center justify-center gap-x-14 gap-y-8 sm:justify-between">
         {partners.map((partner, i) => (
           partner.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={partner.logo_url} alt={partner.name} className="h-10 w-auto object-contain opacity-60 grayscale transition-opacity hover:opacity-90 sm:h-12" loading="lazy" decoding="async" />
+            <img key={i} src={partner.logo_url} alt={partner.name} className="h-14 w-auto object-contain sm:h-16" loading="lazy" decoding="async" />
           ) : (
             <span
               key={i}
