@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PageSection } from "@/lib/api/types";
 
@@ -255,6 +255,15 @@ function TeamCarousel({ team }: { team: Member[] }) {
     }
   }
 
+  // Boutons précédent/suivant — glisser (souris/tactile) reste possible,
+  // mais tout le monde ne pense pas à essayer de glisser une carte. Mobile
+  // et desktop : mêmes boutons, juste plus petits sous sm. Ne touche pas
+  // `paused` : l'avance automatique continue son rythme normal, un clic
+  // s'ajoute simplement par-dessus.
+  function goTo(direction: 1 | -1) {
+    setIndex((i) => i + direction);
+  }
+
   if (team.length === 0) return null;
   const items = Array.from({ length: REPEAT }, () => team).flat();
 
@@ -270,6 +279,26 @@ function TeamCarousel({ team }: { team: Member[] }) {
     >
       <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-10 bg-linear-to-r from-background to-transparent sm:w-16" />
       <div className="pointer-events-none absolute inset-y-0 right-0 z-20 w-10 bg-linear-to-l from-background to-transparent sm:w-16" />
+
+      {/* Précédent/suivant — mobile et desktop, par-dessus les fondus de
+       * bord. Le glisser (souris/tactile) marche déjà, mais tout le monde
+       * ne pense pas à essayer. */}
+      <button
+        type="button"
+        onClick={() => goTo(-1)}
+        aria-label="Membre précédent"
+        className="absolute top-1/2 left-1 z-30 flex size-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-background/80 text-foreground backdrop-blur-sm transition-colors hover:border-primary/40 hover:text-primary sm:left-2 sm:size-9"
+      >
+        <ChevronLeft className="size-4" />
+      </button>
+      <button
+        type="button"
+        onClick={() => goTo(1)}
+        aria-label="Membre suivant"
+        className="absolute top-1/2 right-1 z-30 flex size-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-background/80 text-foreground backdrop-blur-sm transition-colors hover:border-primary/40 hover:text-primary sm:right-2 sm:size-9"
+      >
+        <ChevronRight className="size-4" />
+      </button>
 
       <div
         className={cn("flex cursor-grab gap-6 py-4 select-none", dragging && "cursor-grabbing")}
