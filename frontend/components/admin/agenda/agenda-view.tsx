@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, NotebookPen, Plus, Trash2 } from "lucide-react";
+import { MeetingSheet } from "@/components/admin/agenda/meeting-sheet";
 import { Button } from "@/components/ui/button";
 import { Modal, ModalContent, ModalClose } from "@/components/ui/modal";
 import { ConfirmModal } from "@/components/admin/confirm-modal";
@@ -55,6 +56,7 @@ export function AgendaView() {
   const [clients, setClients] = useState<Client[]>([]);
   const [users, setUsers] = useState<UserBrief[]>([]);
   const [editing, setEditing] = useState<Appointment | null | undefined>(undefined);
+  const [meetingFor, setMeetingFor] = useState<Appointment | null>(null);
 
   async function load() {
     try {
@@ -171,8 +173,14 @@ export function AgendaView() {
             setEditing(undefined);
             load();
           }}
+          onOpenMeeting={(appt) => {
+            setEditing(undefined);
+            setMeetingFor(appt);
+          }}
         />
       )}
+
+      <MeetingSheet appointment={meetingFor} onClose={() => setMeetingFor(null)} />
     </div>
   );
 }
@@ -183,12 +191,14 @@ function AppointmentFormModal({
   users,
   onClose,
   onSaved,
+  onOpenMeeting,
 }: {
   appointment: Appointment | null;
   clients: Client[];
   users: UserBrief[];
   onClose: () => void;
   onSaved: () => void;
+  onOpenMeeting: (appointment: Appointment) => void;
 }) {
   const isEdit = Boolean(appointment);
   const now = new Date();
@@ -295,6 +305,14 @@ function AppointmentFormModal({
               <ModalClose render={<Button type="button" variant="outline" className="rounded-full px-5" onClick={onClose}>Annuler</Button>} />
             </div>
             {isEdit && appointment && (
+              <div className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={() => onOpenMeeting(appointment)}
+                className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+              >
+                <NotebookPen className="size-3.5" /> Réunion
+              </button>
               <ConfirmModal
                 title="Supprimer le rendez-vous"
                 description={`Supprimer « ${appointment.title} » ? Cette action est irréversible.`}
@@ -308,6 +326,7 @@ function AppointmentFormModal({
                   </button>
                 }
               />
+              </div>
             )}
           </div>
         </form>

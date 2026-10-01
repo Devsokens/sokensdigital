@@ -16,7 +16,9 @@ import {
 } from "@/lib/api/administration";
 import { listUsers } from "@/lib/api/hr";
 import { listProjects } from "@/lib/api/projects";
-import type { Client, ClientContact, ClientDocumentEntry, ClientInteractionEntry, ClientStatus, Project, UserBrief } from "@/lib/api/types";
+import { listAppointments } from "@/lib/api/administration";
+import { MeetingSheet } from "@/components/admin/agenda/meeting-sheet";
+import type { Appointment, Client, ClientContact, ClientDocumentEntry, ClientInteractionEntry, ClientStatus, Project, UserBrief } from "@/lib/api/types";
 import { ClientFormModal } from "@/components/admin/rh/client-form-modal";
 import { ConfirmModal } from "@/components/admin/confirm-modal";
 import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/ui/tabs";
@@ -54,18 +56,21 @@ export function ClientDetail({ id }: { id: string }) {
   const [interactions, setInteractions] = useState<ClientInteractionEntry[]>([]);
   const [documents, setDocuments] = useState<ClientDocumentEntry[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [meetings, setMeetings] = useState<Appointment[]>([]);
+  const [openMeeting, setOpenMeeting] = useState<Appointment | null>(null);
   const [users, setUsers] = useState<UserBrief[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
     try {
-      const [c, contactsRes, interactionsRes, docsRes, usersRes, projectsRes] = await Promise.all([
+      const [c, contactsRes, interactionsRes, docsRes, usersRes, projectsRes, meetingsRes] = await Promise.all([
         getClient(id),
         listContacts(id),
         listInteractions(id),
         listClientDocuments(id),
         listUsers(),
         listProjects({ client: id }),
+        listAppointments({ client: id }).catch(() => ({ results: [] as Appointment[] })),
       ]);
       setClient(c);
       setContacts(contactsRes.results);
@@ -73,6 +78,7 @@ export function ClientDetail({ id }: { id: string }) {
       setDocuments(docsRes.results);
       setUsers(usersRes.results);
       setProjects(projectsRes.results);
+      setMeetings(meetingsRes.results);
     } catch {
       setError("Impossible de charger ce client (accès refusé ou introuvable).");
     }
@@ -98,9 +104,9 @@ export function ClientDetail({ id }: { id: string }) {
     <div>
       <Link
         href="/admin/rh/clients"
-        className="mb-5 inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-500 hover:text-neutral-800"
+        className="group mb-5 inline-flex items-center gap-2 text-sm font-medium text-neutral-700 transition-colors hover:text-neutral-900"
       >
-        <ArrowLeft className="size-3.5" /> Clients
+        <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-0.5" /> Retour aux clients
       </Link>
 
       <div className="mb-6 flex items-start justify-between gap-6 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
@@ -143,6 +149,7 @@ export function ClientDetail({ id }: { id: string }) {
           <TabsTab value="historique">Historique ({interactions.length})</TabsTab>
           <TabsTab value="documents">Documents ({documents.length})</TabsTab>
           <TabsTab value="projets">Projets ({projects.length})</TabsTab>
+          <TabsTab value="reunions">Réunions ({meetings.length})</TabsTab>
           <TabsIndicator />
         </TabsList>
 
@@ -171,7 +178,37 @@ export function ClientDetail({ id }: { id: string }) {
         <TabsPanel value="projets" className="pt-4">
           <ProjectsPanel projects={projects} />
         </TabsPanel>
+
+        <TabsPanel value="reunions" className="pt-4">
+          {meetings.length === 0 ? (
+            <p className="text-sm text-neutral-400">
+              Aucun rendez-vous lié à ce client. Planifiez-en un depuis l&apos;Agenda en choisissant ce client.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {meetings.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setOpenMeeting(m)}
+                  className="flex w-full items-center justify-between rounded-xl border border-neutral-200 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:border-primary/40"
+                >
+                  <span>
+                    <span className="block font-medium text-neutral-900">{m.title}</span>
+                    <span className="block text-xs text-neutral-500">
+                      {new Date(m.start_at).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}
+                      {m.location ? ` · ${m.location}` : ""}
+                    </span>
+                  </span>
+                  <span className="text-xs font-medium text-primary">Ouvrir la réunion</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </TabsPanel>
       </Tabs>
+
+      <MeetingSheet appointment={openMeeting} onClose={() => setOpenMeeting(null)} />
     </div>
   );
 }

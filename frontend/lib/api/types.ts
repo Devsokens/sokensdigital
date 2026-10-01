@@ -115,6 +115,24 @@ export interface Appointment {
   updated_at: string;
 }
 
+export interface MeetingNote {
+  id: string;
+  author: string;
+  author_name: string;
+  body: string;
+  updated_at: string;
+}
+
+export interface Meeting {
+  id: string;
+  appointment: string;
+  title: string;
+  agenda: string;
+  minutes_summary: string;
+  notes: MeetingNote[];
+  created_at: string;
+}
+
 export type ContractType = "CDI" | "CDD" | "STAGE" | "FREELANCE";
 export type ContractStatus = "ACTIF" | "TERMINE";
 

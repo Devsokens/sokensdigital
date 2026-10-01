@@ -29,12 +29,13 @@ from core.permissions import (
 from .models import (
     Client, Contact, ClientInteraction, ClientDocument, EmployeeDocument,
     LeaveRequest, CompanyAsset, AdministrativeRecord, ContractGenerator, Appointment,
+    Meeting, MeetingNote,
 )
 from .serializers import (
     ClientSerializer, ClientListSerializer, ContactSerializer, ClientInteractionSerializer,
     ClientDocumentSerializer, EmployeeDocumentSerializer, LeaveRequestSerializer,
     CompanyAssetSerializer, AdministrativeRecordSerializer, ContractGeneratorSerializer,
-    AppointmentSerializer,
+    AppointmentSerializer, MeetingSerializer, MeetingNoteSerializer,
 )
 
 
@@ -537,6 +538,33 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         if not is_admin and instance.created_by_id != user.id:
             raise PermissionDenied("Seul le créateur ou un administrateur peut supprimer ce rendez-vous.")
         instance.delete()
+
+    @action(detail=True, methods=['get', 'patch'], url_path='meeting')
+    def meeting(self, request, pk=None):
+        """Transforme ce rendez-vous en réunion (créée à la demande, une
+        seule fois — OneToOne) ou renvoie la réunion existante."""
+        appointment = self.get_object()
+        meeting_obj, _ = Meeting.objects.get_or_create(appointment=appointment)
+        if request.method == 'PATCH':
+            serializer = MeetingSerializer(meeting_obj, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+        return Response(MeetingSerializer(meeting_obj).data)
+
+    @action(detail=True, methods=['get', 'put'], url_path='meeting/my-note')
+    def meeting_my_note(self, request, pk=None):
+        """Notes personnelles du participant courant sur cette réunion —
+        chacun ne voit/modifie que les siennes via cet endpoint."""
+        appointment = self.get_object()
+        meeting_obj, _ = Meeting.objects.get_or_create(appointment=appointment)
+        note, _ = MeetingNote.objects.get_or_create(meeting=meeting_obj, author=request.user)
+        if request.method == 'PUT':
+            serializer = MeetingNoteSerializer(note, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+        return Response(MeetingNoteSerializer(note).data)
 
 
 # ---------------------------------------------------------------------------

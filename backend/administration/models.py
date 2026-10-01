@@ -246,6 +246,39 @@ class Appointment(LoggedModel):
         return self.title
 
 
+class Meeting(LoggedModel):
+    """Réunion liée à un rendez-vous d'agenda (Appointment.meeting,
+    OneToOne, créée à la demande via l'action 'Transformer en réunion') —
+    ordre du jour + compte rendu partagés, notes personnelles par
+    participant (voir MeetingNote)."""
+    appointment = models.OneToOneField(
+        Appointment, on_delete=models.CASCADE, related_name='meeting',
+    )
+    # HTML riche (Tiptap) — assaini à l'écriture par MeetingSerializer.
+    agenda = models.TextField(blank=True)
+    minutes_summary = models.TextField(blank=True)
+
+    def __str__(self):
+        return f'Réunion — {self.appointment.title}'
+
+
+class MeetingNote(LoggedModel):
+    """Notes personnelles d'un participant sur une réunion — chacun ne
+    modifie que les siennes, les autres sont en lecture seule."""
+    meeting = models.ForeignKey(Meeting, on_delete=models.CASCADE, related_name='notes')
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='meeting_notes')
+    body = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta(LoggedModel.Meta):
+        constraints = [
+            models.UniqueConstraint(fields=['meeting', 'author'], name='unique_meeting_note_per_author'),
+        ]
+
+    def __str__(self):
+        return f'Notes de {self.author} — {self.meeting}'
+
+
 class ContractGenerator(LoggedModel):
     class ContractType(models.TextChoices):
         PRESTATION_SERVICES = 'PRESTATION_SERVICES', _('Prestation de services')

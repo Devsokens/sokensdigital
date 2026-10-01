@@ -6,6 +6,8 @@ import type {
   ClientContact,
   ClientDocumentEntry,
   ClientInteractionEntry,
+  Meeting,
+  MeetingNote,
   Paginated,
 } from "@/lib/api/types";
 
@@ -166,4 +168,27 @@ export function updateAppointment(id: string, data: Partial<AppointmentInput>) {
 
 export function deleteAppointment(id: string) {
   return apiFetch<void>(`${BASE}/appointments/${id}/`, { method: "DELETE" });
+}
+
+/** Crée la réunion à la demande au premier appel (OneToOne sur le rendez-vous). */
+export function getMeeting(appointmentId: string) {
+  return apiFetch<Meeting>(`${BASE}/appointments/${appointmentId}/meeting/`);
+}
+
+export function updateMeeting(appointmentId: string, data: Partial<{ agenda: string; minutes_summary: string }>) {
+  return apiFetch<Meeting>(`${BASE}/appointments/${appointmentId}/meeting/`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function getMyMeetingNote(appointmentId: string) {
+  return apiFetch<MeetingNote>(`${BASE}/appointments/${appointmentId}/meeting/my-note/`);
+}
+
+export function updateMyMeetingNote(appointmentId: string, body: string) {
+  return apiFetch<MeetingNote>(`${BASE}/appointments/${appointmentId}/meeting/my-note/`, {
+    method: "PUT",
+    body: JSON.stringify({ body }),
+  });
 }

@@ -1,11 +1,13 @@
 from rest_framework import serializers
 from django.utils import timezone
 from datetime import timedelta
+from core.sanitize import sanitize_html
 from core.storage import sign_private_path
 from core.serializers import UserBriefSerializer
 from .models import (
     Client, Contact, ClientInteraction, ClientDocument, EmployeeDocument,
-    LeaveRequest, CompanyAsset, AdministrativeRecord, ContractGenerator, Appointment
+    LeaveRequest, CompanyAsset, AdministrativeRecord, ContractGenerator, Appointment,
+    Meeting, MeetingNote,
 )
 
 class ContactSerializer(serializers.ModelSerializer):
@@ -128,6 +130,39 @@ class AppointmentSerializer(serializers.ModelSerializer):
         if start_at and end_at and start_at > end_at:
             raise serializers.ValidationError("La date de début doit être antérieure à la date de fin.")
         return data
+
+
+class MeetingNoteSerializer(serializers.ModelSerializer):
+    author_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MeetingNote
+        fields = ['id', 'author', 'author_name', 'body', 'updated_at']
+        read_only_fields = ['author']
+
+    def get_author_name(self, obj):
+        return f'{obj.author.first_name} {obj.author.last_name}'.strip()
+
+    def validate_body(self, value):
+        # Rendu en HTML chez les AUTRES participants — même défense XSS
+        # stockée que ProjectSerializer.validate_description.
+        return sanitize_html(value)
+
+
+class MeetingSerializer(serializers.ModelSerializer):
+    notes = MeetingNoteSerializer(many=True, read_only=True)
+    title = serializers.CharField(source='appointment.title', read_only=True)
+
+    class Meta:
+        model = Meeting
+        fields = ['id', 'appointment', 'title', 'agenda', 'minutes_summary', 'notes', 'created_at']
+        read_only_fields = ['appointment']
+
+    def validate_agenda(self, value):
+        return sanitize_html(value)
+
+    def validate_minutes_summary(self, value):
+        return sanitize_html(value)
 
 
 class ContractGeneratorSerializer(serializers.ModelSerializer):
