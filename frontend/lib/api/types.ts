@@ -30,7 +30,7 @@ export interface Role {
   permissions: Record<string, string[]>;
 }
 
-export type ClientStatus = "PROSPECT" | "CLIENT_ACTIF" | "CLIENT_INACTIF" | "ARCHIVE";
+export type ClientStatus = "CLIENT_ACTIF" | "CLIENT_INACTIF";
 
 /** CRM — cahier des charges §4.5. List endpoint returns a narrower shape
  * (ClientListSerializer, backend/administration/serializers.py:15-18);
@@ -520,6 +520,11 @@ export interface ProjectDocument {
   created_at: string;
 }
 
+export interface ProjectClientBrief {
+  id: string;
+  company_name: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -529,6 +534,7 @@ export interface Project {
   priority: ProjectPriority;
   category: string;
   lead_project_manager: ProjectUserBrief | null;
+  client: ProjectClientBrief | null;
   members: ProjectMember[];
   documents: ProjectDocument[];
   start_date: string | null;

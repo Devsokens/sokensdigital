@@ -10,10 +10,8 @@ import { listUsers } from "@/lib/api/hr";
 import type { Client, ClientStatus, UserBrief } from "@/lib/api/types";
 
 const STATUS_OPTIONS: { value: ClientStatus; label: string }[] = [
-  { value: "PROSPECT", label: "Prospect" },
   { value: "CLIENT_ACTIF", label: "Client actif" },
   { value: "CLIENT_INACTIF", label: "Client inactif" },
-  { value: "ARCHIVE", label: "Archivé" },
 ];
 
 export function ClientFormModal({
@@ -40,7 +38,7 @@ export function ClientFormModal({
     email: client?.email ?? "",
     phone: client?.phone ?? "",
     website: client?.website ?? "",
-    status: client?.status ?? "PROSPECT",
+    status: client?.status ?? "CLIENT_ACTIF",
     rating: client?.rating ?? null,
     notes: client?.notes ?? "",
     assigned_to: client?.assigned_to ?? null,
@@ -62,7 +60,7 @@ export function ClientFormModal({
       email: client?.email ?? "",
       phone: client?.phone ?? "",
       website: client?.website ?? "",
-      status: client?.status ?? "PROSPECT",
+      status: client?.status ?? "CLIENT_ACTIF",
       rating: client?.rating ?? null,
       notes: client?.notes ?? "",
       assigned_to: client?.assigned_to ?? null,

@@ -62,7 +62,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return Project.objects.none()
         user = self.request.user
-        qs = Project.objects.select_related('lead_project_manager').prefetch_related(
+        qs = Project.objects.select_related('lead_project_manager', 'client').prefetch_related(
             'memberships__user', 'pinned_by', 'tasks',
         )
         if has_role(user, *WIDE_READ_ROLES, ROLE_SUPER_ADMIN):
@@ -73,6 +73,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
         search = self.request.query_params.get('search')
         if search:
             qs = qs.filter(name__icontains=search)
+        client_id = self.request.query_params.get('client')
+        if client_id:
+            qs = qs.filter(client_id=client_id)
         return qs
 
     def perform_create(self, serializer):

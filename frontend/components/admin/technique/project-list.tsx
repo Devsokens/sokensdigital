@@ -41,7 +41,8 @@ import {
   uploadProjectDocument,
 } from "@/lib/api/projects";
 import { listUsers } from "@/lib/api/hr";
-import type { Project, ProjectPriority, ProjectStatus, UserBrief } from "@/lib/api/types";
+import { listClients } from "@/lib/api/administration";
+import type { Client, Project, ProjectPriority, ProjectStatus, UserBrief } from "@/lib/api/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   EN_COURS: "En cours",
@@ -650,8 +651,14 @@ function EditProjectForm({ project, onSaved }: { project: Project; onSaved: () =
   const [startDate, setStartDate] = useState(project.start_date || "");
   const [endDate, setEndDate] = useState(project.end_date || "");
   const [budget, setBudget] = useState(project.budget || "");
+  const [clientId, setClientId] = useState<string | null>(project.client?.id ?? null);
+  const [clients, setClients] = useState<Client[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    listClients().then((res) => setClients(res.results)).catch(() => setClients([]));
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -668,6 +675,7 @@ function EditProjectForm({ project, onSaved }: { project: Project; onSaved: () =
         start_date: startDate || undefined,
         end_date: endDate || undefined,
         budget: budget || undefined,
+        client_id: clientId,
       });
       onSaved();
     } catch {
@@ -728,6 +736,16 @@ function EditProjectForm({ project, onSaved }: { project: Project; onSaved: () =
         />
       </label>
 
+      <label className="block">
+        <span className={labelClass}>Client</span>
+        <SelectSearch
+          options={clients.map((c) => ({ id: c.id, label: c.company_name }))}
+          value={clientId}
+          onChange={setClientId}
+          placeholder="Aucun client rattaché"
+        />
+      </label>
+
       <div className="grid grid-cols-2 gap-4">
         <label className="block">
           <span className={labelClass}>Date de début</span>
@@ -766,14 +784,17 @@ function NewProjectForm({ onSaved }: { onSaved: () => void }) {
   // null = pas de sélection → le backend assigne automatiquement le
   // créateur comme chef de projet (voir ProjectViewSet.perform_create).
   const [leadId, setLeadId] = useState<string | null>(null);
+  const [clientId, setClientId] = useState<string | null>(null);
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [documents, setDocuments] = useState<File[]>([]);
   const [users, setUsers] = useState<UserBrief[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     listUsers().then((data) => setUsers(data.results)).catch(() => setUsers([]));
+    listClients().then((res) => setClients(res.results)).catch(() => setClients([]));
   }, []);
 
   const userOptions = users.map((u) => ({
@@ -797,6 +818,7 @@ function NewProjectForm({ onSaved }: { onSaved: () => void }) {
         priority,
         category: category || undefined,
         lead_project_manager_id: leadId || undefined,
+        client_id: clientId,
       });
       // Deux étapes séparées après la création (comme uploadLeadAttachment
       // pour les demandes publiques) : membres et documents ont besoin de
@@ -873,6 +895,16 @@ function NewProjectForm({ onSaved }: { onSaved: () => void }) {
       <label className="block">
         <span className={labelClass}>Chef de projet</span>
         <SelectSearch options={userOptions} value={leadId} onChange={setLeadId} placeholder="Toi (par défaut)" />
+      </label>
+
+      <label className="block">
+        <span className={labelClass}>Client</span>
+        <SelectSearch
+          options={clients.map((c) => ({ id: c.id, label: c.company_name }))}
+          value={clientId}
+          onChange={setClientId}
+          placeholder="Aucun client rattaché"
+        />
       </label>
 
       <label className="block">

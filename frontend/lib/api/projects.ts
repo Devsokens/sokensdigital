@@ -37,9 +37,12 @@ function taskFromBackend(task: ProjectTask): ProjectTask {
   return { ...task, status: STATUS_FROM_BACKEND[task.status as unknown as string] ?? task.status };
 }
 
-export function listProjects(params?: { search?: string }) {
-  const query = params?.search ? `?search=${encodeURIComponent(params.search)}` : "";
-  return apiFetch<Paginated<Project>>(`/api/v1/projects/${query}`);
+export function listProjects(params?: { search?: string; client?: string }) {
+  const query = new URLSearchParams();
+  if (params?.search) query.set("search", params.search);
+  if (params?.client) query.set("client", params.client);
+  const qs = query.toString();
+  return apiFetch<Paginated<Project>>(`/api/v1/projects/${qs ? `?${qs}` : ""}`);
 }
 
 export function getProject(id: string) {
@@ -56,6 +59,7 @@ export interface ProjectInput {
   priority?: string;
   category?: string;
   lead_project_manager_id?: string;
+  client_id?: string | null;
 }
 
 export function createProject(data: ProjectInput) {

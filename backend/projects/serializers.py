@@ -1,9 +1,19 @@
 from rest_framework import serializers
 
+from administration.models import Client
 from core.models import User
 from core.sanitize import sanitize_html
 from core.storage import sign_private_path
 from projects.models import Project, ProjectDocument, ProjectMember, ProjectTask, ProjectTaskComment, Timesheet
+
+
+class ProjectClientBriefSerializer(serializers.ModelSerializer):
+    """Juste de quoi afficher/choisir un client depuis un projet — pas le
+    reste de la fiche (siret, notes...), pas la préoccupation de ce module."""
+
+    class Meta:
+        model = Client
+        fields = ['id', 'company_name']
 
 
 class ProjectUserBriefSerializer(serializers.ModelSerializer):
@@ -76,6 +86,11 @@ class ProjectSerializer(serializers.ModelSerializer):
         source='lead_project_manager', queryset=User.objects.all(),
         write_only=True, required=False, allow_null=True,
     )
+    client = ProjectClientBriefSerializer(read_only=True)
+    client_id = serializers.PrimaryKeyRelatedField(
+        source='client', queryset=Client.objects.all(),
+        write_only=True, required=False, allow_null=True,
+    )
     members = ProjectMemberSerializer(source='memberships', many=True, read_only=True)
     documents = ProjectDocumentSerializer(many=True, read_only=True)
     is_pinned = serializers.SerializerMethodField()
@@ -86,7 +101,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         model = Project
         fields = [
             'id', 'name', 'description', 'cover_image_url', 'status', 'priority', 'category',
-            'lead_project_manager', 'lead_project_manager_id',
+            'lead_project_manager', 'lead_project_manager_id', 'client', 'client_id',
             'members', 'documents', 'start_date', 'end_date', 'budget', 'created_at',
             'is_archived', 'is_locked', 'is_pinned', 'tasks_total', 'tasks_done',
         ]

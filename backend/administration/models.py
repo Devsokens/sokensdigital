@@ -13,11 +13,13 @@ from datetime import timedelta
 from core.models import LoggedModel, User
 
 class Client(LoggedModel):
+    # Réduit à 2 statuts (décision explicite) — PROSPECT et ARCHIVE
+    # existaient avant mais n'apportaient pas de distinction jugée utile ;
+    # une migration de données (voir administration/migrations/) bascule
+    # les deux vers CLIENT_INACTIF plutôt que de les perdre silencieusement.
     class Status(models.TextChoices):
-        PROSPECT = 'PROSPECT', _('Prospect')
         CLIENT_ACTIF = 'CLIENT_ACTIF', _('Client Actif')
         CLIENT_INACTIF = 'CLIENT_INACTIF', _('Client Inactif')
-        ARCHIVE = 'ARCHIVE', _('Archivé')
 
     company_name = models.CharField(max_length=255)
     siret = models.CharField(max_length=14, unique=True, null=True, blank=True)
@@ -29,7 +31,7 @@ class Client(LoggedModel):
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=50, blank=True)
     website = models.URLField(blank=True)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PROSPECT)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.CLIENT_ACTIF)
     rating = models.PositiveSmallIntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(5)],
         null=True, blank=True

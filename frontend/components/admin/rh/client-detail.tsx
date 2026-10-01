@@ -15,7 +15,8 @@ import {
   deleteClientDocument,
 } from "@/lib/api/administration";
 import { listUsers } from "@/lib/api/hr";
-import type { Client, ClientContact, ClientDocumentEntry, ClientInteractionEntry, ClientStatus, UserBrief } from "@/lib/api/types";
+import { listProjects } from "@/lib/api/projects";
+import type { Client, ClientContact, ClientDocumentEntry, ClientInteractionEntry, ClientStatus, Project, UserBrief } from "@/lib/api/types";
 import { ClientFormModal } from "@/components/admin/rh/client-form-modal";
 import { ConfirmModal } from "@/components/admin/confirm-modal";
 import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/ui/tabs";
@@ -24,10 +25,8 @@ import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { cn } from "@/lib/utils";
 
 const STATUS_LABELS: Record<ClientStatus, string> = {
-  PROSPECT: "Prospect",
   CLIENT_ACTIF: "Client actif",
   CLIENT_INACTIF: "Client inactif",
-  ARCHIVE: "Archivé",
 };
 
 const INTERACTION_LABELS: Record<string, string> = {
@@ -54,23 +53,26 @@ export function ClientDetail({ id }: { id: string }) {
   const [contacts, setContacts] = useState<ClientContact[]>([]);
   const [interactions, setInteractions] = useState<ClientInteractionEntry[]>([]);
   const [documents, setDocuments] = useState<ClientDocumentEntry[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<UserBrief[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
     try {
-      const [c, contactsRes, interactionsRes, docsRes, usersRes] = await Promise.all([
+      const [c, contactsRes, interactionsRes, docsRes, usersRes, projectsRes] = await Promise.all([
         getClient(id),
         listContacts(id),
         listInteractions(id),
         listClientDocuments(id),
         listUsers(),
+        listProjects({ client: id }),
       ]);
       setClient(c);
       setContacts(contactsRes.results);
       setInteractions(interactionsRes.results);
       setDocuments(docsRes.results);
       setUsers(usersRes.results);
+      setProjects(projectsRes.results);
     } catch {
       setError("Impossible de charger ce client (accès refusé ou introuvable).");
     }
@@ -140,6 +142,7 @@ export function ClientDetail({ id }: { id: string }) {
           <TabsTab value="contacts">Contacts ({contacts.length})</TabsTab>
           <TabsTab value="historique">Historique ({interactions.length})</TabsTab>
           <TabsTab value="documents">Documents ({documents.length})</TabsTab>
+          <TabsTab value="projets">Projets ({projects.length})</TabsTab>
           <TabsIndicator />
         </TabsList>
 
@@ -163,6 +166,10 @@ export function ClientDetail({ id }: { id: string }) {
 
         <TabsPanel value="documents" className="pt-4">
           <DocumentsPanel clientId={id} documents={documents} onChange={load} />
+        </TabsPanel>
+
+        <TabsPanel value="projets" className="pt-4">
+          <ProjectsPanel projects={projects} />
         </TabsPanel>
       </Tabs>
     </div>
@@ -372,6 +379,28 @@ function DocumentsPanel({ clientId, documents, onChange }: { clientId: string; d
         <input ref={inputRef} type="file" onChange={handleFile} className="hidden" />
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+function ProjectsPanel({ projects }: { projects: Project[] }) {
+  if (projects.length === 0) {
+    return <p className="text-sm text-neutral-400">Aucun projet rattaché à ce client.</p>;
+  }
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {projects.map((p) => (
+        <Link
+          key={p.id}
+          href={`/admin/technique/projets/${p.id}`}
+          className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm transition-colors hover:border-primary/40"
+        >
+          <p className="font-medium text-neutral-900">{p.name}</p>
+          <p className="mt-1 text-xs text-neutral-500">
+            {p.tasks_done}/{p.tasks_total} tâche{p.tasks_total !== 1 ? "s" : ""} terminée{p.tasks_done !== 1 ? "s" : ""}
+          </p>
+        </Link>
+      ))}
     </div>
   );
 }

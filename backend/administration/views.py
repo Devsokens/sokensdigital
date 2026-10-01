@@ -134,15 +134,17 @@ class ClientViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], permission_classes=[IsSuperAdmin])
     def archive(self, request, pk=None):
-        """Archive un client (Super-Admin uniquement)."""
+        """Marque un client inactif (Super-Admin uniquement). Nom d'action
+        conservé (le frontend appelle déjà /archive/) — sémantique mise à
+        jour pour les 2 statuts actuels (plus d'ARCHIVE distinct)."""
         client = self.get_object()
         old_status = client.status
-        client.status = Client.Status.ARCHIVE
+        client.status = Client.Status.CLIENT_INACTIF
         client.save()
 
         AuditLog.objects.log_action(
             user=request.user,
-            action=f'CLIENT_ARCHIVE:{old_status}->ARCHIVE',
+            action=f'CLIENT_ARCHIVE:{old_status}->CLIENT_INACTIF',
             entity_type='Client',
             entity_id=str(client.pk),
             details={'old_status': old_status},

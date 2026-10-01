@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2, MoreHorizontal, Search, Star } from "lucide-react";
+import { LayoutGrid, List as ListIcon, Loader2, MoreHorizontal, Search, Star } from "lucide-react";
 import { listClients, archiveClient } from "@/lib/api/administration";
 import { listUsers } from "@/lib/api/hr";
 import type { Client, ClientStatus, UserBrief } from "@/lib/api/types";
@@ -13,25 +13,19 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 
 const STATUS_LABELS: Record<ClientStatus, string> = {
-  PROSPECT: "Prospect",
   CLIENT_ACTIF: "Client actif",
   CLIENT_INACTIF: "Client inactif",
-  ARCHIVE: "Archivé",
 };
 
 const STATUS_COLORS: Record<ClientStatus, string> = {
-  PROSPECT: "bg-amber-100 text-amber-700",
   CLIENT_ACTIF: "bg-primary/10 text-primary",
   CLIENT_INACTIF: "bg-neutral-100 text-neutral-500",
-  ARCHIVE: "bg-neutral-100 text-neutral-400",
 };
 
 const TABS: { value: ClientStatus | "tous"; label: string }[] = [
   { value: "tous", label: "Tous" },
-  { value: "PROSPECT", label: "Prospects" },
   { value: "CLIENT_ACTIF", label: "Actifs" },
   { value: "CLIENT_INACTIF", label: "Inactifs" },
-  { value: "ARCHIVE", label: "Archivés" },
 ];
 
 function Rating({ value }: { value: number | null }) {
@@ -51,6 +45,9 @@ export function ClientList() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<ClientStatus | "tous">("tous");
+  // Même pattern que project-list.tsx (technique) — pill toggle, cartes par
+  // défaut.
+  const [view, setView] = useState<"card" | "list">("card");
 
   async function load() {
     try {
@@ -128,8 +125,61 @@ export function ClientList() {
             </button>
           ))}
         </div>
+        <div className="flex items-center rounded-full border border-neutral-200 bg-white p-0.5">
+          <button
+            type="button"
+            onClick={() => setView("card")}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+              view === "card" ? "bg-neutral-900 text-white" : "text-neutral-500 hover:text-neutral-900"
+            )}
+          >
+            <LayoutGrid className="size-3.5" /> Cartes
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("list")}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+              view === "list" ? "bg-neutral-900 text-white" : "text-neutral-500 hover:text-neutral-900"
+            )}
+          >
+            <ListIcon className="size-3.5" /> Liste
+          </button>
+        </div>
       </div>
 
+      {view === "card" ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((c) => (
+            <Link
+              key={c.id}
+              href={`/admin/rh/clients/${c.id}`}
+              className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm transition-colors hover:border-primary/40"
+            >
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <span className="font-medium text-neutral-900">{c.company_name}</span>
+                <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium", STATUS_COLORS[c.status])}>
+                  {STATUS_LABELS[c.status]}
+                </span>
+              </div>
+              <p className="mb-3 text-xs text-neutral-400">{c.siret || c.email || "—"}</p>
+              <div className="flex items-center justify-between text-xs text-neutral-500">
+                <span>{c.sector || "Secteur non renseigné"}</span>
+                <Rating value={c.rating} />
+              </div>
+              <p className="mt-3 border-t border-neutral-100 pt-3 text-xs text-neutral-500">
+                Assigné à <span className="font-medium text-neutral-700">{userName(c.assigned_to)}</span>
+              </p>
+            </Link>
+          ))}
+          {filtered.length === 0 && (
+            <p className="col-span-full py-8 text-center text-sm text-neutral-400">
+              {clients.length === 0 ? "Aucun client pour l'instant." : "Aucun résultat."}
+            </p>
+          )}
+        </div>
+      ) : (
       <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white shadow-sm">
         <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-[11px] font-semibold tracking-wide text-neutral-500 uppercase">
@@ -187,15 +237,15 @@ export function ClientList() {
                           </button>
                         }
                       />
-                      {c.status !== "ARCHIVE" && (
+                      {c.status !== "CLIENT_INACTIF" && (
                         <ConfirmModal
-                          title="Archiver le client"
-                          description={`Archiver « ${c.company_name} » ? Il restera consultable mais sortira des listes actives.`}
-                          confirmLabel="Archiver"
+                          title="Marquer inactif"
+                          description={`Marquer « ${c.company_name} » comme inactif ? Il restera consultable mais sortira des listes actives.`}
+                          confirmLabel="Marquer inactif"
                           onConfirm={async () => { await archiveClient(c.id); load(); }}
                           trigger={
                             <button type="button" className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-destructive hover:bg-destructive/5">
-                              Archiver
+                              Marquer inactif
                             </button>
                           }
                         />
@@ -215,6 +265,7 @@ export function ClientList() {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

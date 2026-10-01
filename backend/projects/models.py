@@ -23,6 +23,20 @@ class Project(LoggedModel):
     # reste du CMS interne.
     description = models.TextField(blank=True)
     cover_image_url = models.URLField(max_length=1000, blank=True, default='')
+    # PROTECT : un client ne doit pas pouvoir être supprimé silencieusement
+    # en emportant ses projets avec lui — la suppression doit être un choix
+    # explicite (détacher d'abord le client, ou l'archiver/inactiver plutôt
+    # que le supprimer, ce que fait déjà Client.archive()).
+    #
+    # related_name='tracked_projects', pas 'projects' : administration.
+    # technique.Project (un second modèle Project, du même nom, non relié au
+    # frontend actuel — legacy, voir son propre commentaire) a déjà un FK
+    # client avec related_name='projects' — le laisser tel quel plutôt que
+    # d'y toucher, hors périmètre ici.
+    client = models.ForeignKey(
+        'administration.Client', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='tracked_projects',
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.EN_COURS)
     priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MOYENNE)
     category = models.CharField(max_length=100, blank=True)

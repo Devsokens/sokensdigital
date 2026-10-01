@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, Loader2, Plus, Shield, Trash2, Users, Wallet } from "lucide-react";
+import { ArrowLeft, Building2, CalendarDays, Loader2, Plus, Shield, Trash2, Users, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/ui/tabs";
@@ -178,6 +178,15 @@ export function ProjectDetail({ id }: { id: string }) {
                     : "Non assigné"}
                 </strong>
               </span>
+              {project.client && (
+                <Link
+                  href={`/admin/rh/clients/${project.client.id}`}
+                  className="flex items-center gap-1.5 text-primary hover:underline"
+                >
+                  <Building2 className="size-3.5" />
+                  {project.client.company_name}
+                </Link>
+              )}
               {(project.start_date || project.end_date) && (
                 <span className="flex items-center gap-1.5">
                   <CalendarDays className="size-3.5 text-neutral-400" />
