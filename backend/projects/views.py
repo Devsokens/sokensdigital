@@ -6,21 +6,26 @@ from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.firestore_client import set_chat_room_members, upsert_chat_room
 from core.notifications import notify_roles
 from core.permissions import has_role
-from core.storage import upload_project_document
+from core.storage import upload_project_document, upload_task_comment_attachment
 from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER
 from projects.emails import (
     send_project_created_email, send_project_member_added_email, send_task_assigned_email,
 )
-from projects.models import Project, ProjectDocument, ProjectMember, ProjectTask, ProjectTaskComment, Timesheet
+from projects.models import (
+    Project, ProjectDocument, ProjectMember, ProjectTask, ProjectTaskComment, ProjectSubtask,
+    Epic, Label, Sprint, Timesheet,
+)
 from projects.serializers import (
     ProjectDocumentSerializer, ProjectMemberSerializer, ProjectSerializer, ProjectTaskCommentSerializer,
     ProjectTaskSerializer, ProjectUserBriefSerializer, TimesheetSerializer,
+    EpicSerializer, LabelSerializer, SprintSerializer, ProjectSubtaskSerializer,
 )
 
 MANAGER_ROLES = (ROLE_PROJECT_MANAGER,)
@@ -259,14 +264,14 @@ class ProjectViewSet(viewsets.ModelViewSet):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         if request.method == 'POST':
-            serializer = ProjectTaskSerializer(data=request.data)
+            serializer = ProjectTaskSerializer(data=request.data, context={'project': project})
             serializer.is_valid(raise_exception=True)
             task = serializer.save(project=project)
             for assignee in task.assignees.all():
                 send_task_assigned_email(task, to_user=assignee)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-        qs = project.tasks.prefetch_related('assignees')
+        qs = project.tasks.prefetch_related('assignees', 'labels', 'subtasks')
         return Response(ProjectTaskSerializer(qs, many=True).data)
 
     @extend_schema(
@@ -296,7 +301,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         # Assignés avant modification, pour ne notifier par e-mail que les
         # nouveaux — pas ceux qui étaient déjà sur la tâche.
         previous_assignee_ids = set(task.assignees.values_list('id', flat=True))
-        serializer = ProjectTaskSerializer(task, data=request.data, partial=True)
+        serializer = ProjectTaskSerializer(task, data=request.data, partial=True, context={'project': project})
         serializer.is_valid(raise_exception=True)
         task = serializer.save()
         for assignee in task.assignees.exclude(id__in=previous_assignee_ids):
@@ -306,13 +311,14 @@ class ProjectViewSet(viewsets.ModelViewSet):
     @extend_schema(
         tags=['Technique & Projets'],
         summary='List / add comments on a checklist task',
-        description='Any project member can view and post comments on a task.',
+        description='Any project member can view and post comments on a task. Pièce jointe optionnelle (multipart).',
         request=ProjectTaskCommentSerializer,
         responses={200: ProjectTaskCommentSerializer(many=True), 201: ProjectTaskCommentSerializer},
     )
     @action(
         detail=True, methods=['get', 'post'], url_path=r'tasks/(?P<task_id>[^/.]+)/comments',
         permission_classes=[permissions.IsAuthenticated],
+        parser_classes=[MultiPartParser, FormParser, JSONParser],
     )
     def task_comments(self, request, pk=None, task_id=None):
         project = self.get_object()
@@ -324,13 +330,202 @@ class ProjectViewSet(viewsets.ModelViewSet):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         if request.method == 'POST':
-            serializer = ProjectTaskCommentSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            serializer.save(task=task, author=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            body = request.data.get('body', '')
+            uploaded = request.FILES.get('attachment')
+            if not body.strip() and not uploaded:
+                return Response({'detail': 'Un message ou une pièce jointe est requis.'}, status=status.HTTP_400_BAD_REQUEST)
+            attachment_path = ''
+            attachment_name = ''
+            if uploaded:
+                try:
+                    attachment_path = upload_task_comment_attachment(uploaded, str(project.id))
+                except DjangoValidationError as exc:
+                    return Response({'detail': exc.messages[0] if exc.messages else str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+                attachment_name = uploaded.name
+            comment = ProjectTaskComment.objects.create(
+                task=task, author=request.user, body=body,
+                attachment_path=attachment_path, attachment_name=attachment_name,
+            )
+            return Response(ProjectTaskCommentSerializer(comment).data, status=status.HTTP_201_CREATED)
 
         qs = task.comments.select_related('author')
         return Response(ProjectTaskCommentSerializer(qs, many=True).data)
+
+    @extend_schema(
+        tags=['Technique & Projets'],
+        summary='List / add subtasks for a checklist task',
+        request=ProjectSubtaskSerializer,
+        responses={200: ProjectSubtaskSerializer(many=True), 201: ProjectSubtaskSerializer},
+    )
+    @action(
+        detail=True, methods=['get', 'post'], url_path=r'tasks/(?P<task_id>[^/.]+)/subtasks',
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def task_subtasks(self, request, pk=None, task_id=None):
+        project = self.get_object()
+        if not self._is_project_member(request, project):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        task = project.tasks.filter(id=task_id).first()
+        if not task:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'POST':
+            serializer = ProjectSubtaskSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(task=task)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        qs = task.subtasks.all()
+        return Response(ProjectSubtaskSerializer(qs, many=True).data)
+
+    @extend_schema(
+        tags=['Technique & Projets'],
+        summary='Update or delete a subtask',
+        request=ProjectSubtaskSerializer,
+        responses={200: ProjectSubtaskSerializer},
+    )
+    @action(
+        detail=True, methods=['patch', 'delete'], url_path=r'tasks/(?P<task_id>[^/.]+)/subtasks/(?P<subtask_id>[^/.]+)',
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def subtask_detail(self, request, pk=None, task_id=None, subtask_id=None):
+        project = self.get_object()
+        if not self._is_project_member(request, project):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        subtask = ProjectSubtask.objects.filter(id=subtask_id, task_id=task_id, task__project=project).first()
+        if not subtask:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'DELETE':
+            subtask.delete(user=request.user)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        serializer = ProjectSubtaskSerializer(subtask, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @extend_schema(
+        tags=['Technique & Projets'],
+        summary='List / create epics for a project',
+        request=EpicSerializer,
+        responses={200: EpicSerializer(many=True), 201: EpicSerializer},
+    )
+    @action(detail=True, methods=['get', 'post'], url_path='epics', permission_classes=[permissions.IsAuthenticated])
+    def epics(self, request, pk=None):
+        project = self.get_object()
+        if not self._is_project_member(request, project):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        if request.method == 'POST':
+            serializer = EpicSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(project=project)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(EpicSerializer(project.epics.all(), many=True).data)
+
+    @extend_schema(tags=['Technique & Projets'], summary='Update or delete an epic', request=EpicSerializer, responses={200: EpicSerializer})
+    @action(
+        detail=True, methods=['patch', 'delete'], url_path=r'epics/(?P<epic_id>[^/.]+)',
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def epic_detail(self, request, pk=None, epic_id=None):
+        project = self.get_object()
+        if not self._is_project_member(request, project):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        epic = project.epics.filter(id=epic_id).first()
+        if not epic:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if request.method == 'DELETE':
+            epic.delete(user=request.user)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        serializer = EpicSerializer(epic, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @extend_schema(
+        tags=['Technique & Projets'],
+        summary='List / create labels for a project',
+        request=LabelSerializer,
+        responses={200: LabelSerializer(many=True), 201: LabelSerializer},
+    )
+    @action(detail=True, methods=['get', 'post'], url_path='labels', permission_classes=[permissions.IsAuthenticated])
+    def labels(self, request, pk=None):
+        project = self.get_object()
+        if not self._is_project_member(request, project):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        if request.method == 'POST':
+            serializer = LabelSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(project=project)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(LabelSerializer(project.labels.all(), many=True).data)
+
+    @extend_schema(tags=['Technique & Projets'], summary='Update or delete a label', request=LabelSerializer, responses={200: LabelSerializer})
+    @action(
+        detail=True, methods=['patch', 'delete'], url_path=r'labels/(?P<label_id>[^/.]+)',
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def label_detail(self, request, pk=None, label_id=None):
+        project = self.get_object()
+        if not self._is_project_member(request, project):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        label = project.labels.filter(id=label_id).first()
+        if not label:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if request.method == 'DELETE':
+            label.delete(user=request.user)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        serializer = LabelSerializer(label, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @extend_schema(
+        tags=['Technique & Projets'],
+        summary='List / create sprints for a project',
+        request=SprintSerializer,
+        responses={200: SprintSerializer(many=True), 201: SprintSerializer},
+    )
+    @action(detail=True, methods=['get', 'post'], url_path='sprints', permission_classes=[permissions.IsAuthenticated])
+    def sprints(self, request, pk=None):
+        project = self.get_object()
+        if not self._is_project_member(request, project):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        if request.method == 'POST':
+            serializer = SprintSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(project=project)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(SprintSerializer(project.sprints.all(), many=True).data)
+
+    @extend_schema(tags=['Technique & Projets'], summary='Update or delete a sprint', request=SprintSerializer, responses={200: SprintSerializer})
+    @action(
+        detail=True, methods=['patch', 'delete'], url_path=r'sprints/(?P<sprint_id>[^/.]+)',
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def sprint_detail(self, request, pk=None, sprint_id=None):
+        project = self.get_object()
+        if not self._is_project_member(request, project):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        sprint = project.sprints.filter(id=sprint_id).first()
+        if not sprint:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if request.method == 'DELETE':
+            sprint.delete(user=request.user)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        serializer = SprintSerializer(sprint, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
     @extend_schema(
         tags=['Technique & Projets'],

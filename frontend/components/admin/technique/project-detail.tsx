@@ -11,6 +11,7 @@ import { getProject, addProjectMember, removeProjectMember } from "@/lib/api/pro
 import { listUsers } from "@/lib/api/hr";
 import { ProjectTaskBoard } from "@/components/admin/technique/project-task-board";
 import { ProjectStatsTab } from "@/components/admin/technique/project-stats-tab";
+import { ProjectOrganisationTab } from "@/components/admin/technique/project-organisation-tab";
 import { AmbientVideoBackground } from "@/components/admin/technique/ambient-video-background";
 import { formatFcfa } from "@/lib/format-currency";
 import type { Project, ProjectPriority, ProjectStatus, UserBrief } from "@/lib/api/types";
@@ -297,11 +298,15 @@ export function ProjectDetail({ id }: { id: string }) {
       <Tabs defaultValue="taches">
         <TabsList>
           <TabsTab value="taches">Tâches</TabsTab>
+          <TabsTab value="organisation">Organisation</TabsTab>
           <TabsTab value="stats">Statistiques</TabsTab>
           <TabsIndicator />
         </TabsList>
         <TabsPanel value="taches" className="pt-5">
           <ProjectTaskBoard project={project} />
+        </TabsPanel>
+        <TabsPanel value="organisation" className="pt-5">
+          <ProjectOrganisationTab projectId={project.id} />
         </TabsPanel>
         <TabsPanel value="stats" className="pt-5">
           <ProjectStatsTab projectId={project.id} />

@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import {
   CalendarDays,
+  Check,
   CheckCircle2,
   Circle,
   CircleDot,
   Eye,
   Loader2,
   MessageSquare,
+  Paperclip,
   Plus,
+  Trash2,
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -18,6 +21,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Modal, ModalTrigger, ModalClose, ModalContent } from "@/components/ui/modal";
 import { MultiSelectSearch } from "@/components/admin/multi-select-search";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
+import { cn } from "@/lib/utils";
 import {
   listProjectTasks,
   createProjectTask,
@@ -25,8 +29,25 @@ import {
   deleteProjectTask,
   listTaskComments,
   createTaskComment,
+  listEpics,
+  listLabels,
+  listSprints,
+  createSubtask,
+  updateSubtask,
+  deleteSubtask,
 } from "@/lib/api/projects";
-import type { Project, ProjectTask, ProjectTaskComment, ProjectTaskStatus, ProjectUserBrief } from "@/lib/api/types";
+import type {
+  Epic,
+  Label as ProjectLabel,
+  Project,
+  ProjectPriority,
+  ProjectSubtask,
+  ProjectTask,
+  ProjectTaskComment,
+  ProjectTaskStatus,
+  ProjectUserBrief,
+  Sprint,
+} from "@/lib/api/types";
 
 const STATUS_ORDER: ProjectTaskStatus[] = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
 
@@ -37,6 +58,13 @@ const STATUS_META: Record<ProjectTaskStatus, { label: string; icon: LucideIcon; 
   DONE: { label: "Terminé", icon: CheckCircle2, badge: "bg-emerald-100 text-emerald-700", bar: "bg-emerald-500" },
 };
 
+const PRIORITY_LABELS: Record<ProjectPriority, string> = { BASSE: "Basse", MOYENNE: "Moyenne", HAUTE: "Haute" };
+const PRIORITY_COLORS: Record<ProjectPriority, string> = {
+  BASSE: "bg-sky-100 text-sky-700",
+  MOYENNE: "bg-violet-100 text-violet-700",
+  HAUTE: "bg-orange-100 text-orange-700",
+};
+
 function initials(firstName?: string, lastName?: string) {
   return `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "?";
 }
@@ -44,74 +72,6 @@ function initials(firstName?: string, lastName?: string) {
 function formatShort(value: string) {
   const d = new Date(`${value}T00:00:00`);
   return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
-}
-
-function isoDate(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
-
-/** A 14-day date strip with each task's due-date pill placed under its
- * column — a lightweight stand-in for a full Gantt/calendar view. */
-function TaskCalendarStrip({ tasks }: { tasks: ProjectTask[] }) {
-  const days = useMemo(() => {
-    const start = new Date();
-    start.setDate(start.getDate() - 3);
-    return Array.from({ length: 14 }, (_, i) => {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      return d;
-    });
-  }, []);
-  const todayIso = isoDate(new Date());
-
-  const byDay = useMemo(() => {
-    const map = new Map<string, ProjectTask[]>();
-    for (const task of tasks) {
-      if (!task.due_date) continue;
-      const list = map.get(task.due_date) ?? [];
-      list.push(task);
-      map.set(task.due_date, list);
-    }
-    return map;
-  }, [tasks]);
-
-  return (
-    <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
-      <div className="grid min-w-[980px]" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(70px, 1fr))` }}>
-        {days.map((day) => {
-          const iso = isoDate(day);
-          const isToday = iso === todayIso;
-          return (
-            <div
-              key={iso}
-              className={`min-h-[140px] border-l border-neutral-100 px-2 py-2 first:border-l-0 ${
-                isToday ? "bg-primary/5" : ""
-              }`}
-            >
-              <p className={`mb-2 text-[11px] font-medium ${isToday ? "text-primary" : "text-neutral-400"}`}>
-                {day.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}
-                {isToday && <span className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-[9px] text-white">Aujourd&apos;hui</span>}
-              </p>
-              <div className="space-y-1">
-                {(byDay.get(iso) ?? []).map((task) => {
-                  const meta = STATUS_META[task.status];
-                  return (
-                    <div
-                      key={task.id}
-                      className={`truncate rounded-md px-1.5 py-1 text-[10px] font-medium ${meta.badge}`}
-                      title={task.title}
-                    >
-                      {task.title}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 function TaskCard({ task, onOpen, onDragStart }: {
@@ -130,6 +90,20 @@ function TaskCard({ task, onOpen, onDragStart }: {
       <div className="mb-2 flex items-center justify-between">
         <p className="truncate text-sm font-medium text-neutral-900">{task.title}</p>
       </div>
+      {(task.labels.length > 0 || task.priority) && (
+        <div className="mb-2 flex flex-wrap items-center gap-1">
+          {task.priority && (
+            <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-medium", PRIORITY_COLORS[task.priority])}>
+              {PRIORITY_LABELS[task.priority]}
+            </span>
+          )}
+          {task.labels.map((l) => (
+            <span key={l.id} className="rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ backgroundColor: `${l.color}1a`, color: l.color }}>
+              {l.name}
+            </span>
+          ))}
+        </div>
+      )}
       {task.due_date && (
         <p className="mb-2 flex items-center gap-1 text-[11px] text-neutral-400">
           <CalendarDays className="size-3" /> {formatShort(task.due_date)}
@@ -170,28 +144,44 @@ function TaskCard({ task, onOpen, onDragStart }: {
  * l'ouverture. */
 function AddTaskModal({
   members,
+  labels,
   onAdd,
 }: {
   members: ProjectUserBrief[];
-  onAdd: (data: { title: string; description: string; assignee_ids: string[] }) => Promise<void>;
+  labels: ProjectLabel[];
+  onAdd: (data: { title: string; description: string; assignee_ids: string[]; due_date?: string; priority?: string | null; label_ids?: string[] }) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [dueDate, setDueDate] = useState("");
+  const [priority, setPriority] = useState<ProjectPriority | "">("");
+  const [labelIds, setLabelIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   const memberOptions = members.map((m) => ({ id: m.id, label: `${m.first_name} ${m.last_name}`.trim() }));
+  const labelOptions = labels.map((l) => ({ id: l.id, label: l.name }));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || saving) return;
     setSaving(true);
     try {
-      await onAdd({ title: title.trim(), description: description.trim(), assignee_ids: assigneeIds });
+      await onAdd({
+        title: title.trim(),
+        description: description.trim(),
+        assignee_ids: assigneeIds,
+        due_date: dueDate || undefined,
+        priority: priority || null,
+        label_ids: labelIds,
+      });
       setTitle("");
       setDescription("");
       setAssigneeIds([]);
+      setDueDate("");
+      setPriority("");
+      setLabelIds([]);
       setOpen(false);
     } finally {
       setSaving(false);
@@ -251,6 +241,34 @@ function AddTaskModal({
             />
           </motion.div>
 
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }} className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className={labelClass}>Échéance</span>
+              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />
+            </label>
+            <label className="block">
+              <span className={labelClass}>Priorité</span>
+              <select value={priority} onChange={(e) => setPriority(e.target.value as ProjectPriority | "")} className={inputClass}>
+                <option value="">—</option>
+                {(["BASSE", "MOYENNE", "HAUTE"] as ProjectPriority[]).map((p) => (
+                  <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
+                ))}
+              </select>
+            </label>
+          </motion.div>
+
+          {labelOptions.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              <span className={labelClass}>Étiquettes</span>
+              <MultiSelectSearch
+                options={labelOptions}
+                values={labelIds}
+                onChange={setLabelIds}
+                placeholder="Ajouter des étiquettes…"
+              />
+            </motion.div>
+          )}
+
           <div className="flex items-center justify-end gap-2 pt-2">
             <ModalClose render={<button type="button" className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-50">Annuler</button>} />
             <button
@@ -267,10 +285,89 @@ function AddTaskModal({
   );
 }
 
+function SubtaskList({ projectId, task }: { projectId: string; task: ProjectTask }) {
+  const [subtasks, setSubtasks] = useState<ProjectSubtask[]>(task.subtasks);
+  const [newTitle, setNewTitle] = useState("");
+
+  useEffect(() => {
+    setSubtasks(task.subtasks);
+  }, [task.id, task.subtasks]);
+
+  async function handleAdd() {
+    const title = newTitle.trim();
+    if (!title) return;
+    setNewTitle("");
+    const subtask = await createSubtask(projectId, task.id, title);
+    setSubtasks((prev) => [...prev, subtask]);
+  }
+
+  async function handleToggle(subtask: ProjectSubtask) {
+    setSubtasks((prev) => prev.map((s) => (s.id === subtask.id ? { ...s, is_done: !s.is_done } : s)));
+    await updateSubtask(projectId, task.id, subtask.id, { is_done: !subtask.is_done });
+  }
+
+  async function handleDelete(subtask: ProjectSubtask) {
+    setSubtasks((prev) => prev.filter((s) => s.id !== subtask.id));
+    await deleteSubtask(projectId, task.id, subtask.id);
+  }
+
+  return (
+    <div>
+      <span className={labelClass}>Sous-tâches</span>
+      <div className="space-y-1">
+        {subtasks.map((s) => (
+          <div key={s.id} className="group flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-neutral-50">
+            <button
+              type="button"
+              onClick={() => handleToggle(s)}
+              className={cn(
+                "flex size-4.5 shrink-0 items-center justify-center rounded border transition-colors",
+                s.is_done ? "border-primary bg-primary text-primary-foreground" : "border-neutral-300"
+              )}
+            >
+              {s.is_done && <Check className="size-3" />}
+            </button>
+            <span className={cn("flex-1 text-sm", s.is_done ? "text-neutral-400 line-through" : "text-neutral-700")}>
+              {s.title}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleDelete(s)}
+              className="shrink-0 text-neutral-300 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="mt-1.5 flex items-center gap-2">
+        <input
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAdd(); } }}
+          placeholder="Ajouter une sous-tâche…"
+          className={inputClass}
+        />
+        <button
+          type="button"
+          onClick={handleAdd}
+          disabled={!newTitle.trim()}
+          className="shrink-0 rounded-lg border border-neutral-200 px-3 py-2.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+        >
+          <Plus className="size-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TaskDetailSheet({
   task,
   projectId,
   members,
+  epics,
+  sprints,
+  labels,
   onClose,
   onUpdate,
   onDelete,
@@ -278,12 +375,19 @@ function TaskDetailSheet({
   task: ProjectTask | null;
   projectId: string;
   members: ProjectUserBrief[];
+  epics: Epic[];
+  sprints: Sprint[];
+  labels: ProjectLabel[];
   onClose: () => void;
-  onUpdate: (taskId: string, data: Partial<{ title: string; status: ProjectTaskStatus; due_date: string | null; progress: number; assignee_ids: string[] }>) => void;
+  onUpdate: (taskId: string, data: Partial<{
+    title: string; status: ProjectTaskStatus; priority: ProjectPriority | null; due_date: string | null;
+    progress: number; assignee_ids: string[]; epic: string | null; sprint: string | null; label_ids: string[];
+  }>) => void;
   onDelete: (taskId: string) => void;
 }) {
   const [comments, setComments] = useState<ProjectTaskComment[] | null>(null);
   const [newComment, setNewComment] = useState("");
+  const [attachment, setAttachment] = useState<File | null>(null);
   const [posting, setPosting] = useState(false);
 
   useEffect(() => {
@@ -292,20 +396,23 @@ function TaskDetailSheet({
       return;
     }
     setComments(null);
+    setAttachment(null);
     listTaskComments(projectId, task.id).then(setComments).catch(() => setComments([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task?.id]);
 
   if (!task) return null;
   const assigneeIds = new Set(task.assignees.map((u) => u.id));
+  const taskLabelIds = new Set(task.labels.map((l) => l.id));
 
   async function handlePostComment() {
-    if (!task || !newComment.trim()) return;
+    if (!task || (!newComment.trim() && !attachment)) return;
     setPosting(true);
     try {
-      const comment = await createTaskComment(projectId, task.id, newComment.trim());
+      const comment = await createTaskComment(projectId, task.id, newComment.trim(), attachment ?? undefined);
       setComments((prev) => (prev ? [...prev, comment] : [comment]));
       setNewComment("");
+      setAttachment(null);
     } finally {
       setPosting(false);
     }
@@ -349,6 +456,78 @@ function TaskDetailSheet({
             </label>
           </div>
 
+          <div className="grid grid-cols-3 gap-4">
+            <label className="block">
+              <span className={labelClass}>Priorité</span>
+              <select
+                value={task.priority ?? ""}
+                onChange={(e) => onUpdate(task.id, { priority: (e.target.value as ProjectPriority) || null })}
+                className={inputClass}
+              >
+                <option value="">—</option>
+                {(["BASSE", "MOYENNE", "HAUTE"] as ProjectPriority[]).map((p) => (
+                  <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className={labelClass}>Epic</span>
+              <select
+                value={task.epic ?? ""}
+                onChange={(e) => onUpdate(task.id, { epic: e.target.value || null })}
+                className={inputClass}
+              >
+                <option value="">—</option>
+                {epics.map((ep) => (
+                  <option key={ep.id} value={ep.id}>{ep.title}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className={labelClass}>Sprint</span>
+              <select
+                value={task.sprint ?? ""}
+                onChange={(e) => onUpdate(task.id, { sprint: e.target.value || null })}
+                className={inputClass}
+              >
+                <option value="">—</option>
+                {sprints.map((sp) => (
+                  <option key={sp.id} value={sp.id}>{sp.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {labels.length > 0 && (
+            <div>
+              <span className={labelClass}>Étiquettes</span>
+              <div className="flex flex-wrap gap-1.5">
+                {labels.map((l) => {
+                  const active = taskLabelIds.has(l.id);
+                  return (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => {
+                        const next = active
+                          ? task.labels.filter((tl) => tl.id !== l.id).map((tl) => tl.id)
+                          : [...task.labels.map((tl) => tl.id), l.id];
+                        onUpdate(task.id, { label_ids: next });
+                      }}
+                      className="rounded-full px-2.5 py-1 text-xs font-medium transition-opacity"
+                      style={{
+                        backgroundColor: active ? l.color : `${l.color}1a`,
+                        color: active ? "#fff" : l.color,
+                      }}
+                    >
+                      {l.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <label className="block">
             <span className={labelClass}>Progression ({task.progress}%)</span>
             <input
@@ -388,6 +567,8 @@ function TaskDetailSheet({
             </div>
           </div>
 
+          <SubtaskList projectId={projectId} task={task} />
+
           <div>
             <span className={labelClass}>Commentaires</span>
             <div className="mb-2 max-h-52 space-y-2 overflow-y-auto">
@@ -398,10 +579,26 @@ function TaskDetailSheet({
                   <p className="mb-0.5 font-medium text-neutral-700">
                     {c.author ? `${c.author.first_name} ${c.author.last_name}` : "—"}
                   </p>
-                  <p className="text-neutral-600">{c.body}</p>
+                  {c.body && <p className="text-neutral-600">{c.body}</p>}
+                  {c.attachment_url && (
+                    <a
+                      href={c.attachment_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 flex items-center gap-1 text-primary hover:underline"
+                    >
+                      <Paperclip className="size-3" /> {c.attachment_name}
+                    </a>
+                  )}
                 </div>
               ))}
             </div>
+            {attachment && (
+              <p className="mb-1.5 flex items-center justify-between rounded-lg bg-primary/5 px-2.5 py-1.5 text-xs text-primary">
+                <span className="flex items-center gap-1 truncate"><Paperclip className="size-3" /> {attachment.name}</span>
+                <button type="button" onClick={() => setAttachment(null)} className="shrink-0"><X className="size-3.5" /></button>
+              </p>
+            )}
             <div className="flex items-center gap-2">
               <input
                 value={newComment}
@@ -410,10 +607,18 @@ function TaskDetailSheet({
                 placeholder="Ajouter un commentaire…"
                 className={inputClass}
               />
+              <label className="flex shrink-0 cursor-pointer items-center justify-center rounded-lg border border-neutral-200 px-3 py-2.5 text-neutral-500 hover:bg-neutral-50">
+                <Paperclip className="size-3.5" />
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
+                />
+              </label>
               <button
                 type="button"
                 onClick={handlePostComment}
-                disabled={posting || !newComment.trim()}
+                disabled={posting || (!newComment.trim() && !attachment)}
                 className="shrink-0 rounded-lg bg-primary px-3 py-2.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
               >
                 Envoyer
@@ -441,6 +646,9 @@ export function ProjectTaskBoard({ project }: { project: Project }) {
   const [error, setError] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<ProjectTaskStatus | null>(null);
+  const [epics, setEpics] = useState<Epic[]>([]);
+  const [sprints, setSprints] = useState<Sprint[]>([]);
+  const [labels, setLabels] = useState<ProjectLabel[]>([]);
 
   async function load() {
     try {
@@ -452,18 +660,24 @@ export function ProjectTaskBoard({ project }: { project: Project }) {
 
   useEffect(() => {
     load();
+    listEpics(project.id).then(setEpics).catch(() => setEpics([]));
+    listSprints(project.id).then(setSprints).catch(() => setSprints([]));
+    listLabels(project.id).then(setLabels).catch(() => setLabels([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
   async function handleAdd(
     status: ProjectTaskStatus,
-    data: { title: string; description: string; assignee_ids: string[] },
+    data: { title: string; description: string; assignee_ids: string[]; due_date?: string; priority?: string | null; label_ids?: string[] },
   ) {
     const task = await createProjectTask(project.id, { ...data, status });
     setTasks((prev) => (prev ? [...prev, task] : [task]));
   }
 
-  async function handleUpdate(taskId: string, data: Partial<{ title: string; status: ProjectTaskStatus; due_date: string | null; progress: number; assignee_ids: string[] }>) {
+  async function handleUpdate(taskId: string, data: Partial<{
+    title: string; status: ProjectTaskStatus; priority: ProjectPriority | null; due_date: string | null;
+    progress: number; assignee_ids: string[]; epic: string | null; sprint: string | null; label_ids: string[];
+  }>) {
     setTasks((prev) => prev?.map((t) => (t.id === taskId ? { ...t, ...data, assignees: data.assignee_ids ? members.filter((m) => data.assignee_ids!.includes(m.id)) : t.assignees } : t)) ?? prev);
     const updated = await updateProjectTask(project.id, taskId, data);
     setTasks((prev) => prev?.map((t) => (t.id === taskId ? updated : t)) ?? prev);
@@ -493,11 +707,6 @@ export function ProjectTaskBoard({ project }: { project: Project }) {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="mb-2 text-sm font-semibold text-neutral-900">Calendrier des tâches</h2>
-        <TaskCalendarStrip tasks={tasks} />
-      </div>
-
       <div>
         <h2 className="mb-2 text-sm font-semibold text-neutral-900">Toutes les tâches</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -535,7 +744,7 @@ export function ProjectTaskBoard({ project }: { project: Project }) {
                       onDragStart={(e) => e.dataTransfer.setData("text/plain", task.id)}
                     />
                   ))}
-                  <AddTaskModal members={members} onAdd={(data) => handleAdd(status, data)} />
+                  <AddTaskModal members={members} labels={labels} onAdd={(data) => handleAdd(status, data)} />
                 </div>
               </div>
             );
@@ -547,6 +756,9 @@ export function ProjectTaskBoard({ project }: { project: Project }) {
         task={selectedTask}
         projectId={project.id}
         members={members}
+        epics={epics}
+        sprints={sprints}
+        labels={labels}
         onClose={() => setSelectedTaskId(null)}
         onUpdate={handleUpdate}
         onDelete={handleDelete}

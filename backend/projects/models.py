@@ -66,6 +66,54 @@ class Project(LoggedModel):
             raise ValidationError({'end_date': 'La date de fin ne peut pas précéder la date de début.'})
 
 
+class Epic(LoggedModel):
+    """Regroupe des tâches au sein d'un projet (module Gestion de projet v2)."""
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='epics')
+    title = models.CharField(max_length=255)
+    color = models.CharField(max_length=20, blank=True, default='#6366f1')
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.title} ({self.project.name})'
+
+
+class Label(LoggedModel):
+    """Étiquette de tâche, propre à un projet."""
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='labels')
+    name = models.CharField(max_length=100)
+    color = models.CharField(max_length=20, blank=True, default='#64748b')
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(fields=['project', 'name'], name='unique_label_name_per_project'),
+        ]
+
+    def __str__(self):
+        return f'{self.name} ({self.project.name})'
+
+
+class Sprint(LoggedModel):
+    """Itération planifiée d'un projet."""
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='sprints')
+    name = models.CharField(max_length=255)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-start_date', 'name']
+
+    def clean(self):
+        super().clean()
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValidationError({'end_date': 'La date de fin ne peut pas précéder la date de début.'})
+
+    def __str__(self):
+        return f'{self.name} ({self.project.name})'
+
+
 class ProjectTask(LoggedModel):
     class Status(models.TextChoices):
         A_FAIRE = 'A_FAIRE', 'À faire'
@@ -73,13 +121,25 @@ class ProjectTask(LoggedModel):
         EN_REVISION = 'EN_REVISION', 'En révision'
         TERMINE = 'TERMINE', 'Terminé'
 
+    class Priority(models.TextChoices):
+        BASSE = 'BASSE', 'Basse'
+        MOYENNE = 'MOYENNE', 'Moyenne'
+        HAUTE = 'HAUTE', 'Haute'
+
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.A_FAIRE)
+    # Pas de défaut forcé à MOYENNE comme Project.priority — la demande est
+    # explicite : rien n'est obligatoire hors le titre. Null tant que
+    # personne n'a choisi de priorité.
+    priority = models.CharField(max_length=10, choices=Priority.choices, null=True, blank=True)
     due_date = models.DateField(null=True, blank=True)
     progress = models.PositiveSmallIntegerField(default=0)
     assignees = models.ManyToManyField(User, related_name='project_tasks', blank=True)
+    epic = models.ForeignKey(Epic, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
+    sprint = models.ForeignKey(Sprint, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
+    labels = models.ManyToManyField(Label, related_name='tasks', blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta(LoggedModel.Meta):
@@ -101,10 +161,29 @@ class ProjectTask(LoggedModel):
         return f'{self.project.name} — {self.title}'
 
 
+class ProjectSubtask(LoggedModel):
+    """Sous-tâche en ligne (case à cocher, titre barré une fois terminée) —
+    aucun précédent dans le repo, modèle minimal dédié."""
+    task = models.ForeignKey(ProjectTask, on_delete=models.CASCADE, related_name='subtasks')
+    title = models.CharField(max_length=255)
+    is_done = models.BooleanField(default=False)
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['order', 'created_at']
+
+    def __str__(self):
+        return f'{self.title} ({self.task})'
+
+
 class ProjectTaskComment(LoggedModel):
     task = models.ForeignKey(ProjectTask, on_delete=models.CASCADE, related_name='comments')
     author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='project_task_comments')
-    body = models.TextField()
+    body = models.TextField(blank=True)
+    # Chemin de stockage, jamais une URL — même principe que
+    # ProjectDocument.storage_path (resigné à la demande par le serializer).
+    attachment_path = models.CharField(max_length=500, blank=True)
+    attachment_name = models.CharField(max_length=255, blank=True)
 
     class Meta(LoggedModel.Meta):
         ordering = ['created_at']

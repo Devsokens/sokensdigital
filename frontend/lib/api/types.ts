@@ -567,14 +567,46 @@ export interface Project {
 
 export type ProjectTaskStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
 
+export interface Epic {
+  id: string;
+  title: string;
+  color: string;
+  created_at: string;
+}
+
+export interface Label {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export interface Sprint {
+  id: string;
+  name: string;
+  start_date: string | null;
+  end_date: string | null;
+}
+
+export interface ProjectSubtask {
+  id: string;
+  title: string;
+  is_done: boolean;
+  order: number;
+}
+
 export interface ProjectTask {
   id: string;
   title: string;
   description: string;
   status: ProjectTaskStatus;
+  priority: ProjectPriority | null;
   due_date: string | null;
   progress: number;
   assignees: ProjectUserBrief[];
+  epic: string | null;
+  sprint: string | null;
+  labels: Label[];
+  subtasks: ProjectSubtask[];
   comments_count: number;
   created_at: string;
   updated_at: string;
@@ -584,6 +616,8 @@ export interface ProjectTaskComment {
   id: string;
   body: string;
   author: ProjectUserBrief | null;
+  attachment_url: string | null;
+  attachment_name: string;
   created_at: string;
 }
 

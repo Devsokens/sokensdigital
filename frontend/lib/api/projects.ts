@@ -1,13 +1,17 @@
 import { auth } from "@/lib/firebase/config";
 import { apiFetch } from "@/lib/api/client";
 import type {
+  Epic,
+  Label,
   Paginated,
   Project,
   ProjectDocument,
   ProjectMember,
+  ProjectSubtask,
   ProjectTask,
   ProjectTaskComment,
   ProjectTaskStatus,
+  Sprint,
   TeamTimesheetResponse,
   Timesheet,
 } from "@/lib/api/types";
@@ -97,9 +101,13 @@ export async function createProjectTask(projectId: string, data: {
   title: string;
   description?: string;
   status?: ProjectTaskStatus;
+  priority?: string | null;
   due_date?: string;
   progress?: number;
   assignee_ids?: string[];
+  epic?: string | null;
+  sprint?: string | null;
+  label_ids?: string[];
 }) {
   const task = await apiFetch<ProjectTask>(`/api/v1/projects/${projectId}/tasks/`, {
     method: "POST",
@@ -112,9 +120,13 @@ export async function updateProjectTask(projectId: string, taskId: string, data:
   title: string;
   description: string;
   status: ProjectTaskStatus;
+  priority: string | null;
   due_date: string | null;
   progress: number;
   assignee_ids: string[];
+  epic: string | null;
+  sprint: string | null;
+  label_ids: string[];
 }>) {
   const task = await apiFetch<ProjectTask>(`/api/v1/projects/${projectId}/tasks/${taskId}/`, {
     method: "PATCH",
@@ -131,11 +143,108 @@ export function listTaskComments(projectId: string, taskId: string) {
   return apiFetch<ProjectTaskComment[]>(`/api/v1/projects/${projectId}/tasks/${taskId}/comments/`);
 }
 
-export function createTaskComment(projectId: string, taskId: string, body: string) {
-  return apiFetch<ProjectTaskComment>(`/api/v1/projects/${projectId}/tasks/${taskId}/comments/`, {
+/** Pas apiFetch() dès qu'une pièce jointe est fournie — FormData,
+ * incompatible avec le Content-Type: application/json forcé par apiFetch. */
+export async function createTaskComment(projectId: string, taskId: string, body: string, attachment?: File): Promise<ProjectTaskComment> {
+  if (!attachment) {
+    return apiFetch<ProjectTaskComment>(`/api/v1/projects/${projectId}/tasks/${taskId}/comments/`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    });
+  }
+
+  const user = auth.currentUser;
+  const token = user ? await user.getIdToken() : null;
+  const formData = new FormData();
+  formData.append("body", body);
+  formData.append("attachment", attachment);
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/tasks/${taskId}/comments/`, {
     method: "POST",
-    body: JSON.stringify({ body }),
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
   });
+  if (!response.ok) {
+    let detail = `Échec de l'envoi (${response.status})`;
+    try {
+      const body = await response.json();
+      if (body.detail) detail = body.detail;
+    } catch {
+      // pas de corps JSON
+    }
+    throw new Error(detail);
+  }
+  return response.json();
+}
+
+export function listEpics(projectId: string) {
+  return apiFetch<Epic[]>(`/api/v1/projects/${projectId}/epics/`);
+}
+
+export function createEpic(projectId: string, data: { title: string; color?: string }) {
+  return apiFetch<Epic>(`/api/v1/projects/${projectId}/epics/`, { method: "POST", body: JSON.stringify(data) });
+}
+
+export function updateEpic(projectId: string, epicId: string, data: Partial<{ title: string; color: string }>) {
+  return apiFetch<Epic>(`/api/v1/projects/${projectId}/epics/${epicId}/`, { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export function deleteEpic(projectId: string, epicId: string) {
+  return apiFetch<void>(`/api/v1/projects/${projectId}/epics/${epicId}/`, { method: "DELETE" });
+}
+
+export function listLabels(projectId: string) {
+  return apiFetch<Label[]>(`/api/v1/projects/${projectId}/labels/`);
+}
+
+export function createLabel(projectId: string, data: { name: string; color?: string }) {
+  return apiFetch<Label>(`/api/v1/projects/${projectId}/labels/`, { method: "POST", body: JSON.stringify(data) });
+}
+
+export function updateLabel(projectId: string, labelId: string, data: Partial<{ name: string; color: string }>) {
+  return apiFetch<Label>(`/api/v1/projects/${projectId}/labels/${labelId}/`, { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export function deleteLabel(projectId: string, labelId: string) {
+  return apiFetch<void>(`/api/v1/projects/${projectId}/labels/${labelId}/`, { method: "DELETE" });
+}
+
+export function listSprints(projectId: string) {
+  return apiFetch<Sprint[]>(`/api/v1/projects/${projectId}/sprints/`);
+}
+
+export function createSprint(projectId: string, data: { name: string; start_date?: string | null; end_date?: string | null }) {
+  return apiFetch<Sprint>(`/api/v1/projects/${projectId}/sprints/`, { method: "POST", body: JSON.stringify(data) });
+}
+
+export function updateSprint(projectId: string, sprintId: string, data: Partial<{ name: string; start_date: string | null; end_date: string | null }>) {
+  return apiFetch<Sprint>(`/api/v1/projects/${projectId}/sprints/${sprintId}/`, { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export function deleteSprint(projectId: string, sprintId: string) {
+  return apiFetch<void>(`/api/v1/projects/${projectId}/sprints/${sprintId}/`, { method: "DELETE" });
+}
+
+export function listSubtasks(projectId: string, taskId: string) {
+  return apiFetch<ProjectSubtask[]>(`/api/v1/projects/${projectId}/tasks/${taskId}/subtasks/`);
+}
+
+export function createSubtask(projectId: string, taskId: string, title: string) {
+  return apiFetch<ProjectSubtask>(`/api/v1/projects/${projectId}/tasks/${taskId}/subtasks/`, {
+    method: "POST",
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function updateSubtask(projectId: string, taskId: string, subtaskId: string, data: Partial<{ title: string; is_done: boolean; order: number }>) {
+  return apiFetch<ProjectSubtask>(`/api/v1/projects/${projectId}/tasks/${taskId}/subtasks/${subtaskId}/`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteSubtask(projectId: string, taskId: string, subtaskId: string) {
+  return apiFetch<void>(`/api/v1/projects/${projectId}/tasks/${taskId}/subtasks/${subtaskId}/`, { method: "DELETE" });
 }
 
 export function addProjectMember(projectId: string, userId: string) {
