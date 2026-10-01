@@ -18,18 +18,10 @@ def send_lead_acknowledgement(lead) -> bool:
     communiquée.
     """
     tracking_url = f'{settings.PUBLIC_SITE_URL}/suivi-projet?t={lead.tracking_token}'
-    body = (
-        f'Bonjour {lead.first_name},\n'
-        'Nous avons bien reçu votre demande de projet et notre équipe la prend en charge.\n'
-        f'Votre référence de suivi est {lead.tracking_reference}. '
-        'Conservez-la : elle vous permet de consulter l\'avancement à tout moment, '
-        'avec l\'adresse e-mail utilisée pour cette demande.\n'
-        'Nous revenons vers vous sous 48 heures ouvrées.'
-    )
-    return mailer.send_mail(
+    return mailer.send_template(
+        'lead_acknowledgement',
         lead.email,
-        f'Votre demande de projet — {lead.tracking_reference}',
-        body,
+        {'first_name': lead.first_name, 'tracking_reference': lead.tracking_reference},
         action_url=tracking_url,
         action_label='Suivre ma demande',
     )
@@ -47,16 +39,14 @@ def send_lead_document_received(lead, document_name: str) -> bool:
     tient le plus.
     """
     tracking_url = f'{settings.PUBLIC_SITE_URL}/suivi-projet?t={lead.tracking_token}'
-    body = (
-        f'Bonjour {lead.first_name},\n'
-        f'Nous confirmons la réception de votre document « {document_name} », '
-        f'joint à votre demande {lead.tracking_reference}.\n'
-        "Notre équipe en tient compte dans l'analyse de votre projet."
-    )
-    return mailer.send_mail(
+    return mailer.send_template(
+        'lead_document_received',
         lead.email,
-        f'Document bien reçu — {lead.tracking_reference}',
-        body,
+        {
+            'first_name': lead.first_name,
+            'document_name': document_name,
+            'tracking_reference': lead.tracking_reference,
+        },
         action_url=tracking_url,
         action_label='Suivre ma demande',
     )
@@ -69,15 +59,14 @@ def send_lead_status_update(lead) -> bool:
     à surveiller la page de suivi pour apprendre qu'on a avancé.
     """
     tracking_url = f'{settings.PUBLIC_SITE_URL}/suivi-projet?t={lead.tracking_token}'
-    body = (
-        f'Bonjour {lead.first_name},\n'
-        f'Votre demande {lead.tracking_reference} a changé d\'état : '
-        f'{lead.tracking_state_label}.'
-    )
-    return mailer.send_mail(
+    return mailer.send_template(
+        'lead_status_update',
         lead.email,
-        f'Mise à jour de votre demande — {lead.tracking_reference}',
-        body,
+        {
+            'first_name': lead.first_name,
+            'tracking_reference': lead.tracking_reference,
+            'status': lead.tracking_state_label,
+        },
         action_url=tracking_url,
         action_label='Voir le détail',
     )

@@ -39,17 +39,14 @@ def send_project_created_email(project, *, to_user) -> bool:
     filtres anti-spam pondèrent, indépendamment de l'expéditeur."""
     if not to_user.email:
         return False
-    excerpt = _plain_excerpt(project.description)
-    body = (
-        f'Bonjour {to_user.first_name},\n'
-        f'Le projet « {project.name} » vient d\'être créé et vous en êtes le chef de projet.\n'
-        + (f'\n{excerpt}\n' if excerpt else '')
-        + 'Vous pouvez le consulter et commencer à l\'organiser dès maintenant.'
-    )
-    return mailer.send_mail(
+    return mailer.send_template(
+        'project_created',
         to_user.email,
-        f'Nouveau projet à piloter : {project.name}',
-        body,
+        {
+            'first_name': to_user.first_name,
+            'project_name': project.name,
+            'project_excerpt': _plain_excerpt(project.description),
+        },
         action_url=_project_url(project),
         action_label='Voir le projet',
     )
@@ -59,15 +56,10 @@ def send_project_member_added_email(project, *, to_user) -> bool:
     """Prévient un membre qu'il vient d'être ajouté à l'équipe d'un projet."""
     if not to_user.email:
         return False
-    body = (
-        f'Bonjour {to_user.first_name},\n'
-        f'Vous avez été ajouté(e) à l\'équipe du projet « {project.name} ».\n'
-        'Vous pouvez dès maintenant consulter ses tâches et son avancement.'
-    )
-    return mailer.send_mail(
+    return mailer.send_template(
+        'project_member_added',
         to_user.email,
-        f'Vous rejoignez le projet {project.name}',
-        body,
+        {'first_name': to_user.first_name, 'project_name': project.name},
         action_url=_project_url(project),
         action_label='Voir le projet',
     )
@@ -77,17 +69,16 @@ def send_task_assigned_email(task, *, to_user) -> bool:
     """Prévient un utilisateur qu'une tâche lui a été assignée."""
     if not to_user.email:
         return False
-    excerpt = _plain_excerpt(task.description)
-    body = (
-        f'Bonjour {to_user.first_name},\n'
-        f'La tâche « {task.title} » du projet « {task.project.name} » vous a été assignée.\n'
-        + (f'\n{excerpt}\n' if excerpt else '')
-        + (f'Échéance : {task.due_date.strftime("%d/%m/%Y")}.' if task.due_date else '')
-    )
-    return mailer.send_mail(
+    return mailer.send_template(
+        'task_assigned',
         to_user.email,
-        f'Nouvelle tâche assignée : {task.title}',
-        body.strip(),
+        {
+            'first_name': to_user.first_name,
+            'task_title': task.title,
+            'project_name': task.project.name,
+            'task_excerpt': _plain_excerpt(task.description),
+            'due_date': task.due_date.strftime('%d/%m/%Y') if task.due_date else 'non définie',
+        },
         action_url=_project_url(task.project),
         action_label='Voir la tâche',
     )

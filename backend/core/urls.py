@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from core.analytics_views import MarketingAnalyticsView, TechniqueAnalyticsView
 from core.attachment_views import DocumentAttachmentViewSet
+from core.email_template_views import EmailTemplateDetailView, EmailTemplateListView
 from core.views import (
     AuditLogViewSet,
     AvatarUploadView,
@@ -45,4 +46,6 @@ urlpatterns = [
     path('users/<uuid:pk>/deactivate/', DeactivateUserView.as_view(), name='deactivate-user'),
     path('analytics/marketing/', MarketingAnalyticsView.as_view(), name='analytics-marketing'),
     path('analytics/technique/', TechniqueAnalyticsView.as_view(), name='analytics-technique'),
+    path('email-templates/', EmailTemplateListView.as_view(), name='email-templates'),
+    path('email-templates/<str:key>/', EmailTemplateDetailView.as_view(), name='email-template-detail'),
 ] + router.urls

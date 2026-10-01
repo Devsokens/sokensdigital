@@ -16,9 +16,9 @@ import {
 } from "@/lib/api/administration";
 import { listUsers } from "@/lib/api/hr";
 import { listProjects } from "@/lib/api/projects";
-import { listAppointments } from "@/lib/api/administration";
+import { listAppointments, listClientEmails } from "@/lib/api/administration";
 import { MeetingSheet } from "@/components/admin/agenda/meeting-sheet";
-import type { Appointment, Client, ClientContact, ClientDocumentEntry, ClientInteractionEntry, ClientStatus, Project, UserBrief } from "@/lib/api/types";
+import type { Appointment, Client, ClientContact, ClientDocumentEntry, ClientInteractionEntry, ClientStatus, Project, SentEmail, UserBrief } from "@/lib/api/types";
 import { ClientFormModal } from "@/components/admin/rh/client-form-modal";
 import { ConfirmModal } from "@/components/admin/confirm-modal";
 import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/ui/tabs";
@@ -58,12 +58,13 @@ export function ClientDetail({ id }: { id: string }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [meetings, setMeetings] = useState<Appointment[]>([]);
   const [openMeeting, setOpenMeeting] = useState<Appointment | null>(null);
+  const [emails, setEmails] = useState<SentEmail[]>([]);
   const [users, setUsers] = useState<UserBrief[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
     try {
-      const [c, contactsRes, interactionsRes, docsRes, usersRes, projectsRes, meetingsRes] = await Promise.all([
+      const [c, contactsRes, interactionsRes, docsRes, usersRes, projectsRes, meetingsRes, emailsRes] = await Promise.all([
         getClient(id),
         listContacts(id),
         listInteractions(id),
@@ -71,6 +72,7 @@ export function ClientDetail({ id }: { id: string }) {
         listUsers(),
         listProjects({ client: id }),
         listAppointments({ client: id }).catch(() => ({ results: [] as Appointment[] })),
+        listClientEmails(id).catch(() => [] as SentEmail[]),
       ]);
       setClient(c);
       setContacts(contactsRes.results);
@@ -79,6 +81,7 @@ export function ClientDetail({ id }: { id: string }) {
       setUsers(usersRes.results);
       setProjects(projectsRes.results);
       setMeetings(meetingsRes.results);
+      setEmails(emailsRes);
     } catch {
       setError("Impossible de charger ce client (accès refusé ou introuvable).");
     }
@@ -150,6 +153,7 @@ export function ClientDetail({ id }: { id: string }) {
           <TabsTab value="documents">Documents ({documents.length})</TabsTab>
           <TabsTab value="projets">Projets ({projects.length})</TabsTab>
           <TabsTab value="reunions">Réunions ({meetings.length})</TabsTab>
+          <TabsTab value="mails">Mails envoyés ({emails.length})</TabsTab>
           <TabsIndicator />
         </TabsList>
 
@@ -202,6 +206,38 @@ export function ClientDetail({ id }: { id: string }) {
                   </span>
                   <span className="text-xs font-medium text-primary">Ouvrir la réunion</span>
                 </button>
+              ))}
+            </div>
+          )}
+        </TabsPanel>
+
+        <TabsPanel value="mails" className="pt-4">
+          {emails.length === 0 ? (
+            <p className="text-sm text-neutral-400">
+              Aucun e-mail envoyé par la plateforme à ce client ou à ses contacts.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {emails.map((mail) => (
+                <div
+                  key={mail.id}
+                  className="flex items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-neutral-900">{mail.subject}</span>
+                    <span className="block text-xs text-neutral-500">
+                      À {mail.recipient} · {new Date(mail.created_at).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium",
+                      mail.success ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"
+                    )}
+                  >
+                    {mail.success ? "Envoyé" : "Échec"}
+                  </span>
+                </div>
               ))}
             </div>
           )}

@@ -75,13 +75,7 @@ def send_ticket_resolution_email(ticket_id):
         logger.warning('send_ticket_resolution_email: ticket %s has no client email', ticket_id)
         return
 
-    mailer.send_mail(
-        recipient,
-        f'Ticket résolu — {ticket.title}',
-        f'Bonjour,\n\nVotre ticket "{ticket.title}" a été marqué comme résolu.\n'
-        'Si le problème persiste, répondez à cet email sous 48h, sinon le '
-        'ticket sera automatiquement clôturé.\n\nCordialement.',
-    )
+    mailer.send_template('ticket_resolved', recipient, {'ticket_title': ticket.title})
 
 
 @shared_task

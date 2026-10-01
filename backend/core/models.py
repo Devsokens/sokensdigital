@@ -403,3 +403,32 @@ class PushDevice(LoggedModel):
 
     def __str__(self):
         return f'{self.user} — {self.get_platform_display()}'
+
+
+class EmailTemplate(LoggedModel):
+    """Surcharge, depuis Paramètres > E-mail, d'un gabarit déclaré dans
+    core.email_templates.TEMPLATES. Sans ligne ici pour une clé, le texte par
+    défaut du registre s'applique — supprimer la ligne revient au défaut."""
+    key = models.CharField(max_length=60, unique=True)
+    subject = models.CharField(max_length=255)
+    body_html = models.TextField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.key
+
+
+class EmailLog(LoggedModel):
+    """Trace de chaque e-mail envoyé par core.mailer.send_mail, un par
+    destinataire. Pas de FK vers Client (core ne dépend pas
+    d'administration) : la fiche client retrouve ses e-mails par adresse."""
+    recipient = models.EmailField(db_index=True)
+    subject = models.CharField(max_length=255)
+    template_key = models.CharField(max_length=60, blank=True)
+    success = models.BooleanField(default=False)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.recipient} — {self.subject}'

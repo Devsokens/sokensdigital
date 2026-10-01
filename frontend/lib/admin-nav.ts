@@ -31,6 +31,7 @@ import {
   type LucideIcon,
   Activity,
   CalendarDays,
+  Mail,
 } from "lucide-react";
 
 export interface NavItem {
@@ -136,6 +137,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
     title: "Paramètres",
     items: [
       { label: "Réseaux sociaux", href: "/admin/parametres/reseaux-sociaux", icon: Settings, moduleKey: "parametres" },
+      { label: "E-mail", href: "/admin/parametres/email", icon: Mail, moduleKey: "parametres" },
     ],
   },
 ];

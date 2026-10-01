@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from core.models import AuditLog, Notification
+from core.models import AuditLog, EmailLog, Notification
 from core.storage import upload_client_document
 from core.constants import (
     ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PROJECT_MANAGER,
@@ -153,6 +153,26 @@ class ClientViewSet(viewsets.ModelViewSet):
             ip_address=request.META.get('REMOTE_ADDR'),
         )
         return Response({'status': 'archived'})
+
+    @action(detail=True, methods=['get'], url_path='emails')
+    def emails(self, request, pk=None):
+        """E-mails envoyés par l'application à ce client — retrouvés par
+        adresse (celle de la fiche et celles de ses contacts) dans EmailLog,
+        qui ne référence pas Client directement."""
+        client = self.get_object()
+        addresses = {a.lower() for a in [client.email, *client.contacts.values_list('email', flat=True)] if a}
+        logs = EmailLog.objects.filter(recipient__in=addresses)[:200]
+        return Response([
+            {
+                'id': str(log.id),
+                'recipient': log.recipient,
+                'subject': log.subject,
+                'template_key': log.template_key,
+                'success': log.success,
+                'created_at': log.created_at,
+            }
+            for log in logs
+        ])
 
 
 # ---------------------------------------------------------------------------

@@ -75,13 +75,14 @@ def document_expiry():
             entity_id=str(doc.pk),
         )
         if doc.user and doc.user.email:
-            mailer.send_mail(
+            mailer.send_template(
+                'document_expiry',
                 doc.user.email,
-                f'Document bientôt expiré — {doc.document_name}',
-                f'Bonjour {doc.user.first_name},\n\nVotre document '
-                f'"{doc.document_name}" expire le '
-                f'{doc.expiry_date.strftime("%d/%m/%Y")}. Merci de le '
-                'renouveler auprès du service RH.\n\nCordialement.',
+                {
+                    'first_name': doc.user.first_name,
+                    'document_name': doc.document_name,
+                    'expiry_date': doc.expiry_date.strftime('%d/%m/%Y'),
+                },
             )
 
 @shared_task

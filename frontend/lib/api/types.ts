@@ -115,6 +115,26 @@ export interface Appointment {
   updated_at: string;
 }
 
+export interface EmailTemplateEntry {
+  key: string;
+  label: string;
+  description: string;
+  variables: Record<string, string>;
+  subject: string;
+  body_html: string;
+  is_customized: boolean;
+  updated_at: string | null;
+}
+
+export interface SentEmail {
+  id: string;
+  recipient: string;
+  subject: string;
+  template_key: string;
+  success: boolean;
+  created_at: string;
+}
+
 export interface MeetingNote {
   id: string;
   author: string;

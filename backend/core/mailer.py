@@ -36,19 +36,27 @@ class Attachment:
     mimetype: str = 'application/pdf'
 
 
-def _html_document(title: str, body: str, action_url: str | None, action_label: str | None) -> str:
+def _html_document(
+    title: str, body: str, action_url: str | None, action_label: str | None, html_body: str | None = None,
+) -> str:
     """Gabarit HTML minimal, en styles inline.
 
     Les clients de messagerie ignorent `<style>` et les feuilles externes ;
     tout ce qui n'est pas inline est perdu. On reste donc sur une mise en page
     sobre plutôt que sur une maquette qui se déferait chez la moitié des
     destinataires.
+
+    `html_body` (gabarit personnalisé, déjà assaini) remplace les paragraphes
+    dérivés du texte brut.
     """
-    paragraphs = ''.join(
-        f'<p style="margin:0 0 14px;line-height:1.6;color:#1f2430;">{escape(line)}</p>'
-        for line in body.split('\n')
-        if line.strip()
-    )
+    if html_body:
+        paragraphs = f'<div style="line-height:1.6;color:#1f2430;font-size:15px;">{html_body}</div>'
+    else:
+        paragraphs = ''.join(
+            f'<p style="margin:0 0 14px;line-height:1.6;color:#1f2430;">{escape(line)}</p>'
+            for line in body.split('\n')
+            if line.strip()
+        )
     button = ''
     if action_url and action_label:
         button = (
@@ -80,12 +88,16 @@ def send_mail(
     action_url: str | None = None,
     action_label: str | None = None,
     reply_to: str | None = None,
+    html_body: str | None = None,
+    template_key: str = '',
 ) -> bool:
     """Envoie un e-mail texte + HTML. Renvoie True si l'envoi a abouti.
 
     `body` est écrit en texte brut, avec un saut de ligne par paragraphe : la
     version HTML en est dérivée. Écrire les deux séparément les ferait diverger
-    à la première correction.
+    à la première correction. Seule exception : `html_body`, fourni par un
+    gabarit personnalisé (send_template), dont `body` est alors la version
+    texte.
     """
     recipients = [to] if isinstance(to, str) else list(to)
     recipients = [address for address in recipients if address]
@@ -101,12 +113,42 @@ def send_mail(
             reply_to=[reply_to] if reply_to else None,
         )
         message.attach_alternative(
-            _html_document(subject, body, action_url, action_label), 'text/html',
+            _html_document(subject, body, action_url, action_label, html_body), 'text/html',
         )
         for attachment in attachments or []:
             message.attach(attachment.filename, attachment.content, attachment.mimetype)
 
-        return message.send(fail_silently=False) > 0
+        sent = message.send(fail_silently=False) > 0
     except Exception:
         logger.exception('Envoi e-mail impossible vers %s (sujet : %s)', recipients, subject)
-        return False
+        sent = False
+
+    _log(recipients, subject, template_key, sent)
+    return sent
+
+
+def _log(recipients: list[str], subject: str, template_key: str, success: bool) -> None:
+    # Import local : core.models importe des modules qui finissent par
+    # importer ce fichier. La trace ne doit jamais faire échouer l'envoi.
+    try:
+        from core.models import EmailLog
+        EmailLog.objects.bulk_create([
+            EmailLog(recipient=r.lower(), subject=subject[:255], template_key=template_key, success=success)
+            for r in recipients
+        ])
+    except Exception:
+        logger.exception('Trace EmailLog impossible (sujet : %s)', subject)
+
+
+def send_template(
+    key: str,
+    to: str | list[str],
+    context: dict,
+    **kwargs,
+) -> bool:
+    """Envoie l'e-mail `key` du registre core.email_templates, avec le
+    gabarit personnalisé en Paramètres > E-mail s'il existe, sinon le texte
+    par défaut du registre."""
+    from core.email_templates import render
+    subject, text_body, html_body = render(key, context)
+    return send_mail(to, subject, text_body, html_body=html_body, template_key=key, **kwargs)

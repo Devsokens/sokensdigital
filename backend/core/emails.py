@@ -17,19 +17,10 @@ def send_user_invitation_email(user, password: str) -> bool:
     de définition de mot de passe à la place), c'est ce qui a été demandé."""
     if not user.email:
         return False
-    login_url = f'{settings.PUBLIC_SITE_URL}/connexion'
-    body = (
-        f'Bonjour {user.first_name},\n'
-        "Votre accès à la plateforme Soken's Digital vient d'être créé.\n"
-        f'Identifiant : {user.email}\n'
-        f'Mot de passe : {password}\n'
-        'Connectez-vous dès maintenant, et pensez à changer ce mot de passe '
-        'depuis votre profil une fois connecté(e).'
-    )
-    return mailer.send_mail(
+    return mailer.send_template(
+        'user_invitation',
         user.email,
-        "Votre accès à la plateforme Soken's Digital",
-        body,
-        action_url=login_url,
+        {'first_name': user.first_name, 'email': user.email, 'password': password},
+        action_url=f'{settings.PUBLIC_SITE_URL}/connexion',
         action_label='Se connecter',
     )

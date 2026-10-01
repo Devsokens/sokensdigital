@@ -9,6 +9,7 @@ import type {
   Meeting,
   MeetingNote,
   Paginated,
+  SentEmail,
 } from "@/lib/api/types";
 
 // The administration app was mounted without the /api/v1/ prefix used by
@@ -57,6 +58,10 @@ export function updateClient(id: string, data: Partial<ClientInput>) {
 
 export function archiveClient(id: string) {
   return apiFetch<{ status: string }>(`${BASE}/clients/${id}/archive/`, { method: "POST" });
+}
+
+export function listClientEmails(id: string) {
+  return apiFetch<SentEmail[]>(`${BASE}/clients/${id}/emails/`);
 }
 
 export function listContacts(clientId: string) {
