@@ -30,6 +30,7 @@ import {
   Inbox,
   type LucideIcon,
   Activity,
+  CalendarDays,
 } from "lucide-react";
 
 export interface NavItem {
@@ -67,6 +68,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
     items: [
       { label: "Tableau de bord", shortLabel: "Dashboard", href: "/admin", icon: LayoutDashboard, moduleKey: "dashboard" },
       { label: "Messagerie", href: "/admin/messagerie", icon: MessageSquare, moduleKey: "messagerie" },
+      { label: "Agenda", href: "/admin/agenda", icon: CalendarDays, moduleKey: "agenda" },
     ],
   },
   {

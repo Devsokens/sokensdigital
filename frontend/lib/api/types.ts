@@ -98,6 +98,23 @@ export interface ClientDocumentEntry {
   updated_at: string;
 }
 
+export interface Appointment {
+  id: string;
+  title: string;
+  description?: string;
+  start_at: string;
+  end_at: string;
+  location?: string;
+  client: string | null;
+  client_name: string | null;
+  attendees: string[];
+  attendees_detail: UserBrief[];
+  created_by: string | null;
+  created_by_detail: UserBrief | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type ContractType = "CDI" | "CDD" | "STAGE" | "FREELANCE";
 export type ContractStatus = "ACTIF" | "TERMINE";
 

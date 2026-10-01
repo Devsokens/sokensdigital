@@ -47,6 +47,7 @@ MODULE_ACTIONS = ['voir', 'creer', 'modifier', 'supprimer']
 MODULES = [
     ('dashboard', 'Tableau de bord', 'Général'),
     ('messagerie', 'Messagerie', 'Général'),
+    ('agenda', 'Agenda', 'Général'),
     ('rh-dashboard', 'Tableau de bord RH', 'Administration'),
     ('employes', 'Employés', 'Administration'),
     ('departements', 'Départements', 'Administration'),
@@ -112,6 +113,7 @@ DEFAULT_ROLE_PERMISSIONS = {
     ROLE_RH_MANAGER: _merge(
         _read_only('dashboard', 'rh-dashboard'),
         {'messagerie': ['voir', 'creer']},
+        {'agenda': ['voir', 'creer', 'modifier']},
         _full('employes'),
         # NOT departements — DepartmentViewSet is Super-Admin-only on the
         # backend (core.views.IsSuperAdmin), so declaring read access here
@@ -121,6 +123,7 @@ DEFAULT_ROLE_PERMISSIONS = {
     ROLE_PROJECT_MANAGER: _merge(
         _read_only('dashboard', 'devis', 'analytique-technique'),
         {'messagerie': ['voir', 'creer']},
+        {'agenda': ['voir', 'creer', 'modifier']},
         _full('projets'),
         {'timesheets': ['voir', 'creer', 'modifier']},
         {'decaissements': ['voir', 'creer']},
@@ -136,6 +139,7 @@ DEFAULT_ROLE_PERMISSIONS = {
     ROLE_DEVELOPER: _merge(
         _read_only('dashboard', 'analytique-technique'),
         {'messagerie': ['voir', 'creer']},
+        {'agenda': ['voir', 'creer', 'modifier']},
         {'projets': ['voir', 'modifier']},
         {'timesheets': ['voir', 'creer']},
         # Voit les fiches et rédige des rapports ; l'attribution et les
@@ -147,6 +151,7 @@ DEFAULT_ROLE_PERMISSIONS = {
     ROLE_DIRECTEUR_FINANCIER: _merge(
         _read_only('dashboard'),
         {'messagerie': ['voir', 'creer']},
+        {'agenda': ['voir', 'creer', 'modifier']},
         _read_only('finance-dashboard'),
         _full('cloture', 'grand-livre', 'facturation', 'rapprochement', 'tva'),
         {'decaissements': ['voir', 'modifier']},
@@ -155,6 +160,7 @@ DEFAULT_ROLE_PERMISSIONS = {
     ROLE_COMPTABLE: _merge(
         _read_only('dashboard'),
         {'messagerie': ['voir', 'creer']},
+        {'agenda': ['voir', 'creer', 'modifier']},
         _full('grand-livre', 'facturation', 'rapprochement', 'tva'),
         {'decaissements': ['voir', 'modifier']},
         _read_only('achats', 'tresorerie', 'encaissements'),
@@ -162,6 +168,7 @@ DEFAULT_ROLE_PERMISSIONS = {
     ROLE_CAISSIER: _merge(
         _read_only('dashboard'),
         {'messagerie': ['voir', 'creer']},
+        {'agenda': ['voir', 'creer', 'modifier']},
         # Caissier tient la caisse physique uniquement — pas d'accès banque/
         # capital (réservé Directeur Financier/Comptable, cf. cahier des
         # charges §3 "opérations de trésorerie").
@@ -171,6 +178,7 @@ DEFAULT_ROLE_PERMISSIONS = {
     ROLE_RESPONSABLE_MARKETING: _merge(
         _read_only('dashboard', 'marketing-dashboard', 'analytique-marketing'),
         {'messagerie': ['voir', 'creer']},
+        {'agenda': ['voir', 'creer', 'modifier']},
         _full('contenu', 'plan-editorial', 'leads', 'devis', 'cahier-des-charges'),
         # Le marketing reçoit les demandes du portail public et les fait
         # circuler : il lui faut le module, pas seulement la lecture.
@@ -179,6 +187,7 @@ DEFAULT_ROLE_PERMISSIONS = {
     ROLE_COMMERCIAL: _merge(
         _read_only('dashboard', 'analytique-marketing'),
         {'messagerie': ['voir', 'creer']},
+        {'agenda': ['voir', 'creer', 'modifier']},
         {'leads': ['voir', 'creer', 'modifier']},
         {'devis': ['voir', 'creer', 'modifier']},
         # ClientViewSet allows Commercial to create/update (core.
@@ -190,10 +199,12 @@ DEFAULT_ROLE_PERMISSIONS = {
     ROLE_CONSULTANT: _merge(
         _read_only('dashboard', 'projets'),
         {'messagerie': ['voir']},
+        {'agenda': ['voir', 'creer', 'modifier']},
     ),
     ROLE_SUPPORT_CLIENT: _merge(
         _read_only('dashboard'),
         {'messagerie': ['voir', 'creer']},
+        {'agenda': ['voir', 'creer', 'modifier']},
         # CDC §4.8 — "accès aux tickets, base de connaissances, et fiches
         # clients" — tickets et base de connaissances gérés en propre par
         # le Support Client ; fiches clients en lecture seule (création/

@@ -4,7 +4,7 @@ from .views import (
     ClientViewSet, ContactViewSet, ClientInteractionViewSet, ClientDocumentViewSet,
     EmployeeDocumentViewSet, LeaveRequestViewSet, CompanyAssetViewSet,
     AdministrativeRecordViewSet, ContractGeneratorViewSet, SignatureWebhookView,
-    PayrollValidationView,
+    PayrollValidationView, AppointmentViewSet,
 )
 
 router = DefaultRouter()
@@ -14,6 +14,7 @@ router.register(r'leave-requests', LeaveRequestViewSet, basename='leave-request'
 router.register(r'company-assets', CompanyAssetViewSet, basename='company-asset')
 router.register(r'administrative-records', AdministrativeRecordViewSet, basename='administrative-record')
 router.register(r'contracts', ContractGeneratorViewSet, basename='contract')
+router.register(r'appointments', AppointmentViewSet, basename='appointment')
 
 urlpatterns = [
     path('', include(router.urls)),

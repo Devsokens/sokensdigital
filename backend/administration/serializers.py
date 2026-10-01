@@ -2,9 +2,10 @@ from rest_framework import serializers
 from django.utils import timezone
 from datetime import timedelta
 from core.storage import sign_private_path
+from core.serializers import UserBriefSerializer
 from .models import (
     Client, Contact, ClientInteraction, ClientDocument, EmployeeDocument,
-    LeaveRequest, CompanyAsset, AdministrativeRecord, ContractGenerator
+    LeaveRequest, CompanyAsset, AdministrativeRecord, ContractGenerator, Appointment
 )
 
 class ContactSerializer(serializers.ModelSerializer):
@@ -106,6 +107,28 @@ class AdministrativeRecordSerializer(serializers.ModelSerializer):
             instance.file_path = data.get('file_path', self.instance.file_path)
             instance.clean()
         return data
+
+class AppointmentSerializer(serializers.ModelSerializer):
+    attendees_detail = UserBriefSerializer(source='attendees', many=True, read_only=True)
+    created_by_detail = UserBriefSerializer(source='created_by', read_only=True)
+    client_name = serializers.CharField(source='client.company_name', read_only=True, default=None)
+
+    class Meta:
+        model = Appointment
+        fields = [
+            'id', 'title', 'description', 'start_at', 'end_at', 'location',
+            'client', 'client_name', 'attendees', 'attendees_detail',
+            'created_by', 'created_by_detail', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['created_by']
+
+    def validate(self, data):
+        start_at = data.get('start_at', getattr(self.instance, 'start_at', None))
+        end_at = data.get('end_at', getattr(self.instance, 'end_at', None))
+        if start_at and end_at and start_at > end_at:
+            raise serializers.ValidationError("La date de début doit être antérieure à la date de fin.")
+        return data
+
 
 class ContractGeneratorSerializer(serializers.ModelSerializer):
     class Meta:

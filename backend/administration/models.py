@@ -214,6 +214,38 @@ class AdministrativeRecord(LoggedModel):
             if old.is_finalized and self.file_path != old.file_path:
                 raise ValidationError({'file_path': 'Le fichier ne peut pas être modifié une fois finalisé.'})
 
+class Appointment(LoggedModel):
+    """Rendez-vous d'agenda (module Agenda) — visible par son créateur et
+    ses participants ; voir administration.views._accessible_appointments_qs
+    pour le périmètre exact."""
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    start_at = models.DateTimeField()
+    end_at = models.DateTimeField()
+    location = models.CharField(max_length=255, blank=True)
+    client = models.ForeignKey(
+        Client, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='appointments',
+    )
+    attendees = models.ManyToManyField(User, related_name='appointments', blank=True)
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True,
+        related_name='created_appointments',
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['start_at']
+
+    def clean(self):
+        super().clean()
+        if self.start_at and self.end_at and self.start_at > self.end_at:
+            raise ValidationError("La date de début doit être antérieure à la date de fin.")
+
+    def __str__(self):
+        return self.title
+
+
 class ContractGenerator(LoggedModel):
     class ContractType(models.TextChoices):
         PRESTATION_SERVICES = 'PRESTATION_SERVICES', _('Prestation de services')

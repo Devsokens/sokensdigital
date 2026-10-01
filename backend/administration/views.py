@@ -28,12 +28,13 @@ from core.permissions import (
 
 from .models import (
     Client, Contact, ClientInteraction, ClientDocument, EmployeeDocument,
-    LeaveRequest, CompanyAsset, AdministrativeRecord, ContractGenerator,
+    LeaveRequest, CompanyAsset, AdministrativeRecord, ContractGenerator, Appointment,
 )
 from .serializers import (
     ClientSerializer, ClientListSerializer, ContactSerializer, ClientInteractionSerializer,
     ClientDocumentSerializer, EmployeeDocumentSerializer, LeaveRequestSerializer,
     CompanyAssetSerializer, AdministrativeRecordSerializer, ContractGeneratorSerializer,
+    AppointmentSerializer,
 )
 
 
@@ -501,6 +502,41 @@ class CompanyAssetViewSet(viewsets.ModelViewSet):
             ip_address=request.META.get('REMOTE_ADDR'),
         )
         return Response({'status': 'assigned'})
+
+
+# ---------------------------------------------------------------------------
+# Agenda — rendez-vous
+# ---------------------------------------------------------------------------
+
+class AppointmentViewSet(viewsets.ModelViewSet):
+    """
+    Agenda — chacun voit ses propres rendez-vous (créés par lui ou où il est
+    participant) ; Admin/Super-Admin voient tout.
+    """
+    serializer_class = AppointmentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filterset_fields = ['client']
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Appointment.objects.select_related('client', 'created_by').prefetch_related('attendees')
+        if user.roles.filter(name__in=ADMIN_ROLES).exists():
+            return qs.distinct()
+        from django.db.models import Q
+        return qs.filter(Q(created_by=user) | Q(attendees=user)).distinct()
+
+    def perform_create(self, serializer):
+        appointment = serializer.save(created_by=self.request.user)
+        # Le créateur est toujours participant, même s'il a oublié de se
+        # sélectionner lui-même dans la liste des participants.
+        appointment.attendees.add(self.request.user)
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        is_admin = user.roles.filter(name__in=ADMIN_ROLES).exists()
+        if not is_admin and instance.created_by_id != user.id:
+            raise PermissionDenied("Seul le créateur ou un administrateur peut supprimer ce rendez-vous.")
+        instance.delete()
 
 
 # ---------------------------------------------------------------------------

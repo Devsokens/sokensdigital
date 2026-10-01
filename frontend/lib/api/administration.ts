@@ -1,6 +1,7 @@
 import { auth } from "@/lib/firebase/config";
 import { apiFetch } from "@/lib/api/client";
 import type {
+  Appointment,
   Client,
   ClientContact,
   ClientDocumentEntry,
@@ -136,4 +137,33 @@ export async function createClientDocument(
 
 export function deleteClientDocument(clientId: string, documentId: string) {
   return apiFetch<void>(`${BASE}/clients/${clientId}/documents/${documentId}/`, { method: "DELETE" });
+}
+
+export interface AppointmentInput {
+  title: string;
+  description?: string;
+  start_at: string;
+  end_at: string;
+  location?: string;
+  client?: string | null;
+  attendees?: string[];
+}
+
+export function listAppointments(params?: { client?: string }) {
+  const query = new URLSearchParams();
+  if (params?.client) query.set("client", params.client);
+  const qs = query.toString();
+  return apiFetch<Paginated<Appointment>>(`${BASE}/appointments/${qs ? `?${qs}` : ""}`);
+}
+
+export function createAppointment(data: AppointmentInput) {
+  return apiFetch<Appointment>(`${BASE}/appointments/`, { method: "POST", body: JSON.stringify(data) });
+}
+
+export function updateAppointment(id: string, data: Partial<AppointmentInput>) {
+  return apiFetch<Appointment>(`${BASE}/appointments/${id}/`, { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export function deleteAppointment(id: string) {
+  return apiFetch<void>(`${BASE}/appointments/${id}/`, { method: "DELETE" });
 }
