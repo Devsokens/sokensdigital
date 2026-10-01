@@ -232,6 +232,9 @@ class Appointment(LoggedModel):
         User, on_delete=models.SET_NULL, null=True,
         related_name='created_appointments',
     )
+    # Événement Google Calendar miroir (core.calendar_sync) — vide tant que
+    # la synchro n'est pas configurée ou que l'événement n'a jamais été poussé.
+    google_event_id = models.CharField(max_length=255, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

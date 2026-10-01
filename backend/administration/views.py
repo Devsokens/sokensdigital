@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
+from core import calendar_sync
 from core.models import AuditLog, EmailLog, Notification
 from core.storage import upload_client_document
 from core.constants import (
@@ -551,12 +552,17 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         # Le créateur est toujours participant, même s'il a oublié de se
         # sélectionner lui-même dans la liste des participants.
         appointment.attendees.add(self.request.user)
+        calendar_sync.sync_appointment_event(appointment)
+
+    def perform_update(self, serializer):
+        calendar_sync.sync_appointment_event(serializer.save())
 
     def perform_destroy(self, instance):
         user = self.request.user
         is_admin = user.roles.filter(name__in=ADMIN_ROLES).exists()
         if not is_admin and instance.created_by_id != user.id:
             raise PermissionDenied("Seul le créateur ou un administrateur peut supprimer ce rendez-vous.")
+        calendar_sync.delete_appointment_event(instance)
         instance.delete()
 
     @action(detail=True, methods=['get', 'patch'], url_path='meeting')

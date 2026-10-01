@@ -1,10 +1,11 @@
 """One-time local script — run this once on your own machine, never on
-Render, to obtain a Gmail API refresh token for the account that will send
-notification emails (core/mail_backend.py's GmailAPIBackend).
+Render, to obtain a Google OAuth refresh token for the account that sends
+notification emails (core/mail_backend.py's GmailAPIBackend) and mirrors
+appointments into Google Calendar (core/calendar_sync.py).
 
 Setup (once):
   1. https://console.cloud.google.com/ -> create/select a project ->
-     enable the "Gmail API".
+     enable the "Gmail API" AND the "Google Calendar API".
   2. APIs & Services -> Credentials -> Create Credentials -> OAuth client
      ID -> Application type "Desktop app". Download the client secret
      JSON, save it next to this script as client_secret.json.
@@ -23,6 +24,10 @@ GMAIL_REFRESH_TOKEN — paste those three, plus GMAIL_SENDER_EMAIL (the
 address you signed in with), as Render environment variables. The refresh
 token does not expire unless revoked from the Google Account's
 "Third-party access" settings.
+
+NOTE: a token generated before Calendar sync existed only carries the
+gmail.send scope — re-run this script so the new token covers both scopes,
+otherwise calendar sync will fail with 403 insufficientPermissions.
 """
 
 import json
@@ -30,7 +35,10 @@ from pathlib import Path
 
 from google_auth_oauthlib.flow import InstalledAppFlow
 
-SCOPES = ['https://www.googleapis.com/auth/gmail.send']
+SCOPES = [
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/calendar.events',
+]
 CLIENT_SECRET_FILE = Path(__file__).parent / 'client_secret.json'
 
 
