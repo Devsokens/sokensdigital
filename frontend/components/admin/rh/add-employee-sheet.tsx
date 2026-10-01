@@ -311,7 +311,7 @@ export function AddEmployeeSheet({
               </Button>
             ) : (
               <Button type="submit" disabled={saving} className="gap-1.5 rounded-full px-5">
-                {saving ? <Loader2 className="size-4 animate-spin" /> : "Créer l'employé"}
+                {saving ? <Loader2 className="size-4 animate-spin" /> : "Créer et envoyer l'invitation"}
               </Button>
             )}
           </div>

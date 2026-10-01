@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check, KeyRound, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/sheet";
-import { listDepartments, listRoles, setUserRole, setUserPermissions, getUserPermissions } from "@/lib/api/hr";
+import { inputClass } from "@/components/admin/form-styles";
+import { listDepartments, listRoles, setUserRole, setUserPermissions, getUserPermissions, setUserPassword } from "@/lib/api/hr";
 import type { Department, Role } from "@/lib/api/types";
 import { ROLE_LABELS, ROLES_BY_DEPARTMENT, DJANGO_ROLE_TO_APP_ROLE, type AppRole } from "@/lib/firebase/types";
 import { PERMISSION_MODULES, MODULE_ACTIONS, ACTION_LABELS } from "@/lib/admin/permission-modules";
@@ -44,6 +45,11 @@ export function UserEditModal({
   const [modulePermissions, setModulePermissions] = useState<Record<string, string[]>>({});
   const [savedOverrides, setSavedOverrides] = useState<Record<string, string[]> | null>(null);
 
+  const [showPasswordField, setShowPasswordField] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [settingPassword, setSettingPassword] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
   // Permissions par défaut des rôles sélectionnés (union) — le point de
   // départ affiché avant toute surcharge personnelle, pour ne pas repartir
   // d'un écran vide à chaque édition.
@@ -63,6 +69,9 @@ export function UserEditModal({
     setDepartmentId(user.departmentId);
     setSelectedRoles(user.roles);
     setError(null);
+    setShowPasswordField(false);
+    setNewPassword("");
+    setPasswordMessage(null);
     setLoading(true);
     // Les modules/actions (étapes 3-4) surchargent les permissions de CETTE
     // personne (User.permission_overrides) — plus le rôle partagé par tout
@@ -132,6 +141,21 @@ export function UserEditModal({
     }
   }
 
+  async function handleSetPassword() {
+    if (newPassword.length < 8) return;
+    setSettingPassword(true);
+    setPasswordMessage(null);
+    try {
+      await setUserPassword(user.djangoId, newPassword);
+      setPasswordMessage({ type: "success", text: "Mot de passe mis à jour." });
+      setNewPassword("");
+    } catch {
+      setPasswordMessage({ type: "error", text: "Impossible de mettre à jour le mot de passe." });
+    } finally {
+      setSettingPassword(false);
+    }
+  }
+
   function canAdvance(): boolean {
     if (step === 0) return Boolean(departmentId);
     if (step === 1) return selectedRoles.length > 0;
@@ -147,7 +171,49 @@ export function UserEditModal({
             <Loader2 className="size-6 animate-spin text-neutral-400" />
           </div>
         ) : (
-          <div className="flex gap-6">
+          <div className="space-y-5">
+            <div className="rounded-xl border border-neutral-200 p-3.5">
+              {!showPasswordField ? (
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordField(true)}
+                  className="flex items-center gap-2 text-xs font-semibold text-neutral-700 hover:text-neutral-900"
+                >
+                  <KeyRound className="size-3.5" /> Changer le mot de passe
+                </button>
+              ) : (
+                <div>
+                  <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-neutral-700">
+                    <KeyRound className="size-3.5" /> Nouveau mot de passe
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      minLength={8}
+                      placeholder="Au moins 8 caractères"
+                      className={inputClass}
+                    />
+                    <Button
+                      type="button"
+                      disabled={settingPassword || newPassword.length < 8}
+                      onClick={handleSetPassword}
+                      className="shrink-0 rounded-full px-4"
+                    >
+                      {settingPassword ? <Loader2 className="size-4 animate-spin" /> : "Mettre à jour"}
+                    </Button>
+                  </div>
+                  {passwordMessage && (
+                    <p className={cn("mt-2 text-xs", passwordMessage.type === "success" ? "text-emerald-600" : "text-destructive")}>
+                      {passwordMessage.text}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-6">
             {/* Left timeline */}
             <div className="w-40 shrink-0">
               {STEPS.map((label, i) => (
@@ -325,6 +391,7 @@ export function UserEditModal({
                   </Button>
                 )}
               </div>
+            </div>
             </div>
           </div>
         )}
