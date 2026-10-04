@@ -1,6 +1,8 @@
 import hashlib
 import hmac
+from unittest import mock
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from rest_framework.test import APITestCase
 from rest_framework import status
@@ -50,7 +52,7 @@ class ClientViewSetTest(APITestCase):
         response = self.client.post(url, {
             'company_name': 'Acme Corp',
             'siret': '12345678901234',
-            'status': 'PROSPECT'
+            'status': 'CLIENT_ACTIF'
         })
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
@@ -77,7 +79,10 @@ class ClientDocumentViewSetTest(APITestCase):
     def test_hide_contrat_for_unauthorized(self):
         self.client.force_authenticate(user=self.normal_user)
         url = reverse('client-documents-list', kwargs={'client_pk': self.client_model.pk})
-        response = self.client.get(url)
+        # get_url resigne chaque chemin à la lecture : mocké, les documents de
+        # test n'existent pas dans un vrai bucket.
+        with mock.patch('administration.serializers.sign_private_path', return_value='https://signed/x'):
+            response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         results = response.data['results'] if isinstance(response.data, dict) and 'results' in response.data else response.data
         self.assertEqual(len(results), 1)
@@ -201,7 +206,7 @@ class ClientRBACTests(APITestCase):
         self.client.force_authenticate(user=self.commercial)
         url = reverse('client-list')
         response = self.client.post(url, {
-            'company_name': 'New Co', 'siret': '99999999999999', 'status': 'PROSPECT',
+            'company_name': 'New Co', 'siret': '99999999999999', 'status': 'CLIENT_ACTIF',
         })
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(str(response.data['assigned_to']), str(self.commercial.id))
@@ -216,9 +221,16 @@ class ClientRBACTests(APITestCase):
     def test_client_document_commercial_devis_allowed(self):
         self.client.force_authenticate(user=self.commercial)
         url = reverse('client-documents-list', kwargs={'client_pk': self.my_client.pk})
-        response = self.client.post(url, {
-            'name': 'Devis 1', 'file_path': '/x', 'file_type': 'DEVIS',
-        })
+        # L'endpoint reçoit le fichier en multipart et l'upload lui-même
+        # (upload_client_document mocké — pas de bucket en test), puis resigne
+        # le chemin pour la réponse (sign_private_path mocké aussi).
+        with mock.patch('administration.views.upload_client_document', return_value='clients/x/devis.pdf'), \
+             mock.patch('administration.serializers.sign_private_path', return_value='https://signed/x'):
+            response = self.client.post(url, {
+                'name': 'Devis 1',
+                'file_type': 'DEVIS',
+                'file': SimpleUploadedFile('devis.pdf', b'%PDF-1.4\n%%EOF\n', content_type='application/pdf'),
+            }, format='multipart')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_client_document_commercial_contrat_forbidden(self):
@@ -244,9 +256,13 @@ class ClientRBACTests(APITestCase):
         from administration.models import ClientDocument
         self.client.force_authenticate(user=self.commercial)
         url = reverse('client-documents-list', kwargs={'client_pk': self.my_client.pk})
-        response = self.client.post(url, {
-            'name': 'Devis Secret', 'file_path': '/x', 'file_type': 'DEVIS',
-        })
+        with mock.patch('administration.views.upload_client_document', return_value='clients/x/devis.pdf'), \
+             mock.patch('administration.serializers.sign_private_path', return_value='https://signed/x'):
+            response = self.client.post(url, {
+                'name': 'Devis Secret',
+                'file_type': 'DEVIS',
+                'file': SimpleUploadedFile('devis.pdf', b'%PDF-1.4\n%%EOF\n', content_type='application/pdf'),
+            }, format='multipart')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         # Requête brute plutôt que l'ORM (qui déchiffrerait `name` via le
         # descripteur du champ) — pas de filtre sur id : sur SQLite un
@@ -362,12 +378,14 @@ class CRMAccessPentestTests(APITestCase):
         self.assertIn(response.status_code, (403, 404))
 
     def test_commercial_cannot_archive_own_client_via_patch(self):
+        # 'status' est en lecture seule sur le serializer : le PATCH est
+        # accepté mais le champ est ignoré, le statut ne bouge pas.
         self.client.force_authenticate(user=self.com_a)
         self.client.patch(
-            reverse('client-detail', kwargs={'pk': self.client_a.pk}), {'status': 'ARCHIVE'}, format='json',
+            reverse('client-detail', kwargs={'pk': self.client_a.pk}), {'status': 'CLIENT_INACTIF'}, format='json',
         )
         self.client_a.refresh_from_db()
-        self.assertNotEqual(self.client_a.status, Client.Status.ARCHIVE)
+        self.assertNotEqual(self.client_a.status, Client.Status.CLIENT_INACTIF)
 
     def test_commercial_cannot_create_contract_on_other_commercials_client(self):
         self.client.force_authenticate(user=self.com_a)

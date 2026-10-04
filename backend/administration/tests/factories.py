@@ -18,7 +18,7 @@ class ClientFactory(DjangoModelFactory):
         model = Client
     company_name = factory.Sequence(lambda n: f"Company {n}")
     siret = factory.Sequence(lambda n: f"{n:014d}")
-    status = Client.Status.PROSPECT
+    status = Client.Status.CLIENT_ACTIF
 
 class ContactFactory(DjangoModelFactory):
     class Meta:
