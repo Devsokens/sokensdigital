@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import {
+  AlertTriangle,
   CalendarDays,
   CheckCircle2,
   CheckSquare,
@@ -26,9 +27,13 @@ import {
   deleteProjectTask,
   listEpics,
   listLabels,
+  createLabel,
   listSprints,
 } from "@/lib/api/projects";
 import { getMe } from "@/lib/api/me";
+import { isTaskOverdue, todayIso } from "@/components/admin/technique/task-overdue";
+import { LabelPicker } from "@/components/admin/technique/label-tag-input";
+import { SPRINTS_ENABLED } from "@/lib/admin/project-features";
 import type {
   Epic,
   Label as ProjectLabel,
@@ -43,11 +48,11 @@ import type {
 
 const STATUS_ORDER: ProjectTaskStatus[] = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
 
-const STATUS_META: Record<ProjectTaskStatus, { label: string; icon: LucideIcon; badge: string; bar: string }> = {
-  TODO: { label: "À faire", icon: Circle, badge: "bg-neutral-100 text-neutral-600", bar: "bg-neutral-400" },
-  IN_PROGRESS: { label: "En cours", icon: CircleDot, badge: "bg-indigo-100 text-indigo-700", bar: "bg-indigo-500" },
-  IN_REVIEW: { label: "En révision", icon: Eye, badge: "bg-amber-100 text-amber-700", bar: "bg-amber-500" },
-  DONE: { label: "Terminé", icon: CheckCircle2, badge: "bg-emerald-100 text-emerald-700", bar: "bg-emerald-500" },
+const STATUS_META: Record<ProjectTaskStatus, { label: string; icon: LucideIcon; badge: string }> = {
+  TODO: { label: "À faire", icon: Circle, badge: "bg-neutral-100 text-neutral-600" },
+  IN_PROGRESS: { label: "En cours", icon: CircleDot, badge: "bg-indigo-100 text-indigo-700" },
+  IN_REVIEW: { label: "En révision", icon: Eye, badge: "bg-amber-100 text-amber-700" },
+  DONE: { label: "Terminé", icon: CheckCircle2, badge: "bg-emerald-100 text-emerald-700" },
 };
 
 const PRIORITY_LABELS: Record<ProjectPriority, string> = { BASSE: "Basse", MOYENNE: "Moyenne", HAUTE: "Haute" };
@@ -66,19 +71,23 @@ function formatShort(value: string) {
   return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
 }
 
-function TaskCard({ task, phase, onOpen, onDragStart }: {
+function TaskCard({ task, phase, today, onOpen, onDragStart }: {
   task: ProjectTask;
   phase: Epic | null;
+  today: string;
   onOpen: () => void;
   onDragStart: (e: React.DragEvent) => void;
 }) {
-  const meta = STATUS_META[task.status];
+  const overdue = isTaskOverdue(task, today);
   return (
     <div
       draggable
       onDragStart={onDragStart}
       onClick={onOpen}
-      className="cursor-pointer rounded-lg border border-neutral-200 bg-white p-3 shadow-sm transition-colors hover:border-primary/40"
+      className={cn(
+        "cursor-pointer rounded-lg border bg-white p-3 shadow-sm transition-colors hover:border-primary/40",
+        overdue ? "border-rose-200" : "border-neutral-200"
+      )}
     >
       {phase && (
         <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold tracking-wide uppercase" style={{ color: phase.color }}>
@@ -104,16 +113,15 @@ function TaskCard({ task, phase, onOpen, onDragStart }: {
         </div>
       )}
       {task.due_date && (
-        <p className="mb-2 flex items-center gap-1 text-[11px] text-neutral-400">
+        <p className={cn("mb-3 flex items-center gap-1.5 text-[11px]", overdue ? "font-medium text-rose-600" : "text-neutral-400")}>
           <CalendarDays className="size-3" /> {formatShort(task.due_date)}
+          {overdue && (
+            <span className="ml-auto flex items-center gap-1 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
+              <AlertTriangle className="size-3" /> En retard
+            </span>
+          )}
         </p>
       )}
-      <div className="mb-2 flex items-center justify-between text-[11px] text-neutral-400">
-        <span>Progression : {task.progress}%</span>
-      </div>
-      <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
-        <div className={`h-full rounded-full ${meta.bar} transition-all`} style={{ width: `${task.progress}%` }} />
-      </div>
       <div className="flex items-center justify-between">
         <div className="flex -space-x-1.5">
           {task.assignees.slice(0, 3).map((u) => (
@@ -153,11 +161,13 @@ function AddTaskModal({
   members,
   labels,
   phases,
+  onCreateLabel,
   onAdd,
 }: {
   members: ProjectUserBrief[];
   labels: ProjectLabel[];
   phases: Epic[];
+  onCreateLabel: (name: string, color: string) => Promise<ProjectLabel>;
   onAdd: (data: { title: string; description: string; assignee_ids: string[]; due_date?: string; priority?: string | null; label_ids?: string[]; epic?: string | null }) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
@@ -171,7 +181,6 @@ function AddTaskModal({
   const [saving, setSaving] = useState(false);
 
   const memberOptions = members.map((m) => ({ id: m.id, label: `${m.first_name} ${m.last_name}`.trim() }));
-  const labelOptions = labels.map((l) => ({ id: l.id, label: l.name }));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -281,17 +290,10 @@ function AddTaskModal({
             </motion.label>
           )}
 
-          {labelOptions.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-              <span className={labelClass}>Étiquettes</span>
-              <MultiSelectSearch
-                options={labelOptions}
-                values={labelIds}
-                onChange={setLabelIds}
-                placeholder="Ajouter des étiquettes…"
-              />
-            </motion.div>
-          )}
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+            <span className={labelClass}>Étiquettes</span>
+            <LabelPicker available={labels} selectedIds={labelIds} onChange={setLabelIds} onCreate={onCreateLabel} />
+          </motion.div>
 
           <div className="flex items-center justify-end gap-2 pt-2">
             <ModalClose render={<button type="button" className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-50">Annuler</button>} />
@@ -330,11 +332,13 @@ export function ProjectTaskBoard({
   }, [tasks]);
   const [error, setError] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [dragOverStatus, setDragOverStatus] = useState<ProjectTaskStatus | null>(null);
   const [epics, setEpics] = useState<Epic[]>([]);
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [labels, setLabels] = useState<ProjectLabel[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [today] = useState(todayIso);
 
   async function load() {
     try {
@@ -347,7 +351,7 @@ export function ProjectTaskBoard({
   useEffect(() => {
     load();
     listEpics(project.id).then(setEpics).catch(() => setEpics([]));
-    listSprints(project.id).then(setSprints).catch(() => setSprints([]));
+    if (SPRINTS_ENABLED) listSprints(project.id).then(setSprints).catch(() => setSprints([]));
     listLabels(project.id).then(setLabels).catch(() => setLabels([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id, refreshKey]);
@@ -355,6 +359,12 @@ export function ProjectTaskBoard({
   useEffect(() => {
     getMe().then((me) => setCurrentUserId(me.id)).catch(() => setCurrentUserId(null));
   }, []);
+
+  async function handleCreateLabel(name: string, color: string) {
+    const label = await createLabel(project.id, { name, color });
+    setLabels((prev) => (prev.some((l) => l.id === label.id) ? prev : [...prev, label]));
+    return label;
+  }
 
   function handleSubtasksChange(taskId: string, subtasks: ProjectSubtask[]) {
     setTasks((prev) => prev?.map((t) => (t.id === taskId ? { ...t, subtasks } : t)) ?? prev);
@@ -389,6 +399,7 @@ export function ProjectTaskBoard({
 
   async function handleDelete(taskId: string) {
     setTasks((prev) => prev?.filter((t) => t.id !== taskId) ?? prev);
+    setDetailOpen(false);
     setSelectedTaskId(null);
     try {
       await deleteProjectTask(project.id, taskId);
@@ -445,11 +456,15 @@ export function ProjectTaskBoard({
                       key={task.id}
                       task={task}
                       phase={epics.find((ep) => ep.id === task.epic) ?? null}
-                      onOpen={() => setSelectedTaskId(task.id)}
+                      today={today}
+                      onOpen={() => {
+                        setSelectedTaskId(task.id);
+                        setDetailOpen(true);
+                      }}
                       onDragStart={(e) => e.dataTransfer.setData("text/plain", task.id)}
                     />
                   ))}
-                  <AddTaskModal members={members} labels={labels} phases={epics} onAdd={(data) => handleAdd(status, data)} />
+                  <AddTaskModal members={members} labels={labels} phases={epics} onCreateLabel={handleCreateLabel} onAdd={(data) => handleAdd(status, data)} />
                 </div>
               </div>
             );
@@ -458,6 +473,7 @@ export function ProjectTaskBoard({
       </div>
 
       <TaskDetailModal
+        open={detailOpen}
         task={selectedTask}
         projectId={project.id}
         members={members}
@@ -465,7 +481,8 @@ export function ProjectTaskBoard({
         sprints={sprints}
         labels={labels}
         currentUserId={currentUserId}
-        onClose={() => setSelectedTaskId(null)}
+        onCreateLabel={handleCreateLabel}
+        onClose={() => setDetailOpen(false)}
         onUpdate={handleUpdate}
         onSubtasksChange={handleSubtasksChange}
         onCommentAdded={handleCommentAdded}

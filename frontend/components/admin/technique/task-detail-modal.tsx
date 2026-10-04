@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import {
+  AlertTriangle,
   CalendarDays,
   Check,
   Flag,
@@ -12,12 +13,14 @@ import {
   Pencil,
   Plus,
   SendHorizontal,
-  Timer,
   Trash2,
   X,
 } from "lucide-react";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { cn } from "@/lib/utils";
+import { LabelPicker } from "@/components/admin/technique/label-tag-input";
+import { isTaskOverdue, todayIso } from "@/components/admin/technique/task-overdue";
+import { SPRINTS_ENABLED } from "@/lib/admin/project-features";
 import {
   listTaskComments,
   createTaskComment,
@@ -43,7 +46,6 @@ export type TaskUpdate = Partial<{
   status: ProjectTaskStatus;
   priority: ProjectPriority | null;
   due_date: string | null;
-  progress: number;
   assignee_ids: string[];
   epic: string | null;
   sprint: string | null;
@@ -233,6 +235,7 @@ function EditPanel({
   sprints,
   labels,
   onUpdate,
+  onCreateLabel,
   onDelete,
 }: {
   task: ProjectTask;
@@ -241,10 +244,10 @@ function EditPanel({
   sprints: Sprint[];
   labels: ProjectLabel[];
   onUpdate: (data: TaskUpdate) => void;
+  onCreateLabel: (name: string, color: string) => Promise<ProjectLabel>;
   onDelete: () => void;
 }) {
   const assigneeIds = new Set(task.assignees.map((u) => u.id));
-  const taskLabelIds = new Set(task.labels.map((l) => l.id));
 
   return (
     <div className="space-y-4 p-5">
@@ -298,7 +301,7 @@ function EditPanel({
         <input type="date" value={task.due_date ?? ""} onChange={(e) => onUpdate({ due_date: e.target.value || null })} className={inputClass} />
       </label>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className={cn("grid gap-3", SPRINTS_ENABLED && "grid-cols-2")}>
         <label className="block">
           <span className={labelClass}>Phase</span>
           <select value={task.epic ?? ""} onChange={(e) => onUpdate({ epic: e.target.value || null })} className={inputClass}>
@@ -306,27 +309,16 @@ function EditPanel({
             {epics.map((ep) => <option key={ep.id} value={ep.id}>{ep.title}</option>)}
           </select>
         </label>
-        <label className="block">
-          <span className={labelClass}>Sprint</span>
-          <select value={task.sprint ?? ""} onChange={(e) => onUpdate({ sprint: e.target.value || null })} className={inputClass}>
-            <option value="">—</option>
-            {sprints.map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
-          </select>
-        </label>
+        {SPRINTS_ENABLED && (
+          <label className="block">
+            <span className={labelClass}>Sprint</span>
+            <select value={task.sprint ?? ""} onChange={(e) => onUpdate({ sprint: e.target.value || null })} className={inputClass}>
+              <option value="">—</option>
+              {sprints.map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+            </select>
+          </label>
+        )}
       </div>
-
-      <label className="block">
-        <span className={labelClass}>Progression ({task.progress}%)</span>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          step={5}
-          value={task.progress}
-          onChange={(e) => onUpdate({ progress: Number(e.target.value) })}
-          className="w-full accent-primary"
-        />
-      </label>
 
       <div>
         <span className={labelClass}>Assigné à</span>
@@ -356,32 +348,15 @@ function EditPanel({
         </div>
       </div>
 
-      {labels.length > 0 && (
-        <div>
-          <span className={labelClass}>Étiquettes</span>
-          <div className="flex flex-wrap gap-1.5">
-            {labels.map((l) => {
-              const active = taskLabelIds.has(l.id);
-              return (
-                <button
-                  key={l.id}
-                  type="button"
-                  onClick={() => {
-                    const next = active
-                      ? task.labels.filter((tl) => tl.id !== l.id).map((tl) => tl.id)
-                      : [...task.labels.map((tl) => tl.id), l.id];
-                    onUpdate({ label_ids: next });
-                  }}
-                  className="rounded-full px-2.5 py-1 text-xs font-medium"
-                  style={{ backgroundColor: active ? l.color : `${l.color}1a`, color: active ? "#fff" : l.color }}
-                >
-                  {l.name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      <div>
+        <span className={labelClass}>Étiquettes</span>
+        <LabelPicker
+          available={labels}
+          selectedIds={task.labels.map((l) => l.id)}
+          onChange={(ids) => onUpdate({ label_ids: ids })}
+          onCreate={onCreateLabel}
+        />
+      </div>
 
       <button
         type="button"
@@ -395,10 +370,11 @@ function EditPanel({
 }
 
 /** Détail d'une tâche : lecture (description, sous-tâches, discussion) par
- * défaut ; « Modifier » ouvre un panneau à gauche qui élargit la modale avec
+ * défaut ; « Modifier » ouvre un panneau à droite qui élargit le panneau avec
  * tous les champs éditables. Toujours monté, piloté par `task` (null =
  * fermé), comme l'ancienne Sheet. */
 export function TaskDetailModal({
+  open,
   task,
   projectId,
   members,
@@ -406,12 +382,16 @@ export function TaskDetailModal({
   sprints,
   labels,
   currentUserId,
+  onCreateLabel,
   onClose,
   onUpdate,
   onSubtasksChange,
   onCommentAdded,
   onDelete,
 }: {
+  /** Séparé de `task` : la tâche reste affichée pendant que le panneau
+   * glisse vers la droite à la fermeture. */
+  open: boolean;
   task: ProjectTask | null;
   projectId: string;
   members: ProjectUserBrief[];
@@ -419,6 +399,7 @@ export function TaskDetailModal({
   sprints: Sprint[];
   labels: ProjectLabel[];
   currentUserId: string | null;
+  onCreateLabel: (name: string, color: string) => Promise<ProjectLabel>;
   onClose: () => void;
   onUpdate: (taskId: string, data: TaskUpdate) => void;
   onSubtasksChange: (taskId: string, subtasks: ProjectSubtask[]) => void;
@@ -426,6 +407,7 @@ export function TaskDetailModal({
   onDelete: (taskId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [today] = useState(todayIso);
   const [comments, setComments] = useState<ProjectTaskComment[] | null>(null);
   const [newComment, setNewComment] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
@@ -434,16 +416,18 @@ export function TaskDetailModal({
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Remise à zéro à l'ouverture seulement : à la fermeture, le contenu doit
+  // rester tel quel pendant que le panneau glisse vers la droite.
   useEffect(() => {
+    if (!open || !task) return;
     setEditing(false);
     setComments(null);
     setNewComment("");
     setAttachment(null);
     setPostError(null);
-    if (!task) return;
     listTaskComments(projectId, task.id).then(setComments).catch(() => setComments([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [task?.id]);
+  }, [task?.id, open]);
 
   async function handlePostComment() {
     if (!task || posting || (!newComment.trim() && !attachment)) return;
@@ -470,7 +454,7 @@ export function TaskDetailModal({
   const sprint = task ? sprints.find((s) => s.id === task.sprint) : null;
 
   return (
-    <Dialog.Root open={!!task} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog.Root open={open && !!task} onOpenChange={(next) => { if (!next) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Backdrop
           className={cn(
@@ -480,10 +464,11 @@ export function TaskDetailModal({
         />
         <Dialog.Popup
           className={cn(
-            "fixed top-1/2 left-1/2 z-50 flex h-[88vh] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl",
-            "transition-[max-width,opacity,scale] duration-300 ease-out",
-            "data-[starting-style]:scale-95 data-[starting-style]:opacity-0",
-            "data-[ending-style]:scale-95 data-[ending-style]:opacity-0",
+            // Panneau collé à droite, qui glisse de la droite vers la gauche
+            // à l'ouverture (et repart vers la droite à la fermeture).
+            "fixed inset-y-0 right-0 z-50 flex h-dvh w-full flex-col overflow-hidden bg-white shadow-2xl",
+            "transition-[max-width,translate] duration-300 ease-out",
+            "data-[starting-style]:translate-x-full data-[ending-style]:translate-x-full",
             editing ? "max-w-6xl" : "max-w-3xl"
           )}
         >
@@ -495,6 +480,11 @@ export function TaskDetailModal({
                   <Dialog.Title className="truncate text-base font-semibold text-neutral-900">{task.title}</Dialog.Title>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     {status && <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", status.badge)}>{status.label}</span>}
+                    {isTaskOverdue(task, today) && (
+                      <span className="flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
+                        <AlertTriangle className="size-3" /> En retard
+                      </span>
+                    )}
                     {task.priority && (
                       <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", PRIORITY_COLORS[task.priority])}>
                         {PRIORITY_LABELS[task.priority]}
@@ -521,9 +511,10 @@ export function TaskDetailModal({
               </div>
 
               <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-                {/* Panneau d'édition, à gauche — n'apparaît qu'en mode Modifier */}
+                {/* Panneau d'édition, à droite — n'apparaît qu'en mode
+                 * Modifier (au-dessus du contenu sur petit écran). */}
                 {editing && (
-                  <aside className="max-h-[45%] shrink-0 overflow-y-auto border-b border-neutral-100 bg-neutral-50/60 md:max-h-none md:w-[22rem] md:border-r md:border-b-0">
+                  <aside className="max-h-[45%] shrink-0 overflow-y-auto border-b border-neutral-100 bg-neutral-50/60 md:order-last md:max-h-none md:w-[22rem] md:border-b-0 md:border-l">
                     <EditPanel
                       task={task}
                       members={members}
@@ -531,6 +522,7 @@ export function TaskDetailModal({
                       sprints={sprints}
                       labels={labels}
                       onUpdate={(data) => onUpdate(task.id, data)}
+                      onCreateLabel={onCreateLabel}
                       onDelete={() => onDelete(task.id)}
                     />
                   </aside>
@@ -540,19 +532,16 @@ export function TaskDetailModal({
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                   <div ref={scrollRef} className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5">
                     <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-neutral-600">
-                      <span className="flex items-center gap-1.5">
-                        <CalendarDays className="size-3.5 text-neutral-400" />
-                        {task.due_date ? formatDate(task.due_date) : "Pas d'échéance"}
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <Timer className="size-3.5 text-neutral-400" /> {task.progress}%
+                      <span className={cn("flex items-center gap-1.5", isTaskOverdue(task, today) && "font-medium text-rose-600")}>
+                        <CalendarDays className={cn("size-3.5", isTaskOverdue(task, today) ? "text-rose-500" : "text-neutral-400")} />
+                        {task.due_date ? `Échéance : ${formatDate(task.due_date)}` : "Pas d'échéance"}
                       </span>
                       {epic && (
                         <span className="flex items-center gap-1.5">
                           <Layers className="size-3.5 text-neutral-400" /> {epic.title}
                         </span>
                       )}
-                      {sprint && (
+                      {SPRINTS_ENABLED && sprint && (
                         <span className="flex items-center gap-1.5">
                           <Flag className="size-3.5 text-neutral-400" /> {sprint.name}
                         </span>

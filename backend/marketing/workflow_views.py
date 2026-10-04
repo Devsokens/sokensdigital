@@ -231,5 +231,5 @@ def _notify_receiving_side(lead, transition, actor) -> None:
             notification_type='FOLLOW_UP',
             link='/admin/marketing/projets-soumis'
             if receiving_roles is MARKETING_SIDE
-            else '/admin/technique/projets-soumis',
+            else '/admin/technique/projets?tab=soumis',
         )

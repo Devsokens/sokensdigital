@@ -387,6 +387,84 @@ class ProjectTaskTests(APITestCase):
         self.assertEqual(response.status_code, 404)
 
 
+class ProjectLabelTests(APITestCase):
+    def setUp(self):
+        self.chef = User.objects.create(email='chef@sokensdigital.com', first_name='Chef')
+        _give_role(self.chef, ROLE_PROJECT_MANAGER)
+        self.project = Project.objects.create(name='Refonte site vitrine', lead_project_manager=self.chef)
+        self.other_project = Project.objects.create(name='Autre projet', lead_project_manager=self.chef)
+        self.client_chef = APIClient()
+        self.client_chef.force_authenticate(user=self.chef)
+        self.labels_url = f'/api/v1/projects/{self.project.id}/labels/'
+
+    def test_create_and_list_labels(self):
+        response = self.client_chef.post(self.labels_url, {'name': 'Front', 'color': '#6366f1'}, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['name'], 'Front')
+
+        response = self.client_chef.get(self.labels_url)
+        self.assertEqual([label['name'] for label in response.json()], ['Front'])
+
+    def test_creating_an_existing_name_returns_it_instead_of_failing(self):
+        """La saisie rapide d'étiquettes renvoie le nom tel quel : un doublon
+        (casse comprise) doit rendre l'étiquette existante, pas une erreur
+        d'intégrité en base."""
+        first = self.client_chef.post(self.labels_url, {'name': 'Front'}, format='json').json()
+        response = self.client_chef.post(self.labels_url, {'name': '  front '}, format='json')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['id'], first['id'])
+        self.assertEqual(len(self.client_chef.get(self.labels_url).json()), 1)
+
+    def test_renaming_to_an_existing_name_rejected(self):
+        self.client_chef.post(self.labels_url, {'name': 'Front'}, format='json')
+        back_id = self.client_chef.post(self.labels_url, {'name': 'Back'}, format='json').json()['id']
+        response = self.client_chef.patch(f'{self.labels_url}{back_id}/', {'name': 'FRONT'}, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_blank_name_rejected(self):
+        response = self.client_chef.post(self.labels_url, {'name': '   '}, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_assign_labels_to_task(self):
+        from projects.models import ProjectTask
+        label_id = self.client_chef.post(self.labels_url, {'name': 'Front'}, format='json').json()['id']
+
+        response = self.client_chef.post(
+            f'/api/v1/projects/{self.project.id}/tasks/',
+            {'title': 'Maquettes', 'label_ids': [label_id]}, format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual([label['id'] for label in response.json()['labels']], [label_id])
+
+        task = ProjectTask.objects.get(id=response.json()['id'])
+        response = self.client_chef.patch(
+            f'/api/v1/projects/{self.project.id}/tasks/{task.id}/', {'label_ids': []}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['labels'], [])
+
+    def test_label_from_another_project_rejected(self):
+        from projects.models import Label
+        foreign = Label.objects.create(project=self.other_project, name='Ailleurs')
+        response = self.client_chef.post(
+            f'/api/v1/projects/{self.project.id}/tasks/',
+            {'title': 'Maquettes', 'label_ids': [str(foreign.id)]}, format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_delete_label_detaches_it_from_tasks(self):
+        from projects.models import ProjectTask
+        label_id = self.client_chef.post(self.labels_url, {'name': 'Front'}, format='json').json()['id']
+        task_id = self.client_chef.post(
+            f'/api/v1/projects/{self.project.id}/tasks/',
+            {'title': 'Maquettes', 'label_ids': [label_id]}, format='json',
+        ).json()['id']
+
+        response = self.client_chef.delete(f'{self.labels_url}{label_id}/')
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(ProjectTask.objects.get(id=task_id).labels.count(), 0)
+
+
 class TeamTimesheetTests(APITestCase):
     def setUp(self):
         from datetime import date, timedelta

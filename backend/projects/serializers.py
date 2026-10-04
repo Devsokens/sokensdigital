@@ -118,6 +118,12 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("La progression doit être comprise entre 0 et 100.")
         return value
 
+    def validate_label_ids(self, labels):
+        project = self.context.get('project') or getattr(self.instance, 'project', None)
+        if project and any(label.project_id != project.id for label in labels):
+            raise serializers.ValidationError("Une étiquette n'appartient pas à ce projet.")
+        return labels
+
     def validate_epic(self, epic):
         project = self.context.get('project') or getattr(self.instance, 'project', None)
         if epic and project and epic.project_id != project.id:

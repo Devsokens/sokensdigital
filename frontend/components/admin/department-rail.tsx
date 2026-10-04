@@ -42,7 +42,7 @@ export function DepartmentRail() {
             <button
               key={section.title}
               type="button"
-              onClick={() => router.push(section.items[0].href)}
+              onClick={() => router.push((section.items.find((item) => !item.comingSoon) ?? section.items[0]).href)}
               aria-current={isActive ? "page" : undefined}
               className={cn(
                 "flex w-16 flex-col items-center gap-1 rounded-xl px-1 py-2.5 transition-colors",

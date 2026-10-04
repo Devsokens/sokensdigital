@@ -85,19 +85,36 @@ export function AdminSidebar({ collapsed = false }: { collapsed?: boolean }) {
                         {item.group}
                       </p>
                     )}
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
-                        item.group && "ml-1",
-                        isActive
-                          ? "bg-primary/10 font-semibold text-primary"
-                          : "text-foreground/80 hover:bg-white/5 hover:text-foreground"
-                      )}
-                    >
-                      <Icon className="size-4" />
-                      {item.label}
-                    </Link>
+                    {item.comingSoon ? (
+                      <span
+                        aria-disabled="true"
+                        title="Ce module arrive bientôt"
+                        className={cn(
+                          "flex cursor-not-allowed items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-foreground/40",
+                          item.group && "ml-1"
+                        )}
+                      >
+                        <Icon className="size-4" />
+                        {item.label}
+                        <span className="ml-auto rounded-full bg-amber-500/15 px-2 py-0.5 text-[0.6rem] font-semibold tracking-wide text-amber-600 uppercase">
+                          Bientôt
+                        </span>
+                      </span>
+                    ) : (
+                      <Link
+                        href={item.href}
+                        className={cn(
+                          "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+                          item.group && "ml-1",
+                          isActive
+                            ? "bg-primary/10 font-semibold text-primary"
+                            : "text-foreground/80 hover:bg-white/5 hover:text-foreground"
+                        )}
+                      >
+                        <Icon className="size-4" />
+                        {item.label}
+                      </Link>
+                    )}
                   </div>
                 );
               })}

@@ -181,13 +181,13 @@ export function PhasesEditor({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-neutral-500">Phases du projet ({phases?.length ?? 0}) — enregistrées dès chaque changement</span>
+      <div className="flex items-center justify-between gap-3">
+        <span className="min-w-0 text-xs text-neutral-500">Phases du projet ({phases?.length ?? 0}) — enregistrées dès chaque changement</span>
         {!adding && (
           <button
             type="button"
             onClick={() => { setAdding(true); setEditingId(null); }}
-            className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            className="flex shrink-0 items-center gap-1 text-xs font-medium whitespace-nowrap text-primary hover:underline"
           >
             <Plus className="size-3.5" /> Nouvelle phase
           </button>
@@ -258,13 +258,13 @@ export function PendingPhasesEditor({ phases, onChange }: { phases: PhaseInput[]
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-neutral-500">Phases du projet ({phases.length})</span>
+      <div className="flex items-center justify-between gap-3">
+        <span className="min-w-0 text-xs text-neutral-500">Phases du projet ({phases.length})</span>
         {!adding && (
           <button
             type="button"
             onClick={() => { setAdding(true); setEditingIndex(null); }}
-            className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            className="flex shrink-0 items-center gap-1 text-xs font-medium whitespace-nowrap text-primary hover:underline"
           >
             <Plus className="size-3.5" /> Nouvelle phase
           </button>

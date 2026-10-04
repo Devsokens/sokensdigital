@@ -1,17 +1,21 @@
 from decimal import Decimal
 
 from django.core.cache import cache
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import models
 from django.db.models import Q, Sum
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import mixins, permissions, status, viewsets, serializers
+from django.http import FileResponse
 from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE, ROLE_CAISSIER
-from core.notifications import notify_roles
+from core.notifications import notify, notify_roles
 from core.permissions import has_role
+from core.storage import upload_disbursement_quote
 from decimal import Decimal as D
 from django.utils import timezone
 from finance.models import (
@@ -19,6 +23,7 @@ from finance.models import (
     AccountingPeriod,
     BankStatementImport,
     BankTransaction,
+    DisbursementQuote,
     DisbursementRequest,
     Invoice,
     JournalEntry,
@@ -32,6 +37,8 @@ from finance.serializers import (
     AccountSerializer,
     BankStatementImportSerializer,
     BankTransactionSerializer,
+    DisbursementQuoteSerializer,
+    DisbursementRequestListSerializer,
     DisbursementRequestSerializer,
     InvoiceSerializer,
     JournalEntrySerializer,
@@ -55,6 +62,49 @@ def _can_decide_stage(user, pending_status):
     if pending_status == DisbursementRequest.Status.EN_ATTENTE_RCF:
         return has_role(user, *COMPTABLE_ROLES, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN)
     return has_role(user, ROLE_SUPER_ADMIN)  # EN_ATTENTE_GERANT
+
+
+BESOINS_LINK = '/admin/technique/decaissements'
+
+
+def _besoin_label(disbursement):
+    return f'{disbursement.reference or "Besoin"} — {disbursement.beneficiary} ({disbursement.amount:,.0f} FCFA)'.replace(',', ' ')
+
+
+def _notify_besoin_stage(disbursement, exclude=None):
+    """Prévient ceux qui doivent statuer à l'étape en cours : la RCF
+    (Comptable, Directeur Financier) puis le Gérant (Super-Admin)."""
+    if disbursement.status == DisbursementRequest.Status.EN_ATTENTE_RCF:
+        roles, title = (ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER), 'Nouveau besoin à examiner'
+    else:
+        roles, title = (ROLE_SUPER_ADMIN,), 'Besoin à valider (Gérant)'
+    notify_roles(
+        roles, title=title, message=_besoin_label(disbursement),
+        notification_type='GENERAL', link=BESOINS_LINK,
+        exclude=[exclude, disbursement.requested_by],
+    )
+
+
+def _notify_besoin_requester(disbursement):
+    """Décision finale ou exécution : le demandeur est prévenu, e-mail
+    compris (il n'est pas forcément devant l'application)."""
+    if not disbursement.requested_by:
+        return
+    titles = {
+        DisbursementRequest.Status.APPROUVE: 'Besoin approuvé',
+        DisbursementRequest.Status.REJETE: 'Besoin rejeté',
+        DisbursementRequest.Status.EXECUTE: 'Besoin exécuté',
+    }
+    title = titles.get(disbursement.status)
+    if not title:
+        return
+    message = _besoin_label(disbursement)
+    if disbursement.status == DisbursementRequest.Status.REJETE and disbursement.rejection_reason:
+        message += f'. Motif : {disbursement.rejection_reason}'
+    notify(
+        user=disbursement.requested_by, title=title, message=message,
+        notification_type='GENERAL', link=BESOINS_LINK, email=True,
+    )
 
 
 class CanInitiateDisbursement(permissions.BasePermission):
@@ -82,10 +132,17 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
     serializer_class = DisbursementRequestSerializer
     permission_classes = [CanInitiateDisbursement]
 
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return DisbursementRequestListSerializer
+        return DisbursementRequestSerializer
+
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return DisbursementRequest.objects.none()
-        qs = DisbursementRequest.objects.select_related('project', 'requested_by', 'decided_by', 'executed_by')
+        qs = DisbursementRequest.objects.select_related(
+            'project', 'requested_by', 'beneficiary_user', 'rcf_decided_by', 'decided_by', 'executed_by',
+        ).prefetch_related('lines', 'quotes')
         if has_role(self.request.user, *FINANCE_READ_ROLES, ROLE_SUPER_ADMIN):
             return qs
         return qs.filter(
@@ -97,10 +154,11 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
         if project and project.lead_project_manager_id != self.request.user.id:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Tu ne peux initier une demande que pour un projet que tu diriges.")
-        serializer.save(
+        disbursement = serializer.save(
             requested_by=self.request.user,
             status=DisbursementRequest.Status.EN_ATTENTE_RCF,
         )
+        _notify_besoin_stage(disbursement, exclude=self.request.user)
 
     @extend_schema(
         tags=['Finance & Comptabilité'],
@@ -164,6 +222,10 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
             update_fields += ['decided_by', 'decided_at']
 
         disbursement.save(update_fields=update_fields)
+        if disbursement.status == DisbursementRequest.Status.EN_ATTENTE_GERANT:
+            _notify_besoin_stage(disbursement, exclude=request.user)
+        else:
+            _notify_besoin_requester(disbursement)
         return Response(DisbursementRequestSerializer(disbursement).data)
 
     @extend_schema(
@@ -183,7 +245,83 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
         disbursement.executed_by = request.user
         disbursement.executed_at = timezone.now()
         disbursement.save(update_fields=['status', 'executed_by', 'executed_at'])
+        _notify_besoin_requester(disbursement)
         return Response(DisbursementRequestSerializer(disbursement).data)
+
+    def _can_edit_quotes(self, user, disbursement):
+        """Les devis se joignent/retirent par le demandeur (ou un
+        Super-Admin) tant que la demande n'est pas tranchée."""
+        is_owner = disbursement.requested_by_id == user.id or has_role(user, ROLE_SUPER_ADMIN)
+        return is_owner and disbursement.status in DisbursementRequest.PENDING_STATUSES
+
+    @extend_schema(
+        tags=['Finance & Comptabilité'],
+        summary='List / attach quotes to a disbursement request',
+        request={'multipart/form-data': {'type': 'object', 'properties': {'file': {'type': 'string', 'format': 'binary'}}}},
+        responses={200: DisbursementQuoteSerializer(many=True), 201: DisbursementQuoteSerializer},
+    )
+    @action(
+        detail=True, methods=['get', 'post'], url_path='quotes',
+        permission_classes=[permissions.IsAuthenticated], parser_classes=[MultiPartParser, FormParser, JSONParser],
+    )
+    def quotes(self, request, pk=None):
+        disbursement = self.get_object()
+        if request.method == 'POST':
+            if not self._can_edit_quotes(request.user, disbursement):
+                return Response(status=status.HTTP_403_FORBIDDEN)
+            uploaded = request.FILES.get('file')
+            if not uploaded:
+                return Response({'detail': 'Fichier manquant.'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                storage_path = upload_disbursement_quote(uploaded, str(disbursement.id))
+            except DjangoValidationError as exc:
+                return Response({'detail': exc.messages[0] if exc.messages else str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            quote = DisbursementQuote.objects.create(
+                request=disbursement, storage_path=storage_path,
+                original_filename=uploaded.name, uploaded_by=request.user,
+            )
+            return Response(DisbursementQuoteSerializer(quote).data, status=status.HTTP_201_CREATED)
+        return Response(DisbursementQuoteSerializer(disbursement.quotes.all(), many=True).data)
+
+    @extend_schema(tags=['Finance & Comptabilité'], summary='Remove a quote from a disbursement request')
+    @action(
+        detail=True, methods=['delete'], url_path=r'quotes/(?P<quote_id>[^/.]+)',
+        permission_classes=[permissions.IsAuthenticated],
+    )
+    def delete_quote(self, request, pk=None, quote_id=None):
+        disbursement = self.get_object()
+        if not self._can_edit_quotes(request.user, disbursement):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        quote = disbursement.quotes.filter(id=quote_id).first()
+        if not quote:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        quote.delete(user=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(
+        tags=['Finance & Comptabilité'],
+        summary='Bon de demande (PDF)',
+        description='Affiché dans le navigateur, ou téléchargé avec `?download=1`. '
+        'Visible par toute personne qui voit la demande.',
+    )
+    @action(detail=True, methods=['get'], url_path='pdf', permission_classes=[permissions.IsAuthenticated])
+    def pdf(self, request, pk=None):
+        from treasury.pdf import generate_disbursement_request_pdf
+        disbursement = self.get_object()
+        try:
+            pdf_file = generate_disbursement_request_pdf(disbursement)
+        except ImportError:
+            return Response(
+                {'detail': "La génération PDF n'est pas disponible sur ce serveur."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        download = request.query_params.get('download') in ('1', 'true')
+        return FileResponse(
+            pdf_file,
+            as_attachment=download,
+            filename=f'{disbursement.reference or disbursement.id}.pdf',
+            content_type='application/pdf',
+        )
 
 
 class IsDirecteurFinancierOrSuperAdmin(permissions.BasePermission):

@@ -180,7 +180,7 @@ export function getMeeting(appointmentId: string) {
   return apiFetch<Meeting>(`${BASE}/appointments/${appointmentId}/meeting/`);
 }
 
-export function updateMeeting(appointmentId: string, data: Partial<{ agenda: string; minutes_summary: string }>) {
+export function updateMeeting(appointmentId: string, data: Partial<{ agenda_items: string[]; minutes_summary: string }>) {
   return apiFetch<Meeting>(`${BASE}/appointments/${appointmentId}/meeting/`, {
     method: "PATCH",
     body: JSON.stringify(data),

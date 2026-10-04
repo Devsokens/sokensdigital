@@ -58,6 +58,7 @@ export function ClientDetail({ id }: { id: string }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [meetings, setMeetings] = useState<Appointment[]>([]);
   const [openMeeting, setOpenMeeting] = useState<Appointment | null>(null);
+  const [meetingOpen, setMeetingOpen] = useState(false);
   const [emails, setEmails] = useState<SentEmail[]>([]);
   const [users, setUsers] = useState<UserBrief[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -194,7 +195,10 @@ export function ClientDetail({ id }: { id: string }) {
                 <button
                   key={m.id}
                   type="button"
-                  onClick={() => setOpenMeeting(m)}
+                  onClick={() => {
+                    setOpenMeeting(m);
+                    setMeetingOpen(true);
+                  }}
                   className="flex w-full items-center justify-between rounded-xl border border-neutral-200 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:border-primary/40"
                 >
                   <span>
@@ -244,7 +248,7 @@ export function ClientDetail({ id }: { id: string }) {
         </TabsPanel>
       </Tabs>
 
-      <MeetingSheet appointment={openMeeting} onClose={() => setOpenMeeting(null)} />
+      <MeetingSheet open={meetingOpen} appointment={openMeeting} onClose={() => setMeetingOpen(false)} />
     </div>
   );
 }

@@ -65,7 +65,11 @@ def notify_roles(
     from core.models import User
 
     recipients = User.objects.filter(is_active=True, roles__name__in=role_names).distinct()
-    if exclude is not None:
-        recipients = recipients.exclude(pk=exclude.pk)
+    # `exclude` : un utilisateur, ou une liste (ex. l'auteur de l'action et
+    # la personne qui reçoit déjà une notification plus précise).
+    excluded = exclude if isinstance(exclude, (list, tuple, set)) else [exclude]
+    excluded_ids = [user.pk for user in excluded if user is not None]
+    if excluded_ids:
+        recipients = recipients.exclude(pk__in=excluded_ids)
     for user in recipients:
         notify(user=user, title=title, message=message, notification_type=notification_type, link=link, email=email)

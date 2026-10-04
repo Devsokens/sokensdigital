@@ -9,7 +9,14 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { signOutUser } from "@/lib/firebase/auth";
 import { ROLE_LABELS, profileRoles, type Notification } from "@/lib/firebase/types";
 import { subscribeToNotifications, markNotificationRead } from "@/lib/firebase/notifications";
-import { enablePush, getPushPermission, refreshPushRegistration, type PushPermission } from "@/lib/push";
+import {
+  enablePush,
+  getPushPermission,
+  refreshPushRegistration,
+  sendTestNotification,
+  type PushPermission,
+  type TestNotificationResult,
+} from "@/lib/push";
 import { ADMIN_SECTIONS, findNavMatch, type NavItem } from "@/lib/admin-nav";
 import { globalSearch, type SearchResult } from "@/lib/api/search";
 import { useOnboardingTour } from "@/lib/admin/onboarding-tour";
@@ -49,7 +56,13 @@ function QuickSearch() {
   const [contentResults, setContentResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
 
-  const allItems = useMemo(() => ADMIN_SECTIONS.flatMap((section) => section.items.map((item) => ({ ...item, section: section.title }))), []);
+  const allItems = useMemo(
+    () =>
+      ADMIN_SECTIONS.flatMap((section) =>
+        section.items.filter((item) => !item.comingSoon).map((item) => ({ ...item, section: section.title }))
+      ),
+    []
+  );
   const pageResults = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.trim().toLowerCase();
@@ -186,6 +199,57 @@ function formatNotificationTime(value: unknown): string {
     : date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
 
+/** Vérifie sa propre configuration : s'envoie une notification sur chaque
+ * canal et affiche ce qui est réellement parti. */
+function TestNotificationButton() {
+  const [state, setState] = useState<"idle" | "sending" | "error">("idle");
+  const [result, setResult] = useState<TestNotificationResult | null>(null);
+
+  async function handleClick() {
+    setState("sending");
+    setResult(null);
+    try {
+      setResult(await sendTestNotification());
+      setState("idle");
+    } catch {
+      setState("error");
+    }
+  }
+
+  const emailConfigured = result && result.email_backend !== "EmailBackend";
+
+  return (
+    <div className="mt-1.5">
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={state === "sending"}
+        className="text-[0.7rem] font-medium text-neutral-500 hover:text-neutral-900 hover:underline disabled:opacity-50"
+      >
+        {state === "sending" ? "Envoi en cours…" : "Tester mes notifications"}
+      </button>
+      {state === "error" && <p className="mt-1 text-[0.7rem] text-destructive">Le test a échoué.</p>}
+      {result && (
+        <ul className="mt-1 space-y-0.5 text-[0.7rem] leading-snug text-neutral-500">
+          <li>{result.in_app ? "✓ Cloche : notification créée" : "✗ Cloche : compte pas encore relié (reconnectez-vous)"}</li>
+          <li>
+            {result.push_devices === 0
+              ? "✗ Push : aucun appareil enregistré — activez les notifications ci-dessus"
+              : `${result.push_sent > 0 ? "✓" : "✗"} Push : ${result.push_sent}/${result.push_devices} appareil(s) atteint(s)`}
+          </li>
+          <li>
+            {!result.email
+              ? "✗ E-mail : échec de l'envoi"
+              : emailConfigured
+                ? "✓ E-mail : envoyé — vérifiez votre boîte"
+                : "✗ E-mail : serveur sans envoi réel (Gmail non configuré)"}
+          </li>
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /**
  * Activation des notifications du navigateur.
  *
@@ -267,6 +331,7 @@ function NotificationBell() {
         <div className="border-b border-neutral-100 px-4 py-3">
           <p className="text-sm font-semibold text-neutral-900">Notifications</p>
           <PushToggle />
+          <TestNotificationButton />
         </div>
         {notifications.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">

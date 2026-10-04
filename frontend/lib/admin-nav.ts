@@ -53,6 +53,9 @@ export interface NavItem {
    * "Administration" section). Purely cosmetic, doesn't affect
    * findNavMatch/filterSectionsByAccess. */
   group?: string;
+  /** Module pas encore ouvert : affiché grisé avec une étiquette
+   * « Bientôt », non cliquable, et absent de la recherche rapide. */
+  comingSoon?: boolean;
 }
 
 export interface NavSection {
@@ -92,7 +95,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
       { label: "Dashboard", href: "/admin/marketing/dashboard", icon: LayoutDashboard, moduleKey: "marketing-dashboard" },
       { label: "Projets soumis", shortLabel: "Soumis", href: "/admin/marketing/projets-soumis", icon: Inbox, moduleKey: "projets-soumis" },
       { label: "Gestion de contenu", shortLabel: "Contenu", href: "/admin/marketing/blog", icon: Newspaper, moduleKey: "contenu" },
-      { label: "Plan Éditorial", shortLabel: "Éditorial", href: "/admin/marketing/plan-editorial", icon: CalendarClock, moduleKey: "plan-editorial" },
+      { label: "Plan Éditorial", shortLabel: "Éditorial", href: "/admin/marketing/plan-editorial", icon: CalendarClock, moduleKey: "plan-editorial", comingSoon: true },
       { label: "Tunnel commercial", shortLabel: "Tunnel", href: "/admin/marketing/leads", icon: Target, moduleKey: "leads" },
       { label: "Devis", href: "/admin/marketing/devis", icon: FileText, moduleKey: "devis" },
       { label: "Analytique web", shortLabel: "Analytique", href: "/admin/marketing/analytique", icon: Activity, moduleKey: "analytique-marketing" },
@@ -102,11 +105,11 @@ export const ADMIN_SECTIONS: NavSection[] = [
   {
     title: "Technique",
     items: [
-      { label: "Gestion de projet", shortLabel: "Projets", href: "/admin/technique/projets", icon: FolderKanban, moduleKey: "projets" },
-      { label: "Projets soumis", shortLabel: "Soumis", href: "/admin/technique/projets-soumis", icon: Inbox, moduleKey: "projets-soumis" },
-      { label: "Timesheets", href: "/admin/technique/timesheets", icon: Clock, moduleKey: "timesheets" },
+      // « Projets soumis » est un onglet de cette page (components/admin/technique/projects-hub.tsx).
+      { label: "Projets", href: "/admin/technique/projets", icon: FolderKanban, moduleKey: "projets" },
+      { label: "Timesheets", href: "/admin/technique/timesheets", icon: Clock, moduleKey: "timesheets", comingSoon: true },
       { label: "Maintenance", href: "/admin/technique/maintenance", icon: Wrench, moduleKey: "maintenance" },
-      { label: "Décaissements", href: "/admin/technique/decaissements", icon: Banknote, moduleKey: "decaissements" },
+      { label: "Besoins", href: "/admin/technique/decaissements", icon: Banknote, moduleKey: "decaissements" },
       { label: "Devis", href: "/admin/technique/devis", icon: FileText, moduleKey: "devis" },
       { label: "Cahier des charges", shortLabel: "Cahier", href: "/admin/technique/cahier-des-charges", icon: ClipboardList, moduleKey: "cahier-des-charges" },
       { label: "Analytique web", shortLabel: "Analytique", href: "/admin/technique/analytique", icon: Activity, moduleKey: "analytique-technique" },
@@ -117,10 +120,10 @@ export const ADMIN_SECTIONS: NavSection[] = [
     items: [
       { label: "Analytique", href: "/admin/finance/dashboard", icon: PieChart, moduleKey: "finance-dashboard" },
       { label: "Clôture comptable", shortLabel: "Clôture", href: "/admin/finance/cloture", icon: Lock, moduleKey: "cloture" },
-      { label: "Grand Livre", href: "/admin/finance/grand-livre", icon: BookOpen, moduleKey: "grand-livre" },
+      { label: "Grand Livre", href: "/admin/finance/grand-livre", icon: BookOpen, moduleKey: "grand-livre", comingSoon: true },
       { label: "Facturation", href: "/admin/finance/facturation", icon: Receipt, moduleKey: "facturation" },
       { label: "Encaissements", href: "/admin/finance/encaissements", icon: ArrowDownToLine, moduleKey: "encaissements" },
-      { label: "Rapprochement bancaire", shortLabel: "Rappro.", href: "/admin/finance/rapprochement", icon: Landmark, moduleKey: "rapprochement" },
+      { label: "Rapprochement bancaire", shortLabel: "Rappro.", href: "/admin/finance/rapprochement", icon: Landmark, moduleKey: "rapprochement", comingSoon: true },
       { label: "Fiscalité (TVA)", shortLabel: "TVA", href: "/admin/finance/tva", icon: Percent, moduleKey: "tva" },
       { label: "Opérations d'achats", shortLabel: "Achats", href: "/admin/finance/achats", icon: ShoppingCart, moduleKey: "achats" },
       { label: "Trésorerie", href: "/admin/finance/tresorerie", icon: Wallet, moduleKey: "tresorerie" },

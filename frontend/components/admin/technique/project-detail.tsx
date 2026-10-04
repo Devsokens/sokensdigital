@@ -95,8 +95,8 @@ function initials(firstName?: string, lastName?: string) {
 function SidebarSection({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <section className="border-t border-neutral-100 px-5 py-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">{title}</h2>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wider text-neutral-400">{title}</h2>
         {action}
       </div>
       {children}
@@ -388,7 +388,7 @@ function PhasesSection({
           <button
             type="button"
             onClick={() => { setAdding(true); setEditingId(null); }}
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+            className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
           >
             <Plus className="size-3.5" /> Nouvelle phase
           </button>

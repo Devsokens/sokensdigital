@@ -19,6 +19,13 @@ function isFullWidthRoute(pathname: string) {
   return FULL_WIDTH_ROUTE_PREFIXES.some((pattern) => pattern.test(pathname));
 }
 
+/** Pages d'impression d'un document (…/imprimer) : affichées seules, sans
+ * menus ni en-tête — elles sont aussi chargées dans la visionneuse de devis,
+ * où l'interface admin se retrouvait dupliquée à l'intérieur de l'aperçu. */
+function isDocumentRoute(pathname: string) {
+  return pathname.endsWith("/imprimer");
+}
+
 /** Owns the collapse state for the secondary (department detail) sidebar —
  * both the sidebar's own width and the main content's left padding need to
  * agree on it, so it's lifted here rather than duplicated. Persisted to
@@ -38,6 +45,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (hydrated) localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0");
   }, [collapsed, hydrated]);
+
+  if (isDocumentRoute(pathname)) {
+    return <main className="min-h-dvh bg-white text-neutral-900">{children}</main>;
+  }
 
   // `min-h-dvh` et non `min-h-screen` : `100vh` est figé à la hauteur du
   // viewport barre d'URL déployée, donc dès qu'elle se rétracte le contenu

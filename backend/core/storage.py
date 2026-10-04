@@ -523,6 +523,18 @@ def upload_task_comment_attachment(file, project_id: str) -> str:
     )
 
 
+def upload_disbursement_quote(file, request_id: str) -> str:
+    """Téléverse un devis joint à un besoin (finance.DisbursementQuote) —
+    même bucket et même raisonnement que upload_project_document, dossier
+    `besoins/{request_id}/`."""
+    extension, content_type = _resolve_upload_type(file, ADMIN_ATTACHMENT_MIME_BY_EXTENSION)
+    if file.size > MAX_ATTACHMENT_SIZE:
+        raise ValidationError('Le fichier dépasse la taille maximale autorisée (15 Mo).')
+    return _upload_to_private_bucket(
+        ATTACHMENTS_BUCKET_NAME, file.read(), content_type, extension, f'besoins/{request_id}',
+    )
+
+
 def sign_private_path(path: str, ttl_seconds: int = SIGNED_URL_TTL_SECONDS) -> str:
     """Signe à la demande un chemin du bucket `pieces_jointes` — pour tout
     objet dont le chemin (pas une URL) est gardé en base, comme

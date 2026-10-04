@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import type { NavItem } from "@/lib/admin-nav";
+import { cn } from "@/lib/utils";
 
 /** Rayon de la première couronne, depuis le centre de l'icône du
  * département. Assez grand pour que les bulles dégagent la barre et que
@@ -171,11 +172,13 @@ export function MobileSectionArc({
               exit={{ x: 0, y: 0, scale: 0.3, opacity: 0 }}
               transition={{ type: "spring", stiffness: 360, damping: 24, delay: index * 0.028 }}
               onClick={() => {
+                if (item.comingSoon) return;
                 onClose();
                 router.push(item.href);
               }}
-              aria-label={item.label}
-              className="pointer-events-auto absolute"
+              aria-label={item.comingSoon ? `${item.label} (bientôt)` : item.label}
+              aria-disabled={item.comingSoon || undefined}
+              className={cn("pointer-events-auto absolute", item.comingSoon && "cursor-not-allowed opacity-50")}
               style={{ left: -BUBBLE_SIZE / 2, top: -BUBBLE_SIZE / 2, width: BUBBLE_SIZE, height: BUBBLE_SIZE }}
             >
               <span className="flex size-full items-center justify-center rounded-full">
@@ -183,6 +186,7 @@ export function MobileSectionArc({
               </span>
               <span className="absolute top-full left-1/2 mt-1.5 -translate-x-1/2 rounded-full bg-neutral-900 px-2 py-0.5 text-[0.65rem] font-medium whitespace-nowrap text-white shadow-md">
                 {item.shortLabel ?? item.label}
+                {item.comingSoon && " · Bientôt"}
               </span>
             </motion.button>
           );

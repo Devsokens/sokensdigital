@@ -147,6 +147,9 @@ export interface Meeting {
   id: string;
   appointment: string;
   title: string;
+  /** Ordre du jour : un point par entrée. */
+  agenda_items: string[];
+  /** Ancien ordre du jour en HTML (réunions antérieures à la liste de points). */
   agenda: string;
   minutes_summary: string;
   notes: MeetingNote[];
@@ -704,15 +707,42 @@ export interface TeamTimesheetResponse {
 
 export type DisbursementStatus = "EN_ATTENTE_RCF" | "EN_ATTENTE_GERANT" | "APPROUVE" | "REJETE" | "EXECUTE";
 
+export interface DisbursementLine {
+  id: string;
+  label: string;
+  quantity: string;
+  unit_price: string;
+  total: string;
+}
+
+export interface DisbursementQuote {
+  id: string;
+  original_filename: string;
+  /** URL signée, valable quelques minutes — à utiliser aussitôt. */
+  url: string;
+  created_at: string;
+}
+
+/** Besoin (anciennement « demande de décaissement »). La liste renvoie
+ * `quotes_count` ; le détail renvoie `quotes` avec leurs URLs. */
 export interface DisbursementRequest {
   id: string;
+  reference: string | null;
+  request_date: string;
   project: string | null;
+  project_name: string | null;
   requested_by: UserBrief | null;
   amount: string;
   beneficiary: string;
+  beneficiary_user: UserBrief | null;
   reason: string;
+  lines: DisbursementLine[];
+  quotes?: DisbursementQuote[];
+  quotes_count?: number;
   status: DisbursementStatus;
   rejection_reason: string;
+  rcf_decided_by: UserBrief | null;
+  rcf_decided_at: string | null;
   decided_by: UserBrief | null;
   decided_at: string | null;
   executed_by: UserBrief | null;

@@ -68,7 +68,10 @@ export function SpotlightOverlay({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-neutral-950/70"
+            // Noir fixe, pas neutral-950 : le thème sombre de l'admin
+            // inverse l'échelle neutral, ce qui transformait ce voile
+            // d'assombrissement en voile presque blanc.
+            className="fixed inset-0 z-[100] bg-black/70"
             onClick={onDismiss}
           />
 
@@ -95,7 +98,7 @@ export function SpotlightOverlay({
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: 0.2 }}
             style={{ position: "fixed", width: TOOLTIP_WIDTH, ...getTooltipPosition(rect, placement) }}
-            className="z-[102] rounded-2xl border border-neutral-200 bg-white p-4 shadow-2xl shadow-black/20"
+            className="z-[102] rounded-2xl border border-neutral-200 bg-white p-4 shadow-2xl shadow-black/40 ring-1 ring-white/10"
           >
             <div className="mb-2 flex items-center justify-between">
               {meta ? <span className="text-xs font-medium text-neutral-400">{meta}</span> : <span />}

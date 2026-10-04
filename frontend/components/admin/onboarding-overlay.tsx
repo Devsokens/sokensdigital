@@ -32,7 +32,7 @@ export function OnboardingOverlay() {
           </button>
           <button
             onClick={next}
-            className="flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary/90"
+            className="flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-[#fff] transition-colors hover:bg-primary/90"
           >
             {isLast ? "Terminer" : "Suivant"}
             {!isLast && <ArrowRight className="size-3.5" />}

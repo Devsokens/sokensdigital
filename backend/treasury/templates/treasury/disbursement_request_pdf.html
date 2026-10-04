@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Demande de Décaissement</title>
+    <title>Expression de besoin</title>
     <style>
         @page {
             size: A4;
@@ -240,116 +240,85 @@
 <body>
     <div class="header">
         <div class="company-info">
-            <h1>SOKENS DIGITAL</h1>
-            <p>Société Koweïtienne d'Electronique Numérique Services</p>
+            <h1>SOKEN'S DIGITAL</h1>
             <p>{{ company_address }}</p>
         </div>
     </div>
 
-    <div class="title">DEMANDE DE DÉCAISSEMENT</div>
+    <div class="title">EXPRESSION DE BESOIN — {{ disbursement.reference|default:disbursement.id }}</div>
 
     <div class="section">
         <div class="section-title">1. INFORMATIONS GÉNÉRALES</div>
-
-        <div class="form-row">
-            <div class="form-group">
-                <div class="label">Date de la demande :</div>
-                <div class="value-line">{{ disbursement.created_at|date:"d/m/Y" }}</div>
-            </div>
-            <div class="form-group">
-                <div class="label">N° de demande :</div>
-                <div class="value-line">{{ disbursement.id }}</div>
-            </div>
-        </div>
-
-        <div class="form-row">
-            <div class="form-group">
-                <div class="label">Demandeur :</div>
-                <div class="value-line">{{ disbursement.requested_by.get_full_name }}</div>
-            </div>
-            <div class="form-group">
-                <div class="label">Département :</div>
-                <div class="value-line">
-                    {% if disbursement.project %}
-                        {{ disbursement.project.name }}
-                    {% else %}
-                        Général
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="section">
-        <div class="section-title">2. DÉTAILS DU DÉCAISSEMENT</div>
-
-        <div class="form-row">
-            <div class="form-group">
-                <div class="label">Bénéficiaire :</div>
-                <div class="value-line">{{ disbursement.beneficiary }}</div>
-            </div>
-        </div>
-
-        <div class="form-row">
-            <div class="form-group">
-                <div class="label">Motif de la dépense :</div>
-                <div class="value-line" style="min-height: 40px;">{{ disbursement.reason }}</div>
-            </div>
-        </div>
-
         <table>
-            <thead>
-                <tr>
-                    <th>Libellé</th>
-                    <th class="amount text-right">Montant (FCFA)</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>{{ disbursement.reason }}</td>
-                    <td class="amount text-right">{{ disbursement.amount|floatformat:2 }}</td>
-                </tr>
-                <tr class="total-row">
-                    <td><strong>MONTANT TOTAL</strong></td>
-                    <td class="amount text-right"><strong>{{ disbursement.amount|floatformat:2 }}</strong></td>
-                </tr>
-            </tbody>
+            <tr>
+                <td><span class="label">Date de la demande :</span> {{ disbursement.request_date|date:"d/m/Y" }}</td>
+                <td><span class="label">N° de demande :</span> {{ disbursement.reference|default:disbursement.id }}</td>
+            </tr>
+            <tr>
+                <td><span class="label">Demandeur :</span> {% if disbursement.requested_by %}{{ disbursement.requested_by.first_name }} {{ disbursement.requested_by.last_name }}{% else %}—{% endif %}</td>
+                <td><span class="label">Bénéficiaire :</span> {{ disbursement.beneficiary }}</td>
+            </tr>
+            <tr>
+                <td colspan="2"><span class="label">Projet :</span> {% if disbursement.project %}{{ disbursement.project.name }}{% else %}Aucun (besoin général){% endif %}</td>
+            </tr>
         </table>
     </div>
 
     <div class="section">
-        <div class="section-title">3. STATUT ET APPROBATIONS</div>
+        <div class="section-title">2. DÉTAIL DU BESOIN</div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 30px;">#</th>
+                    <th>Intitulé</th>
+                    <th class="text-right" style="width: 70px;">Unités</th>
+                    <th class="text-right" style="width: 110px;">Prix unitaire (FCFA)</th>
+                    <th class="text-right" style="width: 110px;">Total (FCFA)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in disbursement.lines.all %}
+                <tr>
+                    <td class="text-center">{{ forloop.counter }}</td>
+                    <td>{{ line.label }}</td>
+                    <td class="text-right">{{ line.quantity|floatformat:"-2" }}</td>
+                    <td class="text-right">{{ line.unit_price|floatformat:"0g" }}</td>
+                    <td class="text-right">{{ line.total|floatformat:"0g" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td class="text-center">1</td>
+                    <td colspan="3">{{ disbursement.reason }}</td>
+                    <td class="text-right">{{ disbursement.amount|floatformat:"0g" }}</td>
+                </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td colspan="4"><strong>MONTANT TOTAL</strong></td>
+                    <td class="text-right"><strong>{{ disbursement.amount|floatformat:"0g" }}</strong></td>
+                </tr>
+            </tbody>
+        </table>
+        {% with quotes=disbursement.quotes.all %}
+        {% if quotes %}
+        <div class="info-box">
+            <strong>Devis joints ({{ quotes|length }}) :</strong>
+            {% for quote in quotes %}{{ quote.original_filename }}{% if not forloop.last %}, {% endif %}{% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+    </div>
 
+    <div class="section">
+        <div class="section-title">3. STATUT</div>
         <div class="info-box">
             <strong>Statut actuel :</strong>
             <span class="status-badge
-                {% if disbursement.status == 'EN_ATTENTE_N1' or disbursement.status == 'EN_ATTENTE_N2' or disbursement.status == 'EN_ATTENTE_N3' %}
-                    status-pending
-                {% elif disbursement.status == 'APPROUVE' %}
-                    status-approved
-                {% elif disbursement.status == 'REJETE' %}
-                    status-rejected
-                {% endif %}
-            ">
+                {% if disbursement.status == 'EN_ATTENTE_RCF' or disbursement.status == 'EN_ATTENTE_GERANT' %}status-pending
+                {% elif disbursement.status == 'APPROUVE' or disbursement.status == 'EXECUTE' %}status-approved
+                {% elif disbursement.status == 'REJETE' %}status-rejected{% endif %}">
                 {{ disbursement.get_status_display }}
             </span>
         </div>
-
-        <div class="form-row">
-            <div class="form-group">
-                <div class="label">Niveau d'approbation requis :</div>
-                <div class="value-line">
-                    {% if disbursement.amount > 50000 %}
-                        N3 - Direction Générale (Montant > 50 000 FCFA)
-                    {% elif disbursement.amount >= 10000 %}
-                        N2 - Directeur Financier (Montant 10 000 - 50 000 FCFA)
-                    {% else %}
-                        N1 - Responsable Comptable (Montant < 10 000 FCFA)
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
         {% if disbursement.rejection_reason %}
         <div class="info-box" style="background-color: #fff3cd; border-color: #ffc107;">
             <strong>Motif de rejet :</strong><br>
@@ -359,38 +328,36 @@
     </div>
 
     <div class="signatures-section">
-        <div class="section-title">4. APPROBATIONS</div>
-
-        <div class="signature-row">
-            <div class="signature-block">
-                <div class="signature-title">Responsable Comptable & Financière</div>
-                <div class="signature-title">(Approbation N1)</div>
-                <div class="signature-line"></div>
-                <div class="signature-label">Signature & Date</div>
-                {% if disbursement.decided_by and 'N1' in disbursement.status %}
-                    <div style="font-size: 9px; margin-top: 5px;">Approuvé le {{ disbursement.decided_at|date:"d/m/Y" }}</div>
-                {% endif %}
-            </div>
-
-            <div class="signature-block">
-                <div class="signature-title">Directeur Financier</div>
-                <div class="signature-title">(Approbation N2)</div>
-                <div class="signature-line"></div>
-                <div class="signature-label">Signature & Date</div>
-            </div>
-
-            <div class="signature-block">
-                <div class="signature-title">Gérant / Direction Générale</div>
-                <div class="signature-title">(Approbation N3)</div>
-                <div class="signature-line"></div>
-                <div class="signature-label">Signature & Date</div>
-            </div>
-        </div>
+        <div class="section-title">4. VALIDATIONS</div>
+        <table>
+            <tr>
+                <th style="width: 33%;">Demandeur</th>
+                <th style="width: 33%;">Responsable Comptable et Financière</th>
+                <th style="width: 34%;">Gérant</th>
+            </tr>
+            <tr>
+                <td style="height: 70px; vertical-align: top;">
+                    {% if disbursement.requested_by %}{{ disbursement.requested_by.first_name }} {{ disbursement.requested_by.last_name }}<br>{% endif %}
+                    Le {{ disbursement.request_date|date:"d/m/Y" }}
+                </td>
+                <td style="vertical-align: top;">
+                    {% if disbursement.rcf_decided_by %}
+                        {{ disbursement.rcf_decided_by.first_name }} {{ disbursement.rcf_decided_by.last_name }}<br>
+                        Le {{ disbursement.rcf_decided_at|date:"d/m/Y" }}
+                    {% endif %}
+                </td>
+                <td style="vertical-align: top;">
+                    {% if disbursement.decided_by %}
+                        {{ disbursement.decided_by.first_name }} {{ disbursement.decided_by.last_name }}<br>
+                        Le {{ disbursement.decided_at|date:"d/m/Y" }}
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
     </div>
 
     <div class="footer">
-        <p>Document généré le {{ now|date:"d/m/Y à H:i" }} | Système de gestion financière SOKENS</p>
-        <p>Pour signature électronique ou archivage : consulter le département Financier</p>
+        <p>Document généré le {{ now|date:"d/m/Y à H:i" }} — Soken's Digital</p>
     </div>
 </body>
 </html>

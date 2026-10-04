@@ -257,8 +257,12 @@ class Meeting(LoggedModel):
     appointment = models.OneToOneField(
         Appointment, on_delete=models.CASCADE, related_name='meeting',
     )
-    # HTML riche (Tiptap) — assaini à l'écriture par MeetingSerializer.
+    # Ordre du jour : une liste de points (textes courts), ajoutés un par un.
+    agenda_items = models.JSONField(default=list, blank=True)
+    # Ancien ordre du jour en HTML riche, conservé pour les réunions créées
+    # avant la liste de points (affiché en lecture seule).
     agenda = models.TextField(blank=True)
+    # HTML riche (Tiptap) — assaini à l'écriture par MeetingSerializer.
     minutes_summary = models.TextField(blank=True)
 
     def __str__(self):

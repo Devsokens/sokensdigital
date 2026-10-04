@@ -1,16 +1,8 @@
-import { RequireRole } from "@/components/admin/require-role";
-import { SubmittedProjects } from "@/components/admin/submitted-projects";
+import { redirect } from "next/navigation";
 
-/* Côté Technique : les demandes à analyser, et celles que le client vient de
- * valider et qu'il reste à passer en développement. */
+/* Les projets soumis côté Technique sont désormais un onglet de la page
+ * Projets — l'ancienne adresse y renvoie (liens et notifications déjà
+ * envoyés). */
 export default function ProjetsSoumisTechniquePage() {
-  return (
-    <RequireRole roles={["SUPER_ADMIN", "CHEF_DE_PROJET", "DEVELOPPEUR"]}>
-      <SubmittedProjects
-        stages={["CHEZ_TECHNIQUE", "VALIDE_CLIENT", "EN_DEVELOPPEMENT"]}
-        title="Gestion des projets"
-        subtitle="Demandes à analyser, cahier des charges à produire, et passage en développement."
-      />
-    </RequireRole>
-  );
+  redirect("/admin/technique/projets?tab=soumis");
 }

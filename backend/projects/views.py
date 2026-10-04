@@ -15,12 +15,11 @@ from core.notifications import notify_roles
 from core.permissions import has_role
 from core.storage import upload_project_document, upload_task_comment_attachment
 from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER
-from projects.emails import (
-    send_project_created_email, send_project_member_added_email, send_task_assigned_email,
+from projects.notifications import (
+    notify_project_lead_assigned, notify_project_member_added, notify_task_assigned, notify_task_comment,
 )
 from projects.models import (
-    Project, ProjectDocument, ProjectMember, ProjectTask, ProjectTaskComment, ProjectSubtask,
-    Epic, Label, Sprint, Timesheet,
+    Project, ProjectDocument, ProjectMember, ProjectTask, ProjectTaskComment, ProjectSubtask, Timesheet,
 )
 from projects.serializers import (
     ProjectDocumentSerializer, ProjectMemberSerializer, ProjectSerializer, ProjectTaskCommentSerializer,
@@ -98,13 +97,19 @@ class ProjectViewSet(viewsets.ModelViewSet):
             message=f'Projet « {project.name} » créé.',
             notification_type='GENERAL',
             link='/admin/technique/projets',
-            exclude=self.request.user,
+            # Le chef désigné reçoit sa propre notification juste après.
+            exclude=[self.request.user, lead],
         )
-        # Le chef de projet est prévenu par e-mail dès la création — les
-        # membres d'équipe le sont individuellement à mesure qu'ils sont
-        # ajoutés (add_member ci-dessous), le formulaire de création les
-        # ajoutant chacun dans un appel séparé une fois le projet créé.
-        send_project_created_email(project, to_user=lead)
+        # Chef de projet : in-app + push + e-mail. Les membres d'équipe sont
+        # prévenus un par un à leur ajout (add_member), le formulaire de
+        # création les ajoutant chacun dans un appel séparé.
+        notify_project_lead_assigned(project, to_user=lead, actor=self.request.user)
+
+    def perform_update(self, serializer):
+        previous_lead_id = serializer.instance.lead_project_manager_id
+        project = serializer.save()
+        if project.lead_project_manager_id and project.lead_project_manager_id != previous_lead_id:
+            notify_project_lead_assigned(project, to_user=project.lead_project_manager, actor=self.request.user)
 
     def perform_destroy(self, instance):
         name = instance.name
@@ -148,7 +153,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         membership = serializer.save(project=project)
         self._sync_chat_room_members(project)
-        send_project_member_added_email(project, to_user=membership.user)
+        notify_project_member_added(project, to_user=membership.user, actor=request.user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @extend_schema(tags=['Technique & Projets'], summary='Remove a member from the project')
@@ -268,7 +273,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             task = serializer.save(project=project)
             for assignee in task.assignees.all():
-                send_task_assigned_email(task, to_user=assignee)
+                notify_task_assigned(task, to_user=assignee, actor=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         qs = project.tasks.prefetch_related('assignees', 'labels', 'subtasks')
@@ -305,7 +310,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         task = serializer.save()
         for assignee in task.assignees.exclude(id__in=previous_assignee_ids):
-            send_task_assigned_email(task, to_user=assignee)
+            notify_task_assigned(task, to_user=assignee, actor=request.user)
         return Response(serializer.data)
 
     @extend_schema(
@@ -346,6 +351,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 task=task, author=request.user, body=body,
                 attachment_path=attachment_path, attachment_name=attachment_name,
             )
+            notify_task_comment(task, author=request.user)
             return Response(ProjectTaskCommentSerializer(comment).data, status=status.HTTP_201_CREATED)
 
         qs = task.comments.select_related('author')
@@ -462,6 +468,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
         if request.method == 'POST':
             serializer = LabelSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
+            # Saisie rapide : un nom déjà pris (casse ignorée) renvoie
+            # l'étiquette existante au lieu d'un doublon ou d'une erreur
+            # d'unicité en base.
+            existing = project.labels.filter(name__iexact=serializer.validated_data['name']).first()
+            if existing:
+                return Response(LabelSerializer(existing).data, status=status.HTTP_200_OK)
             serializer.save(project=project)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -484,6 +496,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
             return Response(status=status.HTTP_204_NO_CONTENT)
         serializer = LabelSerializer(label, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        new_name = serializer.validated_data.get('name')
+        if new_name and project.labels.filter(name__iexact=new_name).exclude(id=label.id).exists():
+            return Response({'name': ['Une étiquette porte déjà ce nom.']}, status=status.HTTP_400_BAD_REQUEST)
         serializer.save()
         return Response(serializer.data)
 

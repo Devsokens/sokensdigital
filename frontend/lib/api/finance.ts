@@ -16,20 +16,94 @@ import type {
   PaymentInput,
 } from "@/lib/api/types";
 
+const DISBURSEMENTS = "/api/v1/finance/disbursement-requests";
+
 export function listDisbursementRequests() {
-  return apiFetch<Paginated<DisbursementRequest>>("/api/v1/finance/disbursement-requests/");
+  return apiFetch<Paginated<DisbursementRequest>>(`${DISBURSEMENTS}/`);
+}
+
+/** Détail, avec les devis et leurs URLs signées (la liste n'en donne que le nombre). */
+export function getDisbursementRequest(id: string) {
+  return apiFetch<DisbursementRequest>(`${DISBURSEMENTS}/${id}/`);
+}
+
+export interface BesoinLineInput {
+  label: string;
+  quantity: string;
+  unit_price: string;
 }
 
 export function createDisbursementRequest(data: {
-  project_id: string;
-  amount: string;
-  beneficiary: string;
-  reason: string;
+  request_date: string;
+  project_id: string | null;
+  beneficiary_user_id: string | null;
+  lines: BesoinLineInput[];
 }) {
-  return apiFetch<DisbursementRequest>("/api/v1/finance/disbursement-requests/", {
+  return apiFetch<DisbursementRequest>(`${DISBURSEMENTS}/`, {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const { auth } = await import("@/lib/firebase/config");
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+
+async function errorDetail(response: Response, fallback: string) {
+  try {
+    const body = await response.json();
+    if (body.detail) return String(body.detail);
+  } catch {
+    // pas de corps JSON
+  }
+  return fallback;
+}
+
+/** Multipart — pas apiFetch(), qui force Content-Type: application/json. */
+export async function uploadDisbursementQuote(id: string, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${API_BASE}${DISBURSEMENTS}/${id}/quotes/`, {
+    method: "POST",
+    headers: await authHeaders(),
+    body: formData,
+  });
+  if (!response.ok) throw new Error(await errorDetail(response, `Envoi du devis échoué (${response.status})`));
+  return response.json();
+}
+
+export function deleteDisbursementQuote(id: string, quoteId: string) {
+  return apiFetch<void>(`${DISBURSEMENTS}/${id}/quotes/${quoteId}/`, { method: "DELETE" });
+}
+
+/** Bon de demande en PDF, en Blob : le lien ne peut pas porter le jeton
+ * Firebase, donc on le récupère nous-mêmes (même schéma que les pièces de
+ * caisse, lib/api/treasury.ts). */
+export async function fetchBesoinPdf(id: string): Promise<Blob> {
+  const response = await fetch(`${API_BASE}${DISBURSEMENTS}/${id}/pdf/`, { headers: await authHeaders() });
+  if (!response.ok) throw new Error(await errorDetail(response, `PDF indisponible (${response.status})`));
+  return response.blob();
+}
+
+/** Un devis stocké : son URL signée force le téléchargement, on le
+ * récupère en Blob pour pouvoir aussi l'afficher dans la visionneuse. */
+export async function fetchQuoteFile(url: string): Promise<Blob> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Devis indisponible (${response.status})`);
+  return response.blob();
+}
+
+export function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export function approveDisbursementRequest(id: string, decision: "APPROUVE" | "REJETE", rejectionReason?: string) {

@@ -106,9 +106,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
+    // suppressHydrationWarning : le script de thème de l'admin
+    // (ADMIN_THEME_BOOTSTRAP, app/admin/layout.tsx) pose data-admin-theme sur
+    // <html> avant l'hydratation, exprès, pour éviter un flash de thème.
+    // Ne s'applique qu'aux attributs de <html>, pas à ses enfants.
     <html
       lang="fr"
       className={`${jakarta.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <JsonLd data={[organizationSchema(), websiteSchema()]} />

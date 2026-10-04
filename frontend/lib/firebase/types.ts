@@ -73,6 +73,10 @@ export type NotificationType =
   | "PROJECT_STATUS_CHANGE"
   | "DISBURSEMENT_WAITING"
   | "CONTENT_PUBLISH_REMINDER"
+  | "PROJECT_UPDATE"
+  | "TASK_ASSIGNED"
+  | "TASK_COMMENT"
+  | "FOLLOW_UP"
   | "GENERAL";
 
 /** Firestore doc at /notifications/{id} — written server-side only (see

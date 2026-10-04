@@ -28,7 +28,7 @@ class ClientSerializer(serializers.ModelSerializer):
         # 'status' en lecture seule — suite au pentest du 24/09/2026 : un
         # Commercial autorisé à PATCHer son propre client pouvait envoyer
         # {"status": "ARCHIVE"} et contourner ainsi l'action `archive`,
-        # réservée au Super-Admin. Le statut par défaut (PROSPECT) couvre
+        # réservée au Super-Admin. Le statut par défaut (CLIENT_ACTIF) couvre
         # déjà la création ; toute transition passe désormais par une
         # action dédiée, jamais par une écriture directe du champ.
         read_only_fields = ['status']
@@ -155,8 +155,16 @@ class MeetingSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Meeting
-        fields = ['id', 'appointment', 'title', 'agenda', 'minutes_summary', 'notes', 'created_at']
+        fields = ['id', 'appointment', 'title', 'agenda_items', 'agenda', 'minutes_summary', 'notes', 'created_at']
         read_only_fields = ['appointment']
+
+    def validate_agenda_items(self, value):
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise serializers.ValidationError("L'ordre du jour doit être une liste de points.")
+        items = [item.strip()[:500] for item in value if item.strip()]
+        if len(items) > 100:
+            raise serializers.ValidationError("100 points maximum.")
+        return items
 
     def validate_agenda(self, value):
         return sanitize_html(value)

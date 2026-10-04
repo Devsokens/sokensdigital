@@ -63,7 +63,7 @@ export function ModuleTourOverlay() {
         <div className="flex justify-end">
           <button
             onClick={dismiss}
-            className="rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary/90"
+            className="rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-[#fff] transition-colors hover:bg-primary/90"
           >
             Compris
           </button>

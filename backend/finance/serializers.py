@@ -4,12 +4,15 @@ from django.db import models
 from rest_framework import serializers
 
 from core.serializers import UserBriefSerializer
-from core.models import DocumentAttachment
+from core.models import DocumentAttachment, User
+from core.storage import sign_private_path
 from finance.models import (
     Account,
     AccountingPeriod,
     BankStatementImport,
     BankTransaction,
+    DisbursementLine,
+    DisbursementQuote,
     DisbursementRequest,
     Invoice,
     JournalEntry,
@@ -21,30 +24,116 @@ from finance.models import (
 from projects.models import Project
 
 
+class DisbursementLineSerializer(serializers.ModelSerializer):
+    total = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = DisbursementLine
+        fields = ['id', 'label', 'quantity', 'unit_price', 'total']
+
+    def validate_quantity(self, value):
+        if value <= 0:
+            raise serializers.ValidationError('Le nombre d\'unités doit être positif.')
+        return value
+
+    def validate_unit_price(self, value):
+        if value < 0:
+            raise serializers.ValidationError('Le prix unitaire ne peut pas être négatif.')
+        return value
+
+
+class DisbursementQuoteSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = DisbursementQuote
+        fields = ['id', 'original_filename', 'url', 'created_at']
+
+    def get_url(self, obj):
+        # Signée à chaque lecture plutôt que stockée : voir
+        # DisbursementQuote.storage_path.
+        return sign_private_path(obj.storage_path)
+
+
 class DisbursementRequestSerializer(serializers.ModelSerializer):
     requested_by = UserBriefSerializer(read_only=True)
     decided_by = UserBriefSerializer(read_only=True)
+    rcf_decided_by = UserBriefSerializer(read_only=True)
     executed_by = UserBriefSerializer(read_only=True)
     project_id = serializers.PrimaryKeyRelatedField(
         source='project', queryset=Project.objects.all(), write_only=True, required=False, allow_null=True,
     )
+    project_name = serializers.CharField(source='project.name', read_only=True, default=None)
+    beneficiary_user_id = serializers.PrimaryKeyRelatedField(
+        source='beneficiary_user', queryset=User.objects.all(), write_only=True, required=False, allow_null=True,
+    )
+    beneficiary_user = UserBriefSerializer(read_only=True)
+    lines = DisbursementLineSerializer(many=True, required=False)
+    quotes = DisbursementQuoteSerializer(many=True, read_only=True)
+    # Calculé à partir des lignes quand il y en a ; obligatoire sinon.
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
+    beneficiary = serializers.CharField(max_length=255, required=False, allow_blank=True)
 
     class Meta:
         model = DisbursementRequest
         fields = [
-            'id', 'project', 'project_id', 'requested_by', 'amount',
-            'beneficiary', 'reason', 'status', 'rejection_reason', 'decided_by', 'decided_at',
+            'id', 'reference', 'request_date', 'project', 'project_id', 'project_name', 'requested_by', 'amount',
+            'beneficiary', 'beneficiary_user', 'beneficiary_user_id', 'reason', 'lines', 'quotes',
+            'status', 'rejection_reason', 'rcf_decided_by', 'rcf_decided_at', 'decided_by', 'decided_at',
             'executed_by', 'executed_at', 'created_at',
         ]
         read_only_fields = [
-            'project', 'requested_by', 'status', 'rejection_reason', 'decided_by', 'decided_at',
-            'executed_by', 'executed_at',
+            'reference', 'project', 'requested_by', 'status', 'rejection_reason', 'rcf_decided_by',
+            'rcf_decided_at', 'decided_by', 'decided_at', 'executed_by', 'executed_at',
         ]
 
     def validate_amount(self, value):
         if value <= 0:
             raise serializers.ValidationError('Le montant doit être positif.')
         return value
+
+    def validate(self, attrs):
+        lines = attrs.get('lines') or []
+        if lines:
+            total = sum((line['quantity'] * line['unit_price'] for line in lines), Decimal('0'))
+            if total <= 0:
+                raise serializers.ValidationError({'lines': 'Le total des lignes doit être positif.'})
+            attrs['amount'] = total.quantize(Decimal('0.01'))
+            if not attrs.get('reason'):
+                # Résumé lisible pour les écrans qui affichent `reason`
+                # (achats, recherche, tableau de bord).
+                attrs['reason'] = '; '.join(line['label'] for line in lines)[:1000]
+        elif 'amount' not in attrs:
+            raise serializers.ValidationError({'lines': 'Ajoutez au moins une ligne au besoin.'})
+
+        beneficiary_user = attrs.get('beneficiary_user')
+        if beneficiary_user:
+            attrs['beneficiary'] = f'{beneficiary_user.first_name} {beneficiary_user.last_name}'.strip() or beneficiary_user.email
+        elif not (attrs.get('beneficiary') or '').strip():
+            raise serializers.ValidationError({'beneficiary': 'Le bénéficiaire est obligatoire.'})
+        return attrs
+
+    def create(self, validated_data):
+        lines = validated_data.pop('lines', [])
+        request = DisbursementRequest.objects.create(**validated_data)
+        DisbursementLine.objects.bulk_create([
+            DisbursementLine(request=request, order=index, **line) for index, line in enumerate(lines)
+        ])
+        return request
+
+
+class DisbursementRequestListSerializer(DisbursementRequestSerializer):
+    """Liste : le nombre de devis seulement — signer l'URL de chaque devis
+    de chaque ligne coûterait un appel au stockage par fichier. Les URLs
+    viennent avec le détail (retrieve)."""
+    quotes = None
+    quotes_count = serializers.SerializerMethodField()
+
+    class Meta(DisbursementRequestSerializer.Meta):
+        fields = [f for f in DisbursementRequestSerializer.Meta.fields if f != 'quotes'] + ['quotes_count']
+
+    def get_quotes_count(self, obj):
+        return len(obj.quotes.all())
 
 
 class AccountingPeriodSerializer(serializers.ModelSerializer):

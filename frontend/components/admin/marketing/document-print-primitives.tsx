@@ -53,7 +53,8 @@ export function Banner({ accentColor }: { accentColor: string }) {
 export function Page({ children, first }: { children: React.ReactNode; first?: boolean }) {
   return (
     <div
-      className="mx-auto flex flex-col print:m-0"
+      // admin-paper : le document reste clair en thème sombre (globals.css).
+      className="admin-paper mx-auto flex flex-col text-neutral-900 print:m-0"
       style={{
         width: "210mm",
         minHeight: "297mm",

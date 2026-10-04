@@ -214,3 +214,23 @@ html[data-admin-theme="dark"] {
   --color-neutral-900: oklch(0.95 0.004 240);
   --color-neutral-950: oklch(0.98 0.003 240);
 }
+
+/* Documents (devis, cahier des charges, aperçus) : du papier, donc toujours
+ * clairs, même en thème sombre. On restaure ici les valeurs d'origine de
+ * Tailwind pour tout ce qui est à l'intérieur — sinon le fond reste clair
+ * mais le texte devient clair aussi, et le document est illisible. */
+html[data-admin-theme="dark"] .admin-paper {
+  color-scheme: light;
+  --color-white: #fff;
+  --color-neutral-50: oklch(0.985 0 0);
+  --color-neutral-100: oklch(0.97 0 0);
+  --color-neutral-200: oklch(0.922 0 0);
+  --color-neutral-300: oklch(0.87 0 0);
+  --color-neutral-400: oklch(0.708 0 0);
+  --color-neutral-500: oklch(0.556 0 0);
+  --color-neutral-600: oklch(0.439 0 0);
+  --color-neutral-700: oklch(0.371 0 0);
+  --color-neutral-800: oklch(0.269 0 0);
+  --color-neutral-900: oklch(0.205 0 0);
+  --color-neutral-950: oklch(0.145 0 0);
+}

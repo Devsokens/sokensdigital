@@ -90,7 +90,7 @@ export async function enablePush(): Promise<boolean> {
     });
     if (!token) return false;
 
-    await apiFetch("/api/v1/core/push/devices/", {
+    await apiFetch("/api/v1/push/devices/", {
       method: "POST",
       body: JSON.stringify({
         token,
@@ -119,7 +119,7 @@ export async function disablePush(): Promise<void> {
       serviceWorkerRegistration: registration,
     });
     if (token) {
-      await apiFetch("/api/v1/core/push/devices/", {
+      await apiFetch("/api/v1/push/devices/", {
         method: "DELETE",
         body: JSON.stringify({ token }),
       }).catch(() => undefined);
@@ -142,4 +142,18 @@ export async function disablePush(): Promise<void> {
 export async function refreshPushRegistration(): Promise<void> {
   if ((await getPushPermission()) !== "granted") return;
   await enablePush();
+}
+
+export interface TestNotificationResult {
+  in_app: boolean;
+  push_devices: number;
+  push_sent: number;
+  email: boolean;
+  email_backend: string;
+}
+
+/** S'envoie une notification sur les trois canaux (cloche, push, e-mail) et
+ * renvoie ce qui est réellement parti — pour vérifier sa configuration. */
+export function sendTestNotification() {
+  return apiFetch<TestNotificationResult>("/api/v1/notifications/test/", { method: "POST" });
 }

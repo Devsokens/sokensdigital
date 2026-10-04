@@ -15,6 +15,7 @@ from django.utils import timezone
 
 from core import calendar_sync
 from core.models import AuditLog, EmailLog, Notification
+from core.notifications import notify
 from core.storage import upload_client_document
 from core.constants import (
     ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PROJECT_MANAGER,
@@ -553,9 +554,31 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         # sélectionner lui-même dans la liste des participants.
         appointment.attendees.add(self.request.user)
         calendar_sync.sync_appointment_event(appointment)
+        self._notify_invited(appointment, appointment.attendees.exclude(pk=self.request.user.pk))
 
     def perform_update(self, serializer):
-        calendar_sync.sync_appointment_event(serializer.save())
+        previous_ids = set(serializer.instance.attendees.values_list('pk', flat=True))
+        appointment = serializer.save()
+        calendar_sync.sync_appointment_event(appointment)
+        new_attendees = appointment.attendees.exclude(pk__in=previous_ids).exclude(pk=self.request.user.pk)
+        self._notify_invited(appointment, new_attendees)
+
+    def _notify_invited(self, appointment, users):
+        """Invitation : in-app + push + e-mail (un rendez-vous s'adresse aussi
+        à quelqu'un qui n'est pas devant l'application)."""
+        when = timezone.localtime(appointment.start_at).strftime('%d/%m/%Y à %H:%M')
+        organizer = self.request.user
+        organizer_name = f'{organizer.first_name} {organizer.last_name}'.strip() or organizer.email
+        for user in users:
+            notify(
+                user=user,
+                title=f'Invitation : {appointment.title}',
+                message=f'{organizer_name} vous invite le {when}'
+                + (f' — {appointment.location}' if appointment.location else '') + '.',
+                notification_type='FOLLOW_UP',
+                link='/admin/agenda',
+                email=True,
+            )
 
     def perform_destroy(self, instance):
         user = self.request.user

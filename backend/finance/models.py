@@ -43,11 +43,24 @@ class DisbursementRequest(LoggedModel):
 
     PENDING_STATUSES = (Status.EN_ATTENTE_RCF, Status.EN_ATTENTE_GERANT)
 
+    # Référence lisible (BES-2026-0001), attribuée à l'enregistrement —
+    # l'id UUID reste la clé technique.
+    reference = models.CharField(max_length=20, unique=True, null=True, blank=True, editable=False)
+    request_date = models.DateField(default=timezone.localdate)
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='disbursement_requests')
     requested_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='disbursement_requests')
+    # Somme des lignes quand il y en a (formulaire « Exprimer un besoin ») ;
+    # saisi directement pour les demandes sans ligne (auto-créées depuis un
+    # devis fournisseur validé, procurement.tasks).
     amount = models.DecimalField(max_digits=12, decimal_places=2)
+    # Nom du bénéficiaire, toujours renseigné (lu tel quel par la trésorerie,
+    # la recherche et les achats) ; beneficiary_user le complète quand le
+    # bénéficiaire est un collaborateur choisi dans la liste.
     beneficiary = models.CharField(max_length=255)
-    reason = models.TextField()
+    beneficiary_user = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='beneficiary_disbursements',
+    )
+    reason = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.EN_ATTENTE_RCF)
     rejection_reason = models.TextField(blank=True)
 
@@ -71,13 +84,65 @@ class DisbursementRequest(LoggedModel):
         ]
 
     def __str__(self):
-        return f'{self.beneficiary} — {self.amount} ({self.status})'
+        return f'{self.reference or self.beneficiary} — {self.amount} ({self.status})'
 
     def clean(self):
         super().clean()
         from django.core.exceptions import ValidationError
         if self.amount is not None and self.amount <= 0:
             raise ValidationError({'amount': 'Le montant doit être positif.'})
+
+    def save(self, *args, **kwargs):
+        if not self.reference:
+            self.reference = self._next_reference()
+        super().save(*args, **kwargs)
+
+    def _next_reference(self):
+        """BES-<année>-<n° sur 4 chiffres>, numérotation reprise à 1 chaque
+        année. La contrainte d'unicité protège contre deux créations
+        simultanées (la seconde échoue plutôt que de dupliquer)."""
+        year = (self.request_date or timezone.localdate()).year
+        prefix = f'BES-{year}-'
+        last = (
+            DisbursementRequest.objects.filter(reference__startswith=prefix)
+            .order_by('-reference').values_list('reference', flat=True).first()
+        )
+        number = int(last.rsplit('-', 1)[1]) + 1 if last else 1
+        return f'{prefix}{number:04d}'
+
+
+class DisbursementLine(LoggedModel):
+    """Ligne d'un besoin : intitulé, unités, prix unitaire."""
+    request = models.ForeignKey(DisbursementRequest, on_delete=models.CASCADE, related_name='lines')
+    label = models.CharField(max_length=255)
+    quantity = models.DecimalField(max_digits=12, decimal_places=2)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['order', 'created_at']
+
+    @property
+    def total(self):
+        return (self.quantity * self.unit_price).quantize(Decimal('0.01'))
+
+    def __str__(self):
+        return f'{self.label} ({self.request})'
+
+
+class DisbursementQuote(LoggedModel):
+    """Devis joint à un besoin — bucket privé, même principe que
+    projects.ProjectDocument : on garde le CHEMIN, resigné à chaque lecture."""
+    request = models.ForeignKey(DisbursementRequest, on_delete=models.CASCADE, related_name='quotes')
+    storage_path = models.CharField(max_length=500)
+    original_filename = models.CharField(max_length=255)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='+')
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.original_filename} ({self.request})'
 
 
 class AccountingPeriod(LoggedModel):

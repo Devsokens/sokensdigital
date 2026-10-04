@@ -1,6 +1,9 @@
 import datetime
 from decimal import Decimal
+from io import BytesIO
+from unittest.mock import patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient, APITestCase
 
 from core.constants import ROLE_COMPTABLE, ROLE_DEVELOPER, ROLE_DIRECTEUR_FINANCIER, ROLE_PROJECT_MANAGER, ROLE_SUPER_ADMIN
@@ -339,6 +342,135 @@ class DisbursementRequestViewSetTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'REJETE')
         self.assertEqual(response.json()['rejection_reason'], 'Budget insuffisant.')
+
+
+class BesoinLinesQuotesPdfTests(APITestCase):
+    """Formulaire « Exprimer un besoin » : lignes, référence, devis, PDF."""
+
+    URL = '/api/v1/finance/disbursement-requests/'
+
+    def setUp(self):
+        self.chef = User.objects.create(email='chef@sokensdigital.com', first_name='Awa', last_name='Diallo')
+        _give_role(self.chef, ROLE_PROJECT_MANAGER)
+        self.other_chef = User.objects.create(email='autre@sokensdigital.com', first_name='Autre')
+        _give_role(self.other_chef, ROLE_PROJECT_MANAGER)
+        self.cfo = User.objects.create(email='cfo@sokensdigital.com', first_name='CFO')
+        _give_role(self.cfo, ROLE_DIRECTEUR_FINANCIER)
+        self.project = Project.objects.create(name='Projet A', lead_project_manager=self.chef)
+
+        self.client_chef = APIClient()
+        self.client_chef.force_authenticate(user=self.chef)
+        self.client_other = APIClient()
+        self.client_other.force_authenticate(user=self.other_chef)
+        self.client_cfo = APIClient()
+        self.client_cfo.force_authenticate(user=self.cfo)
+
+    def create_with_lines(self, **overrides):
+        data = {
+            'project_id': str(self.project.id),
+            'request_date': '2026-10-04',
+            'beneficiary_user_id': str(self.chef.id),
+            'lines': [
+                {'label': 'Écran 27 pouces', 'quantity': '2', 'unit_price': '95000'},
+                {'label': 'Câble HDMI', 'quantity': '3', 'unit_price': '2500'},
+            ],
+        }
+        data.update(overrides)
+        return self.client_chef.post(self.URL, data, format='json')
+
+    def test_lines_set_amount_reason_beneficiary_and_reference(self):
+        response = self.create_with_lines()
+        self.assertEqual(response.status_code, 201, response.content)
+        body = response.json()
+        self.assertEqual(Decimal(body['amount']), Decimal('197500.00'))
+        self.assertEqual(body['beneficiary'], 'Awa Diallo')
+        self.assertEqual(body['reason'], 'Écran 27 pouces; Câble HDMI')
+        self.assertEqual(body['reference'], 'BES-2026-0001')
+        self.assertEqual(body['request_date'], '2026-10-04')
+        self.assertEqual([line['total'] for line in body['lines']], ['190000.00', '7500.00'])
+
+    def test_references_increment(self):
+        self.create_with_lines()
+        second = self.create_with_lines().json()
+        self.assertEqual(second['reference'], 'BES-2026-0002')
+
+    def test_needs_lines_or_amount(self):
+        response = self.client_chef.post(self.URL, {'beneficiary': 'X'}, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('lines', response.json())
+
+    def test_invalid_line_rejected(self):
+        response = self.create_with_lines(lines=[{'label': 'Écran', 'quantity': '0', 'unit_price': '1000'}])
+        self.assertEqual(response.status_code, 400)
+
+    def test_free_text_beneficiary_still_supported(self):
+        response = self.create_with_lines(beneficiary_user_id=None, beneficiary='Fournisseur SA')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['beneficiary'], 'Fournisseur SA')
+
+    def test_list_reports_quote_count_without_urls(self):
+        self.create_with_lines()
+        row = self.client_chef.get(self.URL).json()['results'][0]
+        self.assertEqual(row['quotes_count'], 0)
+        self.assertNotIn('quotes', row)
+        self.assertEqual(len(row['lines']), 2)
+
+    @patch('finance.serializers.sign_private_path', return_value='https://signed.example/devis.pdf')
+    @patch('finance.views.upload_disbursement_quote', return_value='besoins/x/devis.pdf')
+    def test_requester_can_attach_and_remove_quotes(self, _upload, _sign):
+        disbursement_id = self.create_with_lines().json()['id']
+        upload = SimpleUploadedFile('devis.pdf', b'%PDF-1.4', content_type='application/pdf')
+        response = self.client_chef.post(f'{self.URL}{disbursement_id}/quotes/', {'file': upload}, format='multipart')
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()['original_filename'], 'devis.pdf')
+
+        detail = self.client_chef.get(f'{self.URL}{disbursement_id}/').json()
+        self.assertEqual(detail['quotes'][0]['url'], 'https://signed.example/devis.pdf')
+
+        quote_id = response.json()['id']
+        response = self.client_chef.delete(f'{self.URL}{disbursement_id}/quotes/{quote_id}/')
+        self.assertEqual(response.status_code, 204)
+
+    @patch('finance.views.upload_disbursement_quote', return_value='besoins/x/devis.pdf')
+    def test_quotes_locked_for_others_and_after_decision(self, _upload):
+        disbursement_id = self.create_with_lines().json()['id']
+        upload = SimpleUploadedFile('devis.pdf', b'%PDF-1.4', content_type='application/pdf')
+        # Un autre chef ne voit même pas la demande.
+        response = self.client_other.post(f'{self.URL}{disbursement_id}/quotes/', {'file': upload}, format='multipart')
+        self.assertEqual(response.status_code, 404)
+
+        DisbursementRequest.objects.filter(id=disbursement_id).update(status=DisbursementRequest.Status.APPROUVE)
+        upload = SimpleUploadedFile('devis.pdf', b'%PDF-1.4', content_type='application/pdf')
+        response = self.client_chef.post(f'{self.URL}{disbursement_id}/quotes/', {'file': upload}, format='multipart')
+        self.assertEqual(response.status_code, 403)
+
+    @patch('treasury.pdf.generate_disbursement_request_pdf', side_effect=lambda d: BytesIO(b'%PDF-1.4 test'))
+    def test_pdf_inline_or_download(self, _generate):
+        disbursement_id = self.create_with_lines().json()['id']
+        response = self.client_cfo.get(f'{self.URL}{disbursement_id}/pdf/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertTrue(response['Content-Disposition'].startswith('inline'))
+
+        response = self.client_cfo.get(f'{self.URL}{disbursement_id}/pdf/?download=1')
+        self.assertTrue(response['Content-Disposition'].startswith('attachment'))
+        self.assertIn('BES-2026-0001.pdf', response['Content-Disposition'])
+
+    @patch('treasury.pdf.generate_disbursement_request_pdf', side_effect=ImportError('no weasyprint'))
+    def test_pdf_unavailable_returns_503(self, _generate):
+        disbursement_id = self.create_with_lines().json()['id']
+        response = self.client_cfo.get(f'{self.URL}{disbursement_id}/pdf/')
+        self.assertEqual(response.status_code, 503)
+
+    def test_pdf_template_renders_lines(self):
+        from django.template.loader import render_to_string
+        disbursement = DisbursementRequest.objects.get(id=self.create_with_lines().json()['id'])
+        html = render_to_string('treasury/disbursement_request_pdf.html', {
+            'disbursement': disbursement, 'company_address': 'Dakar', 'now': disbursement.created_at,
+        })
+        self.assertIn('BES-2026-0001', html)
+        self.assertIn('Écran 27 pouces', html)
+        self.assertIn('Câble HDMI', html)
 
 
 class AccountingPeriodViewSetTests(APITestCase):

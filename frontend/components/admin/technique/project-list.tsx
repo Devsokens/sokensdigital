@@ -46,6 +46,8 @@ import {
 } from "@/lib/api/projects";
 import { LabelsPanel, SprintsPanel } from "@/components/admin/technique/project-organisation-tab";
 import { PhasesEditor, PendingPhasesEditor, type PhaseInput } from "@/components/admin/technique/project-phases";
+import { LabelManager } from "@/components/admin/technique/label-tag-input";
+import { SPRINTS_ENABLED } from "@/lib/admin/project-features";
 import { listUsers } from "@/lib/api/hr";
 import { listClients } from "@/lib/api/administration";
 import type { Client, Project, ProjectMember, ProjectPriority, ProjectStatus, UserBrief } from "@/lib/api/types";
@@ -118,7 +120,10 @@ function formatDate(value: string | null) {
   return new Date(value).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export function ProjectList() {
+/** `headerTabs` : onglets Projets / Projets soumis de la page (ProjectsHub),
+ * posés au-dessus de l'en-tête pour rester au même endroit sur les deux
+ * onglets. */
+export function ProjectList({ headerTabs }: { headerTabs?: React.ReactNode } = {}) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -261,6 +266,7 @@ export function ProjectList() {
       <AmbientVideoBackground />
 
       <div className="px-6 pt-8 lg:px-10">
+      {headerTabs}
       <div className="mb-5 rounded-2xl bg-white/75 p-4 backdrop-blur-md">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -464,7 +470,7 @@ function ActionRow({
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+      className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
         danger ? "text-destructive hover:bg-destructive/10" : "text-neutral-700 hover:bg-neutral-100"
       }`}
     >
@@ -528,8 +534,10 @@ function ProjectCard({
                 <Star className="size-3.5 fill-amber-400 text-amber-400" />
               </button>
             )}
-            <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-              <SheetTrigger
+            {/* Petite popup ancrée sous les trois points — pas un panneau
+             * plein écran pour cinq actions. */}
+            <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+              <PopoverTrigger
                 render={
                   <button
                     type="button"
@@ -541,8 +549,8 @@ function ProjectCard({
                   </button>
                 }
               />
-              <SheetContent title={project.name}>
-                <div className="space-y-1">
+              <PopoverContent align="end" sideOffset={6} className="w-52 p-1.5">
+                <div className="space-y-0.5">
                   <ActionRow
                     icon={SlidersHorizontal}
                     label="Modifier les détails"
@@ -570,8 +578,8 @@ function ProjectCard({
                     onClick={() => { setMenuOpen(false); onDelete(project); }}
                   />
                 </div>
-              </SheetContent>
-            </Sheet>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
 
@@ -791,9 +799,11 @@ export function EditProjectForm({
       <TeamManager project={project} />
 
       <div className="space-y-3 border-t border-neutral-100 pt-4">
-        <p className="text-xs text-neutral-500">Étiquettes et sprints — enregistrés dès leur ajout.</p>
+        <p className="text-xs text-neutral-500">
+          {SPRINTS_ENABLED ? "Étiquettes et sprints — enregistrés dès leur ajout." : "Étiquettes — enregistrées dès leur ajout."}
+        </p>
         <LabelsPanel projectId={project.id} />
-        <SprintsPanel projectId={project.id} />
+        {SPRINTS_ENABLED && <SprintsPanel projectId={project.id} />}
       </div>
 
       <div className="flex items-center justify-between pt-2">
@@ -1084,8 +1094,6 @@ function TeamManager({ project }: { project: Project }) {
   );
 }
 
-const LABEL_COLORS = ["#6366f1", "#ec4899", "#f59e0b", "#10b981", "#0ea5e9", "#ef4444"];
-
 type PendingLabel = { name: string; color: string };
 type PendingSprint = { name: string; start_date: string | null; end_date: string | null };
 
@@ -1102,18 +1110,9 @@ function PendingLabelsSprints({
   onLabelsChange: (labels: PendingLabel[]) => void;
   onSprintsChange: (sprints: PendingSprint[]) => void;
 }) {
-  const [labelName, setLabelName] = useState("");
-  const [labelColor, setLabelColor] = useState(LABEL_COLORS[0]);
   const [sprintName, setSprintName] = useState("");
   const [sprintStart, setSprintStart] = useState("");
   const [sprintEnd, setSprintEnd] = useState("");
-
-  function addLabel() {
-    const name = labelName.trim();
-    if (!name || labels.some((l) => l.name.toLowerCase() === name.toLowerCase())) return;
-    onLabelsChange([...labels, { name, color: labelColor }]);
-    setLabelName("");
-  }
 
   function addSprint() {
     const name = sprintName.trim();
@@ -1128,48 +1127,14 @@ function PendingLabelsSprints({
     <div className="space-y-4 border-t border-neutral-100 pt-4">
       <div>
         <span className={labelClass}>Étiquettes</span>
-        {labels.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            {labels.map((l, i) => (
-              <span
-                key={l.name}
-                className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
-                style={{ backgroundColor: `${l.color}1a`, color: l.color }}
-              >
-                {l.name}
-                <button type="button" onClick={() => onLabelsChange(labels.filter((_, j) => j !== i))} className="opacity-60 hover:opacity-100">
-                  <Trash2 className="size-3" />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-        <div className="flex items-center gap-2">
-          <div className="flex shrink-0 items-center gap-1">
-            {LABEL_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setLabelColor(c)}
-                className="size-5 rounded-full border-2"
-                style={{ backgroundColor: c, borderColor: labelColor === c ? "#111827" : "transparent" }}
-                aria-label={`Couleur ${c}`}
-              />
-            ))}
-          </div>
-          <input
-            value={labelName}
-            onChange={(e) => setLabelName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLabel(); } }}
-            placeholder="Nom de l'étiquette…"
-            className={inputClass}
-          />
-          <button type="button" onClick={addLabel} disabled={!labelName.trim()} className="shrink-0 rounded-lg border border-neutral-200 px-3 py-2.5 text-neutral-600 hover:bg-neutral-50 disabled:opacity-50">
-            <Plus className="size-3.5" />
-          </button>
-        </div>
+        <LabelManager
+          labels={labels}
+          onCreate={(name, color) => onLabelsChange([...labels, { name, color }])}
+          onDelete={(label) => onLabelsChange(labels.filter((l) => l !== label))}
+        />
       </div>
 
+      {SPRINTS_ENABLED && (
       <div>
         <span className={labelClass}>Sprints</span>
         {sprints.length > 0 && (
@@ -1204,6 +1169,7 @@ function PendingLabelsSprints({
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }

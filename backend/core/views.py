@@ -851,3 +851,38 @@ class PushDeviceView(APIView):
         # jeton suffirait à couper les notifications de quelqu'un d'autre.
         PushDevice.objects.filter(token=token, user=request.user).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class TestNotificationView(APIView):
+    """S'envoyer une notification de test sur les trois canaux (cloche,
+    push, e-mail) et savoir lesquels sont partis — pour vérifier sa propre
+    configuration sans attendre un vrai événement."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from django.conf import settings
+
+        from core import firestore_client, mailer, push
+
+        user = request.user
+        title = 'Notification de test'
+        message = 'Si vous lisez ceci, ce canal de notification fonctionne.'
+
+        in_app = False
+        if user.firebase_uid:
+            firestore_client.create_notification(user.firebase_uid, title, message, 'GENERAL', '/admin')
+            in_app = True
+        devices = PushDevice.objects.filter(user=user).count()
+        pushed = push.send_to_user(user, title, message, link='/admin') if devices else 0
+        email_sent = mailer.send_mail(
+            user.email, title, message, action_url=f'{settings.PUBLIC_SITE_URL}/admin', action_label='Ouvrir la plateforme',
+        ) if user.email else False
+
+        return Response({
+            'in_app': in_app,
+            'push_devices': devices,
+            'push_sent': pushed,
+            'email': email_sent,
+            'email_backend': settings.EMAIL_BACKEND.rsplit('.', 1)[-1],
+        })
