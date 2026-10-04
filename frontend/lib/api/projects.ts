@@ -181,11 +181,13 @@ export function listEpics(projectId: string) {
   return apiFetch<Epic[]>(`/api/v1/projects/${projectId}/epics/`);
 }
 
-export function createEpic(projectId: string, data: { title: string; color?: string }) {
+export function createEpic(projectId: string, data: { title: string; color?: string; start_date: string; end_date: string }) {
   return apiFetch<Epic>(`/api/v1/projects/${projectId}/epics/`, { method: "POST", body: JSON.stringify(data) });
 }
 
-export function updateEpic(projectId: string, epicId: string, data: Partial<{ title: string; color: string }>) {
+export function updateEpic(projectId: string, epicId: string, data: Partial<{
+  title: string; color: string; start_date: string | null; end_date: string | null;
+}>) {
   return apiFetch<Epic>(`/api/v1/projects/${projectId}/epics/${epicId}/`, { method: "PATCH", body: JSON.stringify(data) });
 }
 
@@ -320,15 +322,4 @@ export async function uploadProjectDocument(projectId: string, file: File): Prom
   }
 
   return response.json();
-}
-
-export interface ProjectMemberStats {
-  user: { id: string; first_name: string; last_name: string; avatar_url: string | null };
-  tasks_assigned: number;
-  tasks_done: number;
-  hours_logged: number;
-}
-
-export function getProjectStats(projectId: string) {
-  return apiFetch<{ members: ProjectMemberStats[] }>(`/api/v1/projects/${projectId}/stats/`);
 }

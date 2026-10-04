@@ -67,13 +67,22 @@ class Project(LoggedModel):
 
 
 class Epic(LoggedModel):
-    """Regroupe des tâches au sein d'un projet (module Gestion de projet v2)."""
+    """Phase du projet (libellé affiché) : un ensemble de tâches avec sa
+    propre période. Dates nullables pour les phases créées avant qu'elles
+    existent ; le formulaire les exige pour toute nouvelle phase."""
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='epics')
     title = models.CharField(max_length=255)
     color = models.CharField(max_length=20, blank=True, default='#6366f1')
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
 
     class Meta(LoggedModel.Meta):
-        ordering = ['created_at']
+        ordering = ['start_date', 'created_at']
+
+    def clean(self):
+        super().clean()
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValidationError({'end_date': 'La date de fin ne peut pas précéder la date de début.'})
 
     def __str__(self):
         return f'{self.title} ({self.project.name})'

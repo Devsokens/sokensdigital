@@ -38,11 +38,17 @@ import {
   deleteProject,
   toggleProjectPin,
   addProjectMember,
+  removeProjectMember,
   uploadProjectDocument,
+  createLabel,
+  createSprint,
+  createEpic,
 } from "@/lib/api/projects";
+import { LabelsPanel, SprintsPanel } from "@/components/admin/technique/project-organisation-tab";
+import { PhasesEditor, PendingPhasesEditor, type PhaseInput } from "@/components/admin/technique/project-phases";
 import { listUsers } from "@/lib/api/hr";
 import { listClients } from "@/lib/api/administration";
-import type { Client, Project, ProjectPriority, ProjectStatus, UserBrief } from "@/lib/api/types";
+import type { Client, Project, ProjectMember, ProjectPriority, ProjectStatus, UserBrief } from "@/lib/api/types";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   EN_COURS: "En cours",
@@ -630,6 +636,10 @@ function ProjectCard({
         <SheetContent title={`Modifier ${project.name}`} className="max-w-2xl">
           <EditProjectForm
             project={project}
+            onCancel={() => {
+              setEditOpen(false);
+              onSaved();
+            }}
             onSaved={() => {
               setEditOpen(false);
               onSaved();
@@ -641,7 +651,19 @@ function ProjectCard({
   );
 }
 
-function EditProjectForm({ project, onSaved }: { project: Project; onSaved: () => void }) {
+/** Aussi utilisé dans la barre latérale du détail projet (project-detail.tsx),
+ * d'où `onCancel` plutôt qu'un SheetClose lié à la Sheet de la liste. Les
+ * étiquettes et sprints s'enregistrent à la volée (ils ont déjà l'id du
+ * projet), indépendamment du bouton Enregistrer. */
+export function EditProjectForm({
+  project,
+  onSaved,
+  onCancel,
+}: {
+  project: Project;
+  onSaved: () => void;
+  onCancel: () => void;
+}) {
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description || "");
   const [coverImageUrl, setCoverImageUrl] = useState(project.cover_image_url || "");
@@ -762,8 +784,22 @@ function EditProjectForm({ project, onSaved }: { project: Project; onSaved: () =
         <input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} className={inputClass} />
       </label>
 
+      <div className="border-t border-neutral-100 pt-4">
+        <PhasesEditor projectId={project.id} />
+      </div>
+
+      <TeamManager project={project} />
+
+      <div className="space-y-3 border-t border-neutral-100 pt-4">
+        <p className="text-xs text-neutral-500">Étiquettes et sprints — enregistrés dès leur ajout.</p>
+        <LabelsPanel projectId={project.id} />
+        <SprintsPanel projectId={project.id} />
+      </div>
+
       <div className="flex items-center justify-between pt-2">
-        <SheetClose render={<Button type="button" className="rounded-full border border-neutral-200 bg-white px-4 text-neutral-700 hover:bg-neutral-50">Annuler</Button>} />
+        <Button type="button" onClick={onCancel} className="rounded-full border border-neutral-200 bg-white px-4 text-neutral-700 hover:bg-neutral-50">
+          Annuler
+        </Button>
         <Button type="submit" disabled={saving} className="rounded-full px-5">
           {saving ? <Loader2 className="size-4 animate-spin" /> : "Enregistrer"}
         </Button>
@@ -787,6 +823,9 @@ function NewProjectForm({ onSaved }: { onSaved: () => void }) {
   const [clientId, setClientId] = useState<string | null>(null);
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [documents, setDocuments] = useState<File[]>([]);
+  const [pendingPhases, setPendingPhases] = useState<PhaseInput[]>([]);
+  const [pendingLabels, setPendingLabels] = useState<PendingLabel[]>([]);
+  const [pendingSprints, setPendingSprints] = useState<PendingSprint[]>([]);
   const [users, setUsers] = useState<UserBrief[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -826,6 +865,9 @@ function NewProjectForm({ onSaved }: { onSaved: () => void }) {
       await Promise.all([
         ...memberIds.map((userId) => addProjectMember(project.id, userId)),
         ...documents.map((file) => uploadProjectDocument(project.id, file)),
+        ...pendingPhases.map((ph) => createEpic(project.id, ph)),
+        ...pendingLabels.map((l) => createLabel(project.id, l)),
+        ...pendingSprints.map((sp) => createSprint(project.id, sp)),
       ]);
       onSaved();
     } catch {
@@ -938,6 +980,17 @@ function NewProjectForm({ onSaved }: { onSaved: () => void }) {
         )}
       </label>
 
+      <div className="border-t border-neutral-100 pt-4">
+        <PendingPhasesEditor phases={pendingPhases} onChange={setPendingPhases} />
+      </div>
+
+      <PendingLabelsSprints
+        labels={pendingLabels}
+        sprints={pendingSprints}
+        onLabelsChange={setPendingLabels}
+        onSprintsChange={setPendingSprints}
+      />
+
       <div className="flex items-center justify-between pt-2">
         <SheetClose render={<Button type="button" className="rounded-full border border-neutral-200 bg-white px-4 text-neutral-700 hover:bg-neutral-50">Annuler</Button>} />
         <Button type="submit" disabled={saving} className="rounded-full px-5">
@@ -945,5 +998,212 @@ function NewProjectForm({ onSaved }: { onSaved: () => void }) {
         </Button>
       </div>
     </form>
+  );
+}
+
+/** Équipe du projet, dans le formulaire de modification — comme les
+ * étiquettes et sprints, chaque ajout/retrait est enregistré aussitôt. */
+function TeamManager({ project }: { project: Project }) {
+  const [members, setMembers] = useState<ProjectMember[]>(project.members);
+  const [users, setUsers] = useState<UserBrief[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    listUsers().then((data) => setUsers(data.results)).catch(() => setUsers([]));
+  }, []);
+
+  const options = users
+    .filter((u) => !members.some((m) => m.user.id === u.id))
+    .map((u) => ({ id: u.id, label: `${u.first_name} ${u.last_name}`.trim(), sublabel: u.department_name || undefined }));
+
+  async function handleAdd(userId: string | null) {
+    if (!userId) return;
+    setSelectedUserId(userId);
+    setBusy(true);
+    setError(null);
+    try {
+      const membership = await addProjectMember(project.id, userId);
+      setMembers((prev) => [...prev, membership]);
+    } catch {
+      setError("Impossible d'ajouter ce membre.");
+    } finally {
+      setSelectedUserId(null);
+      setBusy(false);
+    }
+  }
+
+  async function handleRemove(membership: ProjectMember) {
+    setBusy(true);
+    setError(null);
+    try {
+      await removeProjectMember(project.id, membership.id);
+      setMembers((prev) => prev.filter((m) => m.id !== membership.id));
+    } catch {
+      setError("Impossible de retirer ce membre.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2 border-t border-neutral-100 pt-4">
+      <span className={labelClass}>Équipe ({members.length}) — enregistrée dès chaque ajout ou retrait</span>
+      <ul className="space-y-1">
+        {members.map((m) => (
+          <li key={m.id} className="flex items-center gap-2.5 rounded-lg bg-neutral-50 px-2.5 py-1.5">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+              {initials(m.user.first_name, m.user.last_name)}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-sm text-neutral-800">
+              {m.user.first_name} {m.user.last_name}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleRemove(m)}
+              disabled={busy}
+              className="shrink-0 text-neutral-400 hover:text-destructive disabled:opacity-40"
+              aria-label={`Retirer ${m.user.first_name} ${m.user.last_name}`}
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </li>
+        ))}
+        {members.length === 0 && <li className="text-xs text-neutral-400">Aucun membre pour le moment.</li>}
+      </ul>
+      <SelectSearch
+        options={options}
+        value={selectedUserId}
+        onChange={handleAdd}
+        placeholder={busy ? "Enregistrement…" : "Ajouter un membre…"}
+        emptyLabel="Tout le monde fait déjà partie de l'équipe."
+      />
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+const LABEL_COLORS = ["#6366f1", "#ec4899", "#f59e0b", "#10b981", "#0ea5e9", "#ef4444"];
+
+type PendingLabel = { name: string; color: string };
+type PendingSprint = { name: string; start_date: string | null; end_date: string | null };
+
+/** Étiquettes et sprints saisis avant que le projet existe — créés juste
+ * après lui, comme les membres et documents (ils ont besoin de son id). */
+function PendingLabelsSprints({
+  labels,
+  sprints,
+  onLabelsChange,
+  onSprintsChange,
+}: {
+  labels: PendingLabel[];
+  sprints: PendingSprint[];
+  onLabelsChange: (labels: PendingLabel[]) => void;
+  onSprintsChange: (sprints: PendingSprint[]) => void;
+}) {
+  const [labelName, setLabelName] = useState("");
+  const [labelColor, setLabelColor] = useState(LABEL_COLORS[0]);
+  const [sprintName, setSprintName] = useState("");
+  const [sprintStart, setSprintStart] = useState("");
+  const [sprintEnd, setSprintEnd] = useState("");
+
+  function addLabel() {
+    const name = labelName.trim();
+    if (!name || labels.some((l) => l.name.toLowerCase() === name.toLowerCase())) return;
+    onLabelsChange([...labels, { name, color: labelColor }]);
+    setLabelName("");
+  }
+
+  function addSprint() {
+    const name = sprintName.trim();
+    if (!name) return;
+    onSprintsChange([...sprints, { name, start_date: sprintStart || null, end_date: sprintEnd || null }]);
+    setSprintName("");
+    setSprintStart("");
+    setSprintEnd("");
+  }
+
+  return (
+    <div className="space-y-4 border-t border-neutral-100 pt-4">
+      <div>
+        <span className={labelClass}>Étiquettes</span>
+        {labels.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {labels.map((l, i) => (
+              <span
+                key={l.name}
+                className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
+                style={{ backgroundColor: `${l.color}1a`, color: l.color }}
+              >
+                {l.name}
+                <button type="button" onClick={() => onLabelsChange(labels.filter((_, j) => j !== i))} className="opacity-60 hover:opacity-100">
+                  <Trash2 className="size-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1">
+            {LABEL_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setLabelColor(c)}
+                className="size-5 rounded-full border-2"
+                style={{ backgroundColor: c, borderColor: labelColor === c ? "#111827" : "transparent" }}
+                aria-label={`Couleur ${c}`}
+              />
+            ))}
+          </div>
+          <input
+            value={labelName}
+            onChange={(e) => setLabelName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLabel(); } }}
+            placeholder="Nom de l'étiquette…"
+            className={inputClass}
+          />
+          <button type="button" onClick={addLabel} disabled={!labelName.trim()} className="shrink-0 rounded-lg border border-neutral-200 px-3 py-2.5 text-neutral-600 hover:bg-neutral-50 disabled:opacity-50">
+            <Plus className="size-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <span className={labelClass}>Sprints</span>
+        {sprints.length > 0 && (
+          <ul className="mb-2 space-y-1">
+            {sprints.map((sp, i) => (
+              <li key={`${sp.name}-${i}`} className="flex items-center justify-between rounded-lg bg-neutral-50 px-2.5 py-1.5 text-xs text-neutral-700">
+                <span>
+                  {sp.name}
+                  {(sp.start_date || sp.end_date) && (
+                    <span className="ml-2 text-neutral-400">{sp.start_date ?? "…"} → {sp.end_date ?? "…"}</span>
+                  )}
+                </span>
+                <button type="button" onClick={() => onSprintsChange(sprints.filter((_, j) => j !== i))} className="ml-2 shrink-0 text-neutral-400 hover:text-destructive">
+                  <Trash2 className="size-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+          <input
+            value={sprintName}
+            onChange={(e) => setSprintName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSprint(); } }}
+            placeholder="Nom du sprint…"
+            className={`${inputClass} col-span-3`}
+          />
+          <input type="date" value={sprintStart} onChange={(e) => setSprintStart(e.target.value)} className={inputClass} />
+          <input type="date" value={sprintEnd} onChange={(e) => setSprintEnd(e.target.value)} className={inputClass} />
+          <button type="button" onClick={addSprint} disabled={!sprintName.trim()} className="shrink-0 rounded-lg border border-neutral-200 px-3 py-2.5 text-neutral-600 hover:bg-neutral-50 disabled:opacity-50">
+            <Plus className="size-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -4,38 +4,31 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import {
   CalendarDays,
-  Check,
   CheckCircle2,
+  CheckSquare,
   Circle,
   CircleDot,
   Eye,
   Loader2,
   MessageSquare,
-  Paperclip,
   Plus,
-  Trash2,
-  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Modal, ModalTrigger, ModalClose, ModalContent } from "@/components/ui/modal";
 import { MultiSelectSearch } from "@/components/admin/multi-select-search";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
+import { TaskDetailModal, type TaskUpdate } from "@/components/admin/technique/task-detail-modal";
 import { cn } from "@/lib/utils";
 import {
   listProjectTasks,
   createProjectTask,
   updateProjectTask,
   deleteProjectTask,
-  listTaskComments,
-  createTaskComment,
   listEpics,
   listLabels,
   listSprints,
-  createSubtask,
-  updateSubtask,
-  deleteSubtask,
 } from "@/lib/api/projects";
+import { getMe } from "@/lib/api/me";
 import type {
   Epic,
   Label as ProjectLabel,
@@ -43,7 +36,6 @@ import type {
   ProjectPriority,
   ProjectSubtask,
   ProjectTask,
-  ProjectTaskComment,
   ProjectTaskStatus,
   ProjectUserBrief,
   Sprint,
@@ -74,8 +66,9 @@ function formatShort(value: string) {
   return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
 }
 
-function TaskCard({ task, onOpen, onDragStart }: {
+function TaskCard({ task, phase, onOpen, onDragStart }: {
   task: ProjectTask;
+  phase: Epic | null;
   onOpen: () => void;
   onDragStart: (e: React.DragEvent) => void;
 }) {
@@ -87,6 +80,12 @@ function TaskCard({ task, onOpen, onDragStart }: {
       onClick={onOpen}
       className="cursor-pointer rounded-lg border border-neutral-200 bg-white p-3 shadow-sm transition-colors hover:border-primary/40"
     >
+      {phase && (
+        <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold tracking-wide uppercase" style={{ color: phase.color }}>
+          <span className="size-1.5 rounded-full" style={{ backgroundColor: phase.color }} />
+          <span className="truncate">{phase.title}</span>
+        </p>
+      )}
       <div className="mb-2 flex items-center justify-between">
         <p className="truncate text-sm font-medium text-neutral-900">{task.title}</p>
       </div>
@@ -127,8 +126,16 @@ function TaskCard({ task, onOpen, onDragStart }: {
             </span>
           ))}
         </div>
-        <span className="flex items-center gap-1 text-[11px] text-neutral-400">
-          <MessageSquare className="size-3.5" /> {task.comments_count}
+        <span className="flex items-center gap-2.5 text-[11px] text-neutral-400">
+          {task.subtasks.length > 0 && (
+            <span className="flex items-center gap-1">
+              <CheckSquare className="size-3.5" />
+              {task.subtasks.filter((s) => s.is_done).length}/{task.subtasks.length}
+            </span>
+          )}
+          <span className="flex items-center gap-1">
+            <MessageSquare className="size-3.5" /> {task.comments_count}
+          </span>
         </span>
       </div>
     </div>
@@ -145,11 +152,13 @@ function TaskCard({ task, onOpen, onDragStart }: {
 function AddTaskModal({
   members,
   labels,
+  phases,
   onAdd,
 }: {
   members: ProjectUserBrief[];
   labels: ProjectLabel[];
-  onAdd: (data: { title: string; description: string; assignee_ids: string[]; due_date?: string; priority?: string | null; label_ids?: string[] }) => Promise<void>;
+  phases: Epic[];
+  onAdd: (data: { title: string; description: string; assignee_ids: string[]; due_date?: string; priority?: string | null; label_ids?: string[]; epic?: string | null }) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -158,6 +167,7 @@ function AddTaskModal({
   const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState<ProjectPriority | "">("");
   const [labelIds, setLabelIds] = useState<string[]>([]);
+  const [phaseId, setPhaseId] = useState("");
   const [saving, setSaving] = useState(false);
 
   const memberOptions = members.map((m) => ({ id: m.id, label: `${m.first_name} ${m.last_name}`.trim() }));
@@ -175,6 +185,7 @@ function AddTaskModal({
         due_date: dueDate || undefined,
         priority: priority || null,
         label_ids: labelIds,
+        epic: phaseId || null,
       });
       setTitle("");
       setDescription("");
@@ -182,6 +193,7 @@ function AddTaskModal({
       setDueDate("");
       setPriority("");
       setLabelIds([]);
+      setPhaseId("");
       setOpen(false);
     } finally {
       setSaving(false);
@@ -257,6 +269,18 @@ function AddTaskModal({
             </label>
           </motion.div>
 
+          {phases.length > 0 && (
+            <motion.label initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.19 }} className="block">
+              <span className={labelClass}>Phase du projet</span>
+              <select value={phaseId} onChange={(e) => setPhaseId(e.target.value)} className={inputClass}>
+                <option value="">— Aucune —</option>
+                {phases.map((ph) => (
+                  <option key={ph.id} value={ph.id}>{ph.title}</option>
+                ))}
+              </select>
+            </motion.label>
+          )}
+
           {labelOptions.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
               <span className={labelClass}>Étiquettes</span>
@@ -285,370 +309,32 @@ function AddTaskModal({
   );
 }
 
-function SubtaskList({ projectId, task }: { projectId: string; task: ProjectTask }) {
-  const [subtasks, setSubtasks] = useState<ProjectSubtask[]>(task.subtasks);
-  const [newTitle, setNewTitle] = useState("");
-
-  useEffect(() => {
-    setSubtasks(task.subtasks);
-  }, [task.id, task.subtasks]);
-
-  async function handleAdd() {
-    const title = newTitle.trim();
-    if (!title) return;
-    setNewTitle("");
-    const subtask = await createSubtask(projectId, task.id, title);
-    setSubtasks((prev) => [...prev, subtask]);
-  }
-
-  async function handleToggle(subtask: ProjectSubtask) {
-    setSubtasks((prev) => prev.map((s) => (s.id === subtask.id ? { ...s, is_done: !s.is_done } : s)));
-    await updateSubtask(projectId, task.id, subtask.id, { is_done: !subtask.is_done });
-  }
-
-  async function handleDelete(subtask: ProjectSubtask) {
-    setSubtasks((prev) => prev.filter((s) => s.id !== subtask.id));
-    await deleteSubtask(projectId, task.id, subtask.id);
-  }
-
-  return (
-    <div>
-      <span className={labelClass}>Sous-tâches</span>
-      <div className="space-y-1">
-        {subtasks.map((s) => (
-          <div key={s.id} className="group flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-neutral-50">
-            <button
-              type="button"
-              onClick={() => handleToggle(s)}
-              className={cn(
-                "flex size-4.5 shrink-0 items-center justify-center rounded border transition-colors",
-                s.is_done ? "border-primary bg-primary text-primary-foreground" : "border-neutral-300"
-              )}
-            >
-              {s.is_done && <Check className="size-3" />}
-            </button>
-            <span className={cn("flex-1 text-sm", s.is_done ? "text-neutral-400 line-through" : "text-neutral-700")}>
-              {s.title}
-            </span>
-            <button
-              type="button"
-              onClick={() => handleDelete(s)}
-              className="shrink-0 text-neutral-300 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-            >
-              <Trash2 className="size-3.5" />
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="mt-1.5 flex items-center gap-2">
-        <input
-          value={newTitle}
-          onChange={(e) => setNewTitle(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAdd(); } }}
-          placeholder="Ajouter une sous-tâche…"
-          className={inputClass}
-        />
-        <button
-          type="button"
-          onClick={handleAdd}
-          disabled={!newTitle.trim()}
-          className="shrink-0 rounded-lg border border-neutral-200 px-3 py-2.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
-        >
-          <Plus className="size-3.5" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function TaskDetailSheet({
-  task,
-  projectId,
-  members,
-  epics,
-  sprints,
-  labels,
-  onClose,
-  onUpdate,
-  onDelete,
+/** Kanban board shown as a project's task page. `project` only needs its id
+ * and members (for the assignee picker). `onTasksChange` lets the page's
+ * progress sidebar follow every add/move/delete without refetching.
+ * `refreshKey` changes when phases/labels/sprints were edited elsewhere. */
+export function ProjectTaskBoard({
+  project,
+  refreshKey = 0,
+  onTasksChange,
 }: {
-  task: ProjectTask | null;
-  projectId: string;
-  members: ProjectUserBrief[];
-  epics: Epic[];
-  sprints: Sprint[];
-  labels: ProjectLabel[];
-  onClose: () => void;
-  onUpdate: (taskId: string, data: Partial<{
-    title: string; status: ProjectTaskStatus; priority: ProjectPriority | null; due_date: string | null;
-    progress: number; assignee_ids: string[]; epic: string | null; sprint: string | null; label_ids: string[];
-  }>) => void;
-  onDelete: (taskId: string) => void;
+  project: Project;
+  refreshKey?: number;
+  onTasksChange?: (tasks: ProjectTask[]) => void;
 }) {
-  const [comments, setComments] = useState<ProjectTaskComment[] | null>(null);
-  const [newComment, setNewComment] = useState("");
-  const [attachment, setAttachment] = useState<File | null>(null);
-  const [posting, setPosting] = useState(false);
+  const [tasks, setTasks] = useState<ProjectTask[] | null>(null);
 
   useEffect(() => {
-    if (!task) {
-      setComments(null);
-      return;
-    }
-    setComments(null);
-    setAttachment(null);
-    listTaskComments(projectId, task.id).then(setComments).catch(() => setComments([]));
+    if (tasks) onTasksChange?.(tasks);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [task?.id]);
-
-  if (!task) return null;
-  const assigneeIds = new Set(task.assignees.map((u) => u.id));
-  const taskLabelIds = new Set(task.labels.map((l) => l.id));
-
-  async function handlePostComment() {
-    if (!task || (!newComment.trim() && !attachment)) return;
-    setPosting(true);
-    try {
-      const comment = await createTaskComment(projectId, task.id, newComment.trim(), attachment ?? undefined);
-      setComments((prev) => (prev ? [...prev, comment] : [comment]));
-      setNewComment("");
-      setAttachment(null);
-    } finally {
-      setPosting(false);
-    }
-  }
-
-  return (
-    <Sheet open={!!task} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <SheetContent title={task.title}>
-        <div className="space-y-5">
-          <label className="block">
-            <span className={labelClass}>Titre</span>
-            <input
-              defaultValue={task.title}
-              key={task.id}
-              onBlur={(e) => { if (e.target.value.trim() && e.target.value !== task.title) onUpdate(task.id, { title: e.target.value.trim() }); }}
-              className={inputClass}
-            />
-          </label>
-
-          <div className="grid grid-cols-2 gap-4">
-            <label className="block">
-              <span className={labelClass}>Statut</span>
-              <select
-                value={task.status}
-                onChange={(e) => onUpdate(task.id, { status: e.target.value as ProjectTaskStatus })}
-                className={inputClass}
-              >
-                {STATUS_ORDER.map((s) => (
-                  <option key={s} value={s}>{STATUS_META[s].label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className={labelClass}>Échéance</span>
-              <input
-                type="date"
-                value={task.due_date ?? ""}
-                onChange={(e) => onUpdate(task.id, { due_date: e.target.value || null })}
-                className={inputClass}
-              />
-            </label>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <label className="block">
-              <span className={labelClass}>Priorité</span>
-              <select
-                value={task.priority ?? ""}
-                onChange={(e) => onUpdate(task.id, { priority: (e.target.value as ProjectPriority) || null })}
-                className={inputClass}
-              >
-                <option value="">—</option>
-                {(["BASSE", "MOYENNE", "HAUTE"] as ProjectPriority[]).map((p) => (
-                  <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className={labelClass}>Epic</span>
-              <select
-                value={task.epic ?? ""}
-                onChange={(e) => onUpdate(task.id, { epic: e.target.value || null })}
-                className={inputClass}
-              >
-                <option value="">—</option>
-                {epics.map((ep) => (
-                  <option key={ep.id} value={ep.id}>{ep.title}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className={labelClass}>Sprint</span>
-              <select
-                value={task.sprint ?? ""}
-                onChange={(e) => onUpdate(task.id, { sprint: e.target.value || null })}
-                className={inputClass}
-              >
-                <option value="">—</option>
-                {sprints.map((sp) => (
-                  <option key={sp.id} value={sp.id}>{sp.name}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          {labels.length > 0 && (
-            <div>
-              <span className={labelClass}>Étiquettes</span>
-              <div className="flex flex-wrap gap-1.5">
-                {labels.map((l) => {
-                  const active = taskLabelIds.has(l.id);
-                  return (
-                    <button
-                      key={l.id}
-                      type="button"
-                      onClick={() => {
-                        const next = active
-                          ? task.labels.filter((tl) => tl.id !== l.id).map((tl) => tl.id)
-                          : [...task.labels.map((tl) => tl.id), l.id];
-                        onUpdate(task.id, { label_ids: next });
-                      }}
-                      className="rounded-full px-2.5 py-1 text-xs font-medium transition-opacity"
-                      style={{
-                        backgroundColor: active ? l.color : `${l.color}1a`,
-                        color: active ? "#fff" : l.color,
-                      }}
-                    >
-                      {l.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <label className="block">
-            <span className={labelClass}>Progression ({task.progress}%)</span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={task.progress}
-              onChange={(e) => onUpdate(task.id, { progress: Number(e.target.value) })}
-              className="w-full accent-primary"
-            />
-          </label>
-
-          <div>
-            <span className={labelClass}>Assigné à</span>
-            <div className="flex flex-wrap gap-1.5">
-              {members.map((u) => {
-                const active = assigneeIds.has(u.id);
-                return (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => {
-                      const next = active
-                        ? task.assignees.filter((a) => a.id !== u.id).map((a) => a.id)
-                        : [...task.assignees.map((a) => a.id), u.id];
-                      onUpdate(task.id, { assignee_ids: next });
-                    }}
-                    className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
-                      active ? "bg-primary/10 text-primary" : "bg-neutral-100 text-neutral-500 hover:bg-neutral-200"
-                    }`}
-                  >
-                    {u.first_name} {u.last_name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <SubtaskList projectId={projectId} task={task} />
-
-          <div>
-            <span className={labelClass}>Commentaires</span>
-            <div className="mb-2 max-h-52 space-y-2 overflow-y-auto">
-              {comments === null && <Loader2 className="size-4 animate-spin text-neutral-400" />}
-              {comments?.length === 0 && <p className="text-xs text-neutral-400">Aucun commentaire.</p>}
-              {comments?.map((c) => (
-                <div key={c.id} className="rounded-lg bg-neutral-50 px-3 py-2 text-xs">
-                  <p className="mb-0.5 font-medium text-neutral-700">
-                    {c.author ? `${c.author.first_name} ${c.author.last_name}` : "—"}
-                  </p>
-                  {c.body && <p className="text-neutral-600">{c.body}</p>}
-                  {c.attachment_url && (
-                    <a
-                      href={c.attachment_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-1 flex items-center gap-1 text-primary hover:underline"
-                    >
-                      <Paperclip className="size-3" /> {c.attachment_name}
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-            {attachment && (
-              <p className="mb-1.5 flex items-center justify-between rounded-lg bg-primary/5 px-2.5 py-1.5 text-xs text-primary">
-                <span className="flex items-center gap-1 truncate"><Paperclip className="size-3" /> {attachment.name}</span>
-                <button type="button" onClick={() => setAttachment(null)} className="shrink-0"><X className="size-3.5" /></button>
-              </p>
-            )}
-            <div className="flex items-center gap-2">
-              <input
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handlePostComment(); }}
-                placeholder="Ajouter un commentaire…"
-                className={inputClass}
-              />
-              <label className="flex shrink-0 cursor-pointer items-center justify-center rounded-lg border border-neutral-200 px-3 py-2.5 text-neutral-500 hover:bg-neutral-50">
-                <Paperclip className="size-3.5" />
-                <input
-                  type="file"
-                  className="hidden"
-                  onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
-                />
-              </label>
-              <button
-                type="button"
-                onClick={handlePostComment}
-                disabled={posting || (!newComment.trim() && !attachment)}
-                className="shrink-0 rounded-lg bg-primary px-3 py-2.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
-              >
-                Envoyer
-              </button>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => { if (confirm(`Supprimer "${task.title}" ?`)) onDelete(task.id); }}
-            className="flex items-center gap-1.5 text-xs text-destructive hover:underline"
-          >
-            <X className="size-3.5" /> Supprimer cette tâche
-          </button>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-/** Kanban board + calendar strip shown as a project's task page. `project`
- * only needs its id and members (for the assignee picker). */
-export function ProjectTaskBoard({ project }: { project: Project }) {
-  const [tasks, setTasks] = useState<ProjectTask[] | null>(null);
+  }, [tasks]);
   const [error, setError] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<ProjectTaskStatus | null>(null);
   const [epics, setEpics] = useState<Epic[]>([]);
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [labels, setLabels] = useState<ProjectLabel[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   async function load() {
     try {
@@ -664,23 +350,41 @@ export function ProjectTaskBoard({ project }: { project: Project }) {
     listSprints(project.id).then(setSprints).catch(() => setSprints([]));
     listLabels(project.id).then(setLabels).catch(() => setLabels([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.id]);
+  }, [project.id, refreshKey]);
+
+  useEffect(() => {
+    getMe().then((me) => setCurrentUserId(me.id)).catch(() => setCurrentUserId(null));
+  }, []);
+
+  function handleSubtasksChange(taskId: string, subtasks: ProjectSubtask[]) {
+    setTasks((prev) => prev?.map((t) => (t.id === taskId ? { ...t, subtasks } : t)) ?? prev);
+  }
+
+  function handleCommentAdded(taskId: string) {
+    setTasks((prev) => prev?.map((t) => (t.id === taskId ? { ...t, comments_count: t.comments_count + 1 } : t)) ?? prev);
+  }
 
   async function handleAdd(
     status: ProjectTaskStatus,
-    data: { title: string; description: string; assignee_ids: string[]; due_date?: string; priority?: string | null; label_ids?: string[] },
+    data: { title: string; description: string; assignee_ids: string[]; due_date?: string; priority?: string | null; label_ids?: string[]; epic?: string | null },
   ) {
     const task = await createProjectTask(project.id, { ...data, status });
     setTasks((prev) => (prev ? [...prev, task] : [task]));
   }
 
-  async function handleUpdate(taskId: string, data: Partial<{
-    title: string; status: ProjectTaskStatus; priority: ProjectPriority | null; due_date: string | null;
-    progress: number; assignee_ids: string[]; epic: string | null; sprint: string | null; label_ids: string[];
-  }>) {
-    setTasks((prev) => prev?.map((t) => (t.id === taskId ? { ...t, ...data, assignees: data.assignee_ids ? members.filter((m) => data.assignee_ids!.includes(m.id)) : t.assignees } : t)) ?? prev);
-    const updated = await updateProjectTask(project.id, taskId, data);
-    setTasks((prev) => prev?.map((t) => (t.id === taskId ? updated : t)) ?? prev);
+  async function handleUpdate(taskId: string, data: TaskUpdate) {
+    setTasks((prev) => prev?.map((t) => (t.id === taskId ? {
+      ...t,
+      ...data,
+      assignees: data.assignee_ids ? members.filter((m) => data.assignee_ids!.includes(m.id)) : t.assignees,
+      labels: data.label_ids ? labels.filter((l) => data.label_ids!.includes(l.id)) : t.labels,
+    } : t)) ?? prev);
+    try {
+      const updated = await updateProjectTask(project.id, taskId, data);
+      setTasks((prev) => prev?.map((t) => (t.id === taskId ? updated : t)) ?? prev);
+    } catch {
+      load();
+    }
   }
 
   async function handleDelete(taskId: string) {
@@ -709,7 +413,7 @@ export function ProjectTaskBoard({ project }: { project: Project }) {
     <div className="space-y-5">
       <div>
         <h2 className="mb-2 text-sm font-semibold text-neutral-900">Toutes les tâches</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {STATUS_ORDER.map((status) => {
             const meta = STATUS_META[status];
             const columnTasks = tasks.filter((t) => t.status === status);
@@ -740,11 +444,12 @@ export function ProjectTaskBoard({ project }: { project: Project }) {
                     <TaskCard
                       key={task.id}
                       task={task}
+                      phase={epics.find((ep) => ep.id === task.epic) ?? null}
                       onOpen={() => setSelectedTaskId(task.id)}
                       onDragStart={(e) => e.dataTransfer.setData("text/plain", task.id)}
                     />
                   ))}
-                  <AddTaskModal members={members} labels={labels} onAdd={(data) => handleAdd(status, data)} />
+                  <AddTaskModal members={members} labels={labels} phases={epics} onAdd={(data) => handleAdd(status, data)} />
                 </div>
               </div>
             );
@@ -752,15 +457,18 @@ export function ProjectTaskBoard({ project }: { project: Project }) {
         </div>
       </div>
 
-      <TaskDetailSheet
+      <TaskDetailModal
         task={selectedTask}
         projectId={project.id}
         members={members}
         epics={epics}
         sprints={sprints}
         labels={labels}
+        currentUserId={currentUserId}
         onClose={() => setSelectedTaskId(null)}
         onUpdate={handleUpdate}
+        onSubtasksChange={handleSubtasksChange}
+        onCommentAdded={handleCommentAdded}
         onDelete={handleDelete}
       />
     </div>

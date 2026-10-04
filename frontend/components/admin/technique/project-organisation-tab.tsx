@@ -2,78 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
-import { inputClass, labelClass } from "@/components/admin/form-styles";
+import { inputClass } from "@/components/admin/form-styles";
 import {
-  listEpics, createEpic, deleteEpic,
   listLabels, createLabel, deleteLabel,
   listSprints, createSprint, deleteSprint,
 } from "@/lib/api/projects";
-import type { Epic, Label, Sprint } from "@/lib/api/types";
+import type { Label, Sprint } from "@/lib/api/types";
 
 const LABEL_COLORS = ["#6366f1", "#ec4899", "#f59e0b", "#10b981", "#0ea5e9", "#ef4444"];
 
-function EpicsPanel({ projectId }: { projectId: string }) {
-  const [epics, setEpics] = useState<Epic[] | null>(null);
-  const [title, setTitle] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    listEpics(projectId).then(setEpics).catch(() => setEpics([]));
-  }, [projectId]);
-
-  async function handleAdd() {
-    if (!title.trim() || saving) return;
-    setSaving(true);
-    try {
-      const epic = await createEpic(projectId, { title: title.trim() });
-      setEpics((prev) => (prev ? [...prev, epic] : [epic]));
-      setTitle("");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDelete(epic: Epic) {
-    setEpics((prev) => prev?.filter((e) => e.id !== epic.id) ?? prev);
-    await deleteEpic(projectId, epic.id);
-  }
-
-  if (!epics) return <Loader2 className="size-5 animate-spin text-neutral-400" />;
-
-  return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-4">
-      <p className="mb-3 text-sm font-semibold text-neutral-900">Epics</p>
-      <div className="mb-3 space-y-1.5">
-        {epics.map((epic) => (
-          <div key={epic.id} className="flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2 text-sm">
-            <span className="flex items-center gap-2">
-              <span className="size-2.5 rounded-full" style={{ backgroundColor: epic.color }} />
-              {epic.title}
-            </span>
-            <button type="button" onClick={() => handleDelete(epic)} className="text-neutral-400 hover:text-destructive">
-              <Trash2 className="size-3.5" />
-            </button>
-          </div>
-        ))}
-        {epics.length === 0 && <p className="text-xs text-neutral-400">Aucun epic pour l&apos;instant.</p>}
-      </div>
-      <div className="flex items-center gap-2">
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAdd(); } }}
-          placeholder="Nom de l'epic…"
-          className={inputClass}
-        />
-        <button type="button" onClick={handleAdd} disabled={!title.trim() || saving} className="shrink-0 rounded-lg border border-neutral-200 px-3 py-2.5 text-neutral-600 hover:bg-neutral-50 disabled:opacity-50">
-          <Plus className="size-3.5" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function LabelsPanel({ projectId }: { projectId: string }) {
+export function LabelsPanel({ projectId }: { projectId: string }) {
   const [labels, setLabels] = useState<Label[] | null>(null);
   const [name, setName] = useState("");
   const [color, setColor] = useState(LABEL_COLORS[0]);
@@ -147,7 +85,7 @@ function LabelsPanel({ projectId }: { projectId: string }) {
   );
 }
 
-function SprintsPanel({ projectId }: { projectId: string }) {
+export function SprintsPanel({ projectId }: { projectId: string }) {
   const [sprints, setSprints] = useState<Sprint[] | null>(null);
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -200,12 +138,13 @@ function SprintsPanel({ projectId }: { projectId: string }) {
         ))}
         {sprints.length === 0 && <p className="text-xs text-neutral-400">Aucun sprint pour l&apos;instant.</p>}
       </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+      <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAdd(); } }}
           placeholder="Nom du sprint…"
-          className={inputClass}
+          className={`${inputClass} col-span-3`}
         />
         <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputClass} />
         <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputClass} />
@@ -213,19 +152,6 @@ function SprintsPanel({ projectId }: { projectId: string }) {
           <Plus className="size-3.5" />
         </button>
       </div>
-    </div>
-  );
-}
-
-export function ProjectOrganisationTab({ projectId }: { projectId: string }) {
-  return (
-    <div className="space-y-4">
-      <p className={labelClass}>
-        Epics, étiquettes et sprints propres à ce projet — utilisés dans la création et le détail des tâches.
-      </p>
-      <EpicsPanel projectId={projectId} />
-      <LabelsPanel projectId={projectId} />
-      <SprintsPanel projectId={projectId} />
     </div>
   );
 }

@@ -605,10 +605,13 @@ export interface Project {
 
 export type ProjectTaskStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
 
+/** Phase du projet (nom « Epic » conservé côté API). */
 export interface Epic {
   id: string;
   title: string;
   color: string;
+  start_date: string | null;
+  end_date: string | null;
   created_at: string;
 }
 

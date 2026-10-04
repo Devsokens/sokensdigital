@@ -57,8 +57,15 @@ class ProjectTaskCommentSerializer(serializers.ModelSerializer):
 class EpicSerializer(serializers.ModelSerializer):
     class Meta:
         model = Epic
-        fields = ['id', 'title', 'color', 'created_at']
+        fields = ['id', 'title', 'color', 'start_date', 'end_date', 'created_at']
         read_only_fields = ['created_at']
+
+    def validate(self, attrs):
+        start = attrs.get('start_date', getattr(self.instance, 'start_date', None))
+        end = attrs.get('end_date', getattr(self.instance, 'end_date', None))
+        if start and end and end < start:
+            raise serializers.ValidationError({'end_date': 'La date de fin ne peut pas précéder la date de début.'})
+        return attrs
 
 
 class LabelSerializer(serializers.ModelSerializer):
@@ -114,7 +121,7 @@ class ProjectTaskSerializer(serializers.ModelSerializer):
     def validate_epic(self, epic):
         project = self.context.get('project') or getattr(self.instance, 'project', None)
         if epic and project and epic.project_id != project.id:
-            raise serializers.ValidationError("Cet epic n'appartient pas à ce projet.")
+            raise serializers.ValidationError("Cette phase n'appartient pas à ce projet.")
         return epic
 
     def validate_sprint(self, sprint):
