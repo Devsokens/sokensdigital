@@ -304,3 +304,23 @@ class BesoinNotificationTests(APITestCase):
         )
         self.assertEqual(mock_notify.call_args.kwargs['title'], 'Besoin rejeté')
         self.assertIn('Hors budget', mock_notify.call_args.kwargs['message'])
+
+
+class EmailFormatTests(APITestCase):
+    """Ce qui compte pour la délivrabilité : nom d'expéditeur, document HTML
+    complet, version texte en plus de la version HTML."""
+
+    def test_sender_name_full_html_and_text_part(self):
+        from django.test import override_settings
+        from core import mailer
+        with override_settings(DEFAULT_FROM_EMAIL='sokens@gmail.com', EMAIL_FROM_NAME="Soken's Digital"):
+            self.assertTrue(mailer.send_mail('dest@sokensdigital.com', 'Sujet', 'Bonjour,\nCorps.',
+                                             action_url='https://sokensdigital.com/admin', action_label='Ouvrir'))
+        message = mail.outbox[0]
+        self.assertEqual(message.from_email, "Soken's Digital <sokens@gmail.com>")
+        self.assertIn('Corps.', message.body)
+        html = message.alternatives[0][0]
+        self.assertTrue(html.startswith('<!DOCTYPE html><html lang="fr">'))
+        self.assertIn('<meta charset="utf-8">', html)
+        self.assertIn('<title>Sujet</title>', html)
+        self.assertTrue(html.endswith('</body></html>'))

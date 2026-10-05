@@ -14,6 +14,7 @@ même si son accusé de réception ne part pas — et la trace reste dans les lo
 
 import logging
 from dataclasses import dataclass
+from email.utils import formataddr
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
@@ -34,6 +35,14 @@ class Attachment:
     filename: str
     content: bytes
     mimetype: str = 'application/pdf'
+
+
+def sender_address() -> str:
+    """« Soken's Digital <adresse> » plutôt qu'une adresse nue : un nom
+    d'expéditeur lisible compte pour les filtres anti-spam et pour le
+    destinataire. L'adresse reste celle du compte Gmail authentifié (sinon
+    Gmail la réécrit, et l'alignement SPF/DKIM saute)."""
+    return formataddr((settings.EMAIL_FROM_NAME, settings.DEFAULT_FROM_EMAIL))
 
 
 def _html_document(
@@ -66,7 +75,12 @@ def _html_document(
             f'text-decoration:none;padding:12px 22px;border-radius:8px;'
             f'font-weight:600;font-size:14px;">{escape(action_label)}</a></p>'
         )
+    # Document HTML complet (doctype, encodage, langue, titre) : un simple
+    # fragment est un des signaux que les filtres anti-spam pénalisent.
     return (
+        '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        f'<title>{escape(title)}</title></head><body style="margin:0;padding:0;">'
         '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,'
         'Roboto,Helvetica,Arial,sans-serif;background:#f5f6f8;padding:28px 12px;">'
         '<div style="max-width:560px;margin:0 auto;background:#ffffff;'
@@ -74,8 +88,10 @@ def _html_document(
         f'<h1 style="margin:0 0 18px;font-size:19px;color:#0e121a;">{escape(title)}</h1>'
         f'{paragraphs}{button}'
         '<p style="margin:28px 0 0;padding-top:18px;border-top:1px solid #e8eaee;'
-        'font-size:12px;color:#8b909c;">Soken\'s Digital</p>'
-        '</div></div>'
+        'font-size:12px;line-height:1.5;color:#8b909c;">'
+        f'{escape(settings.EMAIL_FROM_NAME)} — message envoyé automatiquement par '
+        'la plateforme, suite à une action vous concernant.</p>'
+        '</div></div></body></html>'
     )
 
 
@@ -108,7 +124,7 @@ def send_mail(
         message = EmailMultiAlternatives(
             subject=subject,
             body=body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
+            from_email=sender_address(),
             to=recipients,
             reply_to=[reply_to] if reply_to else None,
         )

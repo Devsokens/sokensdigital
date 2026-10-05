@@ -299,6 +299,8 @@ else:
 # indésirable. On aligne donc le défaut sur l'expéditeur effectif.
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL') or os.environ.get('GMAIL_SENDER_EMAIL') or 'no-reply@sokensdigital.com'
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
+# Nom affiché comme expéditeur (« Soken's Digital <adresse> »).
+EMAIL_FROM_NAME = os.environ.get('EMAIL_FROM_NAME', "Soken's Digital")
 
 # Adresse publique du site, pour composer les liens envoyés par e-mail (suivi
 # de demande, validation de devis). Sans elle, un e-mail contiendrait un lien
