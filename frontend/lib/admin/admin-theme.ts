@@ -47,5 +47,8 @@ export function clearAdminTheme() {
 
 /** Script inline exécuté avant l'hydratation : applique le thème mémorisé
  * dès le premier rendu, sans éclair clair au chargement d'une page admin
- * en mode sombre. Reprend la logique de readAdminTheme() à l'identique. */
-export const ADMIN_THEME_BOOTSTRAP = `(function(){try{var t=localStorage.getItem('${ADMIN_THEME_STORAGE_KEY}');if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.dataset.adminTheme=t;}catch(e){}})();`;
+ * en mode sombre. Reprend la logique de readAdminTheme() à l'identique.
+ * Posé dans le <head> du layout racine (rendu serveur uniquement) : il ne
+ * concerne que les pages /admin ; les navigations côté client sont
+ * couvertes par AdminThemeScope. */
+export const ADMIN_THEME_BOOTSTRAP = `(function(){try{if(location.pathname.indexOf('/admin')!==0)return;var t=localStorage.getItem('${ADMIN_THEME_STORAGE_KEY}');if(t!=='light'&&t!=='dark'){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.dataset.adminTheme=t;}catch(e){}})();`;

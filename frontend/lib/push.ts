@@ -71,6 +71,18 @@ function platformCode(): "WEB" | "ANDROID" | "IOS" {
  * chargement fait refuser la plupart des gens, et un refus est définitif —
  * le navigateur ne redemandera plus, il faut passer par ses réglages.
  */
+/** `navigator.serviceWorker.ready`, borné dans le temps : le service worker
+ * n'est enregistré qu'en production (ServiceWorkerRegistrar), et sans délai
+ * l'attente serait infinie — le bouton resterait bloqué. */
+function serviceWorkerReady(): Promise<ServiceWorkerRegistration> {
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("service worker indisponible")), 10000)
+    ),
+  ]);
+}
+
 export async function enablePush(): Promise<boolean> {
   const state = await getPushPermission();
   if (state === "unsupported" || state === "denied") return false;
@@ -83,7 +95,7 @@ export async function enablePush(): Promise<boolean> {
     // Le service worker de l'application sert aussi de récepteur push : il
     // écoute déjà `push` et `notificationclick`, inutile d'en enregistrer un
     // second dédié à Firebase.
-    const registration = await navigator.serviceWorker.ready;
+    const registration = await serviceWorkerReady();
     const token = await getToken(getMessaging(firebaseApp!), {
       vapidKey: VAPID_KEY,
       serviceWorkerRegistration: registration,
@@ -112,7 +124,7 @@ export async function enablePush(): Promise<boolean> {
  * mort réessayé à chaque envoi. */
 export async function disablePush(): Promise<void> {
   try {
-    const registration = await navigator.serviceWorker.ready;
+    const registration = await serviceWorkerReady();
     const messaging = getMessaging(firebaseApp!);
     const token = await getToken(messaging, {
       vapidKey: VAPID_KEY,

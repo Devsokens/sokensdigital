@@ -17,6 +17,10 @@ Setup (once):
 
 Usage:
   python scripts/generate_gmail_refresh_token.py
+  python scripts/generate_gmail_refresh_token.py --no-browser
+      (affiche l'adresse de connexion au lieu d'ouvrir le navigateur — à
+      utiliser si Google répond « 400 malformed » : sous Windows,
+      l'ouverture automatique peut tronquer cette longue adresse)
 
 A browser window opens — sign in with the sending Gmail account and
 accept. The script then prints GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET /
@@ -31,6 +35,7 @@ otherwise calendar sync will fail with 403 insufficientPermissions.
 """
 
 import json
+import sys
 from pathlib import Path
 
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -50,7 +55,15 @@ def main():
         )
 
     flow = InstalledAppFlow.from_client_secrets_file(str(CLIENT_SECRET_FILE), SCOPES)
-    creds = flow.run_local_server(port=0)
+    open_browser = '--no-browser' not in sys.argv
+    creds = flow.run_local_server(
+        port=0,
+        open_browser=open_browser,
+        authorization_prompt_message=(
+            '\nOuvrez cette adresse dans votre navigateur (copiez-la EN ENTIER, sur une seule ligne) :\n{url}\n'
+        ),
+        success_message='Autorisation terminée — vous pouvez fermer cet onglet et revenir au terminal.',
+    )
 
     client_config = json.loads(CLIENT_SECRET_FILE.read_text())['installed']
     print('\nAdd these as Render environment variables on the backend service:\n')

@@ -9,7 +9,6 @@ import { ProfileModalProvider } from "@/lib/admin/profile-modal-context";
 import { ProfileSheet } from "@/components/profile/profile-sheet";
 import { PermissionsProvider } from "@/lib/admin/permissions-context";
 import type { Metadata, Viewport } from "next";
-import { ADMIN_THEME_BOOTSTRAP } from "@/lib/admin/admin-theme";
 import { AdminThemeScope } from "@/components/admin/admin-theme-toggle";
 
 import { AdminAccessGuard } from "@/components/admin/admin-access-guard";
@@ -61,7 +60,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <AuthProvider>
       <style>{ADMIN_SURFACE_CSS}</style>
-      <script dangerouslySetInnerHTML={{ __html: ADMIN_THEME_BOOTSTRAP }} />
       <AdminThemeScope />
       <RequireAuth>
         <PermissionsProvider>

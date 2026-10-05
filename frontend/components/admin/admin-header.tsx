@@ -272,6 +272,15 @@ function PushToggle() {
 
   if (permission === "unsupported" || permission === "granted") return null;
 
+  // Le service worker (récepteur des push) n'est actif qu'en production.
+  if (process.env.NODE_ENV !== "production") {
+    return (
+      <p className="mt-1.5 text-[0.7rem] leading-snug text-neutral-400">
+        Les notifications push s&apos;activent sur le site en ligne (pas en local).
+      </p>
+    );
+  }
+
   if (permission === "denied") {
     return (
       <p className="mt-1.5 text-[0.7rem] leading-snug text-neutral-400">

@@ -7,6 +7,7 @@ import { ServiceWorkerRegistrar } from "@/components/pwa/service-worker-registra
 import { JsonLd } from "@/components/seo/json-ld";
 import { SITE, SITE_URL } from "@/lib/seo/site";
 import { organizationSchema, websiteSchema } from "@/lib/seo/structured-data";
+import { ADMIN_THEME_BOOTSTRAP } from "@/lib/admin/admin-theme";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -107,14 +108,21 @@ export default function RootLayout({
 }>) {
   return (
     // suppressHydrationWarning : le script de thème de l'admin
-    // (ADMIN_THEME_BOOTSTRAP, app/admin/layout.tsx) pose data-admin-theme sur
-    // <html> avant l'hydratation, exprès, pour éviter un flash de thème.
+    // (ADMIN_THEME_BOOTSTRAP, dans le <head> ci-dessous) pose data-admin-theme
+    // sur <html> avant l'hydratation, exprès, pour éviter un flash de thème.
     // Ne s'applique qu'aux attributs de <html>, pas à ses enfants.
     <html
       lang="fr"
       className={`${jakarta.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        {/* Thème clair/sombre de l'admin, appliqué avant l'affichage pour
+         * éviter un éclair du mauvais thème (sans effet hors /admin). Ici et
+         * non dans app/admin/layout.tsx : un <script> rendu par React lors
+         * d'une navigation côté client n'est jamais exécuté. */}
+        <script dangerouslySetInnerHTML={{ __html: ADMIN_THEME_BOOTSTRAP }} />
+      </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <JsonLd data={[organizationSchema(), websiteSchema()]} />
         {children}
