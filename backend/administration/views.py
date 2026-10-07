@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from core import calendar_sync
+from core import calendar_sync, mailer
 from core.models import AuditLog, EmailLog, Notification
 from core.notifications import notify
 from core.storage import upload_client_document
@@ -25,7 +25,7 @@ from core.constants import (
 from core.permissions import (
     IsSuperAdmin, IsAdmin, IsProjectManager,
     IsDirecteurFinancier, IsCommercial, IsRHManager,
-    IsOwner, IsAdminOrReadOnly, ReadOnly,
+    IsOwner, IsAdminOrReadOnly, ReadOnly, HasModulePermission,
 )
 
 from .models import (
@@ -104,7 +104,7 @@ class ClientViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update']:
-            return [permissions.IsAuthenticated(), (IsAdmin | IsCommercial)()]
+            return [permissions.IsAuthenticated(), (IsAdmin | IsCommercial)(), HasModulePermission('clients')]
         # Pentest du 24/09/2026 : list/retrieve ne demandaient qu'un compte
         # authentifié, en s'appuyant uniquement sur get_queryset pour filtrer
         # — un rôle hors périmètre (Consultant, Développeur, sans rôle...)
@@ -112,7 +112,7 @@ class ClientViewSet(viewsets.ModelViewSet):
         # direct par id à la fiche de quelqu'un d'autre n'était bloqué que
         # par le filtrage de queryset. IsHasClientAccess rend le refus
         # explicite (403) en plus du filtrage déjà en place.
-        return [permissions.IsAuthenticated(), IsHasClientAccess()]
+        return [permissions.IsAuthenticated(), IsHasClientAccess(), HasModulePermission('clients')]
 
     def destroy(self, request, *args, **kwargs):
         """Suppression interdite — utiliser l'action archive."""
@@ -185,6 +185,11 @@ class ContactViewSet(viewsets.ModelViewSet):
     """Interlocuteurs d'un client (nested sous /clients/{id}/contacts/)."""
     serializer_class = ContactSerializer
 
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated(), HasModulePermission('clients')]
+        return [permissions.IsAuthenticated()]
+
     def get_queryset(self):
         client_pk = self.kwargs.get('client_pk')
         if not _accessible_clients_qs(self.request.user).filter(pk=client_pk).exists():
@@ -210,7 +215,11 @@ class ClientInteractionViewSet(viewsets.ModelViewSet):
     Verrouillage automatique après 24h.
     """
     serializer_class = ClientInteractionSerializer
-    permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated(), HasModulePermission('clients')]
+        return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
         client_pk = self.kwargs.get('client_pk')
@@ -273,6 +282,7 @@ class ClientDocumentViewSet(viewsets.ModelViewSet):
             return [
                 permissions.IsAuthenticated(),
                 (IsAdmin | IsDirecteurFinancier | IsCommercial)(),
+                HasModulePermission('clients'),
             ]
         return [permissions.IsAuthenticated()]
 
@@ -554,16 +564,30 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         # sélectionner lui-même dans la liste des participants.
         appointment.attendees.add(self.request.user)
         calendar_sync.sync_appointment_event(appointment)
-        self._notify_invited(appointment, appointment.attendees.exclude(pk=self.request.user.pk))
+        self._notify_invited(
+            appointment,
+            appointment.attendees.exclude(pk=self.request.user.pk),
+            notify_client=True,
+        )
 
     def perform_update(self, serializer):
-        previous_ids = set(serializer.instance.attendees.values_list('pk', flat=True))
+        instance = serializer.instance
+        previous_ids = set(instance.attendees.values_list('pk', flat=True))
+        old_start = instance.start_at
+        old_location = instance.location
+
         appointment = serializer.save()
         calendar_sync.sync_appointment_event(appointment)
-        new_attendees = appointment.attendees.exclude(pk__in=previous_ids).exclude(pk=self.request.user.pk)
-        self._notify_invited(appointment, new_attendees)
 
-    def _notify_invited(self, appointment, users):
+        new_attendees = appointment.attendees.exclude(pk__in=previous_ids).exclude(pk=self.request.user.pk)
+        if new_attendees.exists():
+            self._notify_invited(appointment, new_attendees, notify_client=False)
+
+        # Si l'horaire ou le lieu a changé, prévenir les participants existants et le client
+        if (old_start != appointment.start_at) or (old_location != appointment.location):
+            self._notify_updated(appointment, previous_ids)
+
+    def _notify_invited(self, appointment, users, notify_client: bool = True):
         """Invitation : in-app + push + e-mail (un rendez-vous s'adresse aussi
         à quelqu'un qui n'est pas devant l'application)."""
         when = timezone.localtime(appointment.start_at).strftime('%d/%m/%Y à %H:%M')
@@ -578,6 +602,48 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                 notification_type='FOLLOW_UP',
                 link='/admin/agenda',
                 email=True,
+            )
+
+        if notify_client and appointment.client and appointment.client.email:
+            mailer.send_template(
+                'meeting_invitation',
+                appointment.client.email,
+                {
+                    'organizer_name': organizer_name,
+                    'meeting_title': appointment.title,
+                    'date_time': when,
+                    'location': appointment.location or 'Non spécifié',
+                    'description': appointment.description or '',
+                },
+            )
+
+    def _notify_updated(self, appointment, attendee_ids):
+        """Mise à jour : alerte les participants existants et le client si l'horaire ou le lieu change."""
+        when = timezone.localtime(appointment.start_at).strftime('%d/%m/%Y à %H:%M')
+        organizer = self.request.user
+        organizer_name = f'{organizer.first_name} {organizer.last_name}'.strip() or organizer.email
+        users_to_notify = appointment.attendees.filter(pk__in=attendee_ids).exclude(pk=self.request.user.pk)
+        for user in users_to_notify:
+            notify(
+                user=user,
+                title=f'Mise à jour : {appointment.title}',
+                message=f'La réunion a été modifiée par {organizer_name} : {when}'
+                + (f' — {appointment.location}' if appointment.location else '') + '.',
+                notification_type='FOLLOW_UP',
+                link='/admin/agenda',
+                email=True,
+            )
+
+        if appointment.client and appointment.client.email:
+            mailer.send_template(
+                'meeting_update',
+                appointment.client.email,
+                {
+                    'organizer_name': organizer_name,
+                    'meeting_title': appointment.title,
+                    'date_time': when,
+                    'location': appointment.location or 'Non spécifié',
+                },
             )
 
     def perform_destroy(self, instance):

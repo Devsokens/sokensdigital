@@ -40,7 +40,18 @@ def notify(
             logger.exception('Notification push impossible pour %s', user.pk)
 
     if email and user.email:
-        mailer.send_mail(user.email, title, message)
+        mail_kwargs = {}
+        if link:
+            from django.conf import settings
+            base = getattr(settings, 'PUBLIC_SITE_URL', 'https://sokensdigital.com').rstrip('/')
+            mail_kwargs['action_url'] = f"{base}{link}" if link.startswith('/') else link
+            mail_kwargs['action_label'] = "Consulter dans l'application"
+        mailer.send_mail(
+            user.email,
+            title,
+            message,
+            **mail_kwargs,
+        )
 
 
 def notify_roles(

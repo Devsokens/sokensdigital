@@ -229,3 +229,75 @@ class IsAssignedDeveloper(permissions.BasePermission):
         if assigned is None:
             assigned = getattr(obj, 'assigned_developer', None)
         return assigned is not None and assigned == request.user
+
+
+# ---------------------------------------------------------------------------
+# Permissions modulaires fines (RBAC par module & action)
+# ---------------------------------------------------------------------------
+
+def user_has_module_action(user, module_key: str, action: str) -> bool:
+    """Vérifie si un utilisateur possède une action donnée sur un module donné.
+
+    1. Super-Administrateur a accès complet à toutes les actions sur tous les modules.
+    2. Surcharge personnelle (user.permission_overrides) :
+       Si le module est présent dans les overrides de l'utilisateur,
+       cette configuration s'applique en priorité absolue (strict override).
+    3. Rôles applicatifs : sinon, union des permissions définies sur les rôles.
+    """
+    if not user or user.is_anonymous:
+        return False
+
+    if _user_has_role(user, ROLE_SUPER_ADMIN):
+        return True
+
+    overrides = getattr(user, 'permission_overrides', None)
+    if isinstance(overrides, dict) and module_key in overrides:
+        allowed_actions = overrides.get(module_key) or []
+        return action in allowed_actions
+
+    # Pas d'override pour ce module : union des permissions des rôles
+    for role in user.roles.all():
+        role_perms = role.permissions or {}
+        if action in role_perms.get(module_key, []):
+            return True
+
+    return False
+
+
+class HasModulePermission(permissions.BasePermission):
+    """Vérifie que l'utilisateur dispose de l'action requise pour ce module.
+
+    Mappe la méthode HTTP vers l'action de base :
+    - SAFE_METHODS -> 'voir'
+    - POST -> 'creer'
+    - PUT, PATCH -> 'modifier'
+    - DELETE -> 'supprimer'
+    """
+    module_key = None
+
+    def __init__(self, module_key=None):
+        if module_key:
+            self.module_key = module_key
+
+    def __call__(self):
+        return self
+
+    def has_permission(self, request, view):
+        if not request.user or request.user.is_anonymous:
+            return False
+
+        module = self.module_key or getattr(view, 'module_key', None)
+        if not module:
+            return True
+
+        if request.method in permissions.SAFE_METHODS:
+            action = 'voir'
+        elif request.method == 'POST':
+            action = 'creer'
+        elif request.method == 'DELETE':
+            action = 'supprimer'
+        else:
+            action = 'modifier'
+
+        return user_has_module_action(request.user, module, action)
+

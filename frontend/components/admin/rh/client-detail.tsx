@@ -24,6 +24,7 @@ import { ConfirmModal } from "@/components/admin/confirm-modal";
 import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
+import { usePermissions } from "@/lib/admin/permissions-context";
 import { cn } from "@/lib/utils";
 
 const STATUS_LABELS: Record<ClientStatus, string> = {
@@ -51,6 +52,7 @@ function formatDate(value: string | null) {
 }
 
 export function ClientDetail({ id }: { id: string }) {
+  const { canEdit, canDelete } = usePermissions();
   const [client, setClient] = useState<Client | null>(null);
   const [contacts, setContacts] = useState<ClientContact[]>([]);
   const [interactions, setInteractions] = useState<ClientInteractionEntry[]>([]);
@@ -139,11 +141,13 @@ export function ClientDetail({ id }: { id: string }) {
             <span>Assigné à {assignedUser ? `${assignedUser.first_name} ${assignedUser.last_name}` : "personne"}</span>
           </div>
         </div>
-        <ClientFormModal
-          client={client}
-          onSaved={load}
-          trigger={<Button variant="outline" className="rounded-full px-4">Modifier</Button>}
-        />
+        {canEdit("clients") && (
+          <ClientFormModal
+            client={client}
+            onSaved={load}
+            trigger={<Button variant="outline" className="rounded-full px-4">Modifier</Button>}
+          />
+        )}
       </div>
 
       <Tabs defaultValue="infos">
@@ -169,15 +173,15 @@ export function ClientDetail({ id }: { id: string }) {
         </TabsPanel>
 
         <TabsPanel value="contacts" className="pt-4">
-          <ContactsPanel clientId={id} contacts={contacts} onChange={load} />
+          <ContactsPanel clientId={id} contacts={contacts} onChange={load} canEdit={canEdit("clients")} canDelete={canDelete("clients")} />
         </TabsPanel>
 
         <TabsPanel value="historique" className="pt-4">
-          <InteractionsPanel clientId={id} interactions={interactions} contacts={contacts} onChange={load} />
+          <InteractionsPanel clientId={id} interactions={interactions} contacts={contacts} onChange={load} canCreate={canEdit("clients")} />
         </TabsPanel>
 
         <TabsPanel value="documents" className="pt-4">
-          <DocumentsPanel clientId={id} documents={documents} onChange={load} />
+          <DocumentsPanel clientId={id} documents={documents} onChange={load} canUpload={canEdit("clients")} canDelete={canDelete("clients")} />
         </TabsPanel>
 
         <TabsPanel value="projets" className="pt-4">
@@ -253,7 +257,19 @@ export function ClientDetail({ id }: { id: string }) {
   );
 }
 
-function ContactsPanel({ clientId, contacts, onChange }: { clientId: string; contacts: ClientContact[]; onChange: () => void }) {
+function ContactsPanel({
+  clientId,
+  contacts,
+  onChange,
+  canEdit = true,
+  canDelete = true,
+}: {
+  clientId: string;
+  contacts: ClientContact[];
+  onChange: () => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
+}) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ first_name: "", last_name: "", email: "", phone: "", role: "", is_primary: false });
   const [saving, setSaving] = useState(false);
@@ -281,38 +297,42 @@ function ContactsPanel({ clientId, contacts, onChange }: { clientId: string; con
             </p>
             <p className="text-xs text-neutral-500">{c.role || "—"} · {c.email || "—"} · {c.phone || "—"}</p>
           </div>
-          <ConfirmModal
-            title="Retirer ce contact"
-            description={`Retirer ${c.first_name} ${c.last_name} des contacts de ce client ?`}
-            onConfirm={async () => { await deleteContact(clientId, c.id); onChange(); }}
-            trigger={<button type="button" className="text-neutral-400 hover:text-destructive"><Trash2 className="size-4" /></button>}
-          />
+          {canDelete && (
+            <ConfirmModal
+              title="Retirer ce contact"
+              description={`Retirer ${c.first_name} ${c.last_name} des contacts de ce client ?`}
+              onConfirm={async () => { await deleteContact(clientId, c.id); onChange(); }}
+              trigger={<button type="button" className="text-neutral-400 hover:text-destructive"><Trash2 className="size-4" /></button>}
+            />
+          )}
         </div>
       ))}
       {contacts.length === 0 && !adding && <p className="text-sm text-neutral-400">Aucun contact enregistré.</p>}
 
-      {adding ? (
-        <form onSubmit={handleAdd} className="space-y-3 rounded-xl border border-neutral-200 bg-white p-4">
-          <div className="grid grid-cols-2 gap-3">
-            <input value={form.first_name} onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))} placeholder="Prénom" className={inputClass} required />
-            <input value={form.last_name} onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))} placeholder="Nom" className={inputClass} required />
-            <input value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="Email" type="email" className={inputClass} />
-            <input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="Téléphone" className={inputClass} />
-            <input value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} placeholder="Fonction" className={inputClass} />
-            <label className="flex items-center gap-2 text-xs text-neutral-600">
-              <input type="checkbox" checked={form.is_primary} onChange={(e) => setForm((f) => ({ ...f, is_primary: e.target.checked }))} />
-              Contact principal
-            </label>
-          </div>
-          <div className="flex gap-2">
-            <Button type="submit" disabled={saving} className="rounded-full px-4">{saving ? <Loader2 className="size-4 animate-spin" /> : "Ajouter"}</Button>
-            <Button type="button" variant="outline" onClick={() => setAdding(false)} className="rounded-full px-4">Annuler</Button>
-          </div>
-        </form>
-      ) : (
-        <button type="button" onClick={() => setAdding(true)} className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
-          <Plus className="size-3.5" /> Ajouter un contact
-        </button>
+      {canEdit && (
+        adding ? (
+          <form onSubmit={handleAdd} className="space-y-3 rounded-xl border border-neutral-200 bg-white p-4">
+            <div className="grid grid-cols-2 gap-3">
+              <input value={form.first_name} onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))} placeholder="Prénom" className={inputClass} required />
+              <input value={form.last_name} onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))} placeholder="Nom" className={inputClass} required />
+              <input value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="Email" type="email" className={inputClass} />
+              <input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="Téléphone" className={inputClass} />
+              <input value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} placeholder="Fonction" className={inputClass} />
+              <label className="flex items-center gap-2 text-xs text-neutral-600">
+                <input type="checkbox" checked={form.is_primary} onChange={(e) => setForm((f) => ({ ...f, is_primary: e.target.checked }))} />
+                Contact principal
+              </label>
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit" disabled={saving} className="rounded-full px-4">{saving ? <Loader2 className="size-4 animate-spin" /> : "Ajouter"}</Button>
+              <Button type="button" variant="outline" onClick={() => setAdding(false)} className="rounded-full px-4">Annuler</Button>
+            </div>
+          </form>
+        ) : (
+          <button type="button" onClick={() => setAdding(true)} className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
+            <Plus className="size-3.5" /> Ajouter un contact
+          </button>
+        )
       )}
     </div>
   );
@@ -323,11 +343,13 @@ function InteractionsPanel({
   interactions,
   contacts,
   onChange,
+  canCreate = true,
 }: {
   clientId: string;
   interactions: ClientInteractionEntry[];
   contacts: ClientContact[];
   onChange: () => void;
+  canCreate?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ interaction_type: "CALL", subject: "", notes: "", contact: "", follow_up_date: "" });
@@ -369,38 +391,52 @@ function InteractionsPanel({
       ))}
       {interactions.length === 0 && !adding && <p className="text-sm text-neutral-400">Aucune interaction enregistrée.</p>}
 
-      {adding ? (
-        <form onSubmit={handleAdd} className="space-y-3 rounded-xl border border-neutral-200 bg-white p-4">
-          <div className="grid grid-cols-2 gap-3">
-            <select value={form.interaction_type} onChange={(e) => setForm((f) => ({ ...f, interaction_type: e.target.value }))} className={inputClass}>
-              {Object.entries(INTERACTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-            <select value={form.contact} onChange={(e) => setForm((f) => ({ ...f, contact: e.target.value }))} className={inputClass}>
-              <option value="">Aucun contact spécifique</option>
-              {contacts.map((c) => <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>)}
-            </select>
-          </div>
-          <input value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} placeholder="Sujet" className={inputClass} required />
-          <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="Notes" rows={3} className={`${inputClass} resize-none`} required />
-          <label className="block">
-            <span className={labelClass}>Relance prévue (optionnel)</span>
-            <input type="date" value={form.follow_up_date} onChange={(e) => setForm((f) => ({ ...f, follow_up_date: e.target.value }))} className={inputClass} />
-          </label>
-          <div className="flex gap-2">
-            <Button type="submit" disabled={saving} className="rounded-full px-4">{saving ? <Loader2 className="size-4 animate-spin" /> : "Enregistrer"}</Button>
-            <Button type="button" variant="outline" onClick={() => setAdding(false)} className="rounded-full px-4">Annuler</Button>
-          </div>
-        </form>
-      ) : (
-        <button type="button" onClick={() => setAdding(true)} className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
-          <Plus className="size-3.5" /> Enregistrer une interaction
-        </button>
+      {canCreate && (
+        adding ? (
+          <form onSubmit={handleAdd} className="space-y-3 rounded-xl border border-neutral-200 bg-white p-4">
+            <div className="grid grid-cols-2 gap-3">
+              <select value={form.interaction_type} onChange={(e) => setForm((f) => ({ ...f, interaction_type: e.target.value }))} className={inputClass}>
+                {Object.entries(INTERACTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <select value={form.contact} onChange={(e) => setForm((f) => ({ ...f, contact: e.target.value }))} className={inputClass}>
+                <option value="">Aucun contact spécifique</option>
+                {contacts.map((c) => <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>)}
+              </select>
+            </div>
+            <input value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} placeholder="Sujet" className={inputClass} required />
+            <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} placeholder="Notes" rows={3} className={`${inputClass} resize-none`} required />
+            <label className="block">
+              <span className={labelClass}>Relance prévue (optionnel)</span>
+              <input type="date" value={form.follow_up_date} onChange={(e) => setForm((f) => ({ ...f, follow_up_date: e.target.value }))} className={inputClass} />
+            </label>
+            <div className="flex gap-2">
+              <Button type="submit" disabled={saving} className="rounded-full px-4">{saving ? <Loader2 className="size-4 animate-spin" /> : "Enregistrer"}</Button>
+              <Button type="button" variant="outline" onClick={() => setAdding(false)} className="rounded-full px-4">Annuler</Button>
+            </div>
+          </form>
+        ) : (
+          <button type="button" onClick={() => setAdding(true)} className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
+            <Plus className="size-3.5" /> Enregistrer une interaction
+          </button>
+        )
       )}
     </div>
   );
 }
 
-function DocumentsPanel({ clientId, documents, onChange }: { clientId: string; documents: ClientDocumentEntry[]; onChange: () => void }) {
+function DocumentsPanel({
+  clientId,
+  documents,
+  onChange,
+  canUpload = true,
+  canDelete = true,
+}: {
+  clientId: string;
+  documents: ClientDocumentEntry[];
+  onChange: () => void;
+  canUpload?: boolean;
+  canDelete?: boolean;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [fileType, setFileType] = useState("CONTRAT");
   const [uploading, setUploading] = useState(false);
@@ -431,30 +467,34 @@ function DocumentsPanel({ clientId, documents, onChange }: { clientId: string; d
             <span>{doc.name}</span>
             <span className="rounded-md bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">{DOCUMENT_TYPE_LABELS[doc.file_type] ?? doc.file_type}</span>
           </a>
-          <ConfirmModal
-            title="Supprimer le document"
-            description={`Supprimer « ${doc.name} » ?`}
-            onConfirm={async () => { await deleteClientDocument(clientId, doc.id); onChange(); }}
-            trigger={<button type="button" className="text-neutral-400 hover:text-destructive"><Trash2 className="size-4" /></button>}
-          />
+          {canDelete && (
+            <ConfirmModal
+              title="Supprimer le document"
+              description={`Supprimer « ${doc.name} » ?`}
+              onConfirm={async () => { await deleteClientDocument(clientId, doc.id); onChange(); }}
+              trigger={<button type="button" className="text-neutral-400 hover:text-destructive"><Trash2 className="size-4" /></button>}
+            />
+          )}
         </div>
       ))}
       {documents.length === 0 && <p className="text-sm text-neutral-400">Aucun document.</p>}
 
-      <div className="flex items-center gap-3">
-        <select value={fileType} onChange={(e) => setFileType(e.target.value)} className={`${inputClass} w-auto`}>
-          {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={uploading}
-          className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-        >
-          {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />} Téléverser un document
-        </button>
-        <input ref={inputRef} type="file" onChange={handleFile} className="hidden" />
-      </div>
+      {canUpload && (
+        <div className="flex items-center gap-3">
+          <select value={fileType} onChange={(e) => setFileType(e.target.value)} className={`${inputClass} w-auto`}>
+            {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+          >
+            {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />} Téléverser un document
+          </button>
+          <input ref={inputRef} type="file" onChange={handleFile} className="hidden" />
+        </div>
+      )}
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );

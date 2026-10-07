@@ -155,6 +155,45 @@ TEMPLATES = {
             '<p>Cordialement.</p>'
         ),
     },
+    'meeting_invitation': {
+        'label': 'Invitation à une réunion',
+        'description': 'Envoyé aux participants lors de la planification d’une réunion ou d’un rendez-vous.',
+        'variables': {
+            'organizer_name': "Nom de l'organisateur",
+            'meeting_title': 'Titre de la réunion',
+            'date_time': 'Date et heure',
+            'location': 'Lieu ou visio',
+            'description': 'Notes ou ordre du jour',
+        },
+        'subject': 'Invitation : {{meeting_title}} ({{date_time}})',
+        'body_html': (
+            '<p>Bonjour,</p>'
+            '<p><strong>{{organizer_name}}</strong> vous invite à participer à la réunion suivante :</p>'
+            '<p style="font-size:16px;font-weight:600;margin:12px 0;">{{meeting_title}}</p>'
+            '<p><strong>Date & heure :</strong> {{date_time}}<br>'
+            '<strong>Lieu :</strong> {{location}}</p>'
+            '<p>{{description}}</p>'
+            '<p>Pour consulter ou préparer cette réunion, rendez-vous sur votre espace Agenda.</p>'
+        ),
+    },
+    'meeting_update': {
+        'label': 'Mise à jour d’une réunion',
+        'description': 'Envoyé aux participants quand les horaires ou le lieu d’une réunion changent.',
+        'variables': {
+            'organizer_name': "Nom de l'organisateur",
+            'meeting_title': 'Titre de la réunion',
+            'date_time': 'Nouvelle date et heure',
+            'location': 'Nouveau lieu ou visio',
+        },
+        'subject': 'Mise à jour : {{meeting_title}} ({{date_time}})',
+        'body_html': (
+            '<p>Bonjour,</p>'
+            '<p>La réunion « <strong>{{meeting_title}}</strong> » a été modifiée par <strong>{{organizer_name}}</strong>.</p>'
+            '<p><strong>Nouvelle date & heure :</strong> {{date_time}}<br>'
+            '<strong>Lieu :</strong> {{location}}</p>'
+            '<p>Consultez votre agenda pour plus de détails.</p>'
+        ),
+    },
 }
 
 _VARIABLE = re.compile(r'\{\{\s*(\w+)\s*\}\}')

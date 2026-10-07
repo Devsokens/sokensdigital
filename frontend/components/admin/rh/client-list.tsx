@@ -10,6 +10,7 @@ import { ApiError } from "@/lib/api/client";
 import { ClientFormModal } from "@/components/admin/rh/client-form-modal";
 import { ConfirmModal } from "@/components/admin/confirm-modal";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { usePermissions } from "@/lib/admin/permissions-context";
 import { cn } from "@/lib/utils";
 
 const STATUS_LABELS: Record<ClientStatus, string> = {
@@ -40,6 +41,7 @@ function Rating({ value }: { value: number | null }) {
 }
 
 export function ClientList() {
+  const { canCreate, canEdit, canDelete } = usePermissions();
   const [clients, setClients] = useState<Client[] | null>(null);
   const [users, setUsers] = useState<UserBrief[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +99,7 @@ export function ClientList() {
             {clients.length} client{clients.length !== 1 ? "s" : ""} — base de données clients (CRM).
           </p>
         </div>
-        <ClientFormModal onSaved={load} />
+        {canCreate("clients") && <ClientFormModal onSaved={load} />}
       </div>
 
       <div className="mb-5 flex items-center gap-3">
@@ -228,16 +230,18 @@ export function ClientList() {
                       >
                         Voir la fiche
                       </Link>
-                      <ClientFormModal
-                        client={c}
-                        onSaved={load}
-                        trigger={
-                          <button type="button" className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50">
-                            Modifier
-                          </button>
-                        }
-                      />
-                      {c.status !== "CLIENT_INACTIF" && (
+                      {canEdit("clients") && (
+                        <ClientFormModal
+                          client={c}
+                          onSaved={load}
+                          trigger={
+                            <button type="button" className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50">
+                              Modifier
+                            </button>
+                          }
+                        />
+                      )}
+                      {canDelete("clients") && c.status !== "CLIENT_INACTIF" && (
                         <ConfirmModal
                           title="Marquer inactif"
                           description={`Marquer « ${c.company_name} » comme inactif ? Il restera consultable mais sortira des listes actives.`}

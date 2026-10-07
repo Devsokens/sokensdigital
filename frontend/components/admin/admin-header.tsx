@@ -306,9 +306,80 @@ function PushToggle() {
   );
 }
 
+function resolveNotificationLink(notification: Notification): string {
+  if (notification.link && typeof notification.link === "string" && notification.link.trim()) {
+    const raw = notification.link.trim();
+    if (raw.startsWith("/")) return raw;
+    try {
+      const url = new URL(raw);
+      if (typeof window !== "undefined" && url.origin === window.location.origin) {
+        return url.pathname + url.search + url.hash;
+      }
+      return raw;
+    } catch {
+      return raw.startsWith("/") ? raw : `/${raw}`;
+    }
+  }
+
+  // Déduction intelligente de la page de destination
+  switch (notification.type) {
+    case "MENTION":
+      return "/admin/messagerie";
+    case "PROJECT_STATUS_CHANGE":
+    case "PROJECT_UPDATE":
+    case "TASK_ASSIGNED":
+    case "TASK_COMMENT":
+      return "/admin/technique/projets";
+    case "DISBURSEMENT_WAITING":
+      return "/admin/technique/decaissements";
+    case "CONTENT_PUBLISH_REMINDER":
+      return "/admin/marketing/contenu";
+    case "FOLLOW_UP": {
+      const text = `${notification.title} ${notification.message}`.toLowerCase();
+      if (text.includes("invitation") || text.includes("rendez-vous") || text.includes("reunion") || text.includes("réunion") || text.includes("agenda")) {
+        return "/admin/agenda";
+      }
+      if (text.includes("demande") || text.includes("projet soumis") || text.includes("cdc")) {
+        return "/admin/marketing/projets-soumis";
+      }
+      return "/admin/marketing/leads";
+    }
+    case "GENERAL":
+    default: {
+      const fullText = `${notification.title} ${notification.message}`.toLowerCase();
+      if (fullText.includes("invitation") || fullText.includes("rendez-vous") || fullText.includes("reunion") || fullText.includes("réunion") || fullText.includes("agenda")) {
+        return "/admin/agenda";
+      }
+      if (fullText.includes("client")) {
+        return "/admin/rh/clients";
+      }
+      if (fullText.includes("devis")) {
+        return "/admin/marketing/devis";
+      }
+      if (fullText.includes("facture") || fullText.includes("encaissement")) {
+        return "/admin/finance/facturation";
+      }
+      if (fullText.includes("besoin") || fullText.includes("décaissement") || fullText.includes("decaissement")) {
+        return "/admin/technique/decaissements";
+      }
+      if (fullText.includes("employé") || fullText.includes("employe") || fullText.includes("rh")) {
+        return "/admin/rh/employes";
+      }
+      if (fullText.includes("ticket") || fullText.includes("support")) {
+        return "/admin/support/tickets";
+      }
+      if (fullText.includes("message") || fullText.includes("chat") || fullText.includes("discussion")) {
+        return "/admin/messagerie";
+      }
+      return "/admin";
+    }
+  }
+}
+
 function NotificationBell() {
   const router = useRouter();
   const { user } = useAuth();
+  const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
@@ -320,11 +391,17 @@ function NotificationBell() {
 
   function handleClick(notification: Notification) {
     if (!notification.isRead) markNotificationRead(notification.id).catch(() => {});
-    if (notification.link) router.push(notification.link);
+    setOpen(false);
+    const targetLink = resolveNotificationLink(notification);
+    if (targetLink.startsWith("http://") || targetLink.startsWith("https://")) {
+      window.location.href = targetLink;
+    } else {
+      router.push(targetLink);
+    }
   }
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         data-tour="notifications"
         className="relative flex size-9 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
@@ -355,13 +432,13 @@ function NotificationBell() {
                 type="button"
                 onClick={() => handleClick(notification)}
                 className={cn(
-                  "flex w-full flex-col gap-0.5 px-4 py-2.5 text-left transition-colors hover:bg-neutral-50",
+                  "group flex w-full flex-col gap-0.5 px-4 py-2.5 text-left transition-colors hover:bg-neutral-50 cursor-pointer",
                   !notification.isRead && "bg-primary/5"
                 )}
               >
                 <span className="flex items-center gap-2">
                   {!notification.isRead && <span className="size-1.5 shrink-0 rounded-full bg-primary" />}
-                  <span className="truncate text-sm font-medium text-neutral-900">{notification.title}</span>
+                  <span className="truncate text-sm font-medium text-neutral-900 group-hover:text-primary transition-colors">{notification.title}</span>
                   <span className="ml-auto shrink-0 text-[0.65rem] text-neutral-400">
                     {formatNotificationTime(notification.createdAt)}
                   </span>
