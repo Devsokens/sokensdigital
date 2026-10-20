@@ -277,7 +277,13 @@ export function QuoteList({ basePath = "/admin/marketing/devis" }: { basePath?: 
       </div>
 
       {viewing && (
-        <QuoteViewerModal quoteId={viewing.id} quoteNumber={viewing.quote_number} onClose={() => setViewing(null)} />
+        <QuoteViewerModal
+          quoteId={viewing.id}
+          quoteNumber={viewing.quote_number}
+          initialQuote={viewing}
+          onClose={() => setViewing(null)}
+          onStatusChanged={() => load()}
+        />
       )}
     </div>
   );

@@ -1,8 +1,10 @@
 import { getSiteSettings } from "@/lib/api/public";
-import { NAV_LINKS } from "@/lib/site-nav";
-import { SiteHeaderClient } from "@/components/site-header-client";
+import { VitrineHeader } from "@/components/vitrine/site-header";
+import { contactInfo } from "@/components/vitrine/ui";
 
+/** En-tête public, partagé par les pages vitrine et les pages secondaires
+ * (légal, FAQ, détail projet/article, suivi, devis). */
 export async function SiteHeader() {
   const settings = await getSiteSettings();
-  return <SiteHeaderClient navLinks={NAV_LINKS} logoUrl={settings.logo_url} />;
+  return <VitrineHeader logoUrl={settings.logo_url} phone={contactInfo(settings).phone} />;
 }

@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Modal, ModalContent } from "@/components/ui/modal";
-import { Sheet, SheetTrigger, SheetContent } from "@/components/ui/sheet";
+import { LeadSlideOver } from "@/components/admin/marketing/lead-slide-over";
 import { listLeads, createLead, updateLead, type LeadInput } from "@/lib/api/marketing";
 import { listUsers } from "@/lib/api/hr";
 import type { Lead, LeadStatus, LeadSource, UserBrief } from "@/lib/api/types";
@@ -134,18 +133,9 @@ export function LeadList() {
             Glissez une carte pour changer son statut, ou cliquez dessus pour voir le détail.
           </p>
         </div>
-        <Sheet open={createOpen} onOpenChange={setCreateOpen}>
-          <SheetTrigger
-            render={
-              <Button className="gap-1.5 rounded-full px-4">
-                <Plus className="size-4" /> Nouveau lead
-              </Button>
-            }
-          />
-          <SheetContent title="Nouveau lead">
-            <LeadForm lead={null} users={users} onSaved={handleCreated} onCancel={() => setCreateOpen(false)} />
-          </SheetContent>
-        </Sheet>
+        <Button onClick={() => setCreateOpen(true)} className="gap-1.5 rounded-full px-4 shadow-sm">
+          <Plus className="size-4" /> Nouveau lead
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -227,162 +217,23 @@ export function LeadList() {
         })}
       </div>
 
-      <Modal open={editLead !== null} onOpenChange={(open) => !open && setEditLead(null)}>
-        <ModalContent title="Détail du lead">
-          {editLead && (
-            <LeadForm lead={editLead} users={users} onSaved={handleUpdated} onCancel={() => setEditLead(null)} />
-          )}
-        </ModalContent>
-      </Modal>
+      {/* Slide-over (tiroir coulissant de la droite vers la gauche) pour nouveau lead */}
+      <LeadSlideOver
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        lead={null}
+        users={users}
+        onSaved={handleCreated}
+      />
+
+      {/* Slide-over pour détail d'un lead (3 onglets) et modification */}
+      <LeadSlideOver
+        open={editLead !== null}
+        onOpenChange={(open) => !open && setEditLead(null)}
+        lead={editLead}
+        users={users}
+        onSaved={handleUpdated}
+      />
     </div>
-  );
-}
-
-function LeadForm({
-  lead,
-  users,
-  onSaved,
-  onCancel,
-}: {
-  lead: Lead | null;
-  users: UserBrief[];
-  onSaved: (lead: Lead) => void;
-  onCancel: () => void;
-}) {
-  const [firstName, setFirstName] = useState(lead?.first_name ?? "");
-  const [lastName, setLastName] = useState(lead?.last_name ?? "");
-  const [companyName, setCompanyName] = useState(lead?.company_name ?? "");
-  const [email, setEmail] = useState(lead?.email ?? "");
-  const [phone, setPhone] = useState(lead?.phone ?? "");
-  const [source, setSource] = useState<LeadSource>(lead?.source ?? "SITE_WEB");
-  const [message, setMessage] = useState(lead?.message ?? "");
-  const [status, setStatus] = useState<LeadStatus>(lead?.status ?? "NOUVEAU");
-  const [score, setScore] = useState(String(lead?.qualification_score ?? 0));
-  const [assignedTo, setAssignedTo] = useState(lead?.assigned_to?.id ?? "");
-  const [estimatedValue, setEstimatedValue] = useState(lead?.estimated_value ?? "");
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-
-    const payload: LeadInput = {
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-      company_name: companyName.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
-      source,
-      message: message.trim(),
-      status,
-      qualification_score: Number(score) || 0,
-      assigned_to_id: assignedTo || null,
-      estimated_value: estimatedValue ? String(estimatedValue) : null,
-    };
-
-    if (!payload.first_name || !payload.last_name || !payload.email) {
-      setError("Prénom, nom et email sont obligatoires.");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const saved = lead ? await updateLead(lead.id, payload) : await createLead(payload);
-      onSaved(saved);
-    } catch {
-      setError(lead ? "Impossible de modifier ce lead." : "Impossible de créer ce lead.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
-          {error}
-        </p>
-      )}
-
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block">
-          <span className={labelClass}>Prénom</span>
-          <input value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputClass} required />
-        </label>
-        <label className="block">
-          <span className={labelClass}>Nom</span>
-          <input value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} required />
-        </label>
-      </div>
-
-      <label className="block">
-        <span className={labelClass}>Entreprise</span>
-        <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} className={inputClass} />
-      </label>
-
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block">
-          <span className={labelClass}>Email</span>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} required />
-        </label>
-        <label className="block">
-          <span className={labelClass}>Téléphone</span>
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} />
-        </label>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block">
-          <span className={labelClass}>Source</span>
-          <select value={source} onChange={(e) => setSource(e.target.value as LeadSource)} className={inputClass}>
-            {Object.entries(SOURCE_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        </label>
-        <label className="block">
-          <span className={labelClass}>Statut</span>
-          <select value={status} onChange={(e) => setStatus(e.target.value as LeadStatus)} className={inputClass}>
-            {Object.entries(STATUS_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block">
-          <span className={labelClass}>Assigné à</span>
-          <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className={inputClass}>
-            <option value="">— Non assigné —</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>{u.first_name} {u.last_name}</option>
-            ))}
-          </select>
-        </label>
-        <label className="block">
-          <span className={labelClass}>Score de qualification</span>
-          <input type="number" min={0} max={100} value={score} onChange={(e) => setScore(e.target.value)} className={inputClass} />
-        </label>
-      </div>
-
-      <label className="block">
-        <span className={labelClass}>Valeur estimée (FCFA)</span>
-        <input type="number" min={0} value={estimatedValue} onChange={(e) => setEstimatedValue(e.target.value)} className={inputClass} />
-      </label>
-
-      <label className="block">
-        <span className={labelClass}>Message</span>
-        <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} className={inputClass} />
-      </label>
-
-      <div className="flex items-center justify-between pt-2">
-        <Button type="button" variant="outline" onClick={onCancel} className="rounded-full px-4">Annuler</Button>
-        <Button type="submit" disabled={saving} className="rounded-full px-5">
-          {saving ? <Loader2 className="size-4 animate-spin" /> : lead ? "Enregistrer" : "Créer le lead"}
-        </Button>
-      </div>
-    </form>
   );
 }

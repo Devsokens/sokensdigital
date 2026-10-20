@@ -158,7 +158,7 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
 
   if (submitted) {
     return (
-      <section className="mx-auto max-w-6xl px-4 pt-32 pb-24 sm:px-6 sm:pt-40 lg:px-8">
+      <section className="mx-auto max-w-6xl px-4 pt-14 pb-24 sm:px-6 sm:pt-22 lg:px-8">
         <StepSuccess data={data} reference={reference} />
         {attachmentWarning && (
           <p className="mt-6 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
@@ -170,7 +170,7 @@ export function StartProjectWizard({ objectifs, solutions, delais, canaux }: Pro
   }
 
   return (
-    <section className="mx-auto max-w-6xl px-4 pt-32 pb-24 sm:px-6 sm:pt-40 lg:px-8">
+    <section className="mx-auto max-w-6xl px-4 pt-14 pb-24 sm:px-6 sm:pt-22 lg:px-8">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">

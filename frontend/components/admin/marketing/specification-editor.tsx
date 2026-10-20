@@ -17,6 +17,10 @@ import type { Specification, SpecType } from "@/lib/api/types";
 import { SpecificationDocumentPages, SPEC_PAGE_COUNT, type SpecificationDocumentData } from "@/components/admin/marketing/specification-document-pages";
 import { DocumentPreviewCards } from "@/components/admin/marketing/document-preview-cards";
 import { DOCUMENT_COLOR_SWATCHES } from "@/components/admin/marketing/document-print-primitives";
+import { ClientLeadSelector, type SelectedClientEntity } from "@/components/admin/marketing/client-lead-selector";
+import { SendDocumentModal } from "@/components/admin/marketing/send-document-modal";
+import { sendDocumentEmail } from "@/lib/api/marketing";
+import { Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const EMPTY_LINE: SpecificationLineInput = { interface_name: "", objective: "" };
@@ -46,6 +50,9 @@ export function SpecificationEditor({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState(0);
+  const [selectedEntity, setSelectedEntity] = useState<SelectedClientEntity | null>(null);
+  const [sendOpen, setSendOpen] = useState(false);
+  const [savedSpecForSend, setSavedSpecForSend] = useState<Specification | null>(null);
 
   useEffect(() => {
     getQuoteSettings().then(setSettings).catch(() => {});
@@ -89,7 +96,13 @@ export function SpecificationEditor({
     setSaving(true);
     try {
       const saved = spec ? await updateSpecification(spec.id, payload) : await createSpecification(payload);
-      router.push(`${basePath}?saved=${saved.id}`);
+      const action = (window as unknown as { __specAction?: string }).__specAction;
+      if (action === "saveAndSend") {
+        setSavedSpecForSend(saved);
+        setSendOpen(true);
+      } else {
+        router.push(`${basePath}?saved=${saved.id}`);
+      }
     } catch {
       setError(spec ? "Impossible de modifier ce cahier des charges." : "Impossible de créer le cahier des charges.");
     } finally {
@@ -157,10 +170,14 @@ export function SpecificationEditor({
                     <option value="TECHNIQUE">Technique</option>
                   </select>
                 </label>
-                <label className="block">
-                  <span className={labelClass}>Projet / Client</span>
-                  <input value={clientName} onChange={(e) => setClientName(e.target.value)} className={inputClass} />
-                </label>
+                <div>
+                  <ClientLeadSelector
+                    value={clientName}
+                    onChange={setClientName}
+                    onEntityChange={setSelectedEntity}
+                    label="Projet / Client ou Prospect"
+                  />
+                </div>
               </div>
 
               <label className="block">
@@ -239,13 +256,66 @@ export function SpecificationEditor({
                   Suivant
                 </Button>
               ) : (
-                <Button type="submit" disabled={saving} className="rounded-full px-5">
-                  {saving ? <Loader2 className="size-4 animate-spin" /> : spec ? "Enregistrer" : "Créer"}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="submit"
+                    disabled={saving}
+                    onClick={() => {
+                      (window as unknown as { __specAction?: string }).__specAction = "save";
+                    }}
+                    variant="outline"
+                    className="rounded-full px-4"
+                  >
+                    {saving ? <Loader2 className="size-4 animate-spin" /> : "Enregistrer"}
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={saving}
+                    onClick={() => {
+                      (window as unknown as { __specAction?: string }).__specAction = "saveAndSend";
+                    }}
+                    className="gap-1.5 rounded-full px-5 shadow-sm"
+                  >
+                    {saving ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Send className="size-3.5" />
+                    )}
+                    Enregistrer & Envoyer
+                  </Button>
+                </div>
               )}
             </div>
           </div>
         </form>
+
+        {savedSpecForSend && (
+          <SendDocumentModal
+            open={sendOpen}
+            onOpenChange={(isOpen) => {
+              setSendOpen(isOpen);
+              if (!isOpen) router.push(basePath);
+            }}
+            documentTitle={`Cahier des charges ${savedSpecForSend.spec_number}`}
+            documentNumber={savedSpecForSend.spec_number}
+            recipientName={savedSpecForSend.client_name}
+            suggestedEmails={
+              selectedEntity?.emails && selectedEntity.emails.length > 0
+                ? selectedEntity.emails
+                : []
+            }
+            onSend={async (emails, msg) => {
+              await sendDocumentEmail({
+                document_type: "CAHIER_DES_CHARGES",
+                document_id: savedSpecForSend.id,
+                document_number: savedSpecForSend.spec_number,
+                recipient_emails: emails,
+                recipient_name: savedSpecForSend.client_name,
+                message: msg,
+              });
+            }}
+          />
+        )}
 
         <div className="xl:sticky xl:top-6 xl:self-start">
           <p className={labelClass}>Aperçu</p>

@@ -14,10 +14,14 @@ import {
   type QuoteInput,
   type QuoteLineInput,
 } from "@/lib/api/marketing";
-import type { Quote, QuoteSettings, QuotePaymentTerm } from "@/lib/api/types";
+import type { Quote, QuoteSettings, QuotePaymentTerm, Lead } from "@/lib/api/types";
 import { QuoteDocumentPages, QUOTE_PAGE_COUNT, type QuoteDocumentData } from "@/components/admin/marketing/quote-document-pages";
 import { DocumentPreviewCards } from "@/components/admin/marketing/document-preview-cards";
 import { DOCUMENT_COLOR_SWATCHES } from "@/components/admin/marketing/document-print-primitives";
+import { ClientLeadSelector, type SelectedClientEntity } from "@/components/admin/marketing/client-lead-selector";
+import { SendDocumentModal } from "@/components/admin/marketing/send-document-modal";
+import { sendQuote } from "@/lib/api/marketing";
+import { Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const EMPTY_LINE: QuoteLineInput = { service_title: "", description: "", quantity: "1", unit_price: "0", amount_label: "" };
@@ -51,6 +55,9 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
   const [settings, setSettings] = useState<QuoteSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [selectedEntity, setSelectedEntity] = useState<SelectedClientEntity | null>(null);
+  const [sendOpen, setSendOpen] = useState(false);
+  const [savedQuoteForSend, setSavedQuoteForSend] = useState<Quote | null>(null);
   const [step, setStep] = useState(0);
 
   useEffect(() => {
@@ -118,7 +125,13 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
     setSaving(true);
     try {
       const saved = quote ? await updateQuote(quote.id, payload) : await createQuote(payload);
-      router.push(`${basePath}?saved=${saved.id}`);
+      const action = (window as unknown as { __quoteAction?: string }).__quoteAction;
+      if (action === "saveAndSend") {
+        setSavedQuoteForSend(saved);
+        setSendOpen(true);
+      } else {
+        router.push(`${basePath}?saved=${saved.id}`);
+      }
     } catch {
       setError(quote ? "Impossible de modifier ce devis." : "Impossible de créer le devis.");
     } finally {
@@ -187,11 +200,12 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
 
           {step === 0 && (
             <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className={labelClass}>Client</span>
-                  <input value={clientName} onChange={(e) => setClientName(e.target.value)} className={inputClass} />
-                </label>
+              <div className="grid grid-cols-2 gap-3 items-start">
+                <ClientLeadSelector
+                  value={clientName}
+                  onChange={setClientName}
+                  onEntityChange={setSelectedEntity}
+                />
                 <label className="block">
                   <span className={labelClass}>Date d&apos;expiration</span>
                   <input type="date" value={expiryDate ?? ""} onChange={(e) => setExpiryDate(e.target.value)} className={inputClass} />
@@ -364,13 +378,65 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
                   Suivant
                 </Button>
               ) : (
-                <Button type="submit" disabled={saving} className="rounded-full px-5">
-                  {saving ? <Loader2 className="size-4 animate-spin" /> : quote ? "Enregistrer" : "Créer le devis"}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="submit"
+                    disabled={saving}
+                    onClick={() => {
+                      (window as unknown as { __quoteAction?: string }).__quoteAction = "save";
+                    }}
+                    variant="outline"
+                    className="rounded-full px-4"
+                  >
+                    {saving ? <Loader2 className="size-4 animate-spin" /> : "Enregistrer"}
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={saving}
+                    onClick={() => {
+                      (window as unknown as { __quoteAction?: string }).__quoteAction = "saveAndSend";
+                    }}
+                    className="gap-1.5 rounded-full px-5 shadow-sm"
+                  >
+                    {saving ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Send className="size-3.5" />
+                    )}
+                    Enregistrer & Envoyer
+                  </Button>
+                </div>
               )}
             </div>
           </div>
         </form>
+
+        {savedQuoteForSend && (
+          <SendDocumentModal
+            open={sendOpen}
+            onOpenChange={(isOpen) => {
+              setSendOpen(isOpen);
+              if (!isOpen) router.push(basePath);
+            }}
+            documentTitle={`Devis ${savedQuoteForSend.quote_number}`}
+            documentNumber={savedQuoteForSend.quote_number}
+            recipientName={savedQuoteForSend.client_name}
+            suggestedEmails={
+              selectedEntity?.emails && selectedEntity.emails.length > 0
+                ? selectedEntity.emails
+                : typeof savedQuoteForSend.lead === "object" && (savedQuoteForSend.lead as Lead)?.email
+                ? [(savedQuoteForSend.lead as Lead).email]
+                : []
+            }
+            onSend={async (emails, msg) => {
+              await sendQuote(savedQuoteForSend.id, {
+                recipient_emails: emails,
+                message: msg,
+              });
+              router.push(`${basePath}?sent=${savedQuoteForSend.id}`);
+            }}
+          />
+        )}
 
         <div className="xl:sticky xl:top-6 xl:self-start">
           <p className={labelClass}>Aperçu</p>

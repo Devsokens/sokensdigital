@@ -26,7 +26,9 @@ export function findSection(sections: PageSection[], key: string) {
 
 const DEFAULT_SITE_SETTINGS: SiteSettings = {
   logo_url: "",
-  tagline: "Architectes de solutions numériques haute performance. Sécurité. Précision. Innovation.",
+  tagline: "Construisons votre avenir digital. Sites, applications et logiciels sur mesure, depuis Libreville.",
+  contact_email: "contact@sokensdigital.com",
+  contact_phone: "060 00 13 33",
   services_links: [
     { label: "Logiciel client" },
     { label: "App Web & Mobile" },
@@ -35,15 +37,14 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
   ],
   legal_links: [
     { label: "Politique de confidentialité", href: "/confidentialite" },
-    { label: "Condition d'utilisation", href: "/cgu" },
-    { label: "CGV", href: "/cgv" },
-    { label: "Mentions légales", href: "/mentions-legales" },
+    { label: "Conditions d'utilisation", href: "/cgu" },
+    { label: "Suivre un projet", href: "/suivi-projet" },
   ],
   social_links: [
     { icon: "globe", url: "#" },
     { icon: "at-sign", url: "mailto:contact@sokensdigital.com" },
   ],
-  copyright_text: "© 2024 Soken's Digital. Sécurité. Précision. Haute Performance.",
+  copyright_text: "Soken's Digital. Tous droits réservés.",
   cgu_text: "",
   cgv_text: "",
   mentions_legales_text: "",
@@ -59,7 +60,9 @@ export async function getSiteSettings(): Promise<SiteSettings> {
       next: { revalidate: 60 },
     });
     if (!response.ok) return DEFAULT_SITE_SETTINGS;
-    return (await response.json()) as SiteSettings;
+    // Fusion : un champ absent de la réponse (backend pas encore migré)
+    // garde sa valeur par défaut.
+    return { ...DEFAULT_SITE_SETTINGS, ...((await response.json()) as Partial<SiteSettings>) };
   } catch {
     return DEFAULT_SITE_SETTINGS;
   }

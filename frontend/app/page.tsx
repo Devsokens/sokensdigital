@@ -1,17 +1,11 @@
 import type { Metadata } from "next";
-import { SiteHeader } from "@/components/site-header";
-import { SiteFooter } from "@/components/site-footer";
-import { Hero } from "@/components/sections/hero";
-import { Services } from "@/components/sections/services";
-import { RecentProjects } from "@/components/sections/recent-projects";
-import { Testimonials } from "@/components/sections/testimonials";
-import { Team } from "@/components/sections/team";
-import { PartnerLogos } from "@/components/sections/partner-logos";
-import { BlogInsights } from "@/components/sections/blog-insights";
-import { Cta } from "@/components/sections/cta";
-import { getPageSections, findSection } from "@/lib/api/public";
-import { getShowcaseProjects } from "@/lib/projects/public";
+import { VitrineShell } from "@/components/vitrine/vitrine-shell";
+import { HomeView } from "@/components/vitrine/home/home-view";
+import { FALLBACK_POST, toVitrinePost } from "@/components/vitrine/blog-data";
+import { contactInfo } from "@/components/vitrine/ui";
+import { getPageSections, getSiteSettings } from "@/lib/api/public";
 import { getBlogPosts } from "@/lib/blog/public";
+import { getShowcaseProjects } from "@/lib/projects/public";
 import { pageMetadata } from "@/lib/seo/metadata";
 
 export const metadata: Metadata = pageMetadata({
@@ -22,26 +16,19 @@ export const metadata: Metadata = pageMetadata({
 });
 
 export default async function Home() {
-  const [sections, homepageProjects, blogPosts] = await Promise.all([
+  const [sections, homepageProjects, allProjects, posts, settings] = await Promise.all([
     getPageSections("ACCUEIL"),
     getShowcaseProjects({ homepage: true }),
+    getShowcaseProjects(),
     getBlogPosts(),
+    getSiteSettings(),
   ]);
+  // Projets cochés « accueil », sinon les deux premiers projets vitrine.
+  const projects = homepageProjects.length ? homepageProjects : allProjects.slice(0, 2);
 
   return (
-    <>
-      <SiteHeader />
-      <main className="flex-1">
-        <Hero section={findSection(sections, "hero")} />
-        <Services section={findSection(sections, "services")} />
-        <RecentProjects section={findSection(sections, "recent_projects")} projects={homepageProjects} />
-        <Testimonials section={findSection(sections, "testimonials")} />
-        <Team section={findSection(sections, "team")} />
-        <BlogInsights section={findSection(sections, "blog_insights")} posts={blogPosts} />
-        <Cta section={findSection(sections, "cta")} />
-        <PartnerLogos section={findSection(sections, "partner_logos")} />
-      </main>
-      <SiteFooter />
-    </>
+    <VitrineShell page="accueil">
+      <HomeView sections={sections} projects={projects} post={posts[0] ? toVitrinePost(posts[0]) : FALLBACK_POST} phone={contactInfo(settings).phone} />
+    </VitrineShell>
   );
 }

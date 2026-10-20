@@ -3,7 +3,7 @@ import { QuoteList } from "@/components/admin/marketing/quote-list";
 
 export default function DevisPage() {
   return (
-    <RequireRole roles={["SUPER_ADMIN", "COMMERCIAL", "CHEF_DE_PROJET"]}>
+    <RequireRole roles={["SUPER_ADMIN", "COMMERCIAL", "CHEF_DE_PROJET", "RESPONSABLE_MARKETING"]}>
       <QuoteList />
     </RequireRole>
   );

@@ -31,4 +31,8 @@ export type Project = {
   stats: ProjectStat[];
   solution: string;
   solutionPoints: string[];
+  /** Versions courtes pour les cartes du site vitrine (vides : début du texte complet). */
+  summary?: string;
+  challengeSummary?: string;
+  solutionSummary?: string;
 };

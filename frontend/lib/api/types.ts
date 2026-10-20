@@ -198,6 +198,24 @@ export interface EmployeeProfile {
 export type LeadSource = "FORMULAIRE_CONTACT" | "FORMULAIRE_DEVIS" | "APPEL_ENTRANT" | "SITE_WEB" | "EVENEMENT";
 export type LeadStatus = "NOUVEAU" | "QUALIFIE" | "PROPOSITION_EN_COURS" | "PERDU" | "CONVERTI";
 
+export interface LeadContactPerson {
+  id?: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  role: string; // Ex: Directeur Marketing, Acheteur
+  is_primary?: boolean;
+}
+
+export interface LeadDocumentItem {
+  id?: string;
+  name: string;
+  url: string;
+  size?: number;
+  uploaded_at?: string;
+}
+
 export interface Lead {
   id: string;
   first_name: string;
@@ -211,6 +229,10 @@ export interface Lead {
   assigned_to: UserBrief | null;
   qualification_score: number;
   estimated_value: string | null;
+  contacts?: LeadContactPerson[];
+  documents?: LeadDocumentItem[];
+  attachment_url?: string | null;
+  attachment_name?: string | null;
   created_at: string;
 }
 
@@ -233,7 +255,7 @@ export interface BlogPost {
   created_at?: string;
 }
 
-export type SitePage = "ACCUEIL" | "EXPERTISE" | "SUIVI_PROJET" | "DEMARRER_PROJET";
+export type SitePage = "ACCUEIL" | "EXPERTISE" | "PROJETS" | "BLOG" | "CONTACT" | "SUIVI_PROJET" | "DEMARRER_PROJET";
 
 export type SectionKey =
   | "hero"
@@ -249,6 +271,13 @@ export type SectionKey =
   | "process_timeline"
   | "tech_stack"
   | "featured_case_study"
+  | "expertise_cta"
+  | "projects_hero"
+  | "projects_cta"
+  | "blog_hero"
+  | "blog_cta"
+  | "contact_hero"
+  | "contact_form"
   | "tracking_hero"
   | "tracking_features"
   | "start_project_objectifs"
@@ -270,6 +299,9 @@ export interface PageSection {
   cta_secondary_label: string;
   cta_secondary_link: string;
   items: Record<string, unknown>[];
+  /** Valeurs propres à une section (voir PageSection.SectionKey côté backend),
+   * ex. hero : { rotating_prefix, rotating_words }. */
+  extra: Record<string, unknown>;
   created_at: string;
 }
 
@@ -302,6 +334,8 @@ export interface SocialMediaCredentials {
 export interface SiteSettings {
   logo_url: string;
   tagline: string;
+  contact_email: string;
+  contact_phone: string;
   services_links: SiteServiceLink[];
   legal_links: SiteNavLink[];
   social_links: SiteSocialLink[];
@@ -350,6 +384,10 @@ export interface ShowcaseProject {
   stats: ShowcaseProjectStat[];
   solution: string;
   solution_points: string[];
+  /** Versions courtes pour les cartes du site vitrine. */
+  summary: string;
+  challenge_summary: string;
+  solution_summary: string;
   /** Admin-only. */
   created_at?: string;
 }
@@ -416,7 +454,7 @@ export interface PublicQuote {
 export interface Quote {
   id: string;
   quote_number: string;
-  lead: string | null;
+  lead: string | Lead | null;
   created_by: UserBrief | null;
   client_name: string;
   intro_message: string;
@@ -1175,3 +1213,75 @@ export interface PaymentInput {
   payment_method: PaymentMethod;
   notes?: string;
 }
+
+// -------------------------------------------------------------
+// MODULES OFFRES DE SERVICE & CONTRATS DE TRAVAIL
+// -------------------------------------------------------------
+
+export type ServiceProposalStatus = "BROUILLON" | "ENVOYE" | "ACCEPTE" | "REFUSE";
+
+export interface ServiceProposalItem {
+  id?: string;
+  title: string;
+  deliverables: string;
+  duration?: string;
+  price?: string;
+}
+
+export interface ServiceProposal {
+  id: string;
+  proposal_number: string;
+  client_name: string;
+  lead_id?: string | null;
+  client_id?: string | null;
+  title: string;
+  subject?: string;
+  intro_message?: string;
+  context_objectives?: string;
+  methodology?: string;
+  deliverables_summary?: string;
+  items: ServiceProposalItem[];
+  pricing_notes?: string;
+  terms_conditions?: string;
+  valid_until?: string;
+  document_color?: string;
+  status: ServiceProposalStatus;
+  sent_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type EmploymentContractType = "CDI" | "CDD" | "STAGE" | "PRESTATION_FREELANCE";
+export type EmploymentContractStatus = "BROUILLON" | "ACTIF" | "TERMINE" | "ENVOYE";
+
+export interface EmploymentContractClause {
+  id?: string;
+  title: string;
+  content: string;
+}
+
+export interface EmploymentContractDocument {
+  id: string;
+  contract_number: string;
+  employee_name: string;
+  employee_email?: string;
+  employee_phone?: string;
+  employee_address?: string;
+  contract_type: EmploymentContractType;
+  position: string;
+  department?: string;
+  start_date: string;
+  end_date?: string;
+  trial_period?: string;
+  monthly_salary: string;
+  benefits?: string;
+  working_hours?: string;
+  workplace?: string;
+  clauses: EmploymentContractClause[];
+  status: EmploymentContractStatus;
+  document_color?: string;
+  sent_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+

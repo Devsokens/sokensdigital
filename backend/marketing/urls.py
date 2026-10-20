@@ -34,6 +34,7 @@ from marketing.views import (
     SocialPostViewSet,
     SpecificationViewSet,
     VideoUploadView,
+    SendDocumentEmailView,
     marketing_dashboard,
 )
 
@@ -57,6 +58,7 @@ urlpatterns = [
     path('submitted-projects/', SubmittedProjectListView.as_view(), name='submitted-projects'),
     path('leads/<uuid:pk>/workflow/', LeadWorkflowActionView.as_view(), name='lead-workflow'),
     path('leads/<uuid:pk>/reject/', RejectLeadView.as_view(), name='lead-reject'),
+    path('documents/send-email/', SendDocumentEmailView.as_view(), name='send-document-email'),
 ] + router.urls
 
 public_urlpatterns = [

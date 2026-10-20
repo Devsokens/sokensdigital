@@ -31,7 +31,8 @@ function excerptFromHtml(html: string): string {
   return text.length > EXCERPT_LENGTH ? `${text.slice(0, EXCERPT_LENGTH).trimEnd()}…` : text;
 }
 
-function toPost(p: ApiBlogPost): BlogPost {
+/** Forme API → forme du site (partagée avec l'éditeur visuel de l'admin). */
+export function toPost(p: ApiBlogPost): BlogPost {
   return {
     slug: p.slug,
     title: p.title,

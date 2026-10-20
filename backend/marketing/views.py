@@ -1,6 +1,7 @@
 import base64
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import Count, F, Max, Sum
@@ -861,6 +862,37 @@ class QuoteViewSet(viewsets.ModelViewSet):
         quote.status = Quote.Status.ENVOYE
         quote.sent_at = timezone.now()
         quote.save(update_fields=['status', 'sent_at'])
+
+        # Envoi automatique par mail aux adresses rattachées
+        recipient_emails = request.data.get('recipient_emails') or []
+        if isinstance(recipient_emails, str):
+            recipient_emails = [e.strip() for e in recipient_emails.split(',') if e.strip()]
+        if not recipient_emails and quote.lead:
+            if quote.lead.email:
+                recipient_emails.append(quote.lead.email)
+            for c in (quote.lead.contacts or []):
+                if isinstance(c, dict) and c.get('email') and c.get('email') not in recipient_emails:
+                    recipient_emails.append(c['email'])
+
+        tracking_url = f'{settings.PUBLIC_SITE_URL}/devis/{quote.tracking_token}/'
+        custom_message = request.data.get('message') or (
+            f"Veuillez trouver ci-joint les détails de notre proposition pour le devis {quote.quote_number}."
+        )
+
+        from core import mailer
+        for dest in recipient_emails:
+            body = (
+                f"Bonjour {quote.client_name or ''},\n\n"
+                f"{custom_message}\n\n"
+                f"Montant Total TTC : {quote.total_ttc} FCFA\n"
+                f"Vous pouvez consulter et valider votre devis en ligne sur ce lien :\n{tracking_url}\n\n"
+                "Cordialement,\nL'équipe Soken's Digital"
+            )
+            try:
+                mailer.send_mail(dest, f"Devis {quote.quote_number} — Soken's Digital", body)
+            except Exception:
+                pass
+
         return Response(QuoteSerializer(quote).data)
 
     @extend_schema(
@@ -1215,3 +1247,45 @@ def marketing_dashboard(request):
         'social_posts_by_status': social_by_status,
         'published_social_posts_by_platform': social_by_platform,
     })
+
+
+class SendDocumentEmailView(APIView):
+    """Envoi par e-mail d'un document aux différents contacts du client."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        recipient_emails = request.data.get('recipient_emails') or []
+        if isinstance(recipient_emails, str):
+            recipient_emails = [e.strip() for e in recipient_emails.split(',') if e.strip()]
+
+        subject = request.data.get('subject') or "Document transmis par Soken's Digital"
+        message = request.data.get('message') or "Veuillez trouver les informations relatives à votre document."
+        document_title = request.data.get('document_title') or "Document"
+        document_url = request.data.get('document_url') or ""
+
+        if not recipient_emails:
+            return Response({'detail': 'Au moins une adresse e-mail est requise.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from core import mailer
+        sent_count = 0
+        for email in recipient_emails:
+            body = (
+                f"Bonjour,\n\n"
+                f"{message}\n\n"
+            )
+            if document_url:
+                body += f"Lien d'accès au document ({document_title}) :\n{document_url}\n\n"
+            body += "Cordialement,\nL'équipe Soken's Digital"
+
+            try:
+                mailer.send_mail(email, subject, body)
+                sent_count += 1
+            except Exception:
+                pass
+
+        return Response({
+            'status': 'sent',
+            'sent_count': sent_count,
+            'recipients': recipient_emails,
+        })
+

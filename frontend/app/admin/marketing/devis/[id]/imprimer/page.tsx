@@ -11,7 +11,7 @@ export default async function DevisImprimerPage({
   const { id } = await params;
   const { embed } = await searchParams;
   return (
-    <RequireRole roles={["SUPER_ADMIN", "COMMERCIAL", "CHEF_DE_PROJET"]}>
+    <RequireRole roles={["SUPER_ADMIN", "COMMERCIAL", "CHEF_DE_PROJET", "RESPONSABLE_MARKETING"]}>
       <QuotePrintView id={id} hideToolbar={embed === "1"} />
     </RequireRole>
   );

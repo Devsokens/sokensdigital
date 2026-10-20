@@ -9,6 +9,8 @@ import { SITE, SITE_URL } from "@/lib/seo/site";
 import { organizationSchema, websiteSchema } from "@/lib/seo/structured-data";
 import { ADMIN_THEME_BOOTSTRAP } from "@/lib/admin/admin-theme";
 import "./globals.css";
+// Classes sd-* et palette du site vitrine (préfixées : aucun effet sur l'admin).
+import "@/components/vitrine/vitrine.css";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-sans",

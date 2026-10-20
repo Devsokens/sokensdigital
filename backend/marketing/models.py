@@ -142,6 +142,11 @@ class Lead(LoggedModel):
     # (SubmittedProjectListView) sans ajouter un état terminal en doublon.
     rejection_reason = models.TextField(blank=True, default='')
 
+    # Contacts rattachés au lead (liste de dicts: {first_name, last_name, email, phone, role})
+    contacts = models.JSONField(default=list, blank=True)
+    # Documents joints au lead (liste de dicts: {id, name, url, size, uploaded_at})
+    documents = models.JSONField(default=list, blank=True)
+
     class Meta(LoggedModel.Meta):
         ordering = ['-created_at']
         indexes = LoggedModel.Meta.indexes + [
@@ -557,47 +562,78 @@ class PageSection(LoggedModel):
 
     `items` is a flexible JSON list whose shape depends on `section_key`
     (documented per-key in SectionKey below) — same "structured blocks, not
-    freeform HTML" reasoning as BlogPost.content."""
+    freeform HTML" reasoning as BlogPost.content. `extra` holds the few
+    single values a section needs beyond the common fields (documented per
+    key too).
+
+    Titles: the part written between *asterisks* is shown in the animated
+    gradient on the public site (e.g. "Un projet en tête ? *Parlons-en.*")."""
 
     class Page(models.TextChoices):
         ACCUEIL = 'ACCUEIL', 'Accueil'
         EXPERTISE = 'EXPERTISE', 'Expertise'
+        PROJETS = 'PROJETS', 'Projets'
+        BLOG = 'BLOG', 'Blog'
+        CONTACT = 'CONTACT', 'Contact'
         SUIVI_PROJET = 'SUIVI_PROJET', 'Suivi de projet'
         DEMARRER_PROJET = 'DEMARRER_PROJET', 'Démarrer un projet'
 
     class SectionKey(models.TextChoices):
         # --- Accueil ---
-        # items: [{value, label}] — the 3 stat callouts under the hero.
+        # kicker: badge above the title. items: [{value, label}] — stats under
+        # the hero, value like "10+" or "2 ans" (the number counts up).
+        # extra: {rotating_prefix, rotating_words: [str]} — "Nous créons votre
+        # site web / application mobile / …" line.
         HERO = 'hero', 'Hero'
-        # items: [{icon, title, description}]
+        # items: [{title, description, points: [str], visual}] — visual picks
+        # the animated illustration: "web" | "mobile" | "logiciel" | "audit".
         SERVICES = 'services', 'Services'
-        # items unused — the carousel content itself is still driven by
-        # lib/projects/projects.ts on the frontend until the public
-        # "Projets vitrine" module exists; only title/subtitle are editable.
+        # items unused — the projects shown are the ShowcaseProject rows with
+        # show_on_homepage=True; kicker/title/cta only.
         RECENT_PROJECTS = 'recent_projects', 'Projets récents'
-        # items: [{quote, name, role}]
+        # items: [{quote, name, role}] — not shown by the current design.
         TESTIMONIALS = 'testimonials', 'Témoignages'
         # items: [{name, role, bio, photo_url}]
         TEAM = 'team', 'Équipe'
-        # items: [{name, logo_url}]
+        # title: "Ils nous font confiance" strip. items: [{name, logo_url}]
         PARTNER_LOGOS = 'partner_logos', 'Logos partenaires'
-        # items unused — posts themselves still come from lib/blog/posts.ts
-        # until the public blog is wired to BlogPost; only title/cta editable.
+        # items unused — the post shown is the latest published BlogPost.
         BLOG_INSIGHTS = 'blog_insights', 'Aperçu blog'
-        # items unused — title/subtitle/cta only.
+        # items unused — title/subtitle/cta only (the second button is the
+        # phone number from SiteSettings).
         CTA = 'cta', 'CTA final'
         # --- Expertise ---
-        # items: [{label, sublabel}] — single entry, the visual panel caption.
+        # title/subtitle/cta/cta_secondary. items: legacy visual panel, unused.
         EXPERTISE_HERO = 'expertise_hero', 'Hero (Expertise)'
-        # items: [{icon, title, description}]
+        # items: [{icon, short, title, description}] — "Nos engagements"; the
+        # first 3 are drawn on the animated diagram, `short` is their caption.
         STRATEGIC_ADVANTAGES = 'strategic_advantages', 'Avantages stratégiques'
-        # items: [{phase, title, description}]
+        # items: [{phase, title, description}] — "Notre méthode".
         PROCESS_TIMELINE = 'process_timeline', 'Processus'
-        # items: [{name, label}]
+        # items: [{name, label}] — label is the category ("Serveur"); names
+        # like "Python · Django" are split into separate orbit badges.
         TECH_STACK = 'tech_stack', 'Stack technique'
-        # items unused — kicker/cta_label only. title/subtitle/image/link
-        # come from whichever ShowcaseProject has featured=True instead.
+        # Not shown by the current design.
         FEATURED_CASE_STUDY = 'featured_case_study', 'Étude de cas vedette'
+        # items unused — title/subtitle/cta only.
+        EXPERTISE_CTA = 'expertise_cta', 'CTA (Expertise)'
+        # --- Projets --- (the case studies themselves are ShowcaseProject rows)
+        # items unused — title/subtitle only.
+        PROJECTS_HERO = 'projects_hero', 'Hero (Projets)'
+        # items unused — "Votre projet sera le prochain" card: title/subtitle/cta.
+        PROJECTS_CTA = 'projects_cta', 'CTA (Projets)'
+        # --- Blog --- (articles are BlogPost rows)
+        # items unused — title/subtitle only.
+        BLOG_HERO = 'blog_hero', 'Hero (Blog)'
+        # items unused — title/subtitle/cta only.
+        BLOG_CTA = 'blog_cta', 'CTA (Blog)'
+        # --- Contact --- (email/phone come from SiteSettings)
+        # title/subtitle. extra: {team_title, team_subtitle} — the line next to
+        # the team avatars.
+        CONTACT_HERO = 'contact_hero', 'Hero (Contact)'
+        # title/subtitle/cta_label (submit button). items: [{label}] — the
+        # "Votre besoin" choices.
+        CONTACT_FORM = 'contact_form', 'Formulaire (Contact)'
         # --- Suivi de projet ---
         # items unused — title/subtitle only (the search form itself isn't editable content).
         TRACKING_HERO = 'tracking_hero', 'Hero (Suivi de projet)'
@@ -628,6 +664,7 @@ class PageSection(LoggedModel):
     cta_secondary_label = models.CharField(max_length=100, blank=True)
     cta_secondary_link = models.CharField(max_length=255, blank=True)
     items = models.JSONField(default=list, blank=True)
+    extra = models.JSONField(default=dict, blank=True)
 
     class Meta(LoggedModel.Meta):
         ordering = ['page', 'order']
@@ -681,6 +718,13 @@ class ShowcaseProject(LoggedModel):
     stats = models.JSONField(default=list, blank=True)
     solution = models.TextField(blank=True)
     solution_points = models.JSONField(default=list, blank=True)
+    # Versions courtes pour les cartes du site vitrine (accueil, page
+    # Projets) — les textes complets ci-dessus restent ceux de la fiche
+    # détaillée /projects/<slug>. Vides : la carte reprend le début du texte
+    # complet correspondant.
+    summary = models.TextField(blank=True)
+    challenge_summary = models.TextField(blank=True)
+    solution_summary = models.TextField(blank=True)
 
     class Meta(LoggedModel.Meta):
         ordering = ['order', '-created_at']
@@ -716,6 +760,10 @@ class SiteSettings(LoggedModel):
 
     logo_url = models.URLField(blank=True)
     tagline = models.TextField(blank=True)
+    # Coordonnées affichées sur le site (pied de page, page Contact, bouton
+    # téléphone de l'en-tête et des appels à l'action).
+    contact_email = models.EmailField(blank=True)
+    contact_phone = models.CharField(max_length=50, blank=True)
     services_links = models.JSONField(default=list, blank=True)
     legal_links = models.JSONField(default=list, blank=True)
     social_links = models.JSONField(default=list, blank=True)

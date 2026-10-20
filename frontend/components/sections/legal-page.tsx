@@ -19,7 +19,7 @@ export function LegalPage({
     <>
       <SiteHeader />
       <main className="flex-1">
-        <div className="mx-auto max-w-6xl px-4 pt-32 pb-20 sm:px-6 sm:pt-40 sm:pb-24 lg:px-8">
+        <div className="mx-auto max-w-6xl px-4 pt-14 pb-20 sm:px-6 sm:pt-22 sm:pb-24 lg:px-8">
           <span className="text-xs font-semibold tracking-[0.2em] text-primary uppercase">{kicker}</span>
           <h1 className="mt-3 text-3xl font-semibold text-foreground sm:text-4xl">{title}</h1>
 

@@ -86,6 +86,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
       // département de premier niveau.
       { label: "Tableau de bord", shortLabel: "Dashboard", href: "/admin/rh/dashboard", icon: LayoutDashboard, moduleKey: "rh-dashboard", group: "RH" },
       { label: "Employés", href: "/admin/rh", icon: Users, moduleKey: "employes", group: "RH" },
+      { label: "Contrats de travail", shortLabel: "Contrats", href: "/admin/rh/contrats-travail", icon: ScrollText, moduleKey: "employes", group: "RH" },
       { label: "Départements", href: "/admin/rh/departements", icon: Building2, moduleKey: "departements", group: "RH" },
     ],
   },
@@ -98,6 +99,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
       { label: "Plan Éditorial", shortLabel: "Éditorial", href: "/admin/marketing/plan-editorial", icon: CalendarClock, moduleKey: "plan-editorial", comingSoon: true },
       { label: "Tunnel commercial", shortLabel: "Tunnel", href: "/admin/marketing/leads", icon: Target, moduleKey: "leads" },
       { label: "Devis", href: "/admin/marketing/devis", icon: FileText, moduleKey: "devis" },
+      { label: "Offres de service", shortLabel: "Offres", href: "/admin/marketing/offres-de-service", icon: FileText, moduleKey: "devis" },
       { label: "Analytique web", shortLabel: "Analytique", href: "/admin/marketing/analytique", icon: Activity, moduleKey: "analytique-marketing" },
       { label: "Cahier des charges", shortLabel: "Cahier", href: "/admin/marketing/cahier-des-charges", icon: ClipboardList, moduleKey: "cahier-des-charges" },
     ],

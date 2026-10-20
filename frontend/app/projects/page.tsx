@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import { SiteHeader } from "@/components/site-header";
-import { SiteFooter } from "@/components/site-footer";
-import { ProjectExplorer } from "@/components/projects/project-explorer";
-import { ProjectsCta } from "@/components/projects/projects-cta";
+import { VitrineShell } from "@/components/vitrine/vitrine-shell";
+import { ProjectsView } from "@/components/vitrine/projects-page";
+import { getPageSections } from "@/lib/api/public";
 import { getShowcaseProjects } from "@/lib/projects/public";
 import { pageMetadata } from "@/lib/seo/metadata";
 
@@ -15,16 +14,10 @@ export const metadata: Metadata = pageMetadata({
 });
 
 export default async function ProjectsIndexPage() {
-  const projects = await getShowcaseProjects();
-
+  const [sections, projects] = await Promise.all([getPageSections("PROJETS"), getShowcaseProjects()]);
   return (
-    <>
-      <SiteHeader />
-      <main className="flex-1">
-        <ProjectExplorer projects={projects} />
-        <ProjectsCta />
-      </main>
-      <SiteFooter />
-    </>
+    <VitrineShell page="projets">
+      <ProjectsView sections={sections} projects={projects} />
+    </VitrineShell>
   );
 }

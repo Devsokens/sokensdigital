@@ -44,8 +44,38 @@ class LeadSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'first_name', 'last_name', 'company_name', 'email', 'phone',
             'source', 'message', 'status', 'assigned_to', 'assigned_to_id',
-            'qualification_score', 'estimated_value', 'created_at',
+            'qualification_score', 'estimated_value', 'contacts', 'documents', 'created_at',
         ]
+
+    def create(self, validated_data):
+        contacts = validated_data.get('contacts') or []
+        if contacts and isinstance(contacts, list) and len(contacts) > 0:
+            first = contacts[0]
+            if isinstance(first, dict):
+                if not validated_data.get('first_name'):
+                    validated_data['first_name'] = first.get('first_name', '')
+                if not validated_data.get('last_name'):
+                    validated_data['last_name'] = first.get('last_name', '')
+                if not validated_data.get('email'):
+                    validated_data['email'] = first.get('email', '')
+                if not validated_data.get('phone'):
+                    validated_data['phone'] = first.get('phone', '')
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        contacts = validated_data.get('contacts')
+        if contacts is not None and isinstance(contacts, list) and len(contacts) > 0:
+            first = contacts[0]
+            if isinstance(first, dict):
+                if 'first_name' not in validated_data and first.get('first_name'):
+                    validated_data['first_name'] = first.get('first_name')
+                if 'last_name' not in validated_data and first.get('last_name'):
+                    validated_data['last_name'] = first.get('last_name')
+                if 'email' not in validated_data and first.get('email'):
+                    validated_data['email'] = first.get('email')
+                if 'phone' not in validated_data and first.get('phone'):
+                    validated_data['phone'] = first.get('phone')
+        return super().update(instance, validated_data)
 
     def validate_qualification_score(self, value):
         if not (0 <= value <= 100):
@@ -242,7 +272,7 @@ class PageSectionSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'page', 'section_key', 'order', 'is_active', 'kicker', 'title',
             'subtitle', 'cta_label', 'cta_link', 'cta_secondary_label',
-            'cta_secondary_link', 'items', 'created_at',
+            'cta_secondary_link', 'items', 'extra', 'created_at',
         ]
         read_only_fields = ['page', 'section_key', 'order']
 
@@ -255,7 +285,7 @@ class PageSectionPublicSerializer(serializers.ModelSerializer):
         model = PageSection
         fields = [
             'section_key', 'kicker', 'title', 'subtitle', 'cta_label', 'cta_link',
-            'cta_secondary_label', 'cta_secondary_link', 'items',
+            'cta_secondary_label', 'cta_secondary_link', 'items', 'extra',
         ]
 
 
@@ -267,7 +297,7 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = SiteSettings
         fields = [
-            'logo_url', 'tagline', 'services_links',
+            'logo_url', 'tagline', 'contact_email', 'contact_phone', 'services_links',
             'legal_links', 'social_links', 'copyright_text',
             'cgu_text', 'cgv_text', 'mentions_legales_text', 'politique_confidentialite_text',
         ]
@@ -323,7 +353,7 @@ class ShowcaseProjectSerializer(serializers.ModelSerializer):
             'order', 'is_active', 'status_tag', 'tag', 'title', 'description', 'visual_icon',
             'project_url', 'video_src', 'images', 'scene_variants', 'client', 'technologies',
             'timeline', 'lead_name', 'lead_role', 'challenge', 'stats', 'solution',
-            'solution_points', 'created_at',
+            'solution_points', 'summary', 'challenge_summary', 'solution_summary', 'created_at',
         ]
 
 
@@ -337,7 +367,7 @@ class ShowcaseProjectPublicSerializer(serializers.ModelSerializer):
             'slug', 'category', 'sector', 'type', 'featured', 'status_tag', 'tag', 'title',
             'description', 'visual_icon', 'project_url', 'video_src', 'images', 'scene_variants',
             'client', 'technologies', 'timeline', 'lead_name', 'lead_role', 'challenge', 'stats',
-            'solution', 'solution_points',
+            'solution', 'solution_points', 'summary', 'challenge_summary', 'solution_summary',
         ]
 
 

@@ -2,6 +2,7 @@
 
 import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/ui/tabs";
 import { PageSectionEditor } from "@/components/admin/marketing/page-section-editor";
+import { VitrineEditor } from "@/components/admin/marketing/vitrine-editor";
 import { BlogPostList } from "@/components/admin/marketing/blog-post-list";
 import { CommentModeration } from "@/components/admin/marketing/comment-moderation";
 import { ShowcaseProjectList } from "@/components/admin/marketing/showcase-project-list";
@@ -13,7 +14,7 @@ export function ContentManagement() {
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-neutral-900">Gestion de contenu</h1>
         <p className="text-sm text-neutral-500">
-          Tout ce qui s&apos;affiche sur le site public, page par page — textes, images, listes.
+          Le site tel qu&apos;il apparaît en ligne : cliquez sur n&apos;importe quel texte, bouton ou image pour le modifier.
         </p>
       </div>
 
@@ -23,27 +24,42 @@ export function ContentManagement() {
           <TabsTab value="expertise">Expertise</TabsTab>
           <TabsTab value="projets">Projets</TabsTab>
           <TabsTab value="blog">Blog</TabsTab>
+          <TabsTab value="contact">Contact</TabsTab>
           <TabsTab value="commentaires">Commentaires</TabsTab>
           <TabsTab value="demarrer">Démarrer un projet</TabsTab>
           <TabsTab value="suivi">Suivi de projet</TabsTab>
-          <TabsTab value="header-footer">Header & Footer</TabsTab>
+          <TabsTab value="header-footer">Paramètres du site</TabsTab>
           <TabsIndicator />
         </TabsList>
 
         <TabsPanel value="accueil" className="pt-6">
-          <PageSectionEditor page="ACCUEIL" />
+          <VitrineEditor page="ACCUEIL" />
         </TabsPanel>
 
         <TabsPanel value="expertise" className="pt-6">
-          <PageSectionEditor page="EXPERTISE" />
+          <VitrineEditor page="EXPERTISE" />
         </TabsPanel>
 
-        <TabsPanel value="projets" className="pt-6">
-          <ShowcaseProjectList />
+        <TabsPanel value="projets" className="space-y-10 pt-6">
+          <VitrineEditor page="PROJETS" />
+          <div>
+            <h2 className="mb-1 text-lg font-semibold text-neutral-900">Projets vitrine</h2>
+            <p className="mb-4 text-sm text-neutral-500">Les études de cas affichées sur la page Projets et sur l&apos;accueil (cochez « Accueil »).</p>
+            <ShowcaseProjectList />
+          </div>
         </TabsPanel>
 
-        <TabsPanel value="blog" className="pt-6">
-          <BlogPostList />
+        <TabsPanel value="blog" className="space-y-10 pt-6">
+          <VitrineEditor page="BLOG" />
+          <div>
+            <h2 className="mb-1 text-lg font-semibold text-neutral-900">Articles</h2>
+            <p className="mb-4 text-sm text-neutral-500">Le plus récent est mis à la une sur la page Blog et sur l&apos;accueil.</p>
+            <BlogPostList />
+          </div>
+        </TabsPanel>
+
+        <TabsPanel value="contact" className="pt-6">
+          <VitrineEditor page="CONTACT" />
         </TabsPanel>
 
         <TabsPanel value="commentaires" className="pt-6">

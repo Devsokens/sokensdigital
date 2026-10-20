@@ -4,7 +4,8 @@ import type { SceneVariant } from "@/components/projects/mockup-scenes";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
-function toProject(p: ApiShowcaseProject): Project {
+/** Forme API → forme du site (partagée avec l'éditeur visuel de l'admin). */
+export function toProject(p: ApiShowcaseProject): Project {
   return {
     slug: p.slug,
     category: p.category,
@@ -29,6 +30,9 @@ function toProject(p: ApiShowcaseProject): Project {
     stats: p.stats,
     solution: p.solution,
     solutionPoints: p.solution_points,
+    summary: p.summary ?? "",
+    challengeSummary: p.challenge_summary ?? "",
+    solutionSummary: p.solution_summary ?? "",
   };
 }
 

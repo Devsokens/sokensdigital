@@ -1,5 +1,23 @@
 import { apiFetch } from "@/lib/api/client";
-import type { BlogPost, Lead, MarketingDashboard, PageSection, Paginated, Quote, QuotePaymentTerm, QuoteSettings, ShowcaseProject, SitePage, SiteSettings, SocialMediaCredentials, SocialPost, Specification, SpecificationListItem } from "@/lib/api/types";
+import type {
+  BlogPost,
+  Lead,
+  LeadContactPerson,
+  LeadDocumentItem,
+  MarketingDashboard,
+  PageSection,
+  Paginated,
+  Quote,
+  QuotePaymentTerm,
+  QuoteSettings,
+  ShowcaseProject,
+  SitePage,
+  SiteSettings,
+  SocialMediaCredentials,
+  SocialPost,
+  Specification,
+  SpecificationListItem,
+} from "@/lib/api/types";
 
 export interface LeadInput {
   first_name: string;
@@ -13,6 +31,8 @@ export interface LeadInput {
   qualification_score?: number;
   assigned_to_id?: string | null;
   estimated_value?: string | null;
+  contacts?: LeadContactPerson[];
+  documents?: LeadDocumentItem[];
 }
 
 export function listLeads() {
@@ -166,8 +186,32 @@ export function deleteQuote(id: string) {
   return apiFetch<void>(`/api/v1/marketing/quotes/${id}/`, { method: "DELETE" });
 }
 
-export function sendQuote(id: string) {
-  return apiFetch<Quote>(`/api/v1/marketing/quotes/${id}/send/`, { method: "POST" });
+export function sendQuote(id: string, options?: { recipient_emails?: string[]; message?: string }) {
+  return apiFetch<Quote>(`/api/v1/marketing/quotes/${id}/send/`, {
+    method: "POST",
+    body: options ? JSON.stringify(options) : undefined,
+  });
+}
+
+export function sendDocumentEmail(params: {
+  recipient_emails: string[];
+  subject?: string;
+  message: string;
+  document_title?: string;
+  document_url?: string;
+  document_type?: string;
+  document_id?: string;
+  document_number?: string;
+  recipient_name?: string;
+}) {
+  const body = {
+    ...params,
+    subject: params.subject || `Soken's Digital - ${params.document_title || params.document_number || "Document"}`,
+  };
+  return apiFetch<{ status: string; sent_count: number; recipients: string[] }>("/api/v1/marketing/documents/send-email/", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 export function cloneQuote(id: string) {
@@ -247,6 +291,7 @@ export interface PageSectionInput {
   cta_secondary_label?: string;
   cta_secondary_link?: string;
   items?: Record<string, unknown>[];
+  extra?: Record<string, unknown>;
 }
 
 export function updatePageSection(id: string, data: PageSectionInput) {
@@ -283,6 +328,9 @@ export interface ShowcaseProjectInput {
   stats?: { value: string; label: string }[];
   solution?: string;
   solution_points?: string[];
+  summary?: string;
+  challenge_summary?: string;
+  solution_summary?: string;
 }
 
 export function listShowcaseProjects() {

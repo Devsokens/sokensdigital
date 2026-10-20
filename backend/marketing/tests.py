@@ -46,6 +46,28 @@ class PublicLeadCreateTests(APITestCase):
         response = self.client.post('/api/v1/public/leads/', self.valid_payload(), format='json')
         self.assertEqual(response.status_code, 201)
 
+    def test_site_vitrine_contact_form_payload(self):
+        # Exactement ce qu'envoie le formulaire de la page Contact
+        # (frontend/components/vitrine/contact-form.tsx) : pas d'entreprise,
+        # numéro gabonais au format national, besoin choisi en tête du message.
+        payload = {
+            'first_name': 'Awa',
+            'last_name': 'Ndong',
+            'email': 'awa@example.com',
+            'phone': '060 00 13 33',
+            'message': 'Besoin : Application mobile\n\nUne app pour nos livreurs.',
+            'source': 'FORMULAIRE_CONTACT',
+        }
+        response = self.client.post('/api/v1/public/leads/', payload, format='json')
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.json()['tracking_reference'])
+        lead = Lead.objects.get(email='awa@example.com')
+        self.assertEqual(lead.source, 'FORMULAIRE_CONTACT')
+        self.assertTrue(lead.message.startswith('Besoin : Application mobile'))
+        # Téléphone facultatif côté formulaire.
+        payload.update(email='sans-tel@example.com', phone='')
+        self.assertEqual(self.client.post('/api/v1/public/leads/', payload, format='json').status_code, 201)
+
     def test_public_can_set_estimated_value(self):
         # The "Démarrer un projet" wizard's Budget field — unlike
         # status/qualification_score, this one IS meant to be settable
@@ -946,12 +968,41 @@ class PageSectionViewSetTests(APITestCase):
         self.assertEqual(len(response.json()), 8)
 
     def test_expertise_and_tracking_pages_seeded(self):
-        # 5 sections seeded by 0008_seed_expertise_and_tracking_sections.
+        # 5 sections seeded by 0008_seed_expertise_and_tracking_sections,
+        # + expertise_cta added by 0039_seed_vitrine_v2_content.
         response = self.client_marketing.get('/api/v1/marketing/cms/page-sections/?page=EXPERTISE')
-        self.assertEqual(len(response.json()), 5)
+        self.assertEqual(len(response.json()), 6)
         # 2 sections.
         response = self.client_marketing.get('/api/v1/marketing/cms/page-sections/?page=SUIVI_PROJET')
         self.assertEqual(len(response.json()), 2)
+
+    def test_vitrine_v2_pages_seeded(self):
+        # Projets, Blog et Contact : 2 sections chacune (0039_seed_vitrine_v2_content).
+        for page, keys in {
+            'PROJETS': {'projects_hero', 'projects_cta'},
+            'BLOG': {'blog_hero', 'blog_cta'},
+            'CONTACT': {'contact_hero', 'contact_form'},
+        }.items():
+            response = self.client_marketing.get(f'/api/v1/marketing/cms/page-sections/?page={page}')
+            self.assertEqual({row['section_key'] for row in response.json()}, keys)
+
+    def test_vitrine_v2_content_keeps_real_data(self):
+        # Textes du nouveau design (setUp réécrit le titre du hero, d'où le CTA ici).
+        cta = PageSection.objects.get(page='ACCUEIL', section_key='cta')
+        self.assertEqual(cta.title, 'Un projet en tête ? *Parlons-en.*')
+        self.assertEqual(cta.cta_link, '/contact')
+        hero = PageSection.objects.get(page='ACCUEIL', section_key='hero')
+        self.assertIn('site web', hero.extra['rotating_words'])
+        team = PageSection.objects.get(page='ACCUEIL', section_key='team')
+        self.assertEqual(team.items[0]['name'], 'Jackie MOUBEYI')
+        self.assertIn('photo_url', team.items[0])
+        form = PageSection.objects.get(page='CONTACT', section_key='contact_form')
+        self.assertEqual(form.items[-1]['label'], 'Autre')
+
+    def test_public_endpoint_exposes_extra(self):
+        body = APIClient().get('/api/v1/public/cms/page-sections/?page=CONTACT').json()
+        hero = next(row for row in body if row['section_key'] == 'contact_hero')
+        self.assertEqual(hero['extra']['team_title'], 'Une équipe à Libreville vous répond')
 
     def test_outsider_forbidden(self):
         response = self.client_outsider.get('/api/v1/marketing/cms/page-sections/?page=ACCUEIL')

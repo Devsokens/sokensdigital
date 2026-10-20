@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { SiteHeader } from "@/components/site-header";
-import { SiteFooter } from "@/components/site-footer";
-import { BlogExplorer } from "@/components/blog/blog-explorer";
+import { VitrineShell } from "@/components/vitrine/vitrine-shell";
+import { BlogView } from "@/components/vitrine/blog-page";
+import { FALLBACK_POST, toVitrinePost } from "@/components/vitrine/blog-data";
+import { getPageSections } from "@/lib/api/public";
 import { getBlogPosts } from "@/lib/blog/public";
 import { pageMetadata } from "@/lib/seo/metadata";
 
@@ -13,15 +14,13 @@ export const metadata: Metadata = pageMetadata({
 });
 
 export default async function BlogIndexPage() {
-  const posts = await getBlogPosts();
+  const [sections, apiPosts] = await Promise.all([getPageSections("BLOG"), getBlogPosts()]);
+  const posts = apiPosts.map(toVitrinePost);
+  const [featured = FALLBACK_POST, ...others] = posts;
 
   return (
-    <>
-      <SiteHeader />
-      <main className="flex-1">
-        <BlogExplorer posts={posts} />
-      </main>
-      <SiteFooter />
-    </>
+    <VitrineShell page="blog">
+      <BlogView sections={sections} featured={featured} posts={others} />
+    </VitrineShell>
   );
 }

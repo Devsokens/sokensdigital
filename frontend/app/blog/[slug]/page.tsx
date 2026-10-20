@@ -72,7 +72,7 @@ export default async function BlogArticlePage({
       />
       <SiteHeader />
       <main className="flex-1">
-        <article className="mx-auto max-w-6xl px-4 pt-28 pb-20 sm:px-6 sm:pt-32 sm:pb-24 lg:px-8">
+        <article className="mx-auto max-w-6xl px-4 pt-10 pb-20 sm:px-6 sm:pt-14 sm:pb-24 lg:px-8">
           <Link
             href="/blog"
             aria-label="Retour au blog"

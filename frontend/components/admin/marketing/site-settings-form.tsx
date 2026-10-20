@@ -203,6 +203,20 @@ export function SiteSettingsForm() {
               ) : (
                 <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted-foreground">{data.tagline}</p>
               )}
+              {/* Coordonnées affichées sur tout le site (pied de page, page Contact, boutons téléphone). */}
+              <div className="mt-4 flex flex-col gap-1.5 text-sm">
+                {editing ? (
+                  <>
+                    <EditableInput value={data.contact_email ?? ""} onChange={(v) => set("contact_email", v)} className="w-full max-w-xs text-sm text-foreground" placeholder="E-mail de contact" />
+                    <EditableInput value={data.contact_phone ?? ""} onChange={(v) => set("contact_phone", v)} className="w-full max-w-xs text-sm text-foreground" placeholder="Téléphone" />
+                  </>
+                ) : (
+                  <>
+                    <span className="text-foreground/80">{data.contact_email}</span>
+                    <span className="text-foreground/80">{data.contact_phone}</span>
+                  </>
+                )}
+              </div>
               <div className="mt-5 flex flex-wrap items-center gap-2">
                 {data.social_links.map((social, i) => (
                   <div key={i} className="group relative">
