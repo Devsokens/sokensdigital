@@ -8,6 +8,12 @@ import { frenchSpacing } from "./cms";
 
 type Point = { lead: string; text: string; details: string[] };
 
+/** « Intitulé : texte » → { lead, text } ; `lead` vide quand la ligne n'a pas d'intitulé. */
+export function splitLead(content: string) {
+  const match = content.match(/^(.{2,90}?)\s*:\s+(.+)$/);
+  return match ? { lead: match[1], text: match[2] } : { lead: "", text: content };
+}
+
 export function parseCaseText(text: string) {
   const intro: string[] = [];
   const points: Point[] = [];
@@ -17,8 +23,8 @@ export function parseCaseText(text: string) {
     const bullet = line.match(/^[*•-]\s*(.*)$/);
     if (bullet) {
       const content = bullet[1].trim();
-      const lead = content.match(/^(.{2,90}?)\s*:\s+(.+)$/);
-      if (lead) points.push({ lead: lead[1], text: lead[2], details: [] });
+      const { lead, text: rest } = splitLead(content);
+      if (lead) points.push({ lead, text: rest, details: [] });
       else if (content.endsWith(":")) points.push({ lead: content.slice(0, -1).trim(), text: "", details: [] });
       else points.push({ lead: "", text: content, details: [] });
     } else if (points.length) {

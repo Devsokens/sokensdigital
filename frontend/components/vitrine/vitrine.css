@@ -280,6 +280,24 @@
   .sd-contact-coords>:first-child{margin-top:0 !important}
 }
 
+/* Détail projet : Besoin → Réponse côte à côte, Résultat en tuiles dessous
+ * (--cols et --cols-md posés par ResultPoints). Sur mobile les cartes
+ * s'empilent et les tuiles défilent horizontalement. */
+.sd-story-pair{position:relative;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.sd-story-link{position:absolute;left:50%;top:50%;z-index:2;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:oklch(var(--sd-bg));border:1px solid rgba(255,255,255,.12);color:oklch(var(--sd-primary-hi))}
+.sd-points{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:12px}
+@media (max-width:1024px){
+  .sd-points{grid-template-columns:repeat(var(--cols-md),minmax(0,1fr))}
+}
+@media (max-width:760px){
+  .sd-story-pair{grid-template-columns:minmax(0,1fr)}
+  .sd-story-link{display:none}
+  .sd-story{padding:22px !important}
+  .sd-points-scroll{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;margin:0 -22px;padding:0 22px 4px;scroll-padding-left:22px}
+  .sd-points-scroll::-webkit-scrollbar{display:none}
+  .sd-points-scroll>li{flex:0 0 82%;scroll-snap-align:start}
+}
+
 .sd-show-sm{display:none}
 @media (max-width:860px){.sd-hide-sm{display:none !important}.sd-show-sm{display:inline-flex}}
 

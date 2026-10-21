@@ -1,7 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { Project } from "@/lib/projects/types";
+import { splitLead } from "./case-text";
 import { frenchSpacing, type Section } from "./cms";
 import { Editable, ManagedElsewhere } from "./editable";
 import { ProjectCaseStudy } from "./project-case-study";
@@ -11,10 +12,11 @@ import { ProjectsCta } from "./projects-page";
 import { TechLogo, techLogo } from "./tech-logos";
 import { ArrowIcon, FONT_DISPLAY, FONT_DISPLAY_SYS, FONT_MONO, HEADER_HEIGHT, underHeader } from "./ui";
 
-/* Détail d'un projet vitrine, « récit en 3 temps » : grand visuel, trois
- * cartes Besoin / Réponse / Résultat lisibles en 30 secondes, puis l'étude de
- * cas complète, dépliable. Partagé par /projects/[slug] et l'éditeur visuel
- * de l'admin (chaque champ du projet s'y modifie au clic). */
+/* Détail d'un projet vitrine, « récit en 3 temps » : grand visuel, cartes
+ * Besoin → Réponse côte à côte puis Résultat en pleine largeur (points en
+ * tuiles, en défilement horizontal sur mobile), puis l'étude de cas complète,
+ * dépliable. Partagé par /projects/[slug] et l'éditeur visuel de l'admin
+ * (chaque champ du projet s'y modifie au clic). */
 
 const LABEL = { fontFamily: FONT_MONO, fontSize: "12px", letterSpacing: "0.1em", textTransform: "uppercase", color: "oklch(var(--sd-primary-hi))" } as const;
 
@@ -26,17 +28,49 @@ const ICONS = {
 
 function StoryCard({ icon, label, children }: { icon: keyof typeof ICONS; label: string; children: ReactNode }) {
   return (
-    <div className="sd-rv" style={{ position: "relative", padding: "28px", borderRadius: "22px", border: "1px solid rgba(255,255,255,0.08)", background: "oklch(var(--sd-card))", display: "flex", flexDirection: "column", gap: "16px" }}>
-      <span style={{ width: "44px", height: "44px", borderRadius: "12px", background: "oklch(var(--sd-primary) / 0.1)", color: "oklch(var(--sd-primary-hi))", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICONS[icon]}</svg>
-      </span>
-      <span style={LABEL}>{label}</span>
+    <div className="sd-rv sd-story" style={{ position: "relative", minWidth: "0", padding: "28px", borderRadius: "22px", border: "1px solid rgba(255,255,255,0.08)", background: "oklch(var(--sd-card))", display: "flex", flexDirection: "column", gap: "18px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+        <span style={{ width: "40px", height: "40px", flex: "none", borderRadius: "11px", background: "oklch(var(--sd-primary) / 0.1)", color: "oklch(var(--sd-primary-hi))", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ICONS[icon]}</svg>
+        </span>
+        <span style={LABEL}>{label}</span>
+      </div>
       {children}
     </div>
   );
 }
 
-const PARAGRAPH = { margin: "0", fontSize: "16px", lineHeight: 1.65, color: "oklch(var(--sd-fg-3))", textWrap: "pretty" } as const;
+/* pre-line : les retours à la ligne saisis dans le CMS sont conservés. */
+const PARAGRAPH = { margin: "0", fontSize: "16px", lineHeight: 1.65, color: "oklch(var(--sd-fg-3))", textWrap: "pretty", whiteSpace: "pre-line" } as const;
+
+/** Points du résultat en tuiles : 2 colonnes pour 2 ou 4 points, sinon 3
+ * (2 sur tablette) ; défilement horizontal sur mobile (vitrine.css). */
+function ResultPoints({ points }: { points: string[] }) {
+  const cols = points.length <= 2 ? points.length : points.length === 4 ? 2 : 3;
+  return (
+    <ul className={points.length > 1 ? "sd-points sd-points-scroll" : "sd-points"} style={{ "--cols": cols, "--cols-md": Math.min(cols, 2) } as CSSProperties}>
+      {points.map((point) => {
+        const { lead, text } = splitLead(point);
+        return (
+          <li key={point} style={{ display: "flex", alignItems: "flex-start", gap: "12px", padding: "16px 18px", borderRadius: "14px", border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.025)", fontSize: "15px", lineHeight: 1.55, color: "oklch(var(--sd-fg-3))", textWrap: "pretty" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="oklch(var(--sd-primary))" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: "none", marginTop: "3px" }}>
+              <path d="M5 12.5l4.5 4.5L19 7.5" />
+            </svg>
+            {lead ? (
+              <span>
+                <strong style={{ fontWeight: 600, color: "oklch(var(--sd-fg))" }}>{frenchSpacing(lead)}</strong>
+                {" : "}
+                {frenchSpacing(text)}
+              </span>
+            ) : (
+              <span style={{ color: "oklch(var(--sd-fg-2b))" }}>{frenchSpacing(point)}</span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 export function ProjectDetailView({ project, related, cta, editing = false }: { project: Project; related: Project[]; cta: Section | null; editing?: boolean }) {
   const summary = project.summary || excerpt(project.description, 220);
@@ -125,7 +159,8 @@ export function ProjectDetailView({ project, related, cta, editing = false }: { 
         <div style={{ maxWidth: "1240px", margin: "0 auto", padding: "0 clamp(20px, 4vw, 40px)", display: "flex", flexDirection: "column", gap: "clamp(40px, 5vw, 64px)" }}>
           <ProjectGallery project={project} />
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))", gap: "16px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div className="sd-story-pair">
             <StoryCard icon="besoin" label="Le besoin">
               <p style={PARAGRAPH}>
                 <Editable path={{ scope: "project", key: "challenge_summary" }} kind="textarea" value={need} hint="Le problème du client, en une ou deux phrases." placeholder="Décrire le besoin du client">
@@ -133,6 +168,9 @@ export function ProjectDetailView({ project, related, cta, editing = false }: { 
                 </Editable>
               </p>
             </StoryCard>
+            <span className="sd-story-link" aria-hidden="true">
+              <ArrowIcon size={17} />
+            </span>
             <StoryCard icon="reponse" label="Notre réponse">
               <p style={PARAGRAPH}>
                 <Editable path={{ scope: "project", key: "solution_summary" }} kind="textarea" value={answer} hint="La solution livrée, en une ou deux phrases." placeholder="Décrire notre réponse">
@@ -140,24 +178,14 @@ export function ProjectDetailView({ project, related, cta, editing = false }: { 
                 </Editable>
               </p>
             </StoryCard>
+          </div>
+          {(project.solutionPoints.length > 0 || editing) && (
             <StoryCard icon="resultat" label="Le résultat">
-              <Editable path={{ scope: "project", key: "solution_points" }} kind="list" value={project.solutionPoints} hint="Un point clé par ligne (ce que le client a gagné ou peut faire désormais).">
-                {project.solutionPoints.length ? (
-                  <ul style={{ margin: "0", padding: "0", listStyle: "none", display: "flex", flexDirection: "column", gap: "10px" }}>
-                    {project.solutionPoints.map((point) => (
-                      <li key={point} style={{ display: "flex", alignItems: "flex-start", gap: "10px", fontSize: "15.5px", lineHeight: 1.5, color: "oklch(var(--sd-fg-2b))" }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="oklch(var(--sd-primary))" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: "none", marginTop: "3px" }}>
-                          <path d="M5 12.5l4.5 4.5L19 7.5" />
-                        </svg>
-                        {frenchSpacing(point)}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p style={PARAGRAPH}>{editing ? "Ajouter les points clés du résultat" : frenchSpacing(answer)}</p>
-                )}
+              <Editable path={{ scope: "project", key: "solution_points" }} kind="list" value={project.solutionPoints} hint="Un point clé par ligne (ce que le client a gagné ou peut faire désormais). « Intitulé : détail » met l'intitulé en gras." placeholder="Ajouter les points clés du résultat">
+                {project.solutionPoints.length > 0 && <ResultPoints points={project.solutionPoints} />}
               </Editable>
             </StoryCard>
+          )}
           </div>
 
           {(stats.length > 0 || editing) && (

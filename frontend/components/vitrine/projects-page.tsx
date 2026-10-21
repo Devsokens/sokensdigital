@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { PageSection } from "@/lib/api/types";
 import type { Project } from "@/lib/projects/types";
+import { splitLead } from "./case-text";
 import { AnimatedTitle, frenchSpacing, resolveSection, type Section } from "./cms";
 import * as D from "./defaults";
 import { Editable, EditableSection, ManagedElsewhere } from "./editable";
@@ -11,6 +12,12 @@ import { ArrowIcon, Breadcrumb, FONT_DISPLAY, FONT_DISPLAY_SYS, FONT_MONO, HEADE
  * captures d'écran), entre un hero et l'appel « Votre projet sera le prochain ». */
 
 const LABEL = { fontFamily: FONT_MONO, fontSize: "12px", letterSpacing: "0.1em", textTransform: "uppercase", color: "oklch(var(--sd-primary-hi))" } as const;
+
+/* Les cartes restent compactes quelle que soit la longueur des textes : le
+ * besoin et la réponse sont coupés à 4 lignes, les points réduits à leur
+ * intitulé sur une ligne (le détail complet est sur la page du projet). */
+const CLAMPED = { margin: "0", fontSize: "15.5px", color: "oklch(var(--sd-fg-3))", textWrap: "pretty", display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" } as const;
+const MAX_CHIPS = 4;
 
 function ProjectsHero({ section }: { section: Section }) {
   return (
@@ -90,7 +97,7 @@ function CaseStudy({ project, reverse }: { project: Project; reverse: boolean })
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "20px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <span style={LABEL}>Le besoin</span>
-            <p style={{ margin: "0", fontSize: "15.5px", color: "oklch(var(--sd-fg-3))", textWrap: "pretty" }}>
+            <p style={CLAMPED}>
               <Editable path={{ scope: "project", key: "challenge_summary", slug }} kind="textarea" value={need} hint="Le problème du client, en une ou deux phrases (repris sur la page du projet)." placeholder="Décrire le besoin du client">
                 {frenchSpacing(need)}
               </Editable>
@@ -98,7 +105,7 @@ function CaseStudy({ project, reverse }: { project: Project; reverse: boolean })
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <span style={LABEL}>Ce que nous avons fait</span>
-            <p style={{ margin: "0", fontSize: "15.5px", color: "oklch(var(--sd-fg-3))", textWrap: "pretty" }}>
+            <p style={CLAMPED}>
               <Editable path={{ scope: "project", key: "solution_summary", slug }} kind="textarea" value={answer} hint="La solution livrée, en une ou deux phrases (« Notre réponse » sur la page du projet)." placeholder="Décrire notre réponse">
                 {frenchSpacing(answer)}
               </Editable>
@@ -108,9 +115,16 @@ function CaseStudy({ project, reverse }: { project: Project; reverse: boolean })
         <Editable path={{ scope: "project", key: "solution_points", slug }} kind="list" value={project.solutionPoints} hint="Un point clé par ligne (ce que le client a gagné ou peut faire désormais)." placeholder="Ajouter les points clés du résultat">
           {project.solutionPoints.length > 0 && (
             <ul style={{ margin: "0", padding: "20px 0 0", listStyle: "none", borderTop: "1px solid rgba(255,255,255,0.07)", display: "flex", flexWrap: "wrap", gap: "8px" }}>
-              {project.solutionPoints.map((point) => (
-                <li key={point} style={{ padding: "7px 13px", borderRadius: "10px", background: "rgba(255,255,255,0.04)", fontSize: "13.5px", color: "oklch(var(--sd-fg-2b))" }}>{point}</li>
+              {project.solutionPoints.slice(0, MAX_CHIPS).map((point) => (
+                <li key={point} title={point} style={{ maxWidth: "100%", padding: "7px 13px", borderRadius: "10px", background: "rgba(255,255,255,0.04)", fontSize: "13.5px", color: "oklch(var(--sd-fg-2b))", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {splitLead(point).lead || point}
+                </li>
               ))}
+              {project.solutionPoints.length > MAX_CHIPS && (
+                <li style={{ padding: "7px 13px", borderRadius: "10px", border: "1px dashed rgba(255,255,255,0.14)", fontSize: "13.5px", color: "oklch(var(--sd-fg-4))" }}>
+                  +{project.solutionPoints.length - MAX_CHIPS}
+                </li>
+              )}
             </ul>
           )}
         </Editable>
