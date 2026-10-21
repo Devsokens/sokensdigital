@@ -37,6 +37,14 @@ export function ShowcaseProjectList() {
       .catch(() => setError("Impossible de charger les projets."));
   }, []);
 
+  /** Recharge la liste avant d'ouvrir un projet : ses textes ont pu être
+   * modifiés entre-temps depuis l'aperçu de la page Projets, au-dessus. */
+  async function openProject(id: string | undefined) {
+    if (!id) return;
+    await load();
+    setSelectedId(id);
+  }
+
   async function handleDelete(project: ShowcaseProject) {
     if (!confirm(`Supprimer "${project.title}" ?`)) return;
     try {
@@ -118,7 +126,7 @@ export function ShowcaseProjectList() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => (
             <div key={project.id} className="group overflow-hidden rounded-2xl border-2 border-primary/25 bg-[#0a0e13] transition-colors hover:border-primary/70">
-              <button type="button" onClick={() => setSelectedId(project.id ?? null)} className="relative flex aspect-video w-full items-center justify-center overflow-hidden">
+              <button type="button" onClick={() => openProject(project.id)} className="relative flex aspect-video w-full items-center justify-center overflow-hidden">
                 <ProjectCardMedia images={project.images} videoSrc={project.video_src} icon={project.visual_icon} />
                 {project.show_on_homepage && (
                   <span className="absolute top-3 right-3 z-10 rounded-full bg-primary px-3 py-1 text-[10px] font-semibold tracking-[0.1em] text-primary-foreground uppercase">Accueil</span>
@@ -132,7 +140,7 @@ export function ShowcaseProjectList() {
                 <h3 className="mt-1 text-base font-semibold text-foreground">{project.title}</h3>
                 <p className="mt-1 text-xs text-muted-foreground">{[project.sector, project.type, project.timeline].filter(Boolean).join(" · ")}</p>
                 <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
-                  <button type="button" onClick={() => setSelectedId(project.id ?? null)} className="text-xs font-medium text-primary hover:underline">
+                  <button type="button" onClick={() => openProject(project.id)} className="text-xs font-medium text-primary hover:underline">
                     Modifier
                   </button>
                   <div className="flex items-center gap-3">
@@ -163,7 +171,7 @@ export function ShowcaseProjectList() {
               {projects.map((project) => (
                 <tr key={project.id} className="hover:bg-neutral-50">
                   <td className="px-4 py-3" data-label="Titre">
-                    <button type="button" onClick={() => setSelectedId(project.id ?? null)} className="text-neutral-900 hover:text-primary">
+                    <button type="button" onClick={() => openProject(project.id)} className="text-neutral-900 hover:text-primary">
                       {project.title}
                     </button>
                   </td>

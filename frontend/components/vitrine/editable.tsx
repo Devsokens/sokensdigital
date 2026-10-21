@@ -22,8 +22,9 @@ export type EditPath =
   | { scope: "extra"; key: string }
   | { scope: "settings"; key: SettingsKey }
   | { scope: "legal"; index: number }
-  /** Champ d'un projet vitrine (page de détail) ; `index` pour une image de la galerie. */
-  | { scope: "project"; key: string; index?: number };
+  /** Champ d'un projet vitrine ; `index` pour une image de la galerie, `slug`
+   * quand la page affiche plusieurs projets (page Projets). */
+  | { scope: "project"; key: string; index?: number; slug?: string };
 
 export type EditRequest = {
   section?: Section;
@@ -66,8 +67,16 @@ function pathLabel(path: EditPath) {
   }
 }
 
-/** Texte, lien ou image modifiable au clic dans l'éditeur. */
-export function Editable({ section, path, kind = "text", value, hint, children }: { section?: Section; path: EditPath; kind?: EditKind; value: EditRequest["value"]; hint?: string; children: ReactNode }) {
+function isEmpty(value: EditRequest["value"]) {
+  if (typeof value === "string") return !value.trim();
+  if (Array.isArray(value)) return value.length === 0;
+  return !value.label.trim();
+}
+
+/** Texte, lien ou image modifiable au clic dans l'éditeur. `placeholder`
+ * s'affiche (dans l'éditeur seulement) quand la valeur est vide, pour que le
+ * champ reste visible et cliquable. */
+export function Editable({ section, path, kind = "text", value, hint, placeholder, children }: { section?: Section; path: EditPath; kind?: EditKind; value: EditRequest["value"]; hint?: string; placeholder?: string; children: ReactNode }) {
   const editor = useContext(EditContext);
   if (!editor) return <>{children}</>;
 
@@ -78,7 +87,7 @@ export function Editable({ section, path, kind = "text", value, hint, children }
   };
   return (
     <span className="sd-editable" role="button" tabIndex={0} title="Cliquer pour modifier" onClick={open} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && open(e)}>
-      {children}
+      {placeholder && isEmpty(value) ? <span className="sd-edit-placeholder">{placeholder}</span> : children}
     </span>
   );
 }

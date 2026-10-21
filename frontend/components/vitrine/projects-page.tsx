@@ -37,8 +37,15 @@ function ProjectsHero({ section }: { section: Section }) {
   );
 }
 
+/** Carte d'un projet ; dans l'éditeur, ses textes s'enregistrent sur le projet (repéré par son slug). */
 function CaseStudy({ project, reverse }: { project: Project; reverse: boolean }) {
-  const chips = [project.type, project.timeline].filter(Boolean);
+  const slug = project.slug;
+  const chips = [
+    { key: "type", value: project.type },
+    { key: "timeline", value: project.timeline },
+  ].filter((chip) => chip.value);
+  const need = project.challengeSummary || excerpt(project.challenge || project.description);
+  const answer = project.solutionSummary || excerpt(project.solution || project.description);
   const visual = (
     <div aria-hidden="true" style={{ flex: "1 1 520px", minWidth: "0", minHeight: "440px", position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 28px", background: "radial-gradient(ellipse 70% 70% at 50% 60%, oklch(var(--sd-primary) / 0.16), transparent 70%), oklch(var(--sd-panel-deep))" }}>
       <div style={{ position: "absolute", inset: "0", backgroundImage: "radial-gradient(rgba(255,255,255,0.1) 1px, transparent 1px)", backgroundSize: "20px 20px", WebkitMaskImage: "radial-gradient(circle at 50% 50%, #000 10%, transparent 70%)", maskImage: "radial-gradient(circle at 50% 50%, #000 10%, transparent 70%)" }} />
@@ -50,32 +57,63 @@ function CaseStudy({ project, reverse }: { project: Project; reverse: boolean })
       {!reverse && visual}
       <div style={{ flex: "1 1 460px", minWidth: "0", padding: "clamp(28px, 4vw, 52px)", display: "flex", flexDirection: "column", gap: "22px" }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-          {project.sector && <span style={{ padding: "5px 12px", borderRadius: "999px", background: "oklch(var(--sd-primary) / 0.12)", color: "oklch(var(--sd-primary-hi))", fontSize: "13px", fontWeight: 500 }}>{project.sector}</span>}
+          {project.sector && (
+            <span style={{ padding: "5px 12px", borderRadius: "999px", background: "oklch(var(--sd-primary) / 0.12)", color: "oklch(var(--sd-primary-hi))", fontSize: "13px", fontWeight: 500 }}>
+              <Editable path={{ scope: "project", key: "sector", slug }} value={project.sector}>
+                {project.sector}
+              </Editable>
+            </span>
+          )}
           {chips.map((chip) => (
-            <span key={chip} style={{ padding: "5px 12px", borderRadius: "999px", border: "1px solid rgba(255,255,255,0.12)", fontSize: "13px", color: "oklch(var(--sd-fg-2))" }}>{chip}</span>
+            <span key={chip.key} style={{ padding: "5px 12px", borderRadius: "999px", border: "1px solid rgba(255,255,255,0.12)", fontSize: "13px", color: "oklch(var(--sd-fg-2))" }}>
+              <Editable path={{ scope: "project", key: chip.key, slug }} value={chip.value}>
+                {chip.value}
+              </Editable>
+            </span>
           ))}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          <h2 style={{ margin: "0", fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: "clamp(30px, 3.2vw, 42px)", lineHeight: 1.08, letterSpacing: "-0.03em" }}>{project.title}</h2>
-          {project.client && <p style={{ margin: "0", fontSize: "15px", color: "oklch(var(--sd-fg-4))" }}>Pour {project.client}</p>}
+          <h2 style={{ margin: "0", fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: "clamp(30px, 3.2vw, 42px)", lineHeight: 1.08, letterSpacing: "-0.03em" }}>
+            <Editable path={{ scope: "project", key: "title", slug }} value={project.title}>
+              {project.title}
+            </Editable>
+          </h2>
+          {project.client && (
+            <p style={{ margin: "0", fontSize: "15px", color: "oklch(var(--sd-fg-4))" }}>
+              Pour{" "}
+              <Editable path={{ scope: "project", key: "client", slug }} value={project.client}>
+                {project.client}
+              </Editable>
+            </p>
+          )}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(220px, 100%), 1fr))", gap: "20px" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <span style={LABEL}>Le besoin</span>
-            <p style={{ margin: "0", fontSize: "15.5px", color: "oklch(var(--sd-fg-3))", textWrap: "pretty" }}>{frenchSpacing(project.challengeSummary || excerpt(project.challenge || project.description))}</p>
+            <p style={{ margin: "0", fontSize: "15.5px", color: "oklch(var(--sd-fg-3))", textWrap: "pretty" }}>
+              <Editable path={{ scope: "project", key: "challenge_summary", slug }} kind="textarea" value={need} hint="Le problème du client, en une ou deux phrases (repris sur la page du projet)." placeholder="Décrire le besoin du client">
+                {frenchSpacing(need)}
+              </Editable>
+            </p>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <span style={LABEL}>Ce que nous avons fait</span>
-            <p style={{ margin: "0", fontSize: "15.5px", color: "oklch(var(--sd-fg-3))", textWrap: "pretty" }}>{frenchSpacing(project.solutionSummary || excerpt(project.solution || project.description))}</p>
+            <p style={{ margin: "0", fontSize: "15.5px", color: "oklch(var(--sd-fg-3))", textWrap: "pretty" }}>
+              <Editable path={{ scope: "project", key: "solution_summary", slug }} kind="textarea" value={answer} hint="La solution livrée, en une ou deux phrases (« Notre réponse » sur la page du projet)." placeholder="Décrire notre réponse">
+                {frenchSpacing(answer)}
+              </Editable>
+            </p>
           </div>
         </div>
-        {project.solutionPoints.length > 0 && (
-          <ul style={{ margin: "0", padding: "20px 0 0", listStyle: "none", borderTop: "1px solid rgba(255,255,255,0.07)", display: "flex", flexWrap: "wrap", gap: "8px" }}>
-            {project.solutionPoints.map((point) => (
-              <li key={point} style={{ padding: "7px 13px", borderRadius: "10px", background: "rgba(255,255,255,0.04)", fontSize: "13.5px", color: "oklch(var(--sd-fg-2b))" }}>{point}</li>
-            ))}
-          </ul>
-        )}
+        <Editable path={{ scope: "project", key: "solution_points", slug }} kind="list" value={project.solutionPoints} hint="Un point clé par ligne (ce que le client a gagné ou peut faire désormais)." placeholder="Ajouter les points clés du résultat">
+          {project.solutionPoints.length > 0 && (
+            <ul style={{ margin: "0", padding: "20px 0 0", listStyle: "none", borderTop: "1px solid rgba(255,255,255,0.07)", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              {project.solutionPoints.map((point) => (
+                <li key={point} style={{ padding: "7px 13px", borderRadius: "10px", background: "rgba(255,255,255,0.04)", fontSize: "13.5px", color: "oklch(var(--sd-fg-2b))" }}>{point}</li>
+              ))}
+            </ul>
+          )}
+        </Editable>
         <div style={{ marginTop: "auto", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px 20px" }}>
           {project.projectUrl && (
             <a className="sd-ghost sd-arrow-link" href={project.projectUrl} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: "8px", height: "48px", padding: "0 20px", borderRadius: "11px", border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.03)", color: "oklch(var(--sd-fg))", fontSize: "15px", fontWeight: 500 }}>
@@ -143,7 +181,7 @@ export function ProjectsView({ sections, projects }: { sections: PageSection[]; 
       )}
       <section style={{ padding: "0 0 clamp(88px, 10vw, 136px)" }}>
         <div style={{ maxWidth: "1240px", margin: "0 auto", padding: "0 clamp(20px, 4vw, 40px)", display: "flex", flexDirection: "column", gap: "24px" }}>
-          <ManagedElsewhere label="Études de cas : onglet « Projets » (liste des projets ci-dessous)">
+          <ManagedElsewhere label="Textes modifiables au clic ; captures, ordre et visibilité : liste des projets ci-dessous">
             <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
               {projects.map((project, i) => (
                 <CaseStudy key={project.slug} project={project} reverse={i % 2 === 1} />

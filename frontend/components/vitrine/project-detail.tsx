@@ -71,13 +71,13 @@ export function ProjectDetailView({ project, related, cta, editing = false }: { 
                 </Editable>
               </h1>
               <p className="sd-bw" style={{ animationDelay: "0.22s", margin: "22px 0 0", maxWidth: "640px", fontSize: "clamp(17px, 1.6vw, 20px)", lineHeight: 1.6, color: "oklch(var(--sd-fg-2))", textWrap: "pretty" }}>
-                <Editable path={{ scope: "project", key: "summary" }} kind="textarea" value={summary} hint="Une à deux phrases qui donnent envie : aussi utilisée sur les cartes de l'accueil.">
+                <Editable path={{ scope: "project", key: "summary" }} kind="textarea" value={summary} hint="Une à deux phrases qui donnent envie : aussi utilisée sur les cartes de l'accueil." placeholder="Ajouter un résumé du projet">
                   {frenchSpacing(summary)}
                 </Editable>
               </p>
               <div className="sd-bw" style={{ animationDelay: "0.32s", marginTop: "22px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
                 <span style={{ padding: "6px 13px", borderRadius: "999px", background: "oklch(var(--sd-primary) / 0.12)", color: "oklch(var(--sd-primary-hi))", fontSize: "13.5px", fontWeight: 500 }}>
-                  <Editable path={{ scope: "project", key: "sector" }} value={project.sector}>
+                  <Editable path={{ scope: "project", key: "sector" }} value={project.sector} placeholder="Secteur">
                     {project.sector}
                   </Editable>
                 </span>
@@ -128,14 +128,14 @@ export function ProjectDetailView({ project, related, cta, editing = false }: { 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(280px, 100%), 1fr))", gap: "16px" }}>
             <StoryCard icon="besoin" label="Le besoin">
               <p style={PARAGRAPH}>
-                <Editable path={{ scope: "project", key: "challenge_summary" }} kind="textarea" value={need} hint="Le problème du client, en une ou deux phrases.">
+                <Editable path={{ scope: "project", key: "challenge_summary" }} kind="textarea" value={need} hint="Le problème du client, en une ou deux phrases." placeholder="Décrire le besoin du client">
                   {frenchSpacing(need)}
                 </Editable>
               </p>
             </StoryCard>
             <StoryCard icon="reponse" label="Notre réponse">
               <p style={PARAGRAPH}>
-                <Editable path={{ scope: "project", key: "solution_summary" }} kind="textarea" value={answer} hint="La solution livrée, en une ou deux phrases.">
+                <Editable path={{ scope: "project", key: "solution_summary" }} kind="textarea" value={answer} hint="La solution livrée, en une ou deux phrases." placeholder="Décrire notre réponse">
                   {frenchSpacing(answer)}
                 </Editable>
               </p>

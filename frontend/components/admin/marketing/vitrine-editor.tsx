@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { ExternalLink, ImagePlus, Loader2, Pencil, Trash2 } from "lucide-react";
-import { getSiteSettingsAdmin, listBlogPosts, listPageSections, listShowcaseProjects, updatePageSection, updateSiteSettings, type PageSectionInput } from "@/lib/api/marketing";
+import { getSiteSettingsAdmin, listBlogPosts, listPageSections, listShowcaseProjects, updatePageSection, updateShowcaseProject, updateSiteSettings, type PageSectionInput, type ShowcaseProjectInput } from "@/lib/api/marketing";
 import { uploadImage } from "@/lib/api/upload";
 import type { PageSection, SitePage, SiteSettings } from "@/lib/api/types";
 import { toPost } from "@/lib/blog/public";
@@ -34,7 +34,8 @@ const PAGES: Record<VitrineEditorPage, { path: string; frame: VitrinePage }> = {
   CONTACT: { path: "/contact", frame: "contact" },
 };
 
-type Data = { sections: PageSection[]; settings: SiteSettings; projects: Project[]; posts: VitrinePost[] };
+/** `projectIds` : slug → id, pour enregistrer un texte de projet modifié depuis la page. */
+type Data = { sections: PageSection[]; settings: SiteSettings; projects: Project[]; projectIds: Record<string, string>; posts: VitrinePost[] };
 
 export function VitrineEditor({ page }: { page: VitrineEditorPage }) {
   const [data, setData] = useState<Data | null>(null);
@@ -60,6 +61,7 @@ export function VitrineEditor({ page }: { page: VitrineEditorPage }) {
           sections,
           settings,
           projects: (page === "ACCUEIL" ? (homeProjects.length ? homeProjects : activeProjects.slice(0, 2)) : activeProjects).map(toProject),
+          projectIds: Object.fromEntries(projects.map((p) => [p.slug, p.id ?? ""])),
           posts: posts
             .filter((p) => p.status === "PUBLIE")
             .sort((a, b) => (b.published_at ?? "").localeCompare(a.published_at ?? ""))
@@ -93,6 +95,12 @@ export function VitrineEditor({ page }: { page: VitrineEditorPage }) {
     setData((d) => (d ? { ...d, settings: { ...d.settings, ...updated } } : d));
   }, []);
 
+  const patchProject = useCallback(async (id: string | undefined, patch: Partial<ShowcaseProjectInput>) => {
+    if (!id) throw new Error("Projet introuvable : rechargez la page puis réessayez.");
+    const project = toProject(await updateShowcaseProject(id, patch));
+    setData((d) => (d ? { ...d, projects: d.projects.map((p) => (p.slug === project.slug ? project : p)) } : d));
+  }, []);
+
   /** Lance une modification hors fenêtre (listes, visibilité) avec retour visuel. */
   const run = useCallback(
     async (task: () => Promise<void>, done: string) => {
@@ -109,6 +117,8 @@ export function VitrineEditor({ page }: { page: VitrineEditorPage }) {
     [notify],
   );
 
+  const legalLinks = data?.settings.legal_links;
+  const projectIds = data?.projectIds;
   const save = useCallback(
     async (req: EditRequest, value: EditRequest["value"]) => {
       const { path, section } = req;
@@ -116,7 +126,7 @@ export function VitrineEditor({ page }: { page: VitrineEditorPage }) {
         case "settings":
           return patchSettings({ [path.key]: value as string });
         case "legal": {
-          const links = [...(data?.settings.legal_links ?? [])];
+          const links = [...(legalLinks ?? [])];
           links[path.index] = value as LinkValue;
           return patchSettings({ legal_links: links });
         }
@@ -136,9 +146,11 @@ export function VitrineEditor({ page }: { page: VitrineEditorPage }) {
         }
         case "extra":
           return patchSection(section, { extra: { ...section?.extra, [path.key]: value } });
+        case "project":
+          return patchProject(path.slug ? projectIds?.[path.slug] : undefined, { [path.key]: value } as Partial<ShowcaseProjectInput>);
       }
     },
-    [data?.settings.legal_links, patchSection, patchSettings],
+    [legalLinks, patchProject, patchSection, patchSettings, projectIds],
   );
 
   const context = useMemo<EditContextValue>(

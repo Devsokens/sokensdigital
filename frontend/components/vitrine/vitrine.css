@@ -239,6 +239,7 @@
 .sd-edit-section:hover>.sd-edit-badge,.sd-edit-section[data-hidden]>.sd-edit-badge{opacity:1}
 .sd-edit-badge button,.sd-item-tools button{cursor:pointer;border:0;border-radius:999px;background:oklch(var(--sd-primary));color:oklch(var(--sd-on-primary));font:600 11px/1 var(--font-geist),system-ui,sans-serif;padding:5px 10px;text-transform:none;letter-spacing:0}
 .sd-edit-muted{color:oklch(var(--sd-fg-4));text-transform:none;letter-spacing:0}
+.sd-edit-placeholder{color:oklch(var(--sd-fg-4));font-style:italic}
 .sd-item-tools{position:absolute;top:8px;right:8px;z-index:30;display:flex;gap:4px;opacity:0;transition:opacity .15s ease}
 *:hover>.sd-item-tools{opacity:1}
 .sd-item-tools button{padding:5px 8px;background:oklch(var(--sd-bg) / .9);color:oklch(var(--sd-fg));border:1px solid rgba(255,255,255,.18)}
