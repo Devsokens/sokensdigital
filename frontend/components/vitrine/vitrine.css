@@ -152,6 +152,9 @@
 @keyframes sd-prog{from{width:0}to{width:100%}}
 .sd-vin{animation:sd-vin .7s cubic-bezier(.2,.7,.2,1) both}
 @keyframes sd-vin{from{opacity:0;transform:translateY(18px) scale(.97);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
+/* Image d'un service : léger zoom arrière pendant son affichage */
+.sd-kb{animation:sd-kb 7s ease-out both}
+@keyframes sd-kb{from{transform:scale(1.08)}to{transform:none}}
 .sd-bld{transform-origin:left center;animation:sd-bld .8s cubic-bezier(.2,.7,.2,1) both}
 @keyframes sd-bld{from{opacity:0;transform:scaleX(.15)}to{opacity:1;transform:none}}
 .sd-cursor{animation:sd-cur 4s ease-in-out infinite}

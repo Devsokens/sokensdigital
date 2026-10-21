@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { Title, frenchSpacing, str, strList, type Section } from "../cms";
 import { AddItem, Editable, ItemTools, useEditor } from "../editable";
 import { Eyebrow, FONT_DISPLAY, FONT_DISPLAY_SYS, FONT_MONO } from "../ui";
 import { AuditVisual, MobileVisual, SoftwareVisual, WebVisual } from "./service-visuals";
 
-/** Visuel animé associé à chaque service (choisi dans le CMS, sinon selon la position). */
+/** Visuel animé associé à chaque service (choisi dans le CMS, sinon selon la
+ * position). Une image (`image_url`) le remplace quand elle est renseignée. */
 const VISUALS = { web: WebVisual, mobile: MobileVisual, logiciel: SoftwareVisual, audit: AuditVisual };
 const VISUAL_ORDER = ["web", "mobile", "logiciel", "audit"] as const;
 const VISUAL_LABELS: Record<(typeof VISUAL_ORDER)[number], string> = { web: "Site web", mobile: "Mobile", logiciel: "Logiciel", audit: "Audit" };
+const IMAGE_HINT = "Image affichée à la place de l'animation (format paysage de préférence). Retirez-la pour revenir à l'animation.";
 
 /** Durée d'affichage de chaque service avant de passer au suivant (= barre de progression). */
 const ROTATE_MS = 6500;
@@ -24,6 +27,7 @@ export function HomeServices({ section }: { section: Section }) {
         title: str(item, "title"),
         text: str(item, "description"),
         points: strList(item.points),
+        image: str(item, "image_url"),
         Visual: VISUALS[visual] ?? VISUALS[VISUAL_ORDER[i % VISUAL_ORDER.length]],
       };
     });
@@ -46,7 +50,7 @@ export function HomeServices({ section }: { section: Section }) {
 
   if (!services.length) return null;
   const current = Math.min(active, services.length - 1);
-  const { Visual } = services[current];
+  const { Visual, image } = services[current];
 
   return (
     <section id="services" style={{ padding: "clamp(88px, 10vw, 136px) 0" }}>
@@ -121,14 +125,26 @@ export function HomeServices({ section }: { section: Section }) {
             <div className="sd-aurora sd-au1" style={{ width: "420px", height: "420px", left: "-120px", top: "-160px", background: "oklch(var(--sd-glow-1))", opacity: 0.28 }} />
             <div className="sd-aurora sd-au2" style={{ width: "380px", height: "380px", right: "-120px", bottom: "-160px", background: "oklch(var(--sd-glow-2))", opacity: 0.24 }} />
             <div style={{ position: "absolute", inset: "0", backgroundImage: "radial-gradient(rgba(255,255,255,0.1) 1px, transparent 1px)", backgroundSize: "22px 22px", WebkitMaskImage: "radial-gradient(ellipse 70% 70% at 50% 50%, #000 20%, transparent 80%)", maskImage: "radial-gradient(ellipse 70% 70% at 50% 50%, #000 20%, transparent 80%)" }} />
-            <Visual key={current} />
+            {image ? (
+              <div key={`image-${current}`} className="sd-vin" style={{ position: "absolute", inset: "0", zIndex: 1, overflow: "hidden" }}>
+                <Editable section={section} path={{ scope: "item", index: current, key: "image_url" }} kind="image" value={image} hint={IMAGE_HINT}>
+                  <Image className="sd-kb" src={image} alt="" fill sizes="(max-width: 860px) 92vw, 680px" style={{ objectFit: "cover" }} />
+                </Editable>
+              </div>
+            ) : (
+              <Visual key={current} />
+            )}
             {editor && (
               <div style={{ position: "absolute", top: "14px", right: "14px", zIndex: 5, display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {/* Choisir une animation retire l'image éventuelle. */}
                 {VISUAL_ORDER.map((key) => (
-                  <button key={key} type="button" className="sd-add-item" style={{ minHeight: "32px", padding: "4px 12px", fontSize: "12.5px", ...(services[current].visualKey === key ? { borderStyle: "solid", background: "oklch(var(--sd-primary) / 0.2)" } : {}) }} onClick={() => editor.setItems(section, section.items.map((item, i) => (i === current ? { ...item, visual: key } : item)))}>
+                  <button key={key} type="button" className="sd-add-item" style={{ minHeight: "32px", padding: "4px 12px", fontSize: "12.5px", ...(!image && services[current].visualKey === key ? { borderStyle: "solid", background: "oklch(var(--sd-primary) / 0.2)" } : {}) }} onClick={() => editor.setItems(section, section.items.map((item, i) => (i === current ? { ...item, visual: key, image_url: "" } : item)))}>
                     {VISUAL_LABELS[key]}
                   </button>
                 ))}
+                <button type="button" className="sd-add-item" style={{ minHeight: "32px", padding: "4px 12px", fontSize: "12.5px", ...(image ? { borderStyle: "solid", background: "oklch(var(--sd-primary) / 0.2)" } : {}) }} onClick={() => editor.open({ section, path: { scope: "item", index: current, key: "image_url" }, kind: "image", value: image, hint: IMAGE_HINT, label: `${section.key}.${current + 1}.image_url` })}>
+                  {image ? "Changer l'image" : "Image"}
+                </button>
               </div>
             )}
           </div>
