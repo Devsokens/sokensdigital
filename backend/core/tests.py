@@ -629,6 +629,35 @@ class GlobalDashboardTests(APITestCase):
         response = APIClient().get('/api/v1/dashboard/')
         self.assertIn(response.status_code, (401, 403))
 
+    def test_figures_come_from_real_records(self):
+        from datetime import date
+        from marketing.models import Lead
+        from projects.models import Project
+
+        Lead.objects.create(first_name='A', last_name='B', email='a@b.ga', source=Lead.Source.SITE_WEB)
+        Project.objects.create(name='Site vitrine', category='Développement Web', budget='1000000')
+        Project.objects.create(
+            name='Appli', category='Mobile', status=Project.Status.TERMINE,
+            start_date=date(2026, 1, 1), end_date=date(2026, 1, 21),
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.marketing_user)
+        data = client.get('/api/v1/dashboard/').json()
+
+        self.assertEqual(data['leads_this_month'], 1)
+        self.assertEqual(data['trends']['leads'][-1], 1)
+        self.assertEqual(len(data['trends']['months']), 12)
+        self.assertEqual(data['avg_delivery_days'], 20)
+        self.assertEqual(data['delivery_rate'], 100)
+        self.assertEqual(
+            {c['name']: c['count'] for c in data['project_categories']},
+            {'Développement Web': 1, 'Mobile': 1},
+        )
+        # 1 lead + 2 projets créés aujourd'hui.
+        self.assertEqual(sum(day['current'] for day in data['activity_weekly']), 3)
+        self.assertEqual(len(data['activity_monthly']), 12)
+        self.assertEqual(data['quotes'], {'signed': 0, 'pending': 0, 'refused': 0})
+
 
 class GetProfileRolesCacheTests(APITestCase):
     """get_profile_roles() used to hit Firestore on every call (i.e. every

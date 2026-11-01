@@ -6,6 +6,7 @@ import type {
   ClientContact,
   ClientDocumentEntry,
   ClientInteractionEntry,
+  DirectoryContact,
   Meeting,
   MeetingNote,
   Paginated,
@@ -42,6 +43,11 @@ export function listClients(params?: { status?: string; search?: string }) {
   if (params?.search) query.set("search", params.search);
   const qs = query.toString();
   return apiFetch<Paginated<Client>>(`${BASE}/clients/${qs ? `?${qs}` : ""}`);
+}
+
+/** Tous les clients accessibles en une requête — pour les listes de choix. */
+export function listAllClients() {
+  return apiFetch<Paginated<Client>>(`${BASE}/clients/?page_size=500&ordering=company_name`);
 }
 
 export function getClient(id: string) {
@@ -84,6 +90,28 @@ export function updateContact(clientId: string, contactId: string, data: Partial
 
 export function deleteContact(clientId: string, contactId: string) {
   return apiFetch<void>(`${BASE}/clients/${clientId}/contacts/${contactId}/`, { method: "DELETE" });
+}
+
+// Annuaire des contacts (/contacts/) — rattachés ou non à un client.
+export type DirectoryContactInput = Partial<Omit<DirectoryContact, "id" | "client_name" | "created_at">>;
+
+export function listDirectoryContacts(params?: { client?: string; search?: string }) {
+  const query = new URLSearchParams({ page_size: "500" });
+  if (params?.client) query.set("client", params.client);
+  if (params?.search) query.set("search", params.search);
+  return apiFetch<Paginated<DirectoryContact>>(`${BASE}/contacts/?${query}`);
+}
+
+export function createDirectoryContact(data: DirectoryContactInput) {
+  return apiFetch<DirectoryContact>(`${BASE}/contacts/`, { method: "POST", body: JSON.stringify(data) });
+}
+
+export function updateDirectoryContact(id: string, data: DirectoryContactInput) {
+  return apiFetch<DirectoryContact>(`${BASE}/contacts/${id}/`, { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export function deleteDirectoryContact(id: string) {
+  return apiFetch<void>(`${BASE}/contacts/${id}/`, { method: "DELETE" });
 }
 
 export function listInteractions(clientId: string) {

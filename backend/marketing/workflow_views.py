@@ -76,9 +76,11 @@ class SubmittedProjectListView(APIView):
         if not has_role(request.user, *MARKETING_SIDE, *TECHNIQUE_SIDE):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
+        # Les leads générés par la création directe d'un client ne sont pas
+        # des demandes de projet — voir marketing.conversion.
         queryset = Lead.objects.select_related('specification').exclude(
             status=Lead.Status.PERDU,
-        )
+        ).exclude(source=Lead.Source.CREATION_CLIENT)
         stages = request.query_params.getlist('stage')
         if stages:
             queryset = queryset.filter(workflow_stage__in=stages)

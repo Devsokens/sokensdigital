@@ -17,19 +17,30 @@ export function ConfirmModal({
   trigger,
   disabled,
   disabledReason,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   title: string;
   description: string;
   confirmLabel?: string;
   onConfirm: () => Promise<void>;
-  trigger: React.ReactElement;
+  /** Optional when the modal is opened from elsewhere (e.g. a right-click
+   * menu item) through `open`/`onOpenChange`. */
+  trigger?: React.ReactElement;
   /** When true, the trigger still opens the modal (so the user can see
    * *why*), but the confirm button is disabled with disabledReason shown
    * instead of the usual description. */
   disabled?: boolean;
   disabledReason?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  function setOpen(next: boolean) {
+    if (controlledOpen === undefined) setInternalOpen(next);
+    onOpenChange?.(next);
+  }
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +62,7 @@ export function ConfirmModal({
 
   return (
     <Modal open={open} onOpenChange={setOpen}>
-      <ModalTrigger render={trigger} />
+      {trigger && <ModalTrigger render={trigger} />}
       <ModalContent title={title} className="max-w-sm">
         <div className="flex items-start gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">

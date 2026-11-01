@@ -14,12 +14,31 @@ class ContactSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contact
         fields = '__all__'
-        read_only_fields = ['client']
+        read_only_fields = ['client', 'created_by']
+
+
+class ContactDirectorySerializer(serializers.ModelSerializer):
+    """Contact vu depuis l'annuaire : le client est modifiable (rattacher,
+    changer ou détacher) et son nom est joint pour l'affichage."""
+    client = serializers.PrimaryKeyRelatedField(
+        queryset=Client.objects.all(), required=False, allow_null=True,
+    )
+    client_name = serializers.CharField(source='client.company_name', read_only=True, default=None)
+
+    class Meta:
+        model = Contact
+        fields = [
+            'id', 'client', 'client_name', 'first_name', 'last_name', 'email', 'phone',
+            'role', 'is_primary', 'notes', 'created_at',
+        ]
 
 class ClientListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Client
-        fields = ['id', 'company_name', 'siret', 'status', 'assigned_to', 'created_at']
+        fields = [
+            'id', 'company_name', 'siret', 'sector', 'email', 'phone', 'city', 'rating',
+            'status', 'assigned_to', 'created_at',
+        ]
 
 class ClientSerializer(serializers.ModelSerializer):
     class Meta:

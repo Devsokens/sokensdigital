@@ -29,6 +29,7 @@ from core.firestore_client import (
     report_blog_comment,
 )
 from core.notifications import notify_roles
+from core.pagination import SelectorPagination
 from core.permissions import has_role
 from core.sanitize import sanitize_plain_text
 from core.storage import upload_image, upload_video
@@ -36,6 +37,7 @@ from marketing.models import (
     BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject,
     SiteSettings, SocialMediaCredentials, SocialPost, Specification, TestimonialSubmission,
 )
+from marketing.conversion import convert_lead_to_client
 from marketing.emails import send_lead_acknowledgement
 from marketing.moderation import screen_comment
 from marketing.ratelimit import get_client_ip, is_rate_limited
@@ -204,17 +206,21 @@ class IsMarketingOrOwnCommercial(permissions.BasePermission):
 class LeadViewSet(viewsets.ModelViewSet):
     serializer_class = LeadSerializer
     permission_classes = [IsMarketingOrOwnCommercial]
+    # Le tunnel affiche toutes les colonnes d'un coup (?page_size=).
+    pagination_class = SelectorPagination
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return Lead.objects.none()
-        qs = Lead.objects.select_related('assigned_to')
+        qs = Lead.objects.select_related('assigned_to', 'client')
         if has_role(self.request.user, *MARKETING_ROLES, ROLE_SUPER_ADMIN):
             return qs
         return qs.filter(assigned_to=self.request.user)
 
     def perform_create(self, serializer):
         lead = serializer.save()
+        if lead.status == Lead.Status.CONVERTI:
+            convert_lead_to_client(lead)
         label = lead.company_name or f'{lead.first_name} {lead.last_name}'.strip()
         notify_roles(
             MARKETING_ROLES,
@@ -224,6 +230,12 @@ class LeadViewSet(viewsets.ModelViewSet):
             link='/admin/marketing/leads',
             exclude=self.request.user,
         )
+
+    def perform_update(self, serializer):
+        lead = serializer.save()
+        # Un lead converti devient client — voir marketing.conversion.
+        if lead.status == Lead.Status.CONVERTI:
+            convert_lead_to_client(lead)
 
     def perform_destroy(self, instance):
         label = instance.company_name or f'{instance.first_name} {instance.last_name}'.strip()

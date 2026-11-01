@@ -272,15 +272,26 @@ export function saveEmploymentContract(
 
   const year = new Date().getFullYear();
   const nextSeq = all.length + 1;
+  const isClientContract = contract.party_type === "CLIENT";
   const newContract: EmploymentContractDocument = {
     id: `ctr-${Date.now()}`,
     contract_number: `CTR-${year}-${String(nextSeq).padStart(4, "0")}`,
-    employee_name: contract.employee_name || "Nouveau Collaborateur",
+    party_type: contract.party_type || "SALARIE",
+    client_id: contract.client_id || null,
+    client_name: contract.client_name || "",
+    client_address: contract.client_address || "",
+    client_email: contract.client_email || "",
+    client_phone: contract.client_phone || "",
+    client_representative: contract.client_representative || "",
+    service_description: contract.service_description || "",
+    contract_amount: contract.contract_amount || "",
+    payment_terms: contract.payment_terms || "",
+    employee_name: contract.employee_name || (isClientContract ? "Nouveau client" : "Nouveau Collaborateur"),
     employee_email: contract.employee_email || "",
     employee_phone: contract.employee_phone || "",
     employee_address: contract.employee_address || "",
-    contract_type: contract.contract_type || "CDI",
-    position: contract.position || "Collaborateur",
+    contract_type: contract.contract_type || (isClientContract ? "PRESTATION_SERVICES" : "CDI"),
+    position: contract.position ?? (isClientContract ? "" : "Collaborateur"),
     department: contract.department || "Technique",
     start_date: contract.start_date || new Date().toISOString().split("T")[0],
     end_date: contract.end_date || "",
@@ -317,7 +328,7 @@ export async function sendEmploymentContractByEmail(
 ): Promise<EmploymentContractDocument> {
   const all = getStored<EmploymentContractDocument[]>(CONTRACTS_STORAGE_KEY, INITIAL_CONTRACTS);
   const found = all.find((c) => c.id === id);
-  if (!found) throw new Error("Contrat de travail introuvable.");
+  if (!found) throw new Error("Contrat introuvable.");
 
   const now = new Date().toISOString();
   found.status = "ENVOYE";
@@ -326,13 +337,16 @@ export async function sendEmploymentContractByEmail(
   setStored(CONTRACTS_STORAGE_KEY, all);
 
   try {
+    const isClientContract = found.party_type === "CLIENT";
     await sendDocumentEmail({
       recipient_emails: emails,
-      subject: `Contrat de travail : ${found.employee_name} (${found.contract_number}) — Soken's Digital`,
+      subject: `${isClientContract ? "Contrat" : "Contrat de travail"} : ${found.employee_name} (${found.contract_number}) — Soken's Digital`,
       message:
         customMessage ||
-        `Veuillez trouver les dispositions relatives à votre contrat de travail au sein de Soken's Digital.`,
-      document_title: `Contrat de travail ${found.employee_name}`,
+        (isClientContract
+          ? `Veuillez trouver ci-joint le contrat relatif à notre collaboration avec Soken's Digital.`
+          : `Veuillez trouver les dispositions relatives à votre contrat de travail au sein de Soken's Digital.`),
+      document_title: `${isClientContract ? "Contrat" : "Contrat de travail"} ${found.employee_name}`,
     });
   } catch (e) {
     console.warn("Mail dispatch handled:", e);

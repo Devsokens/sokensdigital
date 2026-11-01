@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  Building2,
   FileText,
   Loader2,
   Mail,
@@ -11,6 +12,7 @@ import {
   Plus,
   Printer,
   Trash2,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -31,6 +33,25 @@ const STATUS_LABELS: Record<string, string> = {
   ENVOYE: "Envoyé au salarié",
   TERMINE: "Terminé / Clôturé",
 };
+
+const TYPE_LABELS: Record<string, string> = {
+  PRESTATION_FREELANCE: "Freelance",
+  PRESTATION_SERVICES: "Prestation",
+  MAINTENANCE: "Maintenance",
+  CONFIDENTIALITE: "NDA",
+};
+
+type PartyFilter = "tous" | "SALARIE" | "CLIENT";
+
+const PARTY_TABS: { value: PartyFilter; label: string }[] = [
+  { value: "tous", label: "Tous" },
+  { value: "SALARIE", label: "Salariés" },
+  { value: "CLIENT", label: "Clients" },
+];
+
+function isClientContract(contract: EmploymentContractDocument) {
+  return contract.party_type === "CLIENT";
+}
 
 const STATUS_COLORS: Record<string, string> = {
   BROUILLON: "bg-neutral-100 text-neutral-600",
@@ -57,6 +78,15 @@ export function EmploymentContractList({
   const [loading, setLoading] = useState(true);
   const [viewing, setViewing] = useState<EmploymentContractDocument | null>(null);
   const [sendingContract, setSendingContract] = useState<EmploymentContractDocument | null>(null);
+  const [partyFilter, setPartyFilter] = useState<PartyFilter>("tous");
+
+  const visibleContracts = useMemo(
+    () =>
+      contracts?.filter(
+        (c) => partyFilter === "tous" || (c.party_type ?? "SALARIE") === partyFilter
+      ) ?? null,
+    [contracts, partyFilter]
+  );
 
   async function load() {
     setLoading(true);
@@ -81,16 +111,39 @@ export function EmploymentContractList({
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">Contrats de travail</h1>
+          <h1 className="text-2xl font-semibold text-neutral-900">Contrats</h1>
           <p className="text-sm text-neutral-500">
-            Gestion et génération des contrats de travail, avenants et conventions pour les collaborateurs.
+            Contrats de travail des collaborateurs et contrats commerciaux avec les clients.
           </p>
         </div>
-        <Link href={`${basePath}/nouveau`}>
-          <Button className="gap-1.5 rounded-full px-4 shadow-sm">
-            <Plus className="size-4" /> Nouveau contrat
-          </Button>
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={`${basePath}/nouveau?type=client`}>
+            <Button variant="outline" className="gap-1.5 rounded-full px-4">
+              <Building2 className="size-4" /> Contrat client
+            </Button>
+          </Link>
+          <Link href={`${basePath}/nouveau`}>
+            <Button className="gap-1.5 rounded-full px-4 shadow-sm">
+              <Plus className="size-4" /> Contrat de travail
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      <div className="mb-4 flex w-fit gap-1 rounded-lg border border-neutral-200 bg-white p-1">
+        {PARTY_TABS.map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            onClick={() => setPartyFilter(t.value)}
+            className={cn(
+              "rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors",
+              partyFilter === t.value ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-50"
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {loading ? (
@@ -103,8 +156,8 @@ export function EmploymentContractList({
             <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
               <tr>
                 <th className="px-4 py-3 font-medium">N° Contrat</th>
-                <th className="px-4 py-3 font-medium">Salarié / Collaborateur</th>
-                <th className="px-4 py-3 font-medium">Poste & Département</th>
+                <th className="px-4 py-3 font-medium">Salarié / Client</th>
+                <th className="px-4 py-3 font-medium">Poste / Objet</th>
                 <th className="px-4 py-3 font-medium">Type</th>
                 <th className="px-4 py-3 font-medium">Statut</th>
                 <th className="px-4 py-3 font-medium">Date d&apos;effet</th>
@@ -112,8 +165,8 @@ export function EmploymentContractList({
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-200">
-              {contracts &&
-                contracts.map((item) => (
+              {visibleContracts &&
+                visibleContracts.map((item) => (
                   <tr key={item.id} className="hover:bg-neutral-50/50">
                     <td className="px-4 py-3 font-mono font-semibold text-neutral-900">
                       <button
@@ -126,18 +179,39 @@ export function EmploymentContractList({
                       </button>
                     </td>
                     <td className="px-4 py-3 text-neutral-800 font-medium">
-                      <div>{item.employee_name}</div>
+                      <div className="flex items-center gap-1.5">
+                        {isClientContract(item) ? (
+                          <Building2 className="size-3.5 shrink-0 text-neutral-400" />
+                        ) : (
+                          <User className="size-3.5 shrink-0 text-neutral-400" />
+                        )}
+                        {isClientContract(item) && item.client_id ? (
+                          <Link href={`/admin/rh/clients/${item.client_id}`} className="hover:text-primary">
+                            {item.employee_name}
+                          </Link>
+                        ) : (
+                          item.employee_name
+                        )}
+                      </div>
                       {item.employee_email && (
                         <div className="text-xs text-neutral-400">{item.employee_email}</div>
                       )}
                     </td>
                     <td className="px-4 py-3 text-neutral-600">
-                      <div>{item.position}</div>
-                      {item.department && (
-                        <div className="text-xs text-neutral-400">{item.department}</div>
+                      {isClientContract(item) ? (
+                        <div className="max-w-64 truncate">{item.service_description || "—"}</div>
+                      ) : (
+                        <>
+                          <div>{item.position}</div>
+                          {item.department && (
+                            <div className="text-xs text-neutral-400">{item.department}</div>
+                          )}
+                        </>
                       )}
                     </td>
-                    <td className="px-4 py-3 font-semibold text-neutral-700">{item.contract_type}</td>
+                    <td className="px-4 py-3 font-semibold text-neutral-700">
+                      {TYPE_LABELS[item.contract_type] ?? item.contract_type}
+                    </td>
                     <td className="px-4 py-3">
                       <span
                         className={cn(
@@ -180,7 +254,7 @@ export function EmploymentContractList({
                             onClick={() => setSendingContract(item)}
                             className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50"
                           >
-                            <Mail className="size-3.5" /> Envoyer au salarié
+                            <Mail className="size-3.5" /> {isClientContract(item) ? "Envoyer au client" : "Envoyer au salarié"}
                           </button>
                           <ConfirmModal
                             title="Supprimer le contrat"
@@ -200,10 +274,10 @@ export function EmploymentContractList({
                     </td>
                   </tr>
                 ))}
-              {contracts && contracts.length === 0 && (
+              {visibleContracts && visibleContracts.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-4 py-12 text-center text-neutral-400">
-                    Aucun contrat de travail pour le moment.
+                    Aucun contrat pour le moment.
                   </td>
                 </tr>
               )}
@@ -226,7 +300,7 @@ export function EmploymentContractList({
         <SendDocumentModal
           open={Boolean(sendingContract)}
           onOpenChange={(isOpen) => !isOpen && setSendingContract(null)}
-          documentTitle={`Contrat de travail : ${sendingContract.employee_name}`}
+          documentTitle={`${isClientContract(sendingContract) ? "Contrat" : "Contrat de travail"} : ${sendingContract.employee_name}`}
           documentNumber={sendingContract.contract_number}
           recipientName={sendingContract.employee_name}
           suggestedEmails={sendingContract.employee_email ? [sendingContract.employee_email] : []}

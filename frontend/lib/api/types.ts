@@ -68,6 +68,21 @@ export interface ClientContact {
   is_primary: boolean;
 }
 
+/** Contact vu depuis l'annuaire — le client est facultatif. */
+export interface DirectoryContact {
+  id: string;
+  client: string | null;
+  client_name: string | null;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  role: string;
+  is_primary: boolean;
+  notes: string;
+  created_at: string;
+}
+
 export type InteractionType = "CALL" | "EMAIL" | "MEETING" | "OTHER";
 
 export interface ClientInteractionEntry {
@@ -195,7 +210,14 @@ export interface EmployeeProfile {
   created_at: string;
 }
 
-export type LeadSource = "FORMULAIRE_CONTACT" | "FORMULAIRE_DEVIS" | "APPEL_ENTRANT" | "SITE_WEB" | "EVENEMENT";
+export type LeadSource =
+  | "FORMULAIRE_CONTACT"
+  | "FORMULAIRE_DEVIS"
+  | "APPEL_ENTRANT"
+  | "SITE_WEB"
+  | "EVENEMENT"
+  /** Lead généré automatiquement par la création directe d'un client. */
+  | "CREATION_CLIENT";
 export type LeadStatus = "NOUVEAU" | "QUALIFIE" | "PROPOSITION_EN_COURS" | "PERDU" | "CONVERTI";
 
 export interface LeadContactPerson {
@@ -233,6 +255,9 @@ export interface Lead {
   documents?: LeadDocumentItem[];
   attachment_url?: string | null;
   attachment_name?: string | null;
+  /** Client CRM issu de la conversion du lead (lecture seule). */
+  client: string | null;
+  client_name: string | null;
   created_at: string;
 }
 
@@ -540,6 +565,12 @@ export interface MarketingDashboard {
 /** GET /api/v1/dashboard/ — one flat snapshot per department, identical
  * for every authenticated role (no per-role filtering). See
  * backend/core/views.py::global_dashboard. */
+export interface DashboardComparisonPoint {
+  label: string;
+  current: number;
+  previous: number;
+}
+
 export interface GlobalDashboard {
   active_employees: number;
   new_hires_this_month: number;
@@ -551,6 +582,29 @@ export interface GlobalDashboard {
   active_projects: number;
   pending_disbursements: number;
   open_tickets: number;
+  /** Pourcentage de tickets fermés, null s'il n'y a encore aucun ticket. */
+  ticket_resolution_rate: number | null;
+  leads_this_month: number;
+  leads_previous_month: number;
+  projects_created_this_month: number;
+  cash_balance_previous_month_end: string;
+  avg_delivery_days: number | null;
+  delivered_projects: number;
+  /** Projets terminés / projets clos (terminés + annulés), en %. */
+  delivery_rate: number | null;
+  quotes: { signed: number; pending: number; refused: number };
+  tasks: { done: number; pending: number };
+  /** Séries des 12 derniers mois, mois courant en dernier. */
+  trends: {
+    months: string[];
+    leads: number[];
+    projects_created: number[];
+    cash_balance: string[];
+    avg_delivery_days: (number | null)[];
+  };
+  activity_weekly: DashboardComparisonPoint[];
+  activity_monthly: DashboardComparisonPoint[];
+  project_categories: { name: string; count: number; budget: string }[];
 }
 
 export type FAQAudience = "PUBLIC" | "INTERNE";
@@ -1251,7 +1305,20 @@ export interface ServiceProposal {
   updated_at: string;
 }
 
-export type EmploymentContractType = "CDI" | "CDD" | "STAGE" | "PRESTATION_FREELANCE";
+/** SALARIE : contrat de travail avec un collaborateur. CLIENT : contrat
+ * commercial avec un client du CRM. Absent sur les contrats créés avant
+ * l'ajout des contrats clients — à lire comme SALARIE. */
+export type ContractPartyType = "SALARIE" | "CLIENT";
+
+export type EmploymentContractType =
+  | "CDI"
+  | "CDD"
+  | "STAGE"
+  | "PRESTATION_FREELANCE"
+  // Contrats clients
+  | "PRESTATION_SERVICES"
+  | "MAINTENANCE"
+  | "CONFIDENTIALITE";
 export type EmploymentContractStatus = "BROUILLON" | "ACTIF" | "TERMINE" | "ENVOYE";
 
 export interface EmploymentContractClause {
@@ -1263,6 +1330,23 @@ export interface EmploymentContractClause {
 export interface EmploymentContractDocument {
   id: string;
   contract_number: string;
+  party_type?: ContractPartyType;
+  /** Contrat client : client CRM sélectionné et ses coordonnées au moment
+   * de la rédaction (copiées, le document ne doit pas changer si la fiche
+   * client est modifiée ensuite). */
+  client_id?: string | null;
+  client_name?: string;
+  client_address?: string;
+  client_email?: string;
+  client_phone?: string;
+  /** Signataire côté client. */
+  client_representative?: string;
+  /** Objet de la prestation. */
+  service_description?: string;
+  contract_amount?: string;
+  payment_terms?: string;
+  /** Contrat salarié : nom du salarié. Contrat client : raison sociale du
+   * client, pour que listes et e-mails aient toujours un nom à afficher. */
   employee_name: string;
   employee_email?: string;
   employee_phone?: string;

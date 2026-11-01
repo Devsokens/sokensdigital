@@ -38,13 +38,17 @@ class LeadSerializer(serializers.ModelSerializer):
     assigned_to_id = serializers.PrimaryKeyRelatedField(
         source='assigned_to', queryset=User.objects.all(), write_only=True, required=False, allow_null=True,
     )
+    # Fixé par la conversion (marketing.conversion), jamais par le payload.
+    client = serializers.PrimaryKeyRelatedField(read_only=True)
+    client_name = serializers.CharField(source='client.company_name', read_only=True, default=None)
 
     class Meta:
         model = Lead
         fields = [
             'id', 'first_name', 'last_name', 'company_name', 'email', 'phone',
             'source', 'message', 'status', 'assigned_to', 'assigned_to_id',
-            'qualification_score', 'estimated_value', 'contacts', 'documents', 'created_at',
+            'qualification_score', 'estimated_value', 'contacts', 'documents',
+            'client', 'client_name', 'created_at',
         ]
 
     def create(self, validated_data):

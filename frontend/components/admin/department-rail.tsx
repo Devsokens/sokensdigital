@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { ADMIN_SECTIONS, SECTION_ICONS, SECTION_SHORT_LABELS, findNavMatch, filterSectionsByAccess } from "@/lib/admin-nav";
 import { usePermissions } from "@/lib/admin/permissions-context";
 import { cn } from "@/lib/utils";
@@ -16,7 +16,6 @@ import { cn } from "@/lib/utils";
  * same pathname-derived value to show only that department's items. */
 export function DepartmentRail() {
   const pathname = usePathname();
-  const router = useRouter();
   const { canAccessModule } = usePermissions();
   const sections = filterSectionsByAccess(ADMIN_SECTIONS, canAccessModule);
   const activeSectionTitle = findNavMatch(pathname, sections)?.section.title ?? null;
@@ -24,7 +23,7 @@ export function DepartmentRail() {
   return (
     <aside
       data-tour="department-switcher"
-      className="fixed inset-y-0 left-0 z-40 hidden w-20 flex-col items-center border-r border-white/10 bg-background/95 py-5 backdrop-blur-md lg:flex"
+      className="fixed inset-y-0 left-0 z-40 hidden w-20 flex-col items-center border-r border-white/10 bg-background py-5 lg:flex"
     >
       <Link
         href="/admin"
@@ -39,10 +38,11 @@ export function DepartmentRail() {
           const Icon = SECTION_ICONS[section.title];
           const isActive = activeSectionTitle === section.title;
           return (
-            <button
+            // <Link> et non router.push() : seul un lien est préchargé, ce
+            // qui rend le changement de département instantané en production.
+            <Link
               key={section.title}
-              type="button"
-              onClick={() => router.push((section.items.find((item) => !item.comingSoon) ?? section.items[0]).href)}
+              href={(section.items.find((item) => !item.comingSoon) ?? section.items[0]).href}
               aria-current={isActive ? "page" : undefined}
               className={cn(
                 "flex w-16 flex-col items-center gap-1 rounded-xl px-1 py-2.5 transition-colors",
@@ -53,7 +53,7 @@ export function DepartmentRail() {
               <span className="w-full truncate text-center text-[0.62rem] leading-none font-medium">
                 {SECTION_SHORT_LABELS[section.title]}
               </span>
-            </button>
+            </Link>
           );
         })}
       </nav>

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, FileText, Loader2, Mail, Phone, Plus, Star, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, FileText, Link2, Loader2, Mail, Phone, Plus, Star, Trash2, Upload } from "lucide-react";
 import {
   getClient,
   listContacts,
@@ -13,12 +13,14 @@ import {
   listClientDocuments,
   createClientDocument,
   deleteClientDocument,
+  listDirectoryContacts,
+  updateDirectoryContact,
 } from "@/lib/api/administration";
 import { listUsers } from "@/lib/api/hr";
 import { listProjects } from "@/lib/api/projects";
 import { listAppointments, listClientEmails } from "@/lib/api/administration";
 import { MeetingSheet } from "@/components/admin/agenda/meeting-sheet";
-import type { Appointment, Client, ClientContact, ClientDocumentEntry, ClientInteractionEntry, ClientStatus, Project, SentEmail, UserBrief } from "@/lib/api/types";
+import type { Appointment, Client, ClientContact, ClientDocumentEntry, ClientInteractionEntry, ClientStatus, DirectoryContact, Project, SentEmail, UserBrief } from "@/lib/api/types";
 import { ClientFormModal } from "@/components/admin/rh/client-form-modal";
 import { ConfirmModal } from "@/components/admin/confirm-modal";
 import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/ui/tabs";
@@ -273,6 +275,34 @@ function ContactsPanel({
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ first_name: "", last_name: "", email: "", phone: "", role: "", is_primary: false });
   const [saving, setSaving] = useState(false);
+  // Rattachement d'un contact de l'annuaire encore sans client.
+  const [attaching, setAttaching] = useState(false);
+  const [unattached, setUnattached] = useState<DirectoryContact[] | null>(null);
+  const [attachId, setAttachId] = useState("");
+
+  async function startAttach() {
+    setAttaching(true);
+    setAttachId("");
+    try {
+      const res = await listDirectoryContacts();
+      setUnattached(res.results.filter((c) => !c.client));
+    } catch {
+      setUnattached([]);
+    }
+  }
+
+  async function handleAttach(e: React.FormEvent) {
+    e.preventDefault();
+    if (!attachId) return;
+    setSaving(true);
+    try {
+      await updateDirectoryContact(attachId, { client: clientId });
+      setAttaching(false);
+      onChange();
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -328,10 +358,41 @@ function ContactsPanel({
               <Button type="button" variant="outline" onClick={() => setAdding(false)} className="rounded-full px-4">Annuler</Button>
             </div>
           </form>
+        ) : attaching ? (
+          <form onSubmit={handleAttach} className="flex flex-wrap items-center gap-2 rounded-xl border border-neutral-200 bg-white p-4">
+            {unattached === null ? (
+              <Loader2 className="size-4 animate-spin text-neutral-400" />
+            ) : unattached.length === 0 ? (
+              <p className="text-xs text-neutral-500">
+                Aucun contact sans client dans l&apos;annuaire.{" "}
+                <Link href="/admin/rh/contacts" className="font-medium text-primary hover:underline">Ouvrir les contacts</Link>
+              </p>
+            ) : (
+              <select value={attachId} onChange={(e) => setAttachId(e.target.value)} className={cn(inputClass, "max-w-xs")} required>
+                <option value="">— Choisir un contact —</option>
+                {unattached.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.first_name} {c.last_name}{c.email ? ` (${c.email})` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
+            {unattached && unattached.length > 0 && (
+              <Button type="submit" disabled={saving || !attachId} className="rounded-full px-4">
+                {saving ? <Loader2 className="size-4 animate-spin" /> : "Rattacher"}
+              </Button>
+            )}
+            <Button type="button" variant="outline" onClick={() => setAttaching(false)} className="rounded-full px-4">Annuler</Button>
+          </form>
         ) : (
-          <button type="button" onClick={() => setAdding(true)} className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
-            <Plus className="size-3.5" /> Ajouter un contact
-          </button>
+          <div className="flex flex-wrap items-center gap-4">
+            <button type="button" onClick={() => setAdding(true)} className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
+              <Plus className="size-3.5" /> Ajouter un contact
+            </button>
+            <button type="button" onClick={startAttach} className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
+              <Link2 className="size-3.5" /> Rattacher un contact existant
+            </button>
+          </div>
         )
       )}
     </div>

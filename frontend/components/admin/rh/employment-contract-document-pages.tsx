@@ -7,6 +7,7 @@ import {
   Page,
   Paragraphs,
 } from "@/components/admin/marketing/document-print-primitives";
+import { SITE } from "@/lib/seo/site";
 
 export const CONTRACT_PAGE_COUNT = 3;
 
@@ -15,7 +16,13 @@ const CONTRACT_TYPE_LABELS: Record<string, string> = {
   CDD: "Contrat à Durée Déterminée (C.D.D)",
   STAGE: "Convention de Stage Professionnel",
   PRESTATION_FREELANCE: "Contrat de Prestation de Services Freelance",
+  PRESTATION_SERVICES: "Contrat de Prestation de Services",
+  MAINTENANCE: "Contrat de Maintenance & Support",
+  CONFIDENTIALITE: "Accord de Confidentialité (NDA)",
 };
+
+// Coordonnées officielles (lib/seo/site.ts) pour les contrats clients.
+const COMPANY_CITY = `${SITE.address.locality}, ${SITE.address.countryName}`;
 
 export function EmploymentContractDocumentPages({
   contract,
@@ -31,6 +38,7 @@ export function EmploymentContractDocumentPages({
   const showPage3 = onlyPage === undefined || onlyPage === 2;
 
   const typeLabel = CONTRACT_TYPE_LABELS[contract.contract_type] || contract.contract_type;
+  const isClient = contract.party_type === "CLIENT";
 
   const startDateText = contract.start_date
     ? new Date(contract.start_date).toLocaleDateString("fr-FR", {
@@ -63,10 +71,10 @@ export function EmploymentContractDocumentPages({
                     className="inline-block rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider text-white"
                     style={{ backgroundColor: accentColor }}
                   >
-                    Ressources Humaines & Juridique
+                    {isClient ? "Direction Commerciale & Juridique" : "Ressources Humaines & Juridique"}
                   </span>
                   <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-neutral-900 uppercase">
-                    Contrat de Travail
+                    {isClient ? "Contrat Client" : "Contrat de Travail"}
                   </h1>
                   <p className="mt-1 text-sm font-semibold text-neutral-600">
                     {typeLabel}
@@ -94,14 +102,40 @@ export function EmploymentContractDocumentPages({
                     <p className="font-bold text-sm text-neutral-900">
                       1. La Société SOKEN&apos;S DIGITAL SARL
                     </p>
-                    <p className="text-neutral-600">
-                      Société de services numériques au capital de 10 000 000 FCFA, dont le siège social est situé à Abidjan, Côte d&apos;Ivoire, immatriculée au Registre du Commerce et du Crédit Mobilier, représentée par sa Direction Générale.
-                    </p>
+                    {isClient ? (
+                      <p className="text-neutral-600">
+                        Société de services numériques dont le siège social est situé à {COMPANY_CITY}, immatriculée au RCCM sous le numéro {SITE.rccm}, représentée par sa Direction Générale.
+                      </p>
+                    ) : (
+                      <p className="text-neutral-600">
+                        Société de services numériques au capital de 10 000 000 FCFA, dont le siège social est situé à Abidjan, Côte d&apos;Ivoire, immatriculée au Registre du Commerce et du Crédit Mobilier, représentée par sa Direction Générale.
+                      </p>
+                    )}
                     <p className="mt-1 font-semibold text-neutral-800">
-                      Ci-après dénommée &quot;L&apos;Employeur&quot; d&apos;une part,
+                      Ci-après dénommée {isClient ? "\"Le Prestataire\"" : "\"L'Employeur\""} d&apos;une part,
                     </p>
                   </div>
 
+                  {isClient ? (
+                    <div className="border-t border-neutral-100 pt-3">
+                      <p className="font-bold text-sm text-neutral-900">
+                        2. {contract.client_name || contract.employee_name}
+                      </p>
+                      {contract.client_address && (
+                        <p className="text-neutral-600">Siège social : {contract.client_address}</p>
+                      )}
+                      {contract.client_representative && (
+                        <p className="text-neutral-600">Représentée par : {contract.client_representative}</p>
+                      )}
+                      <div className="mt-1 flex items-center gap-4 text-neutral-500">
+                        {contract.client_email && <span>Email : {contract.client_email}</span>}
+                        {contract.client_phone && <span>Tél : {contract.client_phone}</span>}
+                      </div>
+                      <p className="mt-1 font-semibold text-neutral-800">
+                        Ci-après dénommée &quot;Le Client&quot; d&apos;autre part.
+                      </p>
+                    </div>
+                  ) : (
                   <div className="border-t border-neutral-100 pt-3">
                     <p className="font-bold text-sm text-neutral-900">
                       2. {contract.employee_name}
@@ -117,10 +151,23 @@ export function EmploymentContractDocumentPages({
                       Ci-après dénommé(e) &quot;Le Salarié&quot; d&apos;autre part.
                     </p>
                   </div>
+                  )}
                 </div>
               </div>
 
               {/* Cadre de l'engagement */}
+              {isClient ? (
+              <div className="rounded-xl border border-neutral-100 bg-neutral-100/50 p-4 text-xs text-neutral-700 space-y-2">
+                <p className="font-bold text-neutral-900">Objet du contrat</p>
+                <p className="leading-relaxed whitespace-pre-wrap">
+                  {contract.service_description || "Objet de la prestation à préciser."}
+                </p>
+                <p>
+                  Date de prise d&apos;effet : <span className="font-semibold">{startDateText}</span>
+                  {endDateText && <> — Terme : <span className="font-semibold">{endDateText}</span></>}
+                </p>
+              </div>
+              ) : (
               <div className="rounded-xl border border-neutral-100 bg-neutral-100/50 p-4 text-xs text-neutral-700 space-y-2">
                 <p className="font-bold text-neutral-900">
                   Poste & Affectation : {contract.position}
@@ -133,14 +180,23 @@ export function EmploymentContractDocumentPages({
                   Date de prise de fonction : <span className="font-semibold">{startDateText}</span>
                 </p>
               </div>
+              )}
             </div>
 
             <div className="border-t border-neutral-200 pt-6">
-              <ContactBlock
-                address="Abidjan, Côte d'Ivoire&#10;Direction des Ressources Humaines"
-                phone="+225 07 00 00 00 00"
-                email="rh@sokensdigital.com"
-              />
+              {isClient ? (
+                <ContactBlock
+                  address={`${COMPANY_CITY}\nDirection Commerciale`}
+                  phone={SITE.telephone}
+                  email={SITE.email}
+                />
+              ) : (
+                <ContactBlock
+                  address="Abidjan, Côte d'Ivoire&#10;Direction des Ressources Humaines"
+                  phone="+225 07 00 00 00 00"
+                  email="rh@sokensdigital.com"
+                />
+              )}
             </div>
           </div>
         </Page>
@@ -155,14 +211,39 @@ export function EmploymentContractDocumentPages({
             <div className="space-y-6">
               <div className="flex items-baseline justify-between border-b border-neutral-200 pb-2">
                 <h2 className="text-lg font-bold text-neutral-900" style={{ color: accentColor }}>
-                  Conditions d&apos;Exercice & Rémunération
+                  {isClient ? "Conditions Financières & Exécution" : "Conditions d'Exercice & Rémunération"}
                 </h2>
                 <span className="font-mono text-xs text-neutral-400">
                   {contract.contract_number} — PAGE 2
                 </span>
               </div>
 
+              {isClient && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                    <span className="text-[0.7rem] uppercase font-bold text-neutral-400">Montant du contrat</span>
+                    <p className="mt-1 text-base font-bold text-neutral-900 font-mono">
+                      {contract.contract_amount || "À définir"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                    <span className="text-[0.7rem] uppercase font-bold text-neutral-400">Lieu d&apos;exécution</span>
+                    <p className="mt-1 text-xs font-semibold text-neutral-900">
+                      {contract.workplace || "Locaux du Prestataire et/ou du Client"}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {isClient && contract.payment_terms && (
+                <div className="rounded-xl border border-neutral-200 bg-white p-4 text-xs">
+                  <span className="font-bold text-neutral-800">Modalités de paiement :</span>
+                  <p className="mt-1 text-neutral-600 leading-relaxed whitespace-pre-wrap">{contract.payment_terms}</p>
+                </div>
+              )}
+
               {/* Rémunération & Avantages */}
+              {!isClient && (
               <div className="grid grid-cols-2 gap-4">
                 <div className="rounded-xl border border-neutral-200 bg-white p-4">
                   <span className="text-[0.7rem] uppercase font-bold text-neutral-400">
@@ -188,8 +269,9 @@ export function EmploymentContractDocumentPages({
                   </p>
                 </div>
               </div>
+              )}
 
-              {contract.benefits && (
+              {!isClient && contract.benefits && (
                 <div className="rounded-xl border border-neutral-200 bg-white p-4 text-xs">
                   <span className="font-bold text-neutral-800">Avantages & Équipements accordés :</span>
                   <p className="mt-1 text-neutral-600 leading-relaxed">{contract.benefits}</p>
@@ -251,7 +333,7 @@ export function EmploymentContractDocumentPages({
               {/* Bloc final de signature */}
               <div className="mt-8 rounded-xl border border-neutral-200 bg-white p-6">
                 <p className="text-xs font-bold text-neutral-800 uppercase tracking-wide">
-                  Fait à Abidjan, en deux (2) exemplaires originaux de bonne foi
+                  Fait à {isClient ? SITE.address.locality : "Abidjan"}, en deux (2) exemplaires originaux de bonne foi
                 </p>
                 <div className="mt-4 grid grid-cols-2 gap-8 text-xs text-neutral-500">
                   <div>
@@ -261,8 +343,13 @@ export function EmploymentContractDocumentPages({
                   </div>
                   <div>
                     <p className="font-semibold text-neutral-800">
-                      Le Collaborateur / La Collaboratrice
+                      {isClient
+                        ? `Pour le Client — ${contract.client_name || contract.employee_name}`
+                        : "Le Collaborateur / La Collaboratrice"}
                     </p>
+                    {isClient && contract.client_representative && (
+                      <p className="mt-1 text-[0.7rem]">{contract.client_representative}</p>
+                    )}
                     <p className="mt-1 text-[0.7rem]">Signature précédée de la mention manuscrite &quot;Lu et approuvé&quot;</p>
                     <div className="mt-10 h-14 border-b border-dashed border-neutral-300" />
                   </div>
@@ -271,7 +358,7 @@ export function EmploymentContractDocumentPages({
             </div>
 
             <div className="border-t border-neutral-200 pt-4 text-center text-[0.65rem] text-neutral-400">
-              SOKEN&apos;S DIGITAL — Direction des Ressources Humaines — Document légal
+              SOKEN&apos;S DIGITAL — {isClient ? "Direction Commerciale" : "Direction des Ressources Humaines"} — Document légal
             </div>
           </div>
         </Page>

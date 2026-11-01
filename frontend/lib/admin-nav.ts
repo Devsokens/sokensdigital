@@ -20,6 +20,7 @@ import {
   PieChart,
   Settings,
   Contact2,
+  BookUser,
   ClipboardList,
   ShoppingCart,
   Wallet,
@@ -79,6 +80,8 @@ export const ADMIN_SECTIONS: NavSection[] = [
     title: "Administration",
     items: [
       { label: "Clients", href: "/admin/rh/clients", icon: Contact2, moduleKey: "clients" },
+      // Même module de droits que Clients : un contact est une donnée CRM.
+      { label: "Contacts", href: "/admin/rh/contacts", icon: BookUser, moduleKey: "clients" },
       { label: "Utilisateurs & Rôles", shortLabel: "Utilisateurs", href: "/admin/rh/utilisateurs", icon: UserCog, moduleKey: "utilisateurs" },
       { label: "Audit Log", href: "/admin/rh/audit-log", icon: ScrollText, moduleKey: "audit-log" },
       // RH — sous-interface d'Administration, regroupée visuellement dans
@@ -86,7 +89,8 @@ export const ADMIN_SECTIONS: NavSection[] = [
       // département de premier niveau.
       { label: "Tableau de bord", shortLabel: "Dashboard", href: "/admin/rh/dashboard", icon: LayoutDashboard, moduleKey: "rh-dashboard", group: "RH" },
       { label: "Employés", href: "/admin/rh", icon: Users, moduleKey: "employes", group: "RH" },
-      { label: "Contrats de travail", shortLabel: "Contrats", href: "/admin/rh/contrats-travail", icon: ScrollText, moduleKey: "employes", group: "RH" },
+      // Contrats de travail ET contrats clients (même éditeur, voir employment-contract-editor).
+      { label: "Contrats", href: "/admin/rh/contrats-travail", icon: ScrollText, moduleKey: "employes", group: "RH" },
       { label: "Départements", href: "/admin/rh/departements", icon: Building2, moduleKey: "departements", group: "RH" },
     ],
   },

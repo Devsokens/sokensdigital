@@ -10,12 +10,14 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from core import calendar_sync, mailer
 from core.models import AuditLog, EmailLog, Notification
 from core.notifications import notify
+from core.pagination import SelectorPagination
 from core.storage import upload_client_document
 from core.constants import (
     ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PROJECT_MANAGER,
@@ -27,6 +29,7 @@ from core.permissions import (
     IsDirecteurFinancier, IsCommercial, IsRHManager,
     IsOwner, IsAdminOrReadOnly, ReadOnly, HasModulePermission,
 )
+from marketing.conversion import create_converted_lead_for_client
 
 from .models import (
     Client, Contact, ClientInteraction, ClientDocument, EmployeeDocument,
@@ -34,7 +37,8 @@ from .models import (
     Meeting, MeetingNote,
 )
 from .serializers import (
-    ClientSerializer, ClientListSerializer, ContactSerializer, ClientInteractionSerializer,
+    ClientSerializer, ClientListSerializer, ContactSerializer, ContactDirectorySerializer,
+    ClientInteractionSerializer,
     ClientDocumentSerializer, EmployeeDocumentSerializer, LeaveRequestSerializer,
     CompanyAssetSerializer, AdministrativeRecordSerializer, ContractGeneratorSerializer,
     AppointmentSerializer, MeetingSerializer, MeetingNoteSerializer,
@@ -73,6 +77,7 @@ def _accessible_clients_qs(user):
 # CRM — Clients
 # ---------------------------------------------------------------------------
 
+
 # Rôles ayant une raison d'accéder au module clients, ne serait-ce que de
 # façon scopée — le reste (Directeur Financier, Comptable, RH, Développeur,
 # Consultant, Marketing, pas de rôle) n'y figure dans aucune entrée de
@@ -93,6 +98,7 @@ class ClientViewSet(viewsets.ModelViewSet):
     Suppression interdite — utiliser l'action ``archive`` (Super-Admin uniquement).
     """
     queryset = Client.objects.all()
+    pagination_class = SelectorPagination
     filterset_fields = ['status', 'sector', 'assigned_to']
     search_fields = ['company_name', 'siret', 'email']
     ordering_fields = ['created_at', 'company_name', 'status']
@@ -132,9 +138,12 @@ class ClientViewSet(viewsets.ModelViewSet):
         )
         if is_commercial_only:
             # Un Commercial ne peut créer un client que pour lui-même.
-            serializer.save(assigned_to=user)
+            client = serializer.save(assigned_to=user)
         else:
-            serializer.save()
+            client = serializer.save()
+        # Un client créé directement figure d'office parmi les convertis du
+        # tunnel commercial — voir marketing.conversion.
+        create_converted_lead_for_client(client)
 
     @action(detail=True, methods=['post'], permission_classes=[IsSuperAdmin])
     def archive(self, request, pk=None):
@@ -201,7 +210,47 @@ class ContactViewSet(viewsets.ModelViewSet):
         if not _accessible_clients_qs(self.request.user).filter(pk=client_pk).exists():
             raise PermissionDenied("Vous n'avez pas accès à ce client.")
         client = get_object_or_404(Client, pk=client_pk)
-        serializer.save(client=client)
+        serializer.save(client=client, created_by=self.request.user)
+
+
+class ContactDirectoryViewSet(viewsets.ModelViewSet):
+    """Annuaire des contacts (/contacts/), rattachés ou non à un client.
+
+    Un contact rattaché est visible de quiconque voit son client. Un contact
+    encore sans client est visible des rôles qui voient tous les clients, et
+    de la personne qui l'a créé.
+    """
+    serializer_class = ContactDirectorySerializer
+    pagination_class = SelectorPagination
+    filterset_fields = ['client']
+    search_fields = ['first_name', 'last_name', 'email', 'phone', 'role', 'client__company_name']
+    ordering_fields = ['last_name', 'first_name', 'created_at']
+
+    def get_permissions(self):
+        return [permissions.IsAuthenticated(), IsHasClientAccess(), HasModulePermission('clients')]
+
+    def get_queryset(self):
+        user = self.request.user
+        sees_all = user.roles.filter(name__in=[*ADMIN_ROLES, ROLE_SUPPORT_CLIENT]).exists()
+        unattached = Q(client__isnull=True) if sees_all else Q(client__isnull=True, created_by=user)
+        return (
+            Contact.objects.select_related('client')
+            .filter(Q(client__in=_accessible_clients_qs(user)) | unattached)
+            .distinct()
+        )
+
+    def _check_client(self, serializer):
+        client = serializer.validated_data.get('client')
+        if client and not _accessible_clients_qs(self.request.user).filter(pk=client.pk).exists():
+            raise PermissionDenied("Vous n'avez pas accès à ce client.")
+
+    def perform_create(self, serializer):
+        self._check_client(serializer)
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        self._check_client(serializer)
+        serializer.save()
 
 
 # ---------------------------------------------------------------------------

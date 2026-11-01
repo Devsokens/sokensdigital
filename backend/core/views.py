@@ -1,4 +1,5 @@
 import logging
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.core.cache import cache
@@ -662,9 +663,12 @@ def global_search(request):
             Q(first_name__icontains=query) | Q(last_name__icontains=query) | Q(company_name__icontains=query)
         )[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
         for lead in matches:
+            # L'entreprise d'abord, comme sur les cartes du tunnel — et un
+            # lead issu d'un client créé directement n'a parfois pas de nom.
+            person = f'{lead.first_name} {lead.last_name}'.strip()
             results.append({
-                'category': 'Leads', 'label': f'{lead.first_name} {lead.last_name}'.strip(),
-                'sublabel': lead.company_name, 'href': '/admin/marketing/leads',
+                'category': 'Leads', 'label': lead.company_name or person,
+                'sublabel': person if lead.company_name else '', 'href': '/admin/marketing/leads',
             })
 
         quotes = Quote.objects.select_related('lead')
@@ -717,10 +721,46 @@ def global_search(request):
     return Response(results)
 
 
-GLOBAL_DASHBOARD_CACHE_KEY = 'core:dashboard:v1'
+GLOBAL_DASHBOARD_CACHE_KEY = 'core:dashboard:v2'
 # Same TTL as finance_dashboard (finance/views.py) — an aggregate spanning
 # 5 apps is worth caching, and nothing here needs to-the-second freshness.
 GLOBAL_DASHBOARD_CACHE_TTL = 300
+
+WEEKDAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+MONTH_LABELS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc']
+# Au-delà, les catégories de projet restantes sont regroupées sous « Autres »
+# pour que l'anneau du tableau de bord reste lisible.
+MAX_DASHBOARD_CATEGORIES = 6
+
+
+def _shift_month(day, delta):
+    """Premier jour du mois situé `delta` mois avant/après celui de `day`."""
+    index = day.month - 1 + delta
+    return day.replace(year=day.year + index // 12, month=index % 12 + 1, day=1)
+
+
+def _counts_by_period(querysets, trunc, since):
+    """Nombre d'enregistrements créés par période (jour ou mois), tous
+    querysets confondus, depuis `since` (une date)."""
+    totals = {}
+    for qs in querysets:
+        rows = (
+            qs.filter(created_at__date__gte=since)
+            .annotate(period=trunc('created_at'))
+            .values('period')
+            .annotate(n=Count('id'))
+            .order_by()
+        )
+        for row in rows:
+            period = row['period']
+            if isinstance(period, datetime):
+                period = period.date()
+            totals[period] = totals.get(period, 0) + row['n']
+    return totals
+
+
+def _rate(part, whole):
+    return round(part * 100 / whole, 1) if whole else None
 
 
 @extend_schema(
@@ -742,14 +782,18 @@ def global_dashboard(request):
     # Local imports, same reasoning as global_search above and
     # send_quote_and_invoice_reminders.py — avoids core importing every
     # other app's models at module load time.
+    from django.db.models.functions import TruncDate, TruncMonth
+
     from hr.models import EmployeeProfile
-    from marketing.models import Lead, SocialPost
-    from finance.models import Account, DisbursementRequest, TransactionLine
-    from projects.models import Project
+    from marketing.models import Lead, Quote, SocialPost
+    from finance.models import Account, DisbursementRequest, Invoice, TransactionLine
+    from projects.models import Project, ProjectTask
     from support.models import SupportTicket
 
     today = timezone.now().date()
     month_start = today.replace(day=1)
+    # Les 12 derniers mois, mois courant inclus — base des mini-courbes.
+    months = [_shift_month(month_start, offset) for offset in range(-11, 1)]
 
     # RH
     active_employees = EmployeeProfile.objects.filter(status=EmployeeProfile.Status.ACTIF).count()
@@ -790,6 +834,85 @@ def global_dashboard(request):
     open_tickets = SupportTicket.objects.filter(
         status__in=[SupportTicket.Status.OUVERT, SupportTicket.Status.EN_COURS]
     ).count()
+    ticket_resolution_rate = _rate(
+        SupportTicket.objects.filter(status=SupportTicket.Status.FERME).count(),
+        SupportTicket.objects.count(),
+    )
+
+    # Évolutions mensuelles (12 derniers mois)
+    leads_by_month = _counts_by_period([Lead.objects.all()], TruncMonth, months[0])
+    projects_by_month = _counts_by_period([Project.objects.all()], TruncMonth, months[0])
+
+    # Solde bancaire en fin de chaque mois, reconstitué à rebours depuis le
+    # solde actuel en retirant les flux des mois suivants.
+    cash_flows = {
+        row['period']: (row['debit'] or Decimal('0')) - (row['credit'] or Decimal('0'))
+        for row in TransactionLine.objects.filter(account__code='512', entry__date__gte=months[0])
+        .annotate(period=TruncMonth('entry__date'))
+        .values('period')
+        .annotate(debit=Sum('debit'), credit=Sum('credit'))
+        .order_by()
+    }
+    month_end_balances = []
+    running = cash_balance
+    for month in reversed(months):
+        month_end_balances.append(running)
+        running -= cash_flows.get(month, Decimal('0'))
+    month_end_balances.reverse()
+
+    # Délai de livraison : projets terminés dont les deux dates sont connues.
+    delivered = list(
+        Project.objects.filter(
+            status=Project.Status.TERMINE, start_date__isnull=False, end_date__isnull=False,
+        ).values_list('start_date', 'end_date')
+    )
+    durations = [(end - start).days for start, end in delivered if end >= start]
+    avg_delivery_days = round(sum(durations) / len(durations), 1) if durations else None
+    delivery_by_month = {}
+    for start, end in delivered:
+        if end >= start and end >= months[0]:
+            delivery_by_month.setdefault(end.replace(day=1), []).append((end - start).days)
+
+    closed_projects = Project.objects.filter(status__in=[Project.Status.TERMINE, Project.Status.ANNULE])
+    delivery_rate = _rate(
+        closed_projects.filter(status=Project.Status.TERMINE).count(), closed_projects.count(),
+    )
+
+    # Devis et tâches — anneau « objectifs ».
+    quote_counts = dict(Quote.objects.values_list('status').annotate(n=Count('id')).order_by())
+    task_counts = dict(ProjectTask.objects.values_list('status').annotate(n=Count('id')).order_by())
+
+    # Activité opérationnelle : volume d'éléments métier créés (demandes,
+    # devis, projets, tâches, factures, tickets, besoins).
+    activity_sources = [
+        Lead.objects.all(), Quote.objects.all(), Project.objects.all(), ProjectTask.objects.all(),
+        Invoice.objects.all(), SupportTicket.objects.all(), DisbursementRequest.objects.all(),
+    ]
+    week_start = today - timedelta(days=today.weekday())
+    previous_week_start = week_start - timedelta(days=7)
+    daily_activity = _counts_by_period(activity_sources, TruncDate, previous_week_start)
+    monthly_activity = _counts_by_period(activity_sources, TruncMonth, date(today.year - 1, 1, 1))
+
+    # Répartition des projets par catégorie (pôle d'expertise).
+    categories = {}
+    for row in (
+        Project.objects.exclude(status=Project.Status.ANNULE)
+        .values('category')
+        .annotate(count=Count('id'), budget=Sum('budget'))
+        .order_by()
+    ):
+        name = (row['category'] or '').strip() or 'Non catégorisé'
+        entry = categories.setdefault(name, {'name': name, 'count': 0, 'budget': Decimal('0')})
+        entry['count'] += row['count']
+        entry['budget'] += row['budget'] or Decimal('0')
+    ranked = sorted(categories.values(), key=lambda c: c['count'], reverse=True)
+    if len(ranked) > MAX_DASHBOARD_CATEGORIES:
+        rest = ranked[MAX_DASHBOARD_CATEGORIES - 1:]
+        ranked = ranked[:MAX_DASHBOARD_CATEGORIES - 1] + [{
+            'name': 'Autres',
+            'count': sum(c['count'] for c in rest),
+            'budget': sum((c['budget'] for c in rest), Decimal('0')),
+        }]
 
     payload = {
         'active_employees': active_employees,
@@ -802,6 +925,51 @@ def global_dashboard(request):
         'active_projects': active_projects,
         'pending_disbursements': pending_disbursements,
         'open_tickets': open_tickets,
+        'ticket_resolution_rate': ticket_resolution_rate,
+        'leads_this_month': leads_by_month.get(month_start, 0),
+        'leads_previous_month': leads_by_month.get(months[-2], 0),
+        'projects_created_this_month': projects_by_month.get(month_start, 0),
+        'cash_balance_previous_month_end': str(month_end_balances[-2]),
+        'avg_delivery_days': avg_delivery_days,
+        'delivered_projects': len(durations),
+        'delivery_rate': delivery_rate,
+        'quotes': {
+            'signed': quote_counts.get(Quote.Status.ACCEPTE, 0),
+            'pending': quote_counts.get(Quote.Status.ENVOYE, 0) + quote_counts.get(Quote.Status.BROUILLON, 0),
+            'refused': quote_counts.get(Quote.Status.REFUSE, 0),
+        },
+        'tasks': {
+            'done': task_counts.get(ProjectTask.Status.TERMINE, 0),
+            'pending': sum(n for s, n in task_counts.items() if s != ProjectTask.Status.TERMINE),
+        },
+        'trends': {
+            'months': [m.strftime('%Y-%m') for m in months],
+            'leads': [leads_by_month.get(m, 0) for m in months],
+            'projects_created': [projects_by_month.get(m, 0) for m in months],
+            'cash_balance': [str(b) for b in month_end_balances],
+            'avg_delivery_days': [
+                round(sum(d) / len(d), 1) if (d := delivery_by_month.get(m)) else None for m in months
+            ],
+        },
+        'activity_weekly': [
+            {
+                'label': WEEKDAY_LABELS[i],
+                'current': daily_activity.get(week_start + timedelta(days=i), 0),
+                'previous': daily_activity.get(previous_week_start + timedelta(days=i), 0),
+            }
+            for i in range(7)
+        ],
+        'activity_monthly': [
+            {
+                'label': MONTH_LABELS[m - 1],
+                'current': monthly_activity.get(date(today.year, m, 1), 0),
+                'previous': monthly_activity.get(date(today.year - 1, m, 1), 0),
+            }
+            for m in range(1, 13)
+        ],
+        'project_categories': [
+            {'name': c['name'], 'count': c['count'], 'budget': str(c['budget'])} for c in ranked
+        ],
     }
     cache.set(GLOBAL_DASHBOARD_CACHE_KEY, payload, GLOBAL_DASHBOARD_CACHE_TTL)
     return Response(payload)

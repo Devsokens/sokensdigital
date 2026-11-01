@@ -147,7 +147,7 @@ export function EmploymentContractViewerModal({
       <SendDocumentModal
         open={sendOpen}
         onOpenChange={setSendOpen}
-        documentTitle={`Contrat de travail : ${currentContract.employee_name}`}
+        documentTitle={`${currentContract.party_type === "CLIENT" ? "Contrat" : "Contrat de travail"} : ${currentContract.employee_name}`}
         documentNumber={currentContract.contract_number}
         recipientName={currentContract.employee_name}
         suggestedEmails={currentContract.employee_email ? [currentContract.employee_email] : []}

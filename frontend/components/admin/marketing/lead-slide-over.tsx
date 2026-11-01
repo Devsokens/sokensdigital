@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Dialog } from "@base-ui/react/dialog";
 import {
   Building2,
@@ -23,6 +24,7 @@ import {
   Paperclip,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ConfirmModal } from "@/components/admin/confirm-modal";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { formatFcfa } from "@/lib/format-currency";
 import { uploadChatFile } from "@/lib/api/upload";
@@ -59,7 +61,12 @@ const SOURCE_LABELS: Record<LeadSource, string> = {
   APPEL_ENTRANT: "Appel entrant",
   SITE_WEB: "Site web",
   EVENEMENT: "Événement",
+  CREATION_CLIENT: "Client créé directement",
 };
+
+// Sources qu'on peut choisir à la main — CREATION_CLIENT est réservée aux
+// leads générés par la création directe d'un client.
+const SELECTABLE_SOURCES = (Object.keys(SOURCE_LABELS) as LeadSource[]).filter((s) => s !== "CREATION_CLIENT");
 
 export interface LeadSlideOverProps {
   open: boolean;
@@ -67,6 +74,10 @@ export interface LeadSlideOverProps {
   lead: Lead | null; // Si null => Mode création nouveau lead
   users: UserBrief[];
   onSaved: (savedLead: Lead) => void;
+  /** Ouvre un lead existant directement en mode modification. */
+  startInEditMode?: boolean;
+  /** Absent si l'utilisateur n'a pas le droit de supprimer. */
+  onDelete?: (lead: Lead) => Promise<void>;
 }
 
 export function LeadSlideOver({
@@ -75,6 +86,8 @@ export function LeadSlideOver({
   lead,
   users,
   onSaved,
+  startInEditMode = false,
+  onDelete,
 }: LeadSlideOverProps) {
   // Mode : si lead existant => par défaut "view", sinon "edit"
   const [isEditing, setIsEditing] = useState<boolean>(!lead);
@@ -105,7 +118,7 @@ export function LeadSlideOver({
   // Synchronisation lors de l'ouverture ou du changement de lead
   useEffect(() => {
     if (lead) {
-      setIsEditing(false);
+      setIsEditing(startInEditMode);
       setActiveTab("info");
       setCompanyName(lead.company_name || "");
       setSource(lead.source || "SITE_WEB");
@@ -169,7 +182,7 @@ export function LeadSlideOver({
       setDocuments([]);
     }
     setError(null);
-  }, [lead, open]);
+  }, [lead, open, startInEditMode]);
 
   // Gestion des contacts en bloc
   function handleAddContact() {
@@ -350,6 +363,22 @@ export function LeadSlideOver({
             </div>
 
             <div className="flex items-center gap-2">
+              {lead && !isEditing && onDelete && (
+                <ConfirmModal
+                  title="Supprimer le lead"
+                  description={`Supprimer définitivement « ${lead.company_name || `${lead.first_name} ${lead.last_name}`} » ? Cette action est irréversible.`}
+                  onConfirm={() => onDelete(lead)}
+                  trigger={
+                    <button
+                      type="button"
+                      aria-label="Supprimer le lead"
+                      className="rounded-full p-2 text-neutral-400 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  }
+                />
+              )}
               {lead && !isEditing && (
                 <Button
                   type="button"
@@ -446,6 +475,14 @@ export function LeadSlideOver({
                         <p className="text-sm font-semibold text-neutral-900 mt-0.5">
                           {lead.company_name || "Non spécifié"}
                         </p>
+                        {lead.client && (
+                          <Link
+                            href={`/admin/rh/clients/${lead.client}`}
+                            className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[0.7rem] font-medium text-emerald-700 hover:bg-emerald-100"
+                          >
+                            <Building2 className="size-3" /> Fiche client : {lead.client_name}
+                          </Link>
+                        )}
                       </div>
                       <div>
                         <span className="text-[0.7rem] uppercase font-bold text-neutral-400">Statut commercial</span>
@@ -693,6 +730,11 @@ export function LeadSlideOver({
                           </option>
                         ))}
                       </select>
+                      {status === "CONVERTI" && !lead?.client && (
+                        <span className="mt-1 block text-[0.7rem] text-emerald-700">
+                          Le lead sera automatiquement enregistré comme client.
+                        </span>
+                      )}
                     </label>
 
                     <label className="block">
@@ -702,9 +744,9 @@ export function LeadSlideOver({
                         onChange={(e) => setSource(e.target.value as LeadSource)}
                         className={inputClass}
                       >
-                        {Object.entries(SOURCE_LABELS).map(([k, label]) => (
+                        {(source === "CREATION_CLIENT" ? [...SELECTABLE_SOURCES, source] : SELECTABLE_SOURCES).map((k) => (
                           <option key={k} value={k}>
-                            {label}
+                            {SOURCE_LABELS[k]}
                           </option>
                         ))}
                       </select>

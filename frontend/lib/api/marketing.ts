@@ -36,7 +36,9 @@ export interface LeadInput {
 }
 
 export function listLeads() {
-  return apiFetch<Paginated<Lead>>("/api/v1/marketing/leads/");
+  // Toutes les colonnes du tunnel s'affichent d'un bloc : pas de pagination
+  // côté écran, d'où la page large (plafonnée à 500 côté serveur).
+  return apiFetch<Paginated<Lead>>("/api/v1/marketing/leads/?page_size=500");
 }
 
 export function createLead(data: LeadInput) {
@@ -51,6 +53,10 @@ export function updateLead(id: string, data: Partial<LeadInput>) {
     method: "PATCH",
     body: JSON.stringify(data),
   });
+}
+
+export function deleteLead(id: string) {
+  return apiFetch<void>(`/api/v1/marketing/leads/${id}/`, { method: "DELETE" });
 }
 
 export interface BlogPostInput {

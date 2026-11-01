@@ -52,6 +52,9 @@ class Lead(LoggedModel):
         APPEL_ENTRANT = 'APPEL_ENTRANT', 'Appel entrant'
         SITE_WEB = 'SITE_WEB', 'Site web'
         EVENEMENT = 'EVENEMENT', 'Événement'
+        # Lead généré automatiquement quand un client est créé directement
+        # dans le CRM (voir marketing.conversion) — pas une demande entrante.
+        CREATION_CLIENT = 'CREATION_CLIENT', 'Client créé directement'
 
     class Status(models.TextChoices):
         NOUVEAU = 'NOUVEAU', 'Nouveau'
@@ -76,10 +79,13 @@ class Lead(LoggedModel):
         VALIDE_CLIENT = 'VALIDE_CLIENT', 'Validé par le client'
         EN_DEVELOPPEMENT = 'EN_DEVELOPPEMENT', 'En développement'
 
-    # `client` (FK -> ClientAccount) omitted — ClientAccount isn't defined
-    # yet (docs/backend-specifications.md §13, open question). Add once
-    # clarified; the /convert/ endpoint depends on it too and is not
-    # implemented for the same reason.
+    # Client CRM issu de ce lead. Renseigné automatiquement quand le lead
+    # passe en CONVERTI, ou dès la création pour le lead généré par un
+    # client créé directement — voir marketing.conversion.
+    client = models.ForeignKey(
+        'administration.Client', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='leads',
+    )
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)
     company_name = models.CharField(max_length=255, blank=True)

@@ -49,17 +49,31 @@ class Client(LoggedModel):
         return self.company_name
 
 class Contact(LoggedModel):
-    """Interlocuteur chez un client — cahier des charges §4.5 "Contacts"."""
-    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='contacts')
+    """Interlocuteur — cahier des charges §4.5 "Contacts".
+
+    Le client est facultatif : le module Contacts permet de créer un contact
+    seul, puis de le rattacher à un client plus tard.
+    """
+    client = models.ForeignKey(
+        Client, on_delete=models.CASCADE, null=True, blank=True, related_name='contacts',
+    )
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=50, blank=True)
     role = models.CharField(max_length=255, blank=True)
     is_primary = models.BooleanField(default=False)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_contacts',
+    )
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['last_name', 'first_name']
 
     def __str__(self):
-        return f"{self.first_name} {self.last_name} ({self.client.company_name})"
+        company = self.client.company_name if self.client_id else 'sans client'
+        return f"{self.first_name} {self.last_name} ({company})"
 
 class ClientInteraction(LoggedModel):
     class InteractionType(models.TextChoices):

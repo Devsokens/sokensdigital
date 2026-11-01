@@ -43,7 +43,7 @@ export function AdminSidebar({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-20 z-40 hidden flex-col overflow-hidden border-white/10 bg-background/95 backdrop-blur-md transition-[width] duration-200 lg:flex",
+        "fixed inset-y-0 left-20 z-40 hidden flex-col overflow-hidden border-white/10 bg-background transition-[width] duration-200 lg:flex",
         collapsed ? "w-0 border-r-0" : "w-52 border-r"
       )}
     >
