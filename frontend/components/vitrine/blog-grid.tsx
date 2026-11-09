@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useState } from "react";
 import { ArrowIcon, FONT_DISPLAY } from "./ui";
 import type { VitrinePost } from "./blog-data";
+import { CoverImage } from "./cover-image";
 
-/* Visuels abstraits des cartes, en alternance (la maquette n'utilise pas
- * les images de couverture). */
+/* Visuels abstraits des cartes, en alternance — repli quand un article
+ * n'a pas d'image de couverture. */
 const ARTS = [
   "radial-gradient(circle at 30% 30%, oklch(var(--sd-primary) / 0.55), transparent 55%), radial-gradient(circle at 75% 70%, oklch(var(--sd-accent-hi) / 0.4), transparent 55%), oklch(var(--sd-panel-deep))",
   "radial-gradient(circle at 70% 30%, oklch(var(--sd-teal) / 0.45), transparent 55%), radial-gradient(circle at 25% 75%, oklch(var(--sd-primary) / 0.4), transparent 55%), oklch(var(--sd-panel-deep))",
@@ -26,6 +27,7 @@ export function BlogGrid({ posts }: { posts: VitrinePost[] }) {
           <Link key={post.href} className="sd-spot sd-arrow-link" href={post.href} style={{ borderRadius: "24px", border: "1px solid rgba(255,255,255,0.08)", background: "oklch(var(--sd-card))", display: "flex", flexDirection: "column", color: "oklch(var(--sd-fg))" }}>
             <div aria-hidden="true" style={{ height: "190px", position: "relative", overflow: "hidden", background: "oklch(var(--sd-panel-deep))" }}>
               <div className="sd-zoom" style={{ position: "absolute", inset: "0", background: ARTS[i % ARTS.length] }} />
+              <CoverImage src={post.coverImage} />
               <div style={{ position: "absolute", inset: "0", backgroundImage: "radial-gradient(rgba(255,255,255,0.14) 1px, transparent 1px)", backgroundSize: "16px 16px", WebkitMaskImage: "linear-gradient(180deg, #000, transparent)", maskImage: "linear-gradient(180deg, #000, transparent)" }} />
             </div>
             <div style={{ padding: "24px 26px 28px", display: "flex", flexDirection: "column", gap: "12px", flex: 1 }}>

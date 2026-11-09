@@ -6,6 +6,7 @@ import { Editable, EditableSection, ManagedElsewhere } from "./editable";
 import { ArrowIcon, Breadcrumb, FONT_DISPLAY, FONT_DISPLAY_SYS, HEADER_HEIGHT, underHeader } from "./ui";
 import type { VitrinePost } from "./blog-data";
 import { BlogGrid } from "./blog-grid";
+import { CoverImage } from "./cover-image";
 
 /* Page Blog : article à la une (réseau animé), grille des articles suivants
  * (blog du CMS) et appel à l'action. Partagée par le site public et l'éditeur. */
@@ -104,6 +105,7 @@ function FeaturedPost({ post: featured }: { post: VitrinePost }) {
                   </linearGradient>
                 </defs>
               </svg>
+              <CoverImage src={featured.coverImage} />
             </div>
             <div style={{ flex: "1 1 440px", minWidth: "0", padding: "clamp(28px, 4vw, 52px)", display: "flex", flexDirection: "column", justifyContent: "center", gap: "18px" }}>
               <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px", fontSize: "13.5px", color: "oklch(var(--sd-fg-3))" }}>

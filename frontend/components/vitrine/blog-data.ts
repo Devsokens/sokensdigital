@@ -7,6 +7,8 @@ export type VitrinePost = {
   /** Date courte en minuscules, comme la maquette : « 28 sept. 2026 ». */
   date: string;
   href: string;
+  /** URL de l'image de couverture, absente si l'article n'en a pas. */
+  coverImage?: string;
 };
 
 /* Article à la une de la maquette, affiché tant que l'API ne renvoie aucun
@@ -26,5 +28,6 @@ export function toVitrinePost(post: BlogPost): VitrinePost {
       ? new Date(post.publishedAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })
       : "",
     href: `/blog/${post.slug}`,
+    coverImage: post.coverImage,
   };
 }

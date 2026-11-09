@@ -4,6 +4,7 @@ import { Editable, ManagedElsewhere } from "../editable";
 import { CallButton } from "../call-button";
 import { ArrowIcon, Eyebrow, FONT_DISPLAY, FONT_DISPLAY_SYS } from "../ui";
 import type { VitrinePost } from "../blog-data";
+import { CoverImage } from "../cover-image";
 
 /** « Actualités & conseils » : le dernier article publié du blog. */
 export function HomeBlog({ section, post }: { section: Section; post: VitrinePost }) {
@@ -43,6 +44,7 @@ export function HomeBlog({ section, post }: { section: Section; post: VitrinePos
                 <path d="M19 17l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
               </svg>
             </span>
+            <CoverImage src={post.coverImage} />
           </div>
           <div style={{ flex: "1 1 420px", minWidth: "0", padding: "clamp(28px, 4vw, 48px)", display: "flex", flexDirection: "column", justifyContent: "center", gap: "16px" }}>
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px", fontSize: "13.5px", color: "oklch(var(--sd-fg-3))" }}>
