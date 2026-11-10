@@ -590,6 +590,11 @@ class CompanyAssetViewSet(viewsets.ModelViewSet):
 # Agenda — rendez-vous
 # ---------------------------------------------------------------------------
 
+def _location_with_visio(appointment) -> str:
+    parts = [p for p in (appointment.location, f'Visio : {appointment.video_url}' if appointment.video_url else '') if p]
+    return ' — '.join(parts) or 'Non spécifié'
+
+
 class AppointmentViewSet(viewsets.ModelViewSet):
     """
     Agenda — chacun voit ses propres rendez-vous (créés par lui ou où il est
@@ -613,9 +618,15 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         # sélectionner lui-même dans la liste des participants.
         appointment.attendees.add(self.request.user)
         calendar_sync.sync_appointment_event(appointment)
+        # Réunion : les participants ; rendez-vous : tous les membres actifs.
+        if appointment.kind == Appointment.Kind.RENDEZ_VOUS:
+            from core.models import User
+            recipients = User.objects.filter(is_active=True)
+        else:
+            recipients = appointment.attendees.all()
         self._notify_invited(
             appointment,
-            appointment.attendees.exclude(pk=self.request.user.pk),
+            recipients.exclude(pk=self.request.user.pk).distinct(),
             notify_client=True,
         )
 
@@ -642,12 +653,14 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         when = timezone.localtime(appointment.start_at).strftime('%d/%m/%Y à %H:%M')
         organizer = self.request.user
         organizer_name = f'{organizer.first_name} {organizer.last_name}'.strip() or organizer.email
+        kind_label = 'au rendez-vous' if appointment.kind == Appointment.Kind.RENDEZ_VOUS else 'à la réunion'
+        visio = f' Lien visio : {appointment.video_url}' if appointment.video_url else ''
         for user in users:
             notify(
                 user=user,
                 title=f'Invitation : {appointment.title}',
-                message=f'{organizer_name} vous invite le {when}'
-                + (f' — {appointment.location}' if appointment.location else '') + '.',
+                message=f'{organizer_name} vous invite {kind_label} « {appointment.title} » le {when}'
+                + (f' — {appointment.location}' if appointment.location else '') + '.' + visio,
                 notification_type='FOLLOW_UP',
                 link='/admin/agenda',
                 email=True,
@@ -661,7 +674,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                     'organizer_name': organizer_name,
                     'meeting_title': appointment.title,
                     'date_time': when,
-                    'location': appointment.location or 'Non spécifié',
+                    'location': _location_with_visio(appointment),
                     'description': appointment.description or '',
                 },
             )
@@ -677,7 +690,8 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                 user=user,
                 title=f'Mise à jour : {appointment.title}',
                 message=f'La réunion a été modifiée par {organizer_name} : {when}'
-                + (f' — {appointment.location}' if appointment.location else '') + '.',
+                + (f' — {appointment.location}' if appointment.location else '') + '.'
+                + (f' Lien visio : {appointment.video_url}' if appointment.video_url else ''),
                 notification_type='FOLLOW_UP',
                 link='/admin/agenda',
                 email=True,
@@ -691,7 +705,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                     'organizer_name': organizer_name,
                     'meeting_title': appointment.title,
                     'date_time': when,
-                    'location': appointment.location or 'Non spécifié',
+                    'location': _location_with_visio(appointment),
                 },
             )
 

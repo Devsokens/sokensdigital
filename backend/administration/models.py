@@ -237,6 +237,17 @@ class Appointment(LoggedModel):
     start_at = models.DateTimeField()
     end_at = models.DateTimeField()
     location = models.CharField(max_length=255, blank=True)
+
+    class Kind(models.TextChoices):
+        RENDEZ_VOUS = 'RENDEZ_VOUS', _('Rendez-vous')
+        REUNION = 'REUNION', _('Réunion')
+
+    # Réunion : seuls les participants sont notifiés ; rendez-vous : tous
+    # les membres actifs de l'équipe le sont.
+    kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.REUNION)
+    # Lien de visioconférence (Meet, Teams, Zoom…), repris dans les
+    # notifications et affiché dans l'agenda.
+    video_url = models.URLField(max_length=500, blank=True)
     client = models.ForeignKey(
         Client, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='appointments',

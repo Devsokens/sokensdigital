@@ -120,6 +120,8 @@ export interface Appointment {
   start_at: string;
   end_at: string;
   location?: string;
+  kind?: "RENDEZ_VOUS" | "REUNION";
+  video_url?: string;
   client: string | null;
   client_name: string | null;
   attendees: string[];

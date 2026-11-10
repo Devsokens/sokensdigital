@@ -161,6 +161,8 @@ function AppointmentFormModal({
   const [startAt, setStartAt] = useState(toLocalInputValue(defaults.start));
   const [endAt, setEndAt] = useState(toLocalInputValue(defaults.end));
   const [location, setLocation] = useState(appointment?.location ?? "");
+  const [kind, setKind] = useState<"RENDEZ_VOUS" | "REUNION">(appointment?.kind ?? "REUNION");
+  const [videoUrl, setVideoUrl] = useState(appointment?.video_url ?? "");
   const [clientId, setClientId] = useState<string | null>(appointment?.client ?? null);
   const [attendeeIds, setAttendeeIds] = useState<string[]>(appointment?.attendees ?? []);
   const [saving, setSaving] = useState(false);
@@ -176,6 +178,8 @@ function AppointmentFormModal({
       start_at: new Date(startAt).toISOString(),
       end_at: new Date(endAt).toISOString(),
       location,
+      kind,
+      video_url: videoUrl.trim(),
       client: clientId,
       attendees: attendeeIds,
     };
@@ -206,6 +210,26 @@ function AppointmentFormModal({
           {/* Deux colonnes : tout tient à l'écran, sans défilement. */}
           <div className="grid gap-x-6 gap-y-4 md:grid-cols-2">
             <div className="space-y-4">
+              <div>
+                <span className={labelClass}>Type</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    ["REUNION", "Réunion", "Participants notifiés"],
+                    ["RENDEZ_VOUS", "Rendez-vous", "Toute l'équipe notifiée"],
+                  ] as const).map(([value, label, hint]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setKind(value)}
+                      className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${kind === value ? "border-primary bg-primary/10 text-neutral-900" : "border-neutral-200 text-neutral-600 hover:border-neutral-300"}`}
+                    >
+                      <span className="block font-medium">{label}</span>
+                      <span className="block text-xs text-neutral-500">{hint}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <label className="block">
                 <span className={labelClass}>Titre</span>
                 <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} required />
@@ -225,6 +249,11 @@ function AppointmentFormModal({
               <label className="block">
                 <span className={labelClass}>Lieu</span>
                 <input value={location} onChange={(e) => setLocation(e.target.value)} className={inputClass} placeholder="Bureau, visio, chez le client…" />
+              </label>
+
+              <label className="block">
+                <span className={labelClass}>Lien visio</span>
+                <input type="url" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} className={inputClass} placeholder="https://meet.google.com/…" />
               </label>
 
               <label className="block">

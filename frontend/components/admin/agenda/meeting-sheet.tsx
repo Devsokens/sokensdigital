@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
-import { Building2, CalendarDays, Loader2, MapPin, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Building2, CalendarDays, Loader2, MapPin, Pencil, Plus, Trash2, Video, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/ui/tabs";
 import { RichTextEditor } from "@/components/admin/marketing/rich-text-editor";
@@ -205,6 +205,11 @@ export function MeetingSheet({
                       <span className="flex items-center gap-1.5">
                         <MapPin className="size-3.5" /> {appointment.location}
                       </span>
+                    )}
+                    {appointment.video_url && (
+                      <a href={appointment.video_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 font-medium text-primary hover:underline">
+                        <Video className="size-3.5" /> Rejoindre la visio
+                      </a>
                     )}
                     {appointment.client_name && (
                       <span className="flex items-center gap-1.5">

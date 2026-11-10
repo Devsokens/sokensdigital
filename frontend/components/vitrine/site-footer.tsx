@@ -17,6 +17,20 @@ const NAV = [
 
 const COLUMN_TITLE = { fontFamily: FONT_MONO, fontSize: "12px", letterSpacing: "0.1em", textTransform: "uppercase", color: "oklch(var(--sd-fg-4))" } as const;
 
+/* Pages légales toujours présentes dans le pied de page, même si la liste
+ * du CMS les a oubliées (obligation légale) — complétée sans doublon. */
+const REQUIRED_LEGAL_LINKS = [
+  { label: "Mentions légales", href: "/mentions-legales" },
+  { label: "CGU", href: "/cgu" },
+  { label: "CGV", href: "/cgv" },
+  { label: "Confidentialité", href: "/confidentialite" },
+];
+
+function withRequiredLegal<T extends { label: string; href: string }>(links: T[]): { label: string; href: string }[] {
+  const hrefs = new Set(links.map((l) => l.href.replace(/\/$/, "")));
+  return [...links, ...REQUIRED_LEGAL_LINKS.filter((l) => !hrefs.has(l.href))];
+}
+
 type FooterSettings = Pick<SiteSettings, "logo_url" | "tagline" | "contact_email" | "contact_phone" | "legal_links" | "copyright_text">;
 
 /** Pied de page : contenu des paramètres du site (Header & Footer), modifiable
@@ -24,7 +38,7 @@ type FooterSettings = Pick<SiteSettings, "logo_url" | "tagline" | "contact_email
 export function VitrineFooter({ settings }: { settings: FooterSettings }) {
   const editor = useEditor();
   const { email, phone } = contactInfo(settings);
-  const legal = editor ? editor.legalLinks : settings.legal_links;
+  const legal = editor ? editor.legalLinks : withRequiredLegal(settings.legal_links ?? []);
   const copyright = settings.copyright_text.includes("©") ? settings.copyright_text : `© ${new Date().getFullYear()} ${settings.copyright_text}`;
 
   return (

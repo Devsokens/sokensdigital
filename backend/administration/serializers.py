@@ -138,7 +138,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
         model = Appointment
         fields = [
             'id', 'title', 'description', 'start_at', 'end_at', 'location',
-            'client', 'client_name', 'attendees', 'attendees_detail',
+            'kind', 'video_url', 'client', 'client_name', 'attendees', 'attendees_detail',
             'created_by', 'created_by_detail', 'created_at', 'updated_at',
         ]
         read_only_fields = ['created_by']
