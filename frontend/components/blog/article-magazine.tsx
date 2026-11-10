@@ -77,7 +77,13 @@ function splitBlocks(html: string): string[] {
   const doc = new DOMParser().parseFromString(`<div>${html}</div>`, "text/html");
   const out: string[] = [];
   for (const el of Array.from(doc.body.firstElementChild?.children ?? []) as HTMLElement[]) {
-    if (el.tagName === "P" && (el.textContent ?? "").length > 220) {
+    // Le découpage lit les balises sérialisées jusqu'au « > » : on ne
+    // recoupe que si aucun attribut ne contient « < » ou « > », sinon le
+    // paragraphe reste entier (pas de balisage reconstruit de travers).
+    const safeToSplit = Array.from(el.querySelectorAll("*")).every((node) =>
+      Array.from(node.attributes).every((attr) => !/[<>]/.test(attr.value))
+    );
+    if (el.tagName === "P" && safeToSplit && (el.textContent ?? "").length > 220) {
       for (const part of splitParagraphHtml(el.innerHTML)) out.push(`<p>${part}</p>`);
     } else {
       out.push(el.outerHTML);
