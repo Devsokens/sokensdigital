@@ -133,7 +133,9 @@ export function ArticleMagazine({ html, title, author, date }: { html: string; t
       const viewport = window.visualViewport?.height ?? window.innerHeight;
       const wide = window.matchMedia("(min-width: 1024px)").matches;
       // Mesure en une colonne ; sur grand écran deux colonnes doublent la place.
-      const body = Math.max(260, viewport - (wide ? 300 : 270)) * (wide ? 2 : 1);
+      // Feuillet = 3/4 de la hauteur d'écran ; on retire bandeau, folio et
+      // marges internes (~130px) pour obtenir la place du texte.
+      const body = Math.max(200, viewport * 0.75 - 130) * (wide ? 2 : 1);
       const first = body - 70;
       const next = paginateToHeight(blocks, measurer, first, body);
       setPages(next);
@@ -211,7 +213,7 @@ export function ArticleMagazine({ html, title, author, date }: { html: string; t
         <div
           key={`${page}-${phase === "in" ? "in" : "p"}`}
           style={style}
-          className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.7)] [backface-visibility:hidden]"
+          className="relative flex h-[75dvh] flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.7)] [backface-visibility:hidden]"
         >
           {phase !== "idle" && (
             <div
@@ -229,7 +231,7 @@ export function ArticleMagazine({ html, title, author, date }: { html: string; t
             <span className="hidden truncate sm:block">{title}</span>
           </div>
 
-          <div className="px-5 py-5 sm:px-10 sm:py-7">
+          <div className="min-h-0 flex-1 overflow-hidden px-5 py-5 sm:px-10 sm:py-7">
             {/* Conteneur de mesure invisible : même largeur qu'une colonne. */}
             <div aria-hidden className="pointer-events-none invisible absolute top-0 right-5 left-5 h-0 overflow-hidden sm:right-10 sm:left-10">
               <div ref={measureRef} className={cn(PROSE, "lg:w-[calc(50%-1.25rem)] lg:columns-1")} />
