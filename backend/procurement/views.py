@@ -22,7 +22,7 @@ from core.constants import (
     ROLE_DIRECTEUR_FINANCIER,
     ROLE_SUPER_ADMIN,
 )
-from core.permissions import has_role
+from core.permissions import has_role, is_gerant
 from core.celery_utils import safe_dispatch
 
 
@@ -63,9 +63,8 @@ class IsGerantOrAdmin(permissions.BasePermission):
     ressort, jamais la RCF elle-même.
     """
     def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
-            return False
-        return has_role(request.user, ROLE_SUPER_ADMIN)
+        # Gérant désigné (Administration > Utilisateurs), sinon Super-Admin.
+        return is_gerant(request.user)
 
 
 class IsOwnerOrFinanceOrAdmin(permissions.BasePermission):

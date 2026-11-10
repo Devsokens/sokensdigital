@@ -22,6 +22,7 @@ import {
 import { listProjects } from "@/lib/api/projects";
 import { listUsers } from "@/lib/api/hr";
 import { getMe } from "@/lib/api/me";
+import { useIsGerant } from "@/lib/admin/use-is-gerant";
 import type { DisbursementRequest, DisbursementStatus, Project, UserBrief } from "@/lib/api/types";
 
 const STATUS_LABELS: Record<DisbursementStatus, string> = {
@@ -47,10 +48,10 @@ const STAGE_APPROVER_LABEL: Partial<Record<DisbursementStatus, string>> = {
   EN_ATTENTE_GERANT: "Gérant",
 };
 
-function canApproveStage(roles: string[], stage: DisbursementStatus): boolean {
+function canApproveStage(roles: string[], stage: DisbursementStatus, isGerant: boolean): boolean {
   if (roles.includes("SUPER_ADMIN")) return true;
   if (stage === "EN_ATTENTE_RCF") return roles.includes("COMPTABLE") || roles.includes("DIRECTEUR_FINANCIER");
-  return false; // Gérant : Super-Admin uniquement
+  return isGerant; // Gérant désigné (Administration > Utilisateurs)
 }
 
 function formatDate(value: string) {
@@ -71,6 +72,7 @@ export function DisbursementList() {
   const [viewing, setViewing] = useState<DisbursementRequest | null>(null);
 
   const myRoles = profileRoles(profile);
+  const isGerant = useIsGerant();
   const canExecute = myRoles.includes("COMPTABLE") || myRoles.includes("SUPER_ADMIN");
 
   async function handleApprove(id: string, decision: "APPROUVE" | "REJETE", rejectionReason?: string) {
@@ -164,7 +166,7 @@ export function DisbursementList() {
           <tbody className="divide-y divide-neutral-100">
             {requests.map((req) => {
               const isPending = req.status === "EN_ATTENTE_RCF" || req.status === "EN_ATTENTE_GERANT";
-              const canApproveThis = isPending && canApproveStage(myRoles, req.status);
+              const canApproveThis = isPending && canApproveStage(myRoles, req.status, isGerant);
               const firstLine = req.lines[0]?.label ?? req.reason;
               const otherLines = Math.max(req.lines.length - 1, 0);
               return (

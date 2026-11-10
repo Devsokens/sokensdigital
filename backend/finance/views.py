@@ -14,7 +14,7 @@ from rest_framework.response import Response
 
 from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE, ROLE_CAISSIER
 from core.notifications import notify, notify_roles
-from core.permissions import has_role
+from core.permissions import gerant_recipients, has_role, is_gerant
 from core.storage import upload_disbursement_quote
 from decimal import Decimal as D
 from django.utils import timezone
@@ -61,7 +61,7 @@ def _can_decide_stage(user, pending_status):
     Gérant."""
     if pending_status == DisbursementRequest.Status.EN_ATTENTE_RCF:
         return has_role(user, *COMPTABLE_ROLES, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN)
-    return has_role(user, ROLE_SUPER_ADMIN)  # EN_ATTENTE_GERANT
+    return is_gerant(user)  # EN_ATTENTE_GERANT — gérant désigné, sinon Super-Admin
 
 
 BESOINS_LINK = '/admin/technique/decaissements'
@@ -75,14 +75,20 @@ def _notify_besoin_stage(disbursement, exclude=None):
     """Prévient ceux qui doivent statuer à l'étape en cours : la RCF
     (Comptable, Directeur Financier) puis le Gérant (Super-Admin)."""
     if disbursement.status == DisbursementRequest.Status.EN_ATTENTE_RCF:
-        roles, title = (ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER), 'Nouveau besoin à examiner'
-    else:
-        roles, title = (ROLE_SUPER_ADMIN,), 'Besoin à valider (Gérant)'
-    notify_roles(
-        roles, title=title, message=_besoin_label(disbursement),
-        notification_type='GENERAL', link=BESOINS_LINK,
-        exclude=[exclude, disbursement.requested_by],
-    )
+        notify_roles(
+            (ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER), title='Nouveau besoin à examiner',
+            message=_besoin_label(disbursement), notification_type='GENERAL', link=BESOINS_LINK,
+            exclude=[exclude, disbursement.requested_by],
+        )
+        return
+    excluded = {getattr(u, 'pk', None) for u in (exclude, disbursement.requested_by) if u}
+    for user in gerant_recipients():
+        if user.pk in excluded:
+            continue
+        notify(
+            user=user, title='Besoin à valider (Gérant)', message=_besoin_label(disbursement),
+            notification_type='GENERAL', link=BESOINS_LINK,
+        )
 
 
 def _notify_besoin_requester(disbursement):

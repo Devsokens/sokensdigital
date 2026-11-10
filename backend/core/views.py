@@ -526,6 +526,61 @@ class SetUserRoleView(APIView):
         return Response(UserSerializer(django_user).data)
 
 
+class SetGerantView(APIView):
+    """Désigne (ou retire) le gérant de l'entreprise — Super-Admin
+    uniquement. Un seul gérant à la fois : en désigner un nouveau retire le
+    titre au précédent, dans la même transaction. Tracé dans le journal
+    d'audit et notifié aux Super-Admins (changement de droits de validation
+    financière)."""
+
+    permission_classes = [IsSuperAdmin]
+
+    @extend_schema(
+        tags=['Administration & RH'],
+        summary='Designate or remove the company manager (Gérant)',
+        responses={200: UserSerializer},
+    )
+    def post(self, request, pk):
+        from django.db import transaction
+
+        value = request.data.get('is_gerant')
+        if not isinstance(value, bool):
+            return Response({'detail': 'is_gerant (booléen) est requis.'}, status=status.HTTP_400_BAD_REQUEST)
+        target = User.objects.filter(pk=pk).first()
+        if not target:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if value and not target.is_active:
+            return Response({'detail': 'Un compte désactivé ne peut pas être désigné gérant.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            previous = list(User.objects.select_for_update().filter(is_gerant=True).exclude(pk=target.pk))
+            if value:
+                User.objects.filter(pk__in=[u.pk for u in previous]).update(is_gerant=False)
+            target.is_gerant = value
+            target.save(update_fields=['is_gerant'])
+
+        AuditLog.objects.log_action(
+            request.user, 'GERANT_DESIGNE' if value else 'GERANT_RETIRE', 'User', target.pk,
+            details={'previous': [str(u.pk) for u in previous] if value else []},
+            ip_address=request.META.get('REMOTE_ADDR'),
+        )
+        name = f'{target.first_name} {target.last_name}'.strip() or target.email
+        notify_roles(
+            (ROLE_SUPER_ADMIN,),
+            title='Gérant désigné' if value else 'Gérant retiré',
+            message=f'{name} ' + ('est désormais le gérant.' if value else "n'est plus le gérant."),
+            notification_type='GENERAL', link='/admin/rh/utilisateurs', email=True,
+            exclude=request.user,
+        )
+        if value:
+            notify(
+                user=target, title='Vous êtes désigné gérant',
+                message='Vous validez désormais les besoins, demandes d’achat et devis fournisseur au palier Gérant.',
+                notification_type='GENERAL', link='/admin/technique/decaissements',
+            )
+        return Response(UserSerializer(target).data)
+
+
 class DeactivateUserView(APIView):
     """Révoque l'accès plateforme d'un employé — Super-Admin only, comme
     SetUserRoleView. Pas de suppression Firebase/Django réelle (perdrait
@@ -559,7 +614,10 @@ class DeactivateUserView(APIView):
                 logger.exception('Désactivation Firebase impossible pour %s', django_user.firebase_uid)
 
         django_user.is_active = False
-        django_user.save(update_fields=['is_active'])
+        # Un compte désactivé ne garde pas le titre de gérant : le palier
+        # retombe sur les Super-Admins (voir core.permissions.is_gerant).
+        django_user.is_gerant = False
+        django_user.save(update_fields=['is_active', 'is_gerant'])
 
         # Suppression d'un utilisateur = action très critique (décision du
         # 10/09/2026) — e-mail aux Super-Admins en plus du push.

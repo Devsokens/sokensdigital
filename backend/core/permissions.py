@@ -301,3 +301,36 @@ class HasModulePermission(permissions.BasePermission):
 
         return user_has_module_action(request.user, module, action)
 
+
+
+def is_gerant(user) -> bool:
+    """Peut statuer au palier « Gérant » des circuits de validation.
+
+    Le gérant désigné (User.is_gerant) ; à défaut de gérant désigné, le
+    Super-Admin tient lieu de gérant (comportement historique). Un
+    Super-Admin garde ce droit dans tous les cas : c'est le compte de
+    secours si le gérant est absent ou désactivé."""
+    if not user or not getattr(user, 'is_authenticated', False) or not user.is_active:
+        return False
+    if getattr(user, 'is_gerant', False):
+        return True
+    from core.constants import ROLE_SUPER_ADMIN
+    return has_role(user, ROLE_SUPER_ADMIN)
+
+
+def gerant_recipients():
+    """Qui prévenir quand une demande attend le Gérant : le gérant désigné
+    s'il existe et est actif, sinon les Super-Admins."""
+    from core.constants import ROLE_SUPER_ADMIN
+    from core.models import User
+    gerant = User.objects.filter(is_gerant=True, is_active=True)
+    if gerant.exists():
+        return gerant
+    return User.objects.filter(is_active=True, roles__name=ROLE_SUPER_ADMIN).distinct()
+
+
+class IsGerant(permissions.BasePermission):
+    """Palier Gérant — voir is_gerant()."""
+
+    def has_permission(self, request, view):
+        return is_gerant(request.user)

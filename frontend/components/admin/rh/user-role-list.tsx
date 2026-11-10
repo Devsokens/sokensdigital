@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, MoreHorizontal, ShieldCheck, Search } from "lucide-react";
-import { listUsers, listDepartments, deactivateUser } from "@/lib/api/hr";
+import { listUsers, listDepartments, deactivateUser, setUserGerant } from "@/lib/api/hr";
+import { useAuth } from "@/lib/auth/auth-context";
 import { listProfiles } from "@/lib/firebase/profile";
 import type { Department, UserBrief } from "@/lib/api/types";
 import type { Profile } from "@/lib/firebase/types";
@@ -20,6 +21,7 @@ interface MergedUser {
   avatarUrl: string | null;
   roles: AppRole[];
   departmentId: string | null;
+  isGerant: boolean;
 }
 
 function initials(name: string) {
@@ -56,6 +58,7 @@ export function UserRoleList() {
           avatarUrl: profile?.avatarUrl ?? u.avatar_url ?? null,
           roles: profileRoles(profile),
           departmentId: profile?.departmentId ?? null,
+          isGerant: Boolean(u.is_gerant),
         };
       });
       setRows(merged);
@@ -86,6 +89,25 @@ export function UserRoleList() {
   // plutôt qu'une seule, contrairement aux suppressions courantes de
   // l'appli — perdre l'accès plateforme d'un collègue par un clic
   // accidentel n'a pas le même coût qu'un brouillon supprimé par erreur.
+  // Désignation du gérant : réservée aux Super-Admins (l'API refuse les
+  // autres et ne leur renvoie même pas le champ is_gerant).
+  const { profile: me } = useAuth();
+  const isSuperAdmin = profileRoles(me).includes("SUPER_ADMIN");
+
+  async function handleToggleGerant(row: MergedUser) {
+    const next = !row.isGerant;
+    const message = next
+      ? `Désigner ${row.name || row.email} comme gérant ? Il ou elle validera les besoins, demandes d'achat et devis fournisseur au palier Gérant, et remplacera le gérant actuel s'il y en a un.`
+      : `Retirer le titre de gérant à ${row.name || row.email} ? Le palier Gérant reviendra aux Super-Admins.`;
+    if (!confirm(message)) return;
+    try {
+      await setUserGerant(row.djangoId, next);
+      load();
+    } catch {
+      alert("Impossible de modifier le gérant.");
+    }
+  }
+
   async function handleDeactivate(row: MergedUser) {
     if (!confirm(`Désactiver l'accès de ${row.name || row.email} ?`)) return;
     if (!confirm("Confirmer une seconde fois : cette personne perdra tout accès à la plateforme.")) return;
@@ -165,7 +187,12 @@ export function UserRoleList() {
                         )}
                       </span>
                       <span>
-                        <span className="block font-medium text-neutral-900">{row.name || "—"}</span>
+                        <span className="flex items-center gap-1.5 font-medium text-neutral-900">
+                          {row.name || "—"}
+                          {isSuperAdmin && row.isGerant && (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Gérant</span>
+                          )}
+                        </span>
                         <span className="block text-xs text-neutral-400">{row.email}</span>
                       </span>
                     </span>
@@ -212,6 +239,15 @@ export function UserRoleList() {
                               </button>
                             }
                           />
+                          {isSuperAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleGerant(row)}
+                              className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50"
+                            >
+                              {row.isGerant ? "Retirer le titre de gérant" : "Désigner comme gérant"}
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => handleDeactivate(row)}

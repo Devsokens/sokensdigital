@@ -12,6 +12,8 @@ export interface UserBrief {
   email: string;
   avatar_url: string | null;
   department_name: string | null;
+  /** Présent seulement pour un Super-Admin (masqué aux autres par l'API). */
+  is_gerant?: boolean;
 }
 
 export interface Department {

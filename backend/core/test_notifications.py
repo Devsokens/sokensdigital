@@ -290,7 +290,9 @@ class BesoinNotificationTests(APITestCase):
     def test_rcf_approval_notifies_the_gerant_then_decision_reaches_requester(self, mock_roles, mock_notify):
         besoin = self.create()
         _client(self.comptable).post(f'{self.URL}{besoin["id"]}/approve/', {'decision': 'APPROUVE'}, format='json')
-        self.assertEqual(mock_roles.call_args.args[0], (ROLE_SUPER_ADMIN,))
+        # Palier Gérant : le gérant désigné, à défaut les Super-Admins.
+        gerant_calls = [c for c in mock_notify.call_args_list if c.kwargs.get('title') == 'Besoin à valider (Gérant)']
+        self.assertEqual([c.kwargs['user'] for c in gerant_calls], [self.gerant])
 
         _client(self.gerant).post(f'{self.URL}{besoin["id"]}/approve/', {'decision': 'APPROUVE'}, format='json')
         self.assertEqual(mock_notify.call_args.kwargs['user'], self.chef)

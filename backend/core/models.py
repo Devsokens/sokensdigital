@@ -154,6 +154,11 @@ class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
     avatar_url = models.URLField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    # Gérant de l'entreprise : dernier palier des circuits de validation
+    # (besoins/décaissements, demandes d'achat, devis fournisseur). Un seul
+    # titulaire à la fois (contrainte ci-dessous) ; désigné par un
+    # Super-Admin depuis Administration > Utilisateurs.
+    is_gerant = models.BooleanField(default=False)
     mfa_enabled = models.BooleanField(default=False)
     last_login = models.DateTimeField(blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -181,6 +186,12 @@ class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
     class Meta(LoggedModel.Meta):
         indexes = LoggedModel.Meta.indexes + [
             models.Index(fields=['email_hash']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['is_gerant'], condition=models.Q(is_gerant=True),
+                name='single_gerant',
+            ),
         ]
 
     def get_decrypted_email(self):

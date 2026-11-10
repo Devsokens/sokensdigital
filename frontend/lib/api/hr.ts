@@ -99,6 +99,14 @@ export function deleteDepartment(id: string) {
   return apiFetch<void>(`/api/v1/departments/${id}/`, { method: "DELETE" });
 }
 
+/** Désigne ou retire le gérant — Super-Admin uniquement (403 sinon). */
+export function setUserGerant(userId: string, isGerant: boolean) {
+  return apiFetch<UserBrief>(`/api/v1/users/${userId}/gerant/`, {
+    method: "POST",
+    body: JSON.stringify({ is_gerant: isGerant }),
+  });
+}
+
 export function listUsers() {
   return apiFetch<Paginated<UserBrief>>("/api/v1/users/");
 }

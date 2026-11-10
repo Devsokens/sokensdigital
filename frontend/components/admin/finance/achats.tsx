@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTab, TabsIndicator, TabsPanel } from "@/components/
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { formatFcfa } from "@/lib/format-currency";
 import { useAuth } from "@/lib/auth/auth-context";
+import { useIsGerant } from "@/lib/admin/use-is-gerant";
 import { profileRoles } from "@/lib/firebase/types";
 import { listDepartments } from "@/lib/api/hr";
 import { listDisbursementRequests } from "@/lib/api/finance";
@@ -95,6 +96,7 @@ const DISBURSEMENT_STATUS_COLORS: Record<DisbursementRequest["status"], string> 
 
 function FichesPanel() {
   const { profile } = useAuth();
+  const isGerant = useIsGerant();
   const canApprove = profileRoles(profile).some((r) => CAN_APPROVE.includes(r));
   const [requests, setRequests] = useState<ProcurementRequest[] | null>(null);
   const [disbursements, setDisbursements] = useState<DisbursementRequest[]>([]);
@@ -199,7 +201,7 @@ function FichesPanel() {
                         <RejectButton disabled={actingId === r.id} onReject={(reason) => handleReject(r.id, reason, true)} />
                       </div>
                     )}
-                    {r.status === "EN_ATTENTE_MANAGER" && (
+                    {r.status === "EN_ATTENTE_MANAGER" && isGerant && (
                       <div className="flex gap-2">
                         <button disabled={actingId === r.id} onClick={() => handleAction(r.id, approveProcurementManager)} className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-700 disabled:opacity-40">Approuver (Gérant)</button>
                         <RejectButton disabled={actingId === r.id} onReject={(reason) => handleReject(r.id, reason, false)} />
@@ -346,6 +348,7 @@ const QUOTE_STATUS_COLORS: Record<SupplierQuote["status"], string> = {
 
 function DevisPanel() {
   const { profile } = useAuth();
+  const isGerant = useIsGerant();
   const canApprove = profileRoles(profile).some((r) => CAN_APPROVE.includes(r));
   const [quotes, setQuotes] = useState<SupplierQuote[] | null>(null);
   const [requests, setRequests] = useState<ProcurementRequest[]>([]);
@@ -418,7 +421,7 @@ function DevisPanel() {
                         {!q.rcf_validated_at && (
                           <button disabled={actingId === q.id} onClick={() => handleAction(q.id, validateSupplierQuoteRcf)} className="rounded-full bg-primary/10 px-3 py-1 text-xs text-primary disabled:opacity-40">Valider (RCF)</button>
                         )}
-                        <button disabled={actingId === q.id} onClick={() => handleAction(q.id, validateSupplierQuoteManager)} className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-700 disabled:opacity-40">Valider (Gérant)</button>
+                        {isGerant && <button disabled={actingId === q.id} onClick={() => handleAction(q.id, validateSupplierQuoteManager)} className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-700 disabled:opacity-40">Valider (Gérant)</button>}
                         <button disabled={actingId === q.id} onClick={() => handleAction(q.id, rejectSupplierQuote)} className="rounded-full bg-destructive/10 px-3 py-1 text-xs text-destructive disabled:opacity-40">Rejeter</button>
                       </div>
                     )}

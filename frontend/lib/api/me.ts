@@ -5,7 +5,7 @@ import { apiFetch } from "@/lib/api/client";
  * permissions propre à cette personne, voir
  * lib/admin/permissions-context.tsx). */
 export function getMe() {
-  return apiFetch<{ id: string; permission_overrides: Record<string, string[]> }>(
+  return apiFetch<{ id: string; permission_overrides: Record<string, string[]>; is_gerant?: boolean }>(
     "/api/v1/auth/me/"
   );
 }

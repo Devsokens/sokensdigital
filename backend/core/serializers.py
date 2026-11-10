@@ -52,7 +52,18 @@ class UserBriefSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'first_name', 'last_name', 'email', 'avatar_url', 'department_name']
+        fields = ['id', 'first_name', 'last_name', 'email', 'avatar_url', 'department_name', 'is_gerant']
+        read_only_fields = ['is_gerant']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # La désignation du gérant n'est visible que des Super-Admins.
+        request = self.context.get('request')
+        from core.constants import ROLE_SUPER_ADMIN
+        from core.permissions import has_role
+        if not (request and has_role(request.user, ROLE_SUPER_ADMIN)):
+            data.pop('is_gerant', None)
+        return data
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -77,6 +88,7 @@ class UserSerializer(serializers.ModelSerializer):
             'is_active',
             'is_staff',
             'mfa_enabled',
+            'is_gerant',
             'department',
             'permission_overrides',
             'created_at',
