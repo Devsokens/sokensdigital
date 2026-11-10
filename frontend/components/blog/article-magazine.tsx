@@ -4,9 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** Texte visible par page avant de passer à la suivante (≈ une double
- * colonne de magazine sur ordinateur). */
-const CHARS_PER_PAGE = 2200;
 const HALF_FLIP_MS = 320;
 
 type Direction = "next" | "prev";
@@ -34,29 +31,80 @@ const PROSE = cn(
 const DROP_CAP =
   "[&>p:first-of-type]:first-letter:float-left [&>p:first-of-type]:first-letter:mr-2 [&>p:first-of-type]:first-letter:mt-1 [&>p:first-of-type]:first-letter:text-6xl [&>p:first-of-type]:first-letter:font-bold [&>p:first-of-type]:first-letter:leading-[0.8] [&>p:first-of-type]:first-letter:text-primary";
 
-/** Découpe le HTML en feuillets aux frontières de blocs, en coupant de
- * préférence avant un intertitre. Exécuté dans le navigateur seulement. */
-function paginate(html: string): string[] {
+/** Coupe le HTML interne d'un paragraphe en morceaux de quelques phrases,
+ * uniquement entre deux phrases et jamais dans un lien. Les balises de mise
+ * en forme ouvertes (gras, italique…) sont refermées puis rouvertes de part
+ * et d'autre de la coupure, pour garder un balisage valide. */
+function splitParagraphHtml(inner: string, target = 150): string[] {
+  const parts: string[] = [];
+  const stack: { name: string; open: string }[] = [];
+  let current = "";
+  let textLen = 0;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (ch === "<") {
+      const close = inner.indexOf(">", i);
+      if (close === -1) { current += inner.slice(i); break; }
+      const tag = inner.slice(i, close + 1);
+      const name = (tag.match(/^<\/?\s*([a-z0-9]+)/i)?.[1] ?? "").toLowerCase();
+      if (tag.startsWith("</")) {
+        const idx = stack.map((t) => t.name).lastIndexOf(name);
+        if (idx !== -1) stack.splice(idx, 1);
+      } else if (!tag.endsWith("/>") && name !== "br" && name !== "img") {
+        stack.push({ name, open: tag });
+      }
+      current += tag;
+      i = close;
+      continue;
+    }
+    current += ch;
+    textLen++;
+    const inLink = stack.some((t) => t.name === "a");
+    if (!inLink && textLen >= target && /[.!?…]/.test(ch) && /\s/.test(inner[i + 1] ?? "")) {
+      const closing = [...stack].reverse().map((t) => `</${t.name}>`).join("");
+      parts.push((current + closing).trim());
+      current = stack.map((t) => t.open).join("");
+      textLen = 0;
+    }
+  }
+  if (current.replace(/<[^>]+>/g, "").trim()) parts.push(current.trim());
+  return parts;
+}
+
+/** Blocs de premier niveau du HTML ; les longs paragraphes sont recoupés
+ * pour que les feuillets se remplissent sans laisser de grands blancs. */
+function splitBlocks(html: string): string[] {
   const doc = new DOMParser().parseFromString(`<div>${html}</div>`, "text/html");
-  const blocks = Array.from(doc.body.firstElementChild?.children ?? []);
+  const out: string[] = [];
+  for (const el of Array.from(doc.body.firstElementChild?.children ?? []) as HTMLElement[]) {
+    if (el.tagName === "P" && (el.textContent ?? "").length > 220) {
+      for (const part of splitParagraphHtml(el.innerHTML)) out.push(`<p>${part}</p>`);
+    } else {
+      out.push(el.outerHTML);
+    }
+  }
+  return out;
+}
+
+/** Remplit chaque feuillet jusqu'à la hauteur disponible, mesurée dans un
+ * conteneur invisible de même largeur et même typographie. */
+function paginateToHeight(blocks: string[], measurer: HTMLDivElement, firstPageHeight: number, pageHeight: number): string[] {
   const pages: string[] = [];
   let current: string[] = [];
-  let size = 0;
+  measurer.innerHTML = "";
+  const limit = () => (pages.length === 0 ? firstPageHeight : pageHeight);
   for (const block of blocks) {
-    const len = (block.textContent ?? "").length + (block.querySelector("img") || block.tagName === "IMG" ? 600 : 0);
-    const isHeading = /^H[1-3]$/.test(block.tagName);
-    const full = size + len > CHARS_PER_PAGE;
-    const headingBreak = isHeading && size > CHARS_PER_PAGE * 0.6;
-    if (current.length > 0 && (full || headingBreak)) {
+    measurer.insertAdjacentHTML("beforeend", block);
+    if (current.length > 0 && measurer.scrollHeight > limit()) {
       pages.push(current.join(""));
       current = [];
-      size = 0;
+      measurer.innerHTML = block;
     }
-    current.push(block.outerHTML);
-    size += len;
+    current.push(block);
   }
   if (current.length > 0) pages.push(current.join(""));
-  return pages.length > 0 ? pages : [html];
+  measurer.innerHTML = "";
+  return pages;
 }
 
 /** Corps d'article mis en page comme un magazine tech, feuilleté page par
@@ -72,10 +120,30 @@ export function ArticleMagazine({ html, title, author, date }: { html: string; t
   const rootRef = useRef<HTMLDivElement>(null);
   const touchX = useRef<number | null>(null);
 
+  const measureRef = useRef<HTMLDivElement>(null);
+
+  // Hauteur d'un feuillet = hauteur visible de l'écran moins l'en-tête du
+  // site, le bandeau, le folio et la navigation : une page se lit sans
+  // défiler. Recalculé à la rotation de l'écran / au redimensionnement.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- DOMParser n'existe que dans le navigateur
-    setPages(paginate(html));
-    setPage(0);
+    const blocks = splitBlocks(html);
+    function layout() {
+      const measurer = measureRef.current;
+      if (!measurer) return;
+      const viewport = window.visualViewport?.height ?? window.innerHeight;
+      const wide = window.matchMedia("(min-width: 1024px)").matches;
+      // Mesure en une colonne ; sur grand écran deux colonnes doublent la place.
+      const body = Math.max(260, viewport - (wide ? 300 : 270)) * (wide ? 2 : 1);
+      const first = body - 70;
+      const next = paginateToHeight(blocks, measurer, first, body);
+      setPages(next);
+      setPage((p) => Math.min(p, next.length - 1));
+    }
+    layout();
+    let frame = 0;
+    const onResize = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(layout); };
+    window.addEventListener("resize", onResize);
+    return () => { window.removeEventListener("resize", onResize); cancelAnimationFrame(frame); };
   }, [html]);
 
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
@@ -156,12 +224,16 @@ export function ArticleMagazine({ html, title, author, date }: { html: string; t
           <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-black/30 to-transparent" />
 
           {/* Bandeau du magazine */}
-          <div className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-3 font-mono text-[10.5px] uppercase tracking-[0.18em] text-muted-foreground sm:px-10">
+          <div className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.18em] text-muted-foreground sm:px-10">
             <span className="text-primary">Soken&apos;s Digital · Tech News</span>
             <span className="hidden truncate sm:block">{title}</span>
           </div>
 
-          <div className="px-5 py-7 sm:px-10 sm:py-10">
+          <div className="px-5 py-5 sm:px-10 sm:py-7">
+            {/* Conteneur de mesure invisible : même largeur qu'une colonne. */}
+            <div aria-hidden className="pointer-events-none invisible absolute top-0 right-5 left-5 h-0 overflow-hidden sm:right-10 sm:left-10">
+              <div ref={measureRef} className={cn(PROSE, "lg:w-[calc(50%-1.25rem)] lg:columns-1")} />
+            </div>
             {page === 0 && (
               <p className="mb-6 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-white/10 pb-4 font-mono text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
                 <span className="rounded bg-primary px-2 py-0.5 font-semibold text-primary-foreground">Tech</span>
