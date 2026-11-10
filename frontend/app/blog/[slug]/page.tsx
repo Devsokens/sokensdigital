@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ArticleVisual } from "@/components/blog/article-visual";
-import { ArticleContent } from "@/components/blog/article-content";
+import { ArticleMagazine } from "@/components/blog/article-magazine";
 import { ArticleSidebar } from "@/components/blog/article-sidebar";
 import { LikeButton } from "@/components/blog/like-button";
 import { CommentsSection } from "@/components/blog/comments-section";
@@ -83,17 +83,17 @@ export default async function BlogArticlePage({
 
           <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_20rem]">
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+              <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary">Tech News · Dossier</p>
+              <h1 className="mt-3 text-3xl leading-[1.05] font-bold tracking-tight text-balance text-foreground sm:text-5xl">
                 {post.title}
               </h1>
-              <p className="mt-3 text-sm text-muted-foreground">{post.author}</p>
 
               <div className="mt-6">
                 <ArticleVisual image={post.coverImage} />
               </div>
 
               <div className="mt-8">
-                <ArticleContent html={post.content} />
+                <ArticleMagazine html={post.content} title={post.title} author={post.author} date={post.date} />
               </div>
 
               <div className="mt-8 flex items-center justify-between border-t border-white/10 pt-6">
