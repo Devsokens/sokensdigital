@@ -287,7 +287,7 @@ function RejectModal({ onReject, disabled }: { onReject: (reason: string) => voi
           <span className={labelClass}>Motif du rejet (obligatoire)</span>
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} className={`${inputClass} resize-none`} required />
         </label>
-        <div className="mt-5 flex items-center justify-end gap-3">
+        <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
           <ModalClose render={<button type="button" className="rounded-full border border-neutral-200 px-4 py-1.5 text-xs font-semibold text-neutral-600 hover:border-neutral-300">Annuler</button>} />
           <Button
             type="button"

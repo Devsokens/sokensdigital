@@ -92,7 +92,7 @@ export function ClientList() {
 
   return (
     <div>
-      <div className="mb-6 flex items-end justify-between gap-6">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-900">Clients</h1>
           <p className="mt-1.5 text-sm text-neutral-500">
@@ -102,8 +102,8 @@ export function ClientList() {
         {canCreate("clients") && <ClientFormModal onSaved={load} />}
       </div>
 
-      <div className="mb-5 flex items-center gap-3">
-        <div className="flex max-w-[360px] flex-1 items-center gap-2.5 rounded-lg border border-neutral-200 bg-white px-3.5 py-2.5">
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <div className="flex max-w-[360px] min-w-48 flex-1 items-center gap-2.5 rounded-lg border border-neutral-200 bg-white px-3.5 py-2.5">
           <Search className="size-4 shrink-0 text-neutral-400" />
           <input
             value={search}

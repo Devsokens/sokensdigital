@@ -118,7 +118,7 @@ function QuickSearch() {
   const hasResults = pageResults.length > 0 || contentResults.length > 0;
 
   return (
-    <div data-tour="search" className="relative w-full max-w-md">
+    <div data-tour="search" className="relative w-full min-w-0 max-w-md">
       <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-neutral-50 px-3.5 py-2 transition-colors focus-within:border-primary/40 focus-within:bg-white">
         <Search className="size-4 shrink-0 text-neutral-400" />
         <input
@@ -460,8 +460,10 @@ export function AdminHeader({ onToggleSidebar }: { onToggleSidebar?: () => void 
   const { openProfileModal } = useProfileModal();
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-neutral-200 bg-white px-6 lg:pl-8">
-      <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-neutral-200 bg-white px-4 sm:gap-4 sm:px-6 lg:pl-8">
+      {/* Fil d'Ariane masqué sur téléphone : le titre de la page le remplace,
+       * et la place sert à la recherche et aux actions. */}
+      <div className="hidden min-w-0 items-center gap-3 md:flex">
         {onToggleSidebar && (
           <button
             type="button"
@@ -475,11 +477,11 @@ export function AdminHeader({ onToggleSidebar }: { onToggleSidebar?: () => void 
         <Breadcrumb pathname={pathname} />
       </div>
 
-      <div className="flex flex-1 justify-center">
+      <div className="flex min-w-0 flex-1 justify-center">
         <QuickSearch />
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
         <button
           onClick={start}
           aria-label="Revoir la visite guidée"

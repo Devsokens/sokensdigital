@@ -117,7 +117,7 @@ export function ClientDetail({ id }: { id: string }) {
         <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-0.5" /> Retour aux clients
       </Link>
 
-      <div className="mb-6 flex items-start justify-between gap-6 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-4 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-xl font-semibold text-neutral-900">{client.company_name}</h1>

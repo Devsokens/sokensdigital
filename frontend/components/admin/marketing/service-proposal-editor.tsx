@@ -203,7 +203,7 @@ export function ServiceProposalEditor({
         {proposal ? `Modifier ${proposal.proposal_number}` : "Nouvelle offre de services"}
       </h1>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_auto]">
         {/* Formulaire étape par étape */}
         <div className="space-y-5">
           {error && (

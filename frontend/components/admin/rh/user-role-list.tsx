@@ -123,7 +123,7 @@ export function UserRoleList() {
 
       <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
         <div className="flex items-center gap-3 border-b border-neutral-100 px-5 py-3.5">
-          <div className="flex max-w-[320px] flex-1 items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2">
+          <div className="flex max-w-[320px] min-w-48 flex-1 items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2">
             <Search className="size-3.5 shrink-0 text-neutral-400" />
             <input
               value={search}

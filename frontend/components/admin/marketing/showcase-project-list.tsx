@@ -79,7 +79,7 @@ export function ShowcaseProjectList() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-end gap-2">
+      <div className="mb-6 flex flex-wrap items-center justify-end gap-2">
         <div className="flex items-center rounded-full border border-neutral-200 p-0.5">
           <button
             type="button"
@@ -183,7 +183,7 @@ export function ShowcaseProjectList() {
                     {project.show_on_homepage && <span className="ml-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500">Accueil</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-3">
+                    <div className="flex flex-wrap items-center justify-end gap-3">
                       <Link href={`/projects/${project.slug}`} target="_blank" aria-label="Voir le projet" className="text-neutral-400 hover:text-primary">
                         <ExternalLink className="size-4" />
                       </Link>

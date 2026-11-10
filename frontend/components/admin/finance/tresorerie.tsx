@@ -112,7 +112,7 @@ function CaissePanel() {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-end gap-2">
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
         <Button variant="outline" onClick={handleExportStatement} disabled={exporting} className="gap-1.5 rounded-full px-4">
           {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
           État de caisse (mois en cours)

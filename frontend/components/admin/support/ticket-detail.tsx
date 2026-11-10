@@ -108,7 +108,7 @@ export function TicketDetail({ id }: { id: string }) {
         <ArrowLeft className="size-3.5" /> Tickets
       </Link>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="flex h-[32rem] flex-col overflow-hidden rounded-xl border border-neutral-200 shadow-sm">
           <div className="border-b border-neutral-100 px-5 py-4">
             <h1 className="text-lg font-semibold text-neutral-900">{ticket.subject || "Conversation"}</h1>

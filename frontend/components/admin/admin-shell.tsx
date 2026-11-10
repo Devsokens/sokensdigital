@@ -70,14 +70,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       <div
         className={cn(
-          "flex flex-1 flex-col transition-[padding] duration-200 print:pl-0",
+          "flex min-w-0 flex-1 flex-col transition-[padding] duration-200 print:pl-0",
           !fullWidth && (collapsed ? "lg:pl-20" : "lg:pl-[336px]")
         )}
       >
         <div className="print:hidden">
           <AdminHeader onToggleSidebar={() => setCollapsed((v) => !v)} />
         </div>
-        <main className="flex-1 bg-white px-6 py-8 pb-28 text-neutral-900 lg:px-10 lg:pb-8 print:p-0">
+        <main className="min-w-0 flex-1 bg-white px-4 py-6 pb-28 sm:px-6 sm:py-8 text-neutral-900 lg:px-10 lg:pb-8 print:p-0">
           {children}
         </main>
       </div>

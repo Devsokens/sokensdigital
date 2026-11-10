@@ -43,7 +43,7 @@ export function DepartmentList() {
 
   return (
     <div>
-      <div className="mb-6 flex items-end justify-between gap-6">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-900">Départements</h1>
           <p className="mt-1.5 text-sm text-neutral-500">

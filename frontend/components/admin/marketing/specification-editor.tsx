@@ -133,7 +133,7 @@ export function SpecificationEditor({
         {spec ? `Modifier ${spec.spec_number}` : "Nouveau cahier des charges"}
       </h1>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_auto]">
         <form onSubmit={handleSubmit} className="space-y-5">
           {error && (
             <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">

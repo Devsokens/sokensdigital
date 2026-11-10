@@ -156,7 +156,7 @@ export function AddEmployeeSheet({
         }
       />
       <SheetContent title="Ajouter un employé">
-        <div className="mb-6 flex items-center gap-2">
+        <div className="mb-6 flex flex-wrap items-center gap-2">
           {STEPS.map((label, i) => (
             <div key={label} className="flex flex-1 items-center gap-2">
               <div

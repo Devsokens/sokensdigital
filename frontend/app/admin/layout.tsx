@@ -34,7 +34,15 @@ import { AdminAccessGuard } from "@/components/admin/admin-access-guard";
  */
 // var(--color-white) plutôt que #ffffff : en mode sombre, globals.css
 // redéfinit cette variable, et le fond de la racine suit le thème choisi.
-const ADMIN_SURFACE_CSS = `html:root, html:root body { background-color: var(--color-white); }`;
+/* Sur téléphone et tablette, Safari iOS zoome toute la page dès qu'on touche
+ * un champ dont le texte fait moins de 16px — et ne dézoome pas en sortant
+ * du champ. Les champs du back-office sont en text-sm (14px) : on les force
+ * à 16px sur écran tactile ou étroit, ce qui supprime ce zoom sans bloquer
+ * le zoom manuel (accessibilité). */
+const ADMIN_SURFACE_CSS = `html:root, html:root body { background-color: var(--color-white); }
+@media (max-width: 1023px), (pointer: coarse) {
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), select, textarea, [contenteditable=true] { font-size: 16px !important; }
+}`;
 
 /* La couleur de thème est ce dont le système peint ses propres barres :
  * barre d'état et barre de navigation Android, et les mêmes en PWA

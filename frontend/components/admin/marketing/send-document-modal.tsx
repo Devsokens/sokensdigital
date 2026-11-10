@@ -188,7 +188,7 @@ export function SendDocumentModal({
             </div>
           </div>
 
-          <div className="mt-6 flex items-center justify-end gap-2 border-t border-neutral-100 pt-4">
+          <div className="mt-6 flex flex-wrap items-center justify-end gap-2 border-t border-neutral-100 pt-4">
             <Button
               type="button"
               variant="outline"

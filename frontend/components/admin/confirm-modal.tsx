@@ -75,7 +75,7 @@ export function ConfirmModal({
             {error}
           </p>
         )}
-        <div className="mt-5 flex items-center justify-end gap-3">
+        <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
           <ModalClose render={<button type="button" className="rounded-full border border-neutral-200 px-4 py-1.5 text-xs font-semibold text-neutral-600 hover:border-neutral-300">Annuler</button>} />
           <Button
             type="button"

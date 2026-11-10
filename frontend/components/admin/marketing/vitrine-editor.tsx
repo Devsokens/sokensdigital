@@ -356,7 +356,7 @@ export function EditDialog({ request, onClose, onSave }: { request: EditRequest;
         {request.kind === "list" && !request.hint && <p className="mt-3 text-xs text-neutral-500">Un élément par ligne.</p>}
         {error && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
 
-        <div className="mt-6 flex items-center justify-end gap-2">
+        <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-neutral-500 hover:text-neutral-800">
             Annuler
           </button>

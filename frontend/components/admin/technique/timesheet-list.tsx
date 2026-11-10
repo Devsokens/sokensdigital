@@ -111,7 +111,7 @@ function MyTimesheetEntries({ isChefDeProjet }: { isChefDeProjet: boolean }) {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-900">{isChefDeProjet ? "Détail par projet" : "Timesheets"}</h1>
           <p className="text-sm text-neutral-500">
@@ -189,7 +189,7 @@ function MyTimesheetEntries({ isChefDeProjet }: { isChefDeProjet: boolean }) {
                   </td>
                   <td className="px-4 py-3">
                     {isChefDeProjet && entry.status === "SOUMIS" && (
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
                         <button
                           type="button"
                           onClick={() => handleValidate(entry, "VALIDE")}
