@@ -531,9 +531,11 @@ class SetGerantView(APIView):
     uniquement. Un seul gérant à la fois : en désigner un nouveau retire le
     titre au précédent, dans la même transaction. Tracé dans le journal
     d'audit et notifié aux Super-Admins (changement de droits de validation
-    financière)."""
+    financière). Authentification obligatoire (401 sinon), compte actif et
+    rôle Super-Admin (403 sinon) ; l'unicité est en plus garantie en base
+    (contrainte single_gerant)."""
 
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [permissions.IsAuthenticated, IsSuperAdmin]
 
     @extend_schema(
         tags=['Administration & RH'],
@@ -543,6 +545,8 @@ class SetGerantView(APIView):
     def post(self, request, pk):
         from django.db import transaction
 
+        if not request.user.is_active:
+            return Response(status=status.HTTP_403_FORBIDDEN)
         value = request.data.get('is_gerant')
         if not isinstance(value, bool):
             return Response({'detail': 'is_gerant (booléen) est requis.'}, status=status.HTTP_400_BAD_REQUEST)
