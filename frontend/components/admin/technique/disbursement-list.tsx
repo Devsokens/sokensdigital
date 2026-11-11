@@ -97,7 +97,7 @@ export function DisbursementList() {
 
   async function load() {
     try {
-      const [reqRes, projRes] = await Promise.all([listDisbursementRequests(), listProjects()]);
+      const [reqRes, projRes] = await Promise.all([listDisbursementRequests(), listProjects({ pageSize: 500 })]);
       setRequests(reqRes.results);
       setProjects(projRes.results);
     } catch {
@@ -414,9 +414,17 @@ function BesoinForm({ projects, onSaved, onCancel }: { projects: Project[]; onSa
         <span className={labelClass}>Projet (facultatif)</span>
         <select value={projectId ?? ""} onChange={(e) => setProjectId(e.target.value || null)} className={inputClass}>
           <option value="">— Aucun projet —</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
+          {/* Tous les projets, y compris déjà lancés ou en cours d'exécution :
+              un besoin peut survenir à tout moment de la vie du projet.
+              Projets actifs d'abord, annulés exclus. */}
+          {[...projects]
+            .filter((p) => p.status !== "ANNULE")
+            .sort((a, b) => Number(a.status === "TERMINE") - Number(b.status === "TERMINE") || a.name.localeCompare(b.name, "fr"))
+            .map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}{p.status === "EN_COURS" ? " — en cours" : p.status === "TERMINE" ? " — terminé" : ""}
+              </option>
+            ))}
         </select>
       </label>
 

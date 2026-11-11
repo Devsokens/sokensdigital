@@ -41,8 +41,9 @@ function taskFromBackend(task: ProjectTask): ProjectTask {
   return { ...task, status: STATUS_FROM_BACKEND[task.status as unknown as string] ?? task.status };
 }
 
-export function listProjects(params?: { search?: string; client?: string }) {
+export function listProjects(params?: { search?: string; client?: string; pageSize?: number }) {
   const query = new URLSearchParams();
+  if (params?.pageSize) query.set("page_size", String(params.pageSize));
   if (params?.search) query.set("search", params.search);
   if (params?.client) query.set("client", params.client);
   const qs = query.toString();

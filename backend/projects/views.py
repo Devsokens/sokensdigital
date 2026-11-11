@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q, Sum
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
+from core.pagination import SelectorPagination
 from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -61,6 +62,10 @@ class IsProjectManagerOrReadOnly(permissions.BasePermission):
 class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
     permission_classes = [IsProjectManagerOrReadOnly]
+    # `?page_size=` : les listes de choix (rattacher un besoin à un projet)
+    # doivent voir tous les projets, pas seulement les 25 plus récents —
+    # un projet lancé depuis longtemps peut encore avoir des besoins.
+    pagination_class = SelectorPagination
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
