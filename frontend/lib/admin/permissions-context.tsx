@@ -38,6 +38,8 @@ const PermissionsContext = createContext<PermissionsContextValue>({
  * Super-Admin always has access to everything regardless of what's stored
  * — editing that role's permissions through the UI must never be able to
  * lock the only admin account out of its own app. */
+const ALWAYS_ALLOWED_MODULES = new Set(["besoins"]);
+
 export function PermissionsProvider({ children }: { children: React.ReactNode }) {
   const { profile } = useAuth();
   const [moduleActionsMap, setModuleActionsMap] = useState<Map<string, Set<ModuleAction>>>(new Map());
@@ -119,6 +121,9 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
 
   function canAccessModule(moduleKey: string): boolean {
     if (isSuperAdmin) return true;
+    // Exprimer un besoin est ouvert à tout employé, quel que soit son rôle
+    // (l'API borne ce que chacun voit ; la validation reste à la Finance).
+    if (ALWAYS_ALLOWED_MODULES.has(moduleKey)) return true;
     const actions = moduleActionsMap.get(moduleKey);
     return Boolean(actions && actions.size > 0);
   }

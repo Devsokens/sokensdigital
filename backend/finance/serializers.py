@@ -64,6 +64,7 @@ class DisbursementRequestSerializer(serializers.ModelSerializer):
         source='project', queryset=Project.objects.all(), write_only=True, required=False, allow_null=True,
     )
     project_name = serializers.CharField(source='project.name', read_only=True, default=None)
+    department_name = serializers.CharField(source='department.name', read_only=True, default=None)
     beneficiary_user_id = serializers.PrimaryKeyRelatedField(
         source='beneficiary_user', queryset=User.objects.all(), write_only=True, required=False, allow_null=True,
     )
@@ -81,10 +82,12 @@ class DisbursementRequestSerializer(serializers.ModelSerializer):
             'beneficiary', 'beneficiary_user', 'beneficiary_user_id', 'reason', 'lines', 'quotes',
             'status', 'rejection_reason', 'rcf_decided_by', 'rcf_decided_at', 'decided_by', 'decided_at',
             'executed_by', 'executed_at', 'created_at',
+            'department', 'department_name', 'rcf_signature_url', 'gerant_signature_url',
         ]
         read_only_fields = [
             'reference', 'project', 'requested_by', 'status', 'rejection_reason', 'rcf_decided_by',
             'rcf_decided_at', 'decided_by', 'decided_at', 'executed_by', 'executed_at',
+            'department', 'rcf_signature_url', 'gerant_signature_url',
         ]
 
     def validate_amount(self, value):

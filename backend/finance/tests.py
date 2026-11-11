@@ -22,6 +22,8 @@ from finance.models import (
 )
 from projects.models import Project
 
+SIG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+
 
 def _give_role(user, name):
     role, _ = Role.objects.get_or_create(name=name)
@@ -31,6 +33,9 @@ def _give_role(user, name):
 
 class DisbursementRequestViewSetTests(APITestCase):
     def setUp(self):
+        _sig_patcher = patch('core.storage.upload_image', return_value='https://cdn.test/signature.png')
+        _sig_patcher.start()
+        self.addCleanup(_sig_patcher.stop)
         self.chef_a = User.objects.create(email='chef-a@sokensdigital.com', first_name='ChefA')
         _give_role(self.chef_a, ROLE_PROJECT_MANAGER)
 
@@ -165,7 +170,7 @@ class DisbursementRequestViewSetTests(APITestCase):
         # au Gérant, ce n'est pas encore une approbation définitive.
         response = self.client_cfo.post(
             f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
-            {'decision': 'APPROUVE'}, format='json',
+            {'decision': 'APPROUVE', 'signature': SIG}, format='json',
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'EN_ATTENTE_GERANT')
@@ -173,7 +178,7 @@ class DisbursementRequestViewSetTests(APITestCase):
         # Le Gérant statue en dernier ressort.
         response = client_gerant.post(
             f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
-            {'decision': 'APPROUVE'}, format='json',
+            {'decision': 'APPROUVE', 'signature': SIG}, format='json',
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'APPROUVE')
@@ -198,7 +203,7 @@ class DisbursementRequestViewSetTests(APITestCase):
         )
         response = client.post(
             f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
-            {'decision': 'APPROUVE'}, format='json',
+            {'decision': 'APPROUVE', 'signature': SIG}, format='json',
         )
         self.assertEqual(response.status_code, 403)
 
@@ -208,7 +213,7 @@ class DisbursementRequestViewSetTests(APITestCase):
         )
         response = self.client_a.post(
             f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
-            {'decision': 'APPROUVE'}, format='json',
+            {'decision': 'APPROUVE', 'signature': SIG}, format='json',
         )
         self.assertEqual(response.status_code, 403)
 
@@ -224,7 +229,42 @@ class DisbursementRequestViewSetTests(APITestCase):
         response = client_comptable.post(f'/api/v1/finance/disbursement-requests/{disbursement.id}/execute/')
         self.assertEqual(response.status_code, 400)
 
-    def test_comptable_can_act_as_rcf(self):
+    def test_approval_requires_signature_and_stores_it(self):
+        disbursement = DisbursementRequest.objects.create(
+            project=self.project_a, requested_by=self.chef_a, amount=5000, beneficiary='X', reason='Y',
+            status=DisbursementRequest.Status.EN_ATTENTE_RCF,
+        )
+        url = f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/'
+        self.assertEqual(self.client_cfo.post(url, {'decision': 'APPROUVE'}, format='json').status_code, 400)
+        self.assertEqual(self.client_cfo.post(url, {'decision': 'APPROUVE', 'signature': 'pas-une-image'}, format='json').status_code, 400)
+        res = self.client_cfo.post(url, {'decision': 'APPROUVE', 'signature': SIG}, format='json')
+        self.assertEqual(res.status_code, 200)
+        disbursement.refresh_from_db()
+        self.assertEqual(disbursement.status, DisbursementRequest.Status.EN_ATTENTE_GERANT)
+        self.assertEqual(disbursement.rcf_signature_url, 'https://cdn.test/signature.png')
+
+    def test_besoin_takes_requester_department_and_department_scope(self):
+        from core.models import Department
+        dept = Department.objects.create(name='Marketing', color='#000000')
+        self.outsider.department = dept
+        self.outsider.save()
+        colleague = User.objects.create(email='coll@sokensdigital.com', first_name='Coll', department=dept)
+        res = self.client_outsider.post('/api/v1/finance/disbursement-requests/', {
+            'beneficiary_user_id': str(self.outsider.id),
+            'lines': [{'label': 'Flyers', 'quantity': '100', 'unit_price': '150'}],
+        }, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        besoin = DisbursementRequest.objects.get(pk=res.json()['id'])
+        self.assertEqual(besoin.department, dept)
+        coll_client = APIClient()
+        coll_client.force_authenticate(user=colleague)
+        rows = coll_client.get('/api/v1/finance/disbursement-requests/?scope=department').json()['results']
+        self.assertEqual([r['id'] for r in rows], [str(besoin.id)])
+        # Un autre département ne le voit pas.
+        self.assertEqual(self.client_b.get('/api/v1/finance/disbursement-requests/?scope=department').json()['results'], [])
+
+    def test_comptable_cannot_act_as_rcf(self):
+        """1re validation réservée au Directeur financier (et Super-Admin)."""
         comptable = User.objects.create(email='comptable-rcf@sokensdigital.com', first_name='Comptable')
         _give_role(comptable, ROLE_COMPTABLE)
         client_comptable = APIClient()
@@ -236,13 +276,12 @@ class DisbursementRequestViewSetTests(APITestCase):
         )
         response = client_comptable.post(
             f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
-            {'decision': 'APPROUVE'}, format='json',
+            {'decision': 'APPROUVE', 'signature': SIG}, format='json',
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 403)
         # La RCF ne décide pas seule : elle transmet au Gérant.
-        self.assertEqual(response.json()['status'], 'EN_ATTENTE_GERANT')
         disbursement.refresh_from_db()
-        self.assertEqual(disbursement.rcf_decided_by_id, comptable.id)
+        self.assertIsNone(disbursement.rcf_decided_by_id)
 
     def test_comptable_cannot_act_as_gerant(self):
         comptable = User.objects.create(email='comptable-gerant@sokensdigital.com', first_name='Comptable')
@@ -256,7 +295,7 @@ class DisbursementRequestViewSetTests(APITestCase):
         )
         response = client_comptable.post(
             f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
-            {'decision': 'APPROUVE'}, format='json',
+            {'decision': 'APPROUVE', 'signature': SIG}, format='json',
         )
         self.assertEqual(response.status_code, 403)
 
@@ -269,7 +308,7 @@ class DisbursementRequestViewSetTests(APITestCase):
         )
         response = self.client_cfo.post(
             f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
-            {'decision': 'APPROUVE'}, format='json',
+            {'decision': 'APPROUVE', 'signature': SIG}, format='json',
         )
         self.assertEqual(response.status_code, 403)
 
@@ -285,7 +324,7 @@ class DisbursementRequestViewSetTests(APITestCase):
         )
         response = client_super.post(
             f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
-            {'decision': 'APPROUVE'}, format='json',
+            {'decision': 'APPROUVE', 'signature': SIG}, format='json',
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'APPROUVE')
@@ -305,7 +344,7 @@ class DisbursementRequestViewSetTests(APITestCase):
         )
         response = client_super.post(
             f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
-            {'decision': 'APPROUVE'}, format='json',
+            {'decision': 'APPROUVE', 'signature': SIG}, format='json',
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'EN_ATTENTE_GERANT')
@@ -350,6 +389,9 @@ class BesoinLinesQuotesPdfTests(APITestCase):
     URL = '/api/v1/finance/disbursement-requests/'
 
     def setUp(self):
+        _sig_patcher = patch('core.storage.upload_image', return_value='https://cdn.test/signature.png')
+        _sig_patcher.start()
+        self.addCleanup(_sig_patcher.stop)
         self.chef = User.objects.create(email='chef@sokensdigital.com', first_name='Awa', last_name='Diallo')
         _give_role(self.chef, ROLE_PROJECT_MANAGER)
         self.other_chef = User.objects.create(email='autre@sokensdigital.com', first_name='Autre')

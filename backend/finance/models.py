@@ -5,7 +5,7 @@ from django.contrib.contenttypes.fields import GenericRelation
 from django.db import models
 from django.utils import timezone
 
-from core.models import LoggedModel, User
+from core.models import Department, LoggedModel, User
 from projects.models import Project
 
 # Default VAT rate — peut être modifié dynamiquement via FinanceSettings.
@@ -49,6 +49,12 @@ class DisbursementRequest(LoggedModel):
     request_date = models.DateField(default=timezone.localdate)
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='disbursement_requests')
     requested_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='disbursement_requests')
+    # Département demandeur (celui du demandeur au moment de la demande) :
+    # chaque département exprime ses besoins depuis sa propre interface ;
+    # Finance & Comptabilité les voit tous (interface Décaissements).
+    department = models.ForeignKey(
+        Department, on_delete=models.SET_NULL, null=True, blank=True, related_name='disbursement_requests',
+    )
     # Somme des lignes quand il y en a (formulaire « Exprimer un besoin ») ;
     # saisi directement pour les demandes sans ligne (auto-créées depuis un
     # devis fournisseur validé, procurement.tasks).
@@ -68,6 +74,10 @@ class DisbursementRequest(LoggedModel):
     # rejette directement — dans les deux cas, c'est elle qui a statué.
     rcf_decided_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='rcf_decided_disbursements')
     rcf_decided_at = models.DateTimeField(null=True, blank=True)
+    # Signatures manuscrites (PNG) apposées à l'approbation, reprises sur le
+    # bon de demande PDF : Directeur financier puis Gérant.
+    rcf_signature_url = models.URLField(max_length=1000, blank=True)
+    gerant_signature_url = models.URLField(max_length=1000, blank=True)
 
     # Gérant : décision finale, seulement atteinte si la RCF a transmis.
     decided_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='decided_disbursements')

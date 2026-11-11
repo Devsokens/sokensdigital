@@ -259,7 +259,8 @@
                 <td><span class="label">Bénéficiaire :</span> {{ disbursement.beneficiary }}</td>
             </tr>
             <tr>
-                <td colspan="2"><span class="label">Projet :</span> {% if disbursement.project %}{{ disbursement.project.name }}{% else %}Aucun (besoin général){% endif %}</td>
+                <td><span class="label">Département :</span> {% if disbursement.department %}{{ disbursement.department.name }}{% else %}—{% endif %}</td>
+                <td><span class="label">Projet :</span> {% if disbursement.project %}{{ disbursement.project.name }}{% else %}Aucun (besoin général){% endif %}</td>
             </tr>
         </table>
     </div>
@@ -332,11 +333,11 @@
         <table>
             <tr>
                 <th style="width: 33%;">Demandeur</th>
-                <th style="width: 33%;">Responsable Comptable et Financière</th>
+                <th style="width: 33%;">Directeur financier</th>
                 <th style="width: 34%;">Gérant</th>
             </tr>
             <tr>
-                <td style="height: 70px; vertical-align: top;">
+                <td style="height: 90px; vertical-align: top;">
                     {% if disbursement.requested_by %}{{ disbursement.requested_by.first_name }} {{ disbursement.requested_by.last_name }}<br>{% endif %}
                     Le {{ disbursement.request_date|date:"d/m/Y" }}
                 </td>
@@ -344,12 +345,14 @@
                     {% if disbursement.rcf_decided_by %}
                         {{ disbursement.rcf_decided_by.first_name }} {{ disbursement.rcf_decided_by.last_name }}<br>
                         Le {{ disbursement.rcf_decided_at|date:"d/m/Y" }}
+                        {% if disbursement.rcf_signature_url %}<br><img src="{{ disbursement.rcf_signature_url }}" alt="Signature du Directeur financier" style="max-height: 60px; max-width: 160px; margin-top: 6px;">{% endif %}
                     {% endif %}
                 </td>
                 <td style="vertical-align: top;">
                     {% if disbursement.decided_by %}
                         {{ disbursement.decided_by.first_name }} {{ disbursement.decided_by.last_name }}<br>
                         Le {{ disbursement.decided_at|date:"d/m/Y" }}
+                        {% if disbursement.gerant_signature_url %}<br><img src="{{ disbursement.gerant_signature_url }}" alt="Signature du Gérant" style="max-height: 60px; max-width: 160px; margin-top: 6px;">{% endif %}
                     {% endif %}
                 </td>
             </tr>

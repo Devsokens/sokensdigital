@@ -823,6 +823,9 @@ export interface DisbursementQuote {
  * `quotes_count` ; le détail renvoie `quotes` avec leurs URLs. */
 export interface DisbursementRequest {
   id: string;
+  department_name?: string | null;
+  rcf_signature_url?: string;
+  gerant_signature_url?: string;
   reference: string | null;
   request_date: string;
   project: string | null;

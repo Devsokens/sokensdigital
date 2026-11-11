@@ -18,8 +18,13 @@ import type {
 
 const DISBURSEMENTS = "/api/v1/finance/disbursement-requests";
 
-export function listDisbursementRequests() {
-  return apiFetch<Paginated<DisbursementRequest>>(`${DISBURSEMENTS}/`);
+/** `scope: "department"` : interface Besoins d'un département (mes
+ * demandes et celles de mon département) ; sans scope : tout ce que mon
+ * rôle permet de voir (Finance : toutes les demandes). */
+export function listDisbursementRequests(params?: { scope?: "department" }) {
+  const qs = new URLSearchParams({ page_size: "500" });
+  if (params?.scope) qs.set("scope", params.scope);
+  return apiFetch<Paginated<DisbursementRequest>>(`${DISBURSEMENTS}/?${qs}`);
 }
 
 /** Détail, avec les devis et leurs URLs signées (la liste n'en donne que le nombre). */
@@ -106,10 +111,16 @@ export function saveBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function approveDisbursementRequest(id: string, decision: "APPROUVE" | "REJETE", rejectionReason?: string) {
+/** Approuver exige la signature manuscrite (PNG base64 du pad). */
+export function approveDisbursementRequest(
+  id: string,
+  decision: "APPROUVE" | "REJETE",
+  rejectionReason?: string,
+  signature?: string,
+) {
   return apiFetch<DisbursementRequest>(`/api/v1/finance/disbursement-requests/${id}/approve/`, {
     method: "POST",
-    body: JSON.stringify({ decision, rejection_reason: rejectionReason }),
+    body: JSON.stringify({ decision, rejection_reason: rejectionReason, signature }),
   });
 }
 

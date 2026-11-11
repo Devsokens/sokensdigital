@@ -84,6 +84,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
       { label: "Contacts", href: "/admin/rh/contacts", icon: BookUser, moduleKey: "clients" },
       { label: "Utilisateurs & Rôles", shortLabel: "Utilisateurs", href: "/admin/rh/utilisateurs", icon: UserCog, moduleKey: "utilisateurs" },
       { label: "Audit Log", href: "/admin/rh/audit-log", icon: ScrollText, moduleKey: "audit-log" },
+      { label: "Besoins", href: "/admin/rh/besoins", icon: Banknote, moduleKey: "besoins" },
       // RH — sous-interface d'Administration, regroupée visuellement dans
       // la sidebar (voir AdminSidebar) plutôt qu'être son propre
       // département de premier niveau.
@@ -106,6 +107,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
       { label: "Offres de service", shortLabel: "Offres", href: "/admin/marketing/offres-de-service", icon: FileText, moduleKey: "devis" },
       { label: "Analytique web", shortLabel: "Analytique", href: "/admin/marketing/analytique", icon: Activity, moduleKey: "analytique-marketing" },
       { label: "Cahier des charges", shortLabel: "Cahier", href: "/admin/marketing/cahier-des-charges", icon: ClipboardList, moduleKey: "cahier-des-charges" },
+      { label: "Besoins", href: "/admin/marketing/besoins", icon: Banknote, moduleKey: "besoins" },
     ],
   },
   {
@@ -115,7 +117,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
       { label: "Projets", href: "/admin/technique/projets", icon: FolderKanban, moduleKey: "projets" },
       { label: "Timesheets", href: "/admin/technique/timesheets", icon: Clock, moduleKey: "timesheets", comingSoon: true },
       { label: "Maintenance", href: "/admin/technique/maintenance", icon: Wrench, moduleKey: "maintenance" },
-      { label: "Besoins", href: "/admin/technique/decaissements", icon: Banknote, moduleKey: "decaissements" },
+      { label: "Besoins", href: "/admin/technique/decaissements", icon: Banknote, moduleKey: "besoins" },
       { label: "Devis", href: "/admin/technique/devis", icon: FileText, moduleKey: "devis" },
       { label: "Cahier des charges", shortLabel: "Cahier", href: "/admin/technique/cahier-des-charges", icon: ClipboardList, moduleKey: "cahier-des-charges" },
       { label: "Analytique web", shortLabel: "Analytique", href: "/admin/technique/analytique", icon: Activity, moduleKey: "analytique-technique" },
@@ -132,6 +134,9 @@ export const ADMIN_SECTIONS: NavSection[] = [
       { label: "Rapprochement bancaire", shortLabel: "Rappro.", href: "/admin/finance/rapprochement", icon: Landmark, moduleKey: "rapprochement", comingSoon: true },
       { label: "Fiscalité (TVA)", shortLabel: "TVA", href: "/admin/finance/tva", icon: Percent, moduleKey: "tva" },
       { label: "Opérations d'achats", shortLabel: "Achats", href: "/admin/finance/achats", icon: ShoppingCart, moduleKey: "achats" },
+      // Tous les besoins des départements : validation signée Directeur financier puis Gérant.
+      { label: "Décaissements", href: "/admin/finance/decaissements", icon: Banknote, moduleKey: "decaissements" },
+      { label: "Besoins", href: "/admin/finance/besoins", icon: Banknote, moduleKey: "besoins" },
       { label: "Trésorerie", href: "/admin/finance/tresorerie", icon: Wallet, moduleKey: "tresorerie" },
     ],
   },
@@ -140,6 +145,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
     items: [
       { label: "Tickets", href: "/admin/support/tickets", icon: Headset, moduleKey: "tickets" },
       { label: "Base de connaissances", shortLabel: "Connaissances", href: "/admin/support/base-connaissances", icon: Library, moduleKey: "base-connaissances" },
+      { label: "Besoins", href: "/admin/support/besoins", icon: Banknote, moduleKey: "besoins" },
     ],
   },
   {

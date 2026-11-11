@@ -331,7 +331,7 @@ function resolveNotificationLink(notification: Notification): string {
     case "TASK_COMMENT":
       return "/admin/technique/projets";
     case "DISBURSEMENT_WAITING":
-      return "/admin/technique/decaissements";
+      return "/admin/finance/decaissements";
     case "CONTENT_PUBLISH_REMINDER":
       return "/admin/marketing/contenu";
     case "FOLLOW_UP": {
@@ -360,7 +360,7 @@ function resolveNotificationLink(notification: Notification): string {
         return "/admin/finance/facturation";
       }
       if (fullText.includes("besoin") || fullText.includes("décaissement") || fullText.includes("decaissement")) {
-        return "/admin/technique/decaissements";
+        return "/admin/finance/decaissements";
       }
       if (fullText.includes("employé") || fullText.includes("employe") || fullText.includes("rh")) {
         return "/admin/rh/employes";

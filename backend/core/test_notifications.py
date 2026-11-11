@@ -19,6 +19,8 @@ from core.constants import (
 from core.models import PushDevice, Role, User
 from projects.models import Project, ProjectMember, ProjectTask
 
+SIG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+
 
 def _user(email, *roles, first_name='Prénom', firebase_uid=None):
     user = User.objects.create(email=email, first_name=first_name, last_name='Test', firebase_uid=firebase_uid)
@@ -272,8 +274,11 @@ class BesoinNotificationTests(APITestCase):
     URL = '/api/v1/finance/disbursement-requests/'
 
     def setUp(self):
+        _sig_patcher = patch('core.storage.upload_image', return_value='https://cdn.test/signature.png')
+        _sig_patcher.start()
+        self.addCleanup(_sig_patcher.stop)
         self.chef = _user('chef@sokensdigital.com', ROLE_PROJECT_MANAGER)
-        self.comptable = _user('compta@sokensdigital.com', ROLE_COMPTABLE)
+        self.comptable = _user('compta@sokensdigital.com', 'Directeur Financier')
         self.gerant = _user('gerant@sokensdigital.com', ROLE_SUPER_ADMIN)
 
     def create(self):
@@ -284,17 +289,17 @@ class BesoinNotificationTests(APITestCase):
 
     def test_new_besoin_notifies_the_rcf(self, mock_roles, _notify):
         self.create()
-        self.assertEqual(mock_roles.call_args.args[0], (ROLE_COMPTABLE, 'Directeur Financier'))
+        self.assertEqual(mock_roles.call_args.args[0], ('Directeur Financier',))
         self.assertEqual(mock_roles.call_args.kwargs['title'], 'Nouveau besoin à examiner')
 
     def test_rcf_approval_notifies_the_gerant_then_decision_reaches_requester(self, mock_roles, mock_notify):
         besoin = self.create()
-        _client(self.comptable).post(f'{self.URL}{besoin["id"]}/approve/', {'decision': 'APPROUVE'}, format='json')
+        _client(self.comptable).post(f'{self.URL}{besoin["id"]}/approve/', {'decision': 'APPROUVE', 'signature': SIG}, format='json')
         # Palier Gérant : le gérant désigné, à défaut les Super-Admins.
         gerant_calls = [c for c in mock_notify.call_args_list if c.kwargs.get('title') == 'Besoin à valider (Gérant)']
         self.assertEqual([c.kwargs['user'] for c in gerant_calls], [self.gerant])
 
-        _client(self.gerant).post(f'{self.URL}{besoin["id"]}/approve/', {'decision': 'APPROUVE'}, format='json')
+        _client(self.gerant).post(f'{self.URL}{besoin["id"]}/approve/', {'decision': 'APPROUVE', 'signature': SIG}, format='json')
         self.assertEqual(mock_notify.call_args.kwargs['user'], self.chef)
         self.assertEqual(mock_notify.call_args.kwargs['title'], 'Besoin approuvé')
         self.assertTrue(mock_notify.call_args.kwargs['email'])

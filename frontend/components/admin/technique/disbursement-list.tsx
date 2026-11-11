@@ -21,6 +21,7 @@ import {
 } from "@/lib/api/finance";
 import { listProjects } from "@/lib/api/projects";
 import { ApiError } from "@/lib/api/client";
+import { SignaturePad, type SignaturePadHandle } from "@/components/signature-pad";
 import { listUsers } from "@/lib/api/hr";
 import { getMe } from "@/lib/api/me";
 import { useIsGerant } from "@/lib/admin/use-is-gerant";
@@ -45,13 +46,13 @@ const STATUS_COLORS: Record<DisbursementStatus, string> = {
 // Process comptable et financier, "Demande de décaissement" : circuit fixe,
 // aucun seuil de montant — la RCF examine d'abord, puis le Gérant statue.
 const STAGE_APPROVER_LABEL: Partial<Record<DisbursementStatus, string>> = {
-  EN_ATTENTE_RCF: "Responsable Comptable et Financière",
+  EN_ATTENTE_RCF: "Directeur financier",
   EN_ATTENTE_GERANT: "Gérant",
 };
 
 function canApproveStage(roles: string[], stage: DisbursementStatus, isGerant: boolean): boolean {
   if (roles.includes("SUPER_ADMIN")) return true;
-  if (stage === "EN_ATTENTE_RCF") return roles.includes("COMPTABLE") || roles.includes("DIRECTEUR_FINANCIER");
+  if (stage === "EN_ATTENTE_RCF") return roles.includes("DIRECTEUR_FINANCIER");
   return isGerant; // Gérant désigné (Administration > Utilisateurs)
 }
 
@@ -63,7 +64,12 @@ function personName(user: UserBrief | null) {
   return user ? `${user.first_name} ${user.last_name}`.trim() || user.email : "—";
 }
 
-export function DisbursementList() {
+/** `department` : interface Besoins d'un département (exprimer et suivre
+ * ses besoins). `finance` : interface Décaissements de Finance &
+ * Comptabilité — toutes les demandes, validation signée (Directeur
+ * financier puis Gérant), exécution. */
+export function DisbursementList({ mode = "department", departmentLabel }: { mode?: "department" | "finance"; departmentLabel?: string } = {}) {
+  const isFinanceView = mode === "finance";
   const { profile } = useAuth();
   const [requests, setRequests] = useState<DisbursementRequest[] | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -76,11 +82,14 @@ export function DisbursementList() {
   const isGerant = useIsGerant();
   const canExecute = myRoles.includes("COMPTABLE") || myRoles.includes("SUPER_ADMIN");
 
-  async function handleApprove(id: string, decision: "APPROUVE" | "REJETE", rejectionReason?: string) {
+  async function handleApprove(id: string, decision: "APPROUVE" | "REJETE", rejectionReason?: string, signature?: string) {
     setActingId(id);
     try {
-      await approveDisbursementRequest(id, decision, rejectionReason);
+      await approveDisbursementRequest(id, decision, rejectionReason, signature);
       await load();
+    } catch (e) {
+      const body = e instanceof ApiError ? (e.body as { detail?: string } | null) : null;
+      alert(body?.detail ?? "Action impossible.");
     } finally {
       setActingId(null);
     }
@@ -98,7 +107,7 @@ export function DisbursementList() {
 
   async function load() {
     try {
-      const [reqRes, projRes] = await Promise.all([listDisbursementRequests(), listProjects({ pageSize: 500 })]);
+      const [reqRes, projRes] = await Promise.all([listDisbursementRequests(isFinanceView ? undefined : { scope: "department" }), listProjects({ pageSize: 500 })]);
       setRequests(reqRes.results);
       setProjects(projRes.results);
     } catch {
@@ -123,10 +132,13 @@ export function DisbursementList() {
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">Besoins</h1>
+          <h1 className="text-2xl font-semibold text-neutral-900">
+            {isFinanceView ? "Décaissements" : departmentLabel ? `Besoins — ${departmentLabel}` : "Besoins"}
+          </h1>
           <p className="text-sm text-neutral-500">
-            Chaque besoin est examiné par la Responsable Comptable et Financière, puis validé ou refusé par le
-            Gérant — quel que soit le montant.
+            {isFinanceView
+              ? "Toutes les demandes de besoins des départements. Le Directeur financier puis le Gérant valident en signant, ou rejettent avec un motif si le justificatif ne convient pas."
+              : "Exprimez les besoins de votre département. Chaque demande est validée par le Directeur financier puis par le Gérant (signatures sur le bon de demande), ou rejetée avec un motif."}
           </p>
         </div>
         <Sheet open={open} onOpenChange={setOpen}>
@@ -157,6 +169,7 @@ export function DisbursementList() {
               <th className="px-4 py-3 font-medium">Réf.</th>
               <th className="px-4 py-3 font-medium">Besoin</th>
               <th className="px-4 py-3 font-medium">Bénéficiaire</th>
+              <th className="px-4 py-3 font-medium">Département</th>
               <th className="px-4 py-3 font-medium">Projet</th>
               <th className="px-4 py-3 text-right font-medium">Montant</th>
               <th className="px-4 py-3 font-medium">Statut</th>
@@ -167,7 +180,7 @@ export function DisbursementList() {
           <tbody className="divide-y divide-neutral-100">
             {requests.map((req) => {
               const isPending = req.status === "EN_ATTENTE_RCF" || req.status === "EN_ATTENTE_GERANT";
-              const canApproveThis = isPending && canApproveStage(myRoles, req.status, isGerant);
+              const canApproveThis = isFinanceView && isPending && canApproveStage(myRoles, req.status, isGerant);
               const firstLine = req.lines[0]?.label ?? req.reason;
               const otherLines = Math.max(req.lines.length - 1, 0);
               return (
@@ -190,6 +203,7 @@ export function DisbursementList() {
                     </p>
                   </td>
                   <td className="px-4 py-3 text-neutral-700" data-label="Bénéficiaire">{req.beneficiary}</td>
+                  <td className="px-4 py-3 text-neutral-500" data-label="Département">{req.department_name ?? "—"}</td>
                   <td className="px-4 py-3 text-neutral-500" data-label="Projet">{req.project_name ?? "—"}</td>
                   <td className="px-4 py-3 text-right font-mono whitespace-nowrap text-neutral-900" data-label="Montant">
                     {formatFcfa(req.amount)}
@@ -219,20 +233,19 @@ export function DisbursementList() {
                       </button>
                       {canApproveThis && (
                         <>
-                          <button
+                          <SignApproveModal
                             disabled={actingId === req.id}
-                            onClick={() => handleApprove(req.id, "APPROUVE")}
-                            className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-700 disabled:opacity-40"
-                          >
-                            Approuver
-                          </button>
+                            stageLabel={STAGE_APPROVER_LABEL[req.status] ?? ""}
+                            reference={req.reference ?? ""}
+                            onSign={(signature) => handleApprove(req.id, "APPROUVE", undefined, signature)}
+                          />
                           <RejectModal
                             disabled={actingId === req.id}
                             onReject={(reasonText) => handleApprove(req.id, "REJETE", reasonText)}
                           />
                         </>
                       )}
-                      {canExecute && req.status === "APPROUVE" && (
+                      {isFinanceView && canExecute && req.status === "APPROUVE" && (
                         <button
                           disabled={actingId === req.id}
                           onClick={() => handleExecute(req.id)}
@@ -259,6 +272,52 @@ export function DisbursementList() {
 
       {viewing && <BesoinViewerModal request={viewing} onClose={() => setViewing(null)} />}
     </div>
+  );
+}
+
+/** Approuver = signer : la signature manuscrite est apposée sur le bon de
+ * demande PDF (Directeur financier puis Gérant). */
+function SignApproveModal({ onSign, disabled, stageLabel, reference }: {
+  onSign: (signature: string) => void;
+  disabled?: boolean;
+  stageLabel: string;
+  reference: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [empty, setEmpty] = useState(true);
+  const padRef = useRef<SignaturePadHandle>(null);
+
+  function handleConfirm() {
+    const signature = padRef.current?.toDataURL();
+    if (!signature) return;
+    onSign(signature);
+    setOpen(false);
+  }
+
+  return (
+    <Modal open={open} onOpenChange={setOpen}>
+      <ModalTrigger
+        render={
+          <button disabled={disabled} className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-700 disabled:opacity-40">
+            Approuver et signer
+          </button>
+        }
+      />
+      <ModalContent title={`Signer ${reference}`} className="max-w-md">
+        <p className="mb-3 text-xs text-neutral-500">
+          Validation en tant que <strong className="text-neutral-800">{stageLabel}</strong>. Votre signature sera
+          apposée sur le bon de demande. Vérifiez le justificatif avant de signer ; s&apos;il ne convient pas,
+          rejetez la demande avec un motif.
+        </p>
+        <SignaturePad ref={padRef} onChange={setEmpty} />
+        <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
+          <ModalClose render={<button type="button" className="rounded-full border border-neutral-200 px-4 py-1.5 text-xs font-semibold text-neutral-600 hover:border-neutral-300">Annuler</button>} />
+          <Button type="button" disabled={empty} onClick={handleConfirm} className="rounded-full px-5">
+            Signer et approuver
+          </Button>
+        </div>
+      </ModalContent>
+    </Modal>
   );
 }
 

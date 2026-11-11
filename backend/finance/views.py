@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+import logging
+
 from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import models
@@ -51,6 +53,7 @@ CHEF_DE_PROJET_ROLES = (ROLE_PROJECT_MANAGER,)
 DIRECTEUR_FINANCIER_ROLES = (ROLE_DIRECTEUR_FINANCIER,)
 COMPTABLE_ROLES = (ROLE_COMPTABLE,)
 FINANCE_READ_ROLES = (ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE)
+logger = logging.getLogger(__name__)
 
 
 def _can_decide_stage(user, pending_status):
@@ -60,11 +63,13 @@ def _can_decide_stage(user, pending_status):
     procurement.views.IsManagerOrAdmin) ; Super-Admin tient lieu de
     Gérant."""
     if pending_status == DisbursementRequest.Status.EN_ATTENTE_RCF:
-        return has_role(user, *COMPTABLE_ROLES, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN)
+        # Première validation : le Directeur financier (Super-Admin en secours).
+        return has_role(user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN)
     return is_gerant(user)  # EN_ATTENTE_GERANT — gérant désigné, sinon Super-Admin
 
 
-BESOINS_LINK = '/admin/technique/decaissements'
+BESOINS_LINK = '/admin/technique/decaissements'  # suivi côté demandeur
+DECAISSEMENTS_LINK = '/admin/finance/decaissements'  # validation (Directeur financier, Gérant)
 
 
 def _besoin_label(disbursement):
@@ -76,8 +81,8 @@ def _notify_besoin_stage(disbursement, exclude=None):
     (Comptable, Directeur Financier) puis le Gérant (Super-Admin)."""
     if disbursement.status == DisbursementRequest.Status.EN_ATTENTE_RCF:
         notify_roles(
-            (ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER), title='Nouveau besoin à examiner',
-            message=_besoin_label(disbursement), notification_type='GENERAL', link=BESOINS_LINK,
+            (ROLE_DIRECTEUR_FINANCIER,), title='Nouveau besoin à examiner',
+            message=_besoin_label(disbursement), notification_type='GENERAL', link=DECAISSEMENTS_LINK,
             exclude=[exclude, disbursement.requested_by],
         )
         return
@@ -87,7 +92,7 @@ def _notify_besoin_stage(disbursement, exclude=None):
             continue
         notify(
             user=user, title='Besoin à valider (Gérant)', message=_besoin_label(disbursement),
-            notification_type='GENERAL', link=BESOINS_LINK,
+            notification_type='GENERAL', link=DECAISSEMENTS_LINK,
         )
 
 
@@ -114,15 +119,19 @@ def _notify_besoin_requester(disbursement):
 
 
 class CanInitiateDisbursement(permissions.BasePermission):
-    """N1 initiation: Chef de Projet, restricted in the view to projects
-    they lead. N2/N3 final approval and execution are separate actions
+    """Initiation d'un besoin : tout employé (rattachement à un projet
+    contrôlé dans perform_create). N2/N3 final approval and execution are separate actions
     below, with their own permission checks — this class only gates
     list/retrieve/create."""
 
     def has_permission(self, request, view):
-        if request.method == 'POST':
-            return has_role(request.user, *CHEF_DE_PROJET_ROLES, ROLE_SUPER_ADMIN)
-        return has_role(request.user, *CHEF_DE_PROJET_ROLES, *FINANCE_READ_ROLES, ROLE_SUPER_ADMIN)
+        # Chaque département exprime ses besoins depuis sa propre interface :
+        # tout employé connecté et actif peut créer une demande et voir les
+        # siennes. Ce qu'il voit est borné par get_queryset (ses demandes,
+        # son département, les projets qu'il dirige) ; la validation reste
+        # réservée au Directeur financier puis au Gérant (action approve).
+        user = request.user
+        return bool(user and user.is_authenticated and user.is_active)
 
 
 @extend_schema_view(
@@ -148,12 +157,26 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
             return DisbursementRequest.objects.none()
         qs = DisbursementRequest.objects.select_related(
             'project', 'requested_by', 'beneficiary_user', 'rcf_decided_by', 'decided_by', 'executed_by',
+            'department',
         ).prefetch_related('lines', 'quotes')
-        if has_role(self.request.user, *FINANCE_READ_ROLES, ROLE_SUPER_ADMIN):
-            return qs
-        return qs.filter(
-            Q(project__lead_project_manager=self.request.user) | Q(requested_by=self.request.user)
-        ).distinct()
+        user = self.request.user
+        if has_role(user, *FINANCE_READ_ROLES, ROLE_SUPER_ADMIN) or is_gerant(user):
+            scoped = qs
+        else:
+            # Interface « Besoins » d'un département : ses propres demandes,
+            # celles des projets qu'il dirige et celles de son département.
+            visible = Q(project__lead_project_manager=user) | Q(requested_by=user)
+            if user.department_id:
+                visible |= Q(department_id=user.department_id)
+            scoped = qs.filter(visible).distinct()
+        # ?scope=department : vue département (mes besoins et ceux du département),
+        # même pour les rôles finance qui voient tout ailleurs.
+        if self.request.query_params.get('scope') == 'department':
+            mine = Q(requested_by=user)
+            if user.department_id:
+                mine |= Q(department_id=user.department_id)
+            scoped = scoped.filter(mine).distinct()
+        return scoped
 
     def perform_create(self, serializer):
         project = serializer.validated_data.get('project')
@@ -176,6 +199,7 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
                 raise PermissionDenied("Seuls le chef de projet et les membres de l'équipe du projet peuvent lui rattacher un besoin.")
         disbursement = serializer.save(
             requested_by=self.request.user,
+            department=self.request.user.department,
             status=DisbursementRequest.Status.EN_ATTENTE_RCF,
         )
         _notify_besoin_stage(disbursement, exclude=self.request.user)
@@ -220,6 +244,24 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
 
         at_rcf_stage = disbursement.status == DisbursementRequest.Status.EN_ATTENTE_RCF
 
+        # Approuver = signer : signature manuscrite obligatoire, reprise sur
+        # le bon de demande PDF (Directeur financier puis Gérant).
+        signature_url = ''
+        if decision == 'APPROUVE':
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            from core.signatures import decode_signature_image
+            from core.storage import upload_image
+            signature = request.data.get('signature')
+            if not signature:
+                return Response({'detail': 'Votre signature est requise pour approuver.'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                signature_url = upload_image(decode_signature_image(signature), 'besoin-signatures')
+            except DjangoValidationError:
+                return Response({'detail': 'Signature invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception:
+                logger.exception('Signature du besoin %s non enregistrée', disbursement.pk)
+                return Response({'detail': "Impossible d'enregistrer la signature. Réessayez."}, status=status.HTTP_502_BAD_GATEWAY)
+
         if decision == 'REJETE':
             disbursement.status = DisbursementRequest.Status.REJETE
             disbursement.rejection_reason = rejection_reason
@@ -235,11 +277,13 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
         if at_rcf_stage:
             disbursement.rcf_decided_by = request.user
             disbursement.rcf_decided_at = timezone.now()
-            update_fields += ['rcf_decided_by', 'rcf_decided_at']
+            disbursement.rcf_signature_url = signature_url
+            update_fields += ['rcf_decided_by', 'rcf_decided_at', 'rcf_signature_url']
         else:
             disbursement.decided_by = request.user
             disbursement.decided_at = timezone.now()
-            update_fields += ['decided_by', 'decided_at']
+            disbursement.gerant_signature_url = signature_url
+            update_fields += ['decided_by', 'decided_at', 'gerant_signature_url']
 
         disbursement.save(update_fields=update_fields)
         if disbursement.status == DisbursementRequest.Status.EN_ATTENTE_GERANT:
