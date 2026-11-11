@@ -20,6 +20,7 @@ import {
   uploadDisbursementQuote,
 } from "@/lib/api/finance";
 import { listProjects } from "@/lib/api/projects";
+import { ApiError } from "@/lib/api/client";
 import { listUsers } from "@/lib/api/hr";
 import { getMe } from "@/lib/api/me";
 import { useIsGerant } from "@/lib/admin/use-is-gerant";
@@ -378,8 +379,13 @@ function BesoinForm({ projects, onSaved, onCancel }: { projects: Project[]; onSa
         alert(`Besoin ${created.reference ?? ""} enregistré, mais ces devis n'ont pas pu être joints : ${failed.join(", ")}.`);
       }
       onSaved();
-    } catch {
-      setError("Impossible d'enregistrer le besoin — si un projet est choisi, vérifiez que vous le dirigez.");
+    } catch (e) {
+      // Motif exact renvoyé par l'API (droits sur le projet, projet annulé,
+      // ligne invalide…) plutôt qu'un message générique.
+      const body = e instanceof ApiError ? (e.body as Record<string, unknown> | null) : null;
+      const first = body ? (body.detail ?? Object.values(body)[0]) : null;
+      const detail = Array.isArray(first) ? first[0] : first;
+      setError(typeof detail === "string" ? detail : "Impossible d'enregistrer le besoin.");
     } finally {
       setSaving(false);
     }

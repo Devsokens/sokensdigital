@@ -365,6 +365,31 @@ class BesoinLinesQuotesPdfTests(APITestCase):
         self.client_cfo = APIClient()
         self.client_cfo.force_authenticate(user=self.cfo)
 
+    def test_member_can_attach_besoin_to_running_project(self):
+        """Un besoin survient souvent après le lancement du projet : un membre
+        de l'équipe d'un projet en cours peut le lui rattacher."""
+        from projects.models import ProjectMember
+        self.project.status = Project.Status.EN_COURS
+        self.project.save()
+        ProjectMember.objects.create(project=self.project, user=self.other_chef)
+        res = self.client_other.post(self.URL, {
+            'project_id': str(self.project.id), 'request_date': '2026-10-04',
+            'beneficiary_user_id': str(self.other_chef.id),
+            'lines': [{'label': 'Licence', 'quantity': '1', 'unit_price': '50000'}],
+        }, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+
+    def test_outsider_and_cancelled_project_refused(self):
+        payload = {
+            'project_id': str(self.project.id), 'request_date': '2026-10-04',
+            'beneficiary_user_id': str(self.other_chef.id),
+            'lines': [{'label': 'Licence', 'quantity': '1', 'unit_price': '50000'}],
+        }
+        self.assertEqual(self.client_other.post(self.URL, payload, format='json').status_code, 403)
+        self.project.status = Project.Status.ANNULE
+        self.project.save()
+        self.assertEqual(self.client_chef.post(self.URL, payload, format='json').status_code, 400)
+
     def create_with_lines(self, **overrides):
         data = {
             'project_id': str(self.project.id),

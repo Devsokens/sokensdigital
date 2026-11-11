@@ -12,7 +12,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
-from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE, ROLE_CAISSIER
+from core.constants import ROLE_ADMIN, ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE, ROLE_CAISSIER
 from core.notifications import notify, notify_roles
 from core.permissions import gerant_recipients, has_role, is_gerant
 from core.storage import upload_disbursement_quote
@@ -157,9 +157,23 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
 
     def perform_create(self, serializer):
         project = serializer.validated_data.get('project')
-        if project and project.lead_project_manager_id != self.request.user.id:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Tu ne peux initier une demande que pour un projet que tu diriges.")
+        if project:
+            from rest_framework.exceptions import PermissionDenied, ValidationError
+            # Un besoin peut survenir à tout moment de la vie du projet
+            # (lancé, en cours d'exécution, en pause, même terminé pour une
+            # dépense de clôture) — seul un projet annulé est refusé.
+            if project.status == project.Status.ANNULE:
+                raise ValidationError({'project_id': 'Ce projet est annulé : aucun besoin ne peut lui être rattaché.'})
+            # Qui peut rattacher : le chef de projet, un membre de l'équipe
+            # du projet, ou un Admin/Super-Admin.
+            user = self.request.user
+            allowed = (
+                project.lead_project_manager_id == user.id
+                or project.memberships.filter(user=user).exists()
+                or has_role(user, ROLE_ADMIN, ROLE_SUPER_ADMIN)
+            )
+            if not allowed:
+                raise PermissionDenied("Seuls le chef de projet et les membres de l'équipe du projet peuvent lui rattacher un besoin.")
         disbursement = serializer.save(
             requested_by=self.request.user,
             status=DisbursementRequest.Status.EN_ATTENTE_RCF,
