@@ -197,7 +197,7 @@ export function Chat() {
   // dépasser la messagerie sous la barre de navigation. La marge basse plus
   // généreuse sous `lg` laisse la place à celle-ci.
   return (
-    <div className="flex h-[calc(100dvh-12rem)] overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm lg:h-[calc(100dvh-8rem)]">
+    <div className="flex h-[calc(100dvh-13rem-env(safe-area-inset-bottom))] min-h-[22rem] overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm sm:h-[calc(100dvh-13.5rem-env(safe-area-inset-bottom))] lg:h-[calc(100dvh-8rem)]">
       {/* Sous `lg`, liste et conversation ne tiennent pas côte à côte :
           312px + 340px + les messages débordaient largement d'un écran de
           téléphone, et la page ne s'affichait qu'au prix d'un dézoom. On
@@ -206,7 +206,7 @@ export function Chat() {
       <aside
         data-tour="module-messagerie"
         className={cn(
-          "flex-col border-r border-neutral-200 lg:flex lg:w-[312px] lg:shrink-0",
+          "min-h-0 flex-col border-r border-neutral-200 lg:flex lg:w-[312px] lg:shrink-0",
           activeRoom ? "hidden" : "flex w-full"
         )}
       >
@@ -248,7 +248,7 @@ export function Chat() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-2 pb-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
           {sidebarTab === "rooms" ? (
             <>
               {groupedRooms.length === 0 && <p className="p-4 text-xs text-neutral-400">Aucun salon.</p>}
@@ -292,7 +292,7 @@ export function Chat() {
         </div>
       </aside>
 
-      <div className={cn("flex-1 flex-col bg-white lg:flex", activeRoom ? "flex" : "hidden lg:flex")}>
+      <div className={cn("min-h-0 min-w-0 flex-1 flex-col bg-white lg:flex", activeRoom ? "flex" : "hidden lg:flex")}>
         {activeRoom ? (
           <>
             <div className="flex shrink-0 items-center gap-3 border-b border-neutral-200 px-4 py-3 lg:px-5">
@@ -367,9 +367,9 @@ export function Chat() {
               </Popover>
             </div>
 
-            <div className="relative flex flex-1 overflow-hidden">
-              <div className="flex flex-1 flex-col overflow-hidden">
-                <div className="flex-1 space-y-1 overflow-y-auto px-5 py-4">
+            <div className="relative flex min-h-0 flex-1 overflow-hidden">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4 sm:px-5">
                   {rootMessages.map((message, index) => {
                     const prevDay = index > 0 ? formatDay(rootMessages[index - 1].createdAt) : null;
                     const day = formatDay(message.createdAt);

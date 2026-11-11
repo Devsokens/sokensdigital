@@ -10,6 +10,7 @@ import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { formatFcfa } from "@/lib/format-currency";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useIsGerant } from "@/lib/admin/use-is-gerant";
+import { AttachmentsButton } from "@/components/admin/finance/attachments-button";
 import { profileRoles } from "@/lib/firebase/types";
 import { listDepartments } from "@/lib/api/hr";
 import { listDisbursementRequests } from "@/lib/api/finance";
@@ -402,6 +403,7 @@ function DevisPanel() {
               <th className="px-4 py-3 font-medium">Fournisseur</th>
               <th className="px-4 py-3 font-medium">Montant TTC</th>
               <th className="px-4 py-3 font-medium">Statut</th>
+              <th className="px-4 py-3 font-medium">Pièces</th>
               {canApprove && <th className="px-4 py-3 font-medium">Action</th>}
             </tr>
           </thead>
@@ -413,6 +415,9 @@ function DevisPanel() {
                 <td className="px-4 py-3 font-mono text-neutral-900" data-label="Montant TTC">{formatFcfa(q.amount_ttc)}</td>
                 <td className="px-4 py-3" data-label="Statut">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${QUOTE_STATUS_COLORS[q.status]}`}>{QUOTE_STATUS_LABELS[q.status]}</span>
+                </td>
+                <td className="px-4 py-3" data-label="Pièces">
+                  <AttachmentsButton target="procurement.supplierquote" objectId={q.id} documentType="QUOTE" label={q.quote_number} />
                 </td>
                 {canApprove && (
                   <td className="px-4 py-3" data-label="Action">
@@ -567,6 +572,7 @@ function FacturesPanel() {
               <th className="px-4 py-3 font-medium">Fournisseur</th>
               <th className="px-4 py-3 font-medium">Montant TTC</th>
               <th className="px-4 py-3 font-medium">Statut</th>
+              <th className="px-4 py-3 font-medium">Pièces</th>
               {canValidate && <th className="px-4 py-3 font-medium">Action</th>}
             </tr>
           </thead>
@@ -578,6 +584,9 @@ function FacturesPanel() {
                 <td className="px-4 py-3 font-mono text-neutral-900" data-label="Montant TTC">{formatFcfa(inv.amount_ttc)}</td>
                 <td className="px-4 py-3" data-label="Statut">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${INVOICE_STATUS_COLORS[inv.status]}`}>{INVOICE_STATUS_LABELS[inv.status]}</span>
+                </td>
+                <td className="px-4 py-3" data-label="Pièces">
+                  <AttachmentsButton target="procurement.supplierinvoice" objectId={inv.id} documentType="INVOICE" label={inv.invoice_number} />
                 </td>
                 {canValidate && (
                   <td className="px-4 py-3" data-label="Action">

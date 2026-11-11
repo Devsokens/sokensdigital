@@ -51,6 +51,7 @@ ATTACHABLE_MODELS = {
     'treasury.capitalcontribution': [*FINANCE_ROLES],
     'finance.disbursementrequest': [*FINANCE_ROLES, ROLE_COMPTABLE, ROLE_CAISSIER],
     'procurement.procurementrequest': [*FINANCE_ROLES, ROLE_COMPTABLE, *MANAGEMENT_ROLES],
+    'procurement.supplierquote': [*FINANCE_ROLES, ROLE_COMPTABLE],
     'procurement.supplierinvoice': [*FINANCE_ROLES, ROLE_COMPTABLE],
 }
 
