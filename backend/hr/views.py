@@ -3,6 +3,7 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from core.accounts import AccountDeletionError, delete_platform_account
 from core.permissions import has_role
 from core.constants import ROLE_RH_MANAGER, ROLE_SUPER_ADMIN
 from hr.models import EmployeeProfile
@@ -59,6 +60,34 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if has_role(self.request.user, *HR_MANAGER_ROLES):
             return EmployeeProfileSerializer
         return EmployeeProfileSelfSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        """Supprimer un employé supprime aussi son compte utilisateur
+        (core.accounts) — l'inverse n'est pas vrai : supprimer un compte
+        laisse la fiche employé en place."""
+        employee = self.get_object()
+        user = employee.user
+        if user.pk == request.user.pk:
+            return Response(
+                {'detail': 'Vous ne pouvez pas supprimer votre propre fiche employé.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Supprimer un employé coupe son accès : seul un Super-Admin peut
+        # le faire pour un autre Super-Admin.
+        if has_role(user, ROLE_SUPER_ADMIN) and not has_role(request.user, ROLE_SUPER_ADMIN):
+            return Response(
+                {'detail': "Seul un Super-Admin peut supprimer la fiche d'un Super-Admin."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Compte d'abord : si la connexion ne peut pas être coupée, la fiche
+        # reste en place plutôt que de laisser un accès sans employé.
+        try:
+            delete_platform_account(user, actor=request.user, ip_address=request.META.get('REMOTE_ADDR'))
+        except AccountDeletionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        employee.delete(user=request.user, ip_address=request.META.get('REMOTE_ADDR'))
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(tags=['Administration & RH'], summary='Add a contract for this employee', request=ContractSerializer, responses={201: ContractSerializer})
     @action(detail=True, methods=['post'], url_path='contracts', permission_classes=[permissions.IsAuthenticated])

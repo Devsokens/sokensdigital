@@ -80,7 +80,7 @@ class SubmittedProjectListView(APIView):
         # des demandes de projet — voir marketing.conversion.
         queryset = Lead.objects.select_related('specification').exclude(
             status=Lead.Status.PERDU,
-        ).exclude(source=Lead.Source.CREATION_CLIENT)
+        ).exclude(created_from_client=True)
         stages = request.query_params.getlist('stage')
         if stages:
             queryset = queryset.filter(workflow_stage__in=stages)

@@ -121,6 +121,16 @@ export function setUserRole(userId: string, data: { roles: string[]; department_
 /** Révoque l'accès plateforme d'un employé — Super-Admin only. Désactive
  * (jamais de suppression réelle : préserve l'historique audit/finance
  * rattaché à ce user_id), voir backend/core/views.py::DeactivateUserView. */
+/** Supprime le compte plateforme (connexion, rôles) — la fiche employé reste. */
+export function deleteUserAccount(userId: string) {
+  return apiFetch<void>(`/api/v1/users/${userId}/account/`, { method: "DELETE" });
+}
+
+/** Supprime la fiche employé ET son compte utilisateur. */
+export function deleteEmployee(id: string) {
+  return apiFetch<void>(`/api/v1/hr/employees/${id}/`, { method: "DELETE" });
+}
+
 export function deactivateUser(userId: string) {
   return apiFetch<UserBrief>(`/api/v1/users/${userId}/deactivate/`, { method: "POST" });
 }

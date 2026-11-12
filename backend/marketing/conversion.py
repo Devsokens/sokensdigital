@@ -86,8 +86,13 @@ def convert_lead_to_client(lead):
     return client
 
 
-def create_converted_lead_for_client(client):
-    """Inscrit un client créé directement dans le tunnel, colonne « Converti »."""
+def create_converted_lead_for_client(client, source=None, qualification_score=None, estimated_value=None):
+    """Inscrit un client créé directement dans le tunnel, colonne « Converti ».
+
+    Les champs « lead » du formulaire client (source, score, valeur estimée)
+    sont reportés sur ce lead ; à défaut, source « client créé directement »
+    et score 100.
+    """
     if client.leads.exists():
         return client.leads.first()
 
@@ -99,8 +104,11 @@ def create_converted_lead_for_client(client):
         last_name=primary.last_name if primary else '',
         email=(primary.email if primary and primary.email else client.email) or '',
         phone=(primary.phone if primary and primary.phone else client.phone) or '',
-        source=Lead.Source.CREATION_CLIENT,
+        message=client.notes or '',
+        created_from_client=True,
+        source=source or Lead.Source.CREATION_CLIENT,
         status=Lead.Status.CONVERTI,
-        qualification_score=100,
+        qualification_score=100 if qualification_score is None else qualification_score,
+        estimated_value=estimated_value,
         assigned_to=client.assigned_to,
     )

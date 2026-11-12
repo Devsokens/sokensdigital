@@ -159,6 +159,12 @@ class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
     # titulaire à la fois (contrainte ci-dessous) ; désigné par un
     # Super-Admin depuis Administration > Utilisateurs.
     is_gerant = models.BooleanField(default=False)
+    # Compte plateforme supprimé (core.accounts.delete_platform_account) :
+    # compte Firebase et profil Firestore effacés, rôles retirés. La ligne
+    # reste — c'est l'identité de la fiche employé et de l'historique
+    # (audit log, validations, timesheets) — mais elle n'est plus un
+    # utilisateur : absente de la liste, refusée à l'authentification.
+    account_deleted_at = models.DateTimeField(null=True, blank=True)
     mfa_enabled = models.BooleanField(default=False)
     last_login = models.DateTimeField(blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True)

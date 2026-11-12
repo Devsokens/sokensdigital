@@ -68,7 +68,7 @@ export function ContextMenuSeparator() {
 
 export function ContextMenuLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="truncate px-2.5 pt-1.5 pb-1 text-[0.65rem] font-semibold tracking-wide text-neutral-400 uppercase">
+    <p className="max-w-64 px-2.5 pt-1.5 pb-1 text-[0.65rem] font-semibold tracking-wide break-words text-neutral-400 uppercase">
       {children}
     </p>
   );

@@ -7,6 +7,7 @@ import type {
   ClientDocumentEntry,
   ClientInteractionEntry,
   DirectoryContact,
+  LeadSource,
   Meeting,
   MeetingNote,
   Paginated,
@@ -35,6 +36,13 @@ export interface ClientInput {
   rating?: number | null;
   notes?: string;
   assigned_to?: string | null;
+  /** Mêmes champs que le formulaire lead : contacts en bloc (`id` = contact
+   * existant à modifier, absent = nouveau ; absents de la liste = retirés)
+   * et champs portés par le lead converti du client. */
+  contacts?: { id?: string; first_name: string; last_name: string; email?: string; phone?: string; role?: string }[];
+  lead_source?: LeadSource;
+  qualification_score?: number;
+  estimated_value?: string | null;
 }
 
 export function listClients(params?: { status?: string; search?: string }) {

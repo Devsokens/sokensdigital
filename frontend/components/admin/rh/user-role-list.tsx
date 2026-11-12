@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, MoreHorizontal, ShieldCheck, Search } from "lucide-react";
-import { listUsers, listDepartments, deactivateUser, setUserGerant } from "@/lib/api/hr";
+import { Ban, Crown, Loader2, MoreHorizontal, Pencil, ShieldCheck, Search, Trash2 } from "lucide-react";
+import { listUsers, listDepartments, deactivateUser, deleteUserAccount, setUserGerant } from "@/lib/api/hr";
 import { useAuth } from "@/lib/auth/auth-context";
 import { listProfiles } from "@/lib/firebase/profile";
 import type { Department, UserBrief } from "@/lib/api/types";
@@ -11,6 +11,13 @@ import { ROLE_LABELS, profileRoles, type AppRole } from "@/lib/firebase/types";
 import { AddEmployeeSheet } from "@/components/admin/rh/add-employee-sheet";
 import { UserEditModal } from "@/components/admin/rh/user-edit-modal";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { ConfirmModal } from "@/components/admin/confirm-modal";
+import {
+  ContextMenu,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+} from "@/components/admin/context-menu";
 
 interface MergedUser {
   djangoId: string;
@@ -34,6 +41,9 @@ export function UserRoleList() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  // Actions lancées depuis le clic droit (les modales vivent hors du menu).
+  const [editing, setEditing] = useState<MergedUser | null>(null);
+  const [toDelete, setToDelete] = useState<MergedUser | null>(null);
 
   async function load() {
     try {
@@ -119,6 +129,47 @@ export function UserRoleList() {
     }
   }
 
+  // Supprimer le compte : connexion et rôles disparaissent, la fiche
+  // employé reste (voir backend core/accounts.py). Super-Admin uniquement.
+  async function handleDeleteAccount(row: MergedUser) {
+    await deleteUserAccount(row.djangoId);
+    setRows((prev) => prev && prev.filter((r) => r.djangoId !== row.djangoId));
+  }
+
+  const myEmail = me?.email?.toLowerCase() ?? "";
+
+  function renderContextMenu(row: MergedUser) {
+    const isMe = row.email.toLowerCase() === myEmail;
+    return (
+      <>
+        <ContextMenuLabel>{row.name || row.email}</ContextMenuLabel>
+        {row.roles.length > 0 && (
+          <ContextMenuItem icon={Pencil} onClick={() => setEditing(row)}>
+            Modifier l&apos;utilisateur
+          </ContextMenuItem>
+        )}
+        {isSuperAdmin && row.roles.length > 0 && (
+          <ContextMenuItem icon={Crown} onClick={() => handleToggleGerant(row)}>
+            {row.isGerant ? "Retirer le titre de gérant" : "Désigner comme gérant"}
+          </ContextMenuItem>
+        )}
+        {row.roles.length > 0 && !isMe && (
+          <ContextMenuItem icon={Ban} onClick={() => handleDeactivate(row)}>
+            Désactiver l&apos;accès
+          </ContextMenuItem>
+        )}
+        {isSuperAdmin && !isMe && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem icon={Trash2} destructive onClick={() => setToDelete(row)}>
+              Supprimer l&apos;utilisateur
+            </ContextMenuItem>
+          </>
+        )}
+      </>
+    );
+  }
+
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!rows) {
     return (
@@ -135,7 +186,7 @@ export function UserRoleList() {
           <h1 className="text-2xl font-semibold text-neutral-900">Utilisateurs &amp; Rôles</h1>
           <p className="mt-1.5 max-w-xl text-sm text-neutral-500">
             Le rôle et le département déterminent ce que chaque personne peut voir et faire. Toute modification est
-            enregistrée dans l&apos;Audit Log.
+            enregistrée dans l&apos;Audit Log. Clic droit sur une ligne pour les actions rapides.
           </p>
         </div>
         <span className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3.5 py-1.5 text-xs font-semibold text-primary">
@@ -175,7 +226,13 @@ export function UserRoleList() {
             </thead>
             <tbody className="divide-y divide-neutral-100">
               {filtered.map((row, index) => (
-                <tr key={row.djangoId} data-tour={index === 0 ? "module-rh-utilisateurs" : undefined}>
+                <ContextMenu
+                  key={row.djangoId}
+                  render={<tr />}
+                  data-tour={index === 0 ? "module-rh-utilisateurs" : undefined}
+                  className="data-[popup-open]:bg-primary/5"
+                  menu={renderContextMenu(row)}
+                >
                   <td className="px-5 py-3.5" data-label="Utilisateur">
                     <span className="flex items-center gap-3">
                       <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-100 text-[11px] font-semibold text-neutral-600">
@@ -255,6 +312,15 @@ export function UserRoleList() {
                           >
                             Désactiver l&apos;accès
                           </button>
+                          {isSuperAdmin && row.email.toLowerCase() !== myEmail && (
+                            <button
+                              type="button"
+                              onClick={() => setToDelete(row)}
+                              className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-destructive hover:bg-destructive/5"
+                            >
+                              Supprimer l&apos;utilisateur
+                            </button>
+                          )}
                         </PopoverContent>
                       </Popover>
                     ) : (
@@ -272,7 +338,7 @@ export function UserRoleList() {
                       />
                     )}
                   </td>
-                </tr>
+                </ContextMenu>
               ))}
               {filtered.length === 0 && (
                 <tr>
@@ -285,6 +351,32 @@ export function UserRoleList() {
           </table>
         </div>
       </div>
+
+      {editing && (
+        <UserEditModal
+          key={editing.djangoId}
+          user={editing}
+          onSaved={load}
+          open
+          onOpenChange={(open) => !open && setEditing(null)}
+        />
+      )}
+
+      <ConfirmModal
+        open={toDelete !== null}
+        onOpenChange={(open) => !open && setToDelete(null)}
+        title="Supprimer l'utilisateur"
+        description={
+          toDelete
+            ? `Le compte de ${toDelete.name || toDelete.email} sera supprimé : connexion et rôles retirés. Sa fiche employé est conservée.`
+            : ""
+        }
+        confirmLabel="Supprimer"
+        requireTyping="SUPPRIMER"
+        onConfirm={async () => {
+          if (toDelete) await handleDeleteAccount(toDelete);
+        }}
+      />
     </div>
   );
 }

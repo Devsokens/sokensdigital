@@ -14,6 +14,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.accounts import AccountDeletionError, delete_platform_account
 from core.emails import send_user_invitation_email
 from core.firestore_client import create_profile, invalidate_role_cache, update_profile_fields, upsert_chat_room
 from core.models import AuditLog, Department, PushDevice, Role, User, hash_email
@@ -232,7 +233,9 @@ class CanListUsers(permissions.BasePermission):
     retrieve=extend_schema(tags=['Administration & RH'], summary='Get a Django-side user row'),
 )
 class UserListView(viewsets.ReadOnlyModelViewSet):
-    queryset = User.objects.all().order_by('first_name', 'last_name')
+    # Comptes supprimés exclus : la ligne reste pour la fiche employé et
+    # l'historique, mais ce n'est plus un utilisateur (core.accounts).
+    queryset = User.objects.filter(account_deleted_at__isnull=True).order_by('first_name', 'last_name')
     serializer_class = UserBriefSerializer
     permission_classes = [CanListUsers]
 
@@ -306,7 +309,13 @@ class ProvisionUserView(APIView):
                 django_user.firebase_uid = firebase_user.uid
                 django_user.department = department
                 django_user.avatar_url = avatar_url
-                django_user.save(update_fields=['firebase_uid', 'department', 'avatar_url'])
+                # Re-provisionner une personne dont le compte avait été
+                # supprimé lui rend un compte actif.
+                django_user.account_deleted_at = None
+                django_user.is_active = True
+                django_user.save(update_fields=[
+                    'firebase_uid', 'department', 'avatar_url', 'account_deleted_at', 'is_active',
+                ])
             else:
                 django_user = User.objects.create_user(
                     email=data['email'],
@@ -636,6 +645,46 @@ class DeactivateUserView(APIView):
         )
 
         return Response(UserSerializer(django_user).data)
+
+
+class DeleteUserAccountView(APIView):
+    """Supprime le compte plateforme d'un utilisateur — Super-Admin only,
+    comme DeactivateUserView. La fiche employé n'est PAS touchée : seul le
+    compte (connexion Firebase, profil Firestore, rôles) disparaît, voir
+    core.accounts.delete_platform_account."""
+
+    permission_classes = [IsSuperAdmin]
+
+    @extend_schema(
+        tags=['Administration & RH'],
+        summary="Delete a user's platform account (employee record kept)",
+        responses={204: None},
+    )
+    def delete(self, request, pk):
+        django_user = User.objects.filter(pk=pk, account_deleted_at__isnull=True).first()
+        if not django_user:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if django_user.pk == request.user.pk:
+            return Response(
+                {'detail': 'Vous ne pouvez pas supprimer votre propre compte.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            delete_platform_account(django_user, actor=request.user, ip_address=request.META.get('REMOTE_ADDR'))
+        except AccountDeletionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        notify_roles(
+            (ROLE_SUPER_ADMIN,),
+            title='Compte utilisateur supprimé',
+            message=f'Le compte de {django_user.first_name} {django_user.last_name} a été supprimé.',
+            notification_type='GENERAL',
+            link='/admin/rh/utilisateurs',
+            email=True,
+            exclude=request.user,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @extend_schema_view(

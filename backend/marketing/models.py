@@ -86,6 +86,10 @@ class Lead(LoggedModel):
         'administration.Client', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='leads',
     )
+    # Lead généré par la création directe d'un client : pas une demande de
+    # projet, donc exclu des « projets soumis ». Distinct de `source`, que
+    # le formulaire client laisse choisir (bouche-à-oreille, événement…).
+    created_from_client = models.BooleanField(default=False)
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)
     company_name = models.CharField(max_length=255, blank=True)
