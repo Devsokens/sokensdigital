@@ -59,7 +59,7 @@ class Contract(LoggedModel):
     signed_at = models.DateField(null=True, blank=True)
     # Google Drive share link — no upload pipeline yet (see
     # docs/backend-specifications.md), pasted by hand for now.
-    file_url = models.URLField(blank=True, null=True)
+    file_url = models.URLField(max_length=1000, blank=True, null=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIF)
 
     class Meta(LoggedModel.Meta):
@@ -81,7 +81,7 @@ class Payslip(LoggedModel):
     employee = models.ForeignKey(EmployeeProfile, on_delete=models.CASCADE, related_name='payslips')
     period_month = models.PositiveSmallIntegerField()
     period_year = models.PositiveSmallIntegerField()
-    file_url = models.URLField()
+    file_url = models.URLField(max_length=1000)
 
     class Meta(LoggedModel.Meta):
         ordering = ['-period_year', '-period_month']

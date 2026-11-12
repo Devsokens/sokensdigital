@@ -251,7 +251,7 @@ class BlogPost(LoggedModel):
     title = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, unique=True, blank=True)
     author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='blog_posts')
-    cover_image = models.URLField(blank=True)
+    cover_image = models.URLField(max_length=1000, blank=True)
     # Rich text as HTML (Tiptap's editor.getHTML() output) — deliberately
     # simple: title + cover image + formatted content, nothing else.
     content = models.TextField(blank=True)
@@ -296,7 +296,7 @@ class SocialPost(LoggedModel):
 
     title = models.CharField(max_length=255)
     content = models.TextField()
-    image_path = models.URLField(blank=True)
+    image_path = models.URLField(max_length=1000, blank=True)
     additional_images = models.JSONField(default=list)
     platform = models.CharField(max_length=20, choices=Platform.choices)
     scheduled_at = models.DateTimeField(null=True, blank=True)
@@ -716,7 +716,7 @@ class ShowcaseProject(LoggedModel):
     # /projects/<slug> case-study page, which is what visitors are already
     # on when they see the "Visiter le projet" button that uses this.
     project_url = models.URLField(blank=True)
-    video_src = models.URLField(blank=True)
+    video_src = models.URLField(max_length=1000, blank=True)
     images = models.JSONField(default=list, blank=True)
     scene_variants = models.JSONField(default=list, blank=True)
     client = models.CharField(max_length=255, blank=True)
@@ -768,7 +768,7 @@ class SiteSettings(LoggedModel):
       services_links: [{label}] — footer's "Services" column
       social_links: [{icon, url}] — icon is a lucide name, e.g. "globe" """
 
-    logo_url = models.URLField(blank=True)
+    logo_url = models.URLField(max_length=1000, blank=True)
     tagline = models.TextField(blank=True)
     # Coordonnées affichées sur le site (pied de page, page Contact, bouton
     # téléphone de l'en-tête et des appels à l'action).
@@ -822,7 +822,7 @@ class QuoteSettings(LoggedModel):
     # Cahier des charges §4.7 "signature électronique" — the company's
     # digital stamp/seal image, uploaded once here and stamped onto every
     # devis PDF/print view and the public acceptance page once signed.
-    company_stamp_url = models.URLField(blank=True)
+    company_stamp_url = models.URLField(max_length=1000, blank=True)
 
     def __str__(self):
         return 'Paramètres des devis'
