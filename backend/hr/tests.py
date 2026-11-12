@@ -62,6 +62,24 @@ class EmployeeProfileViewSetTests(APITestCase):
         )
         self.assertEqual(response.status_code, 403)
 
+    def test_rehire_reuses_existing_profile(self):
+        """Réembauche : la fiche restée après la suppression du compte est
+        remise à jour et réactivée au lieu d'échouer (doublon)."""
+        self.other_profile.status = EmployeeProfile.Status.INACTIF
+        self.other_profile.save()
+
+        response = self.client_hr.post(
+            '/api/v1/hr/employees/',
+            {'user_id': str(self.other_dev.id), 'position': 'Lead Frontend'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(EmployeeProfile.objects.filter(user=self.other_dev).count(), 1)
+        self.other_profile.refresh_from_db()
+        self.assertEqual(self.other_profile.position, 'Lead Frontend')
+        self.assertEqual(self.other_profile.status, EmployeeProfile.Status.ACTIF)
+
     def test_dev_cannot_edit_salary(self):
         response = self.client_dev.patch(
             f'/api/v1/hr/employees/{self.dev_profile.id}/',

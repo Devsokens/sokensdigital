@@ -240,6 +240,38 @@ class UserListView(viewsets.ReadOnlyModelViewSet):
     permission_classes = [CanListUsers]
 
 
+def _existing_account_response(email):
+    """Explique pourquoi un compte de connexion existe déjà pour `email`.
+
+    Cas récupérable (409 + `user_id`) : le compte a bien été créé lors d'un
+    essai précédent, mais la fiche employé a échoué ensuite. Sans ça, chaque
+    nouvel essai bute sur « un compte existe déjà » ; le formulaire propose
+    alors de créer la fiche pour ce compte."""
+    user = User.objects.filter(email_hash=hash_email(email)).select_related('employee_profile').first()
+    if user is None or user.account_deleted_at or not user.firebase_uid:
+        return Response(
+            {'detail': (
+                "Un compte de connexion existe déjà pour cet email dans Firebase, mais il n'est "
+                "rattaché à aucun utilisateur de la plateforme. Supprimez-le dans la console "
+                "Firebase (Authentication), puis réessayez."
+            )},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    name = f'{user.first_name} {user.last_name}'.strip() or email
+    if hasattr(user, 'employee_profile'):
+        return Response(
+            {'detail': f"Cet email appartient déjà à l'employé {name}."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return Response(
+        {
+            'detail': f"Un compte utilisateur existe déjà pour cet email ({name}), sans fiche employé.",
+            'user_id': str(user.pk),
+        },
+        status=status.HTTP_409_CONFLICT,
+    )
+
+
 class ProvisionUserView(APIView):
     """Creates a new employee's platform access in one call: Firebase Auth
     account + Firestore profile (role/department) + Django User row.
@@ -287,10 +319,7 @@ class ProvisionUserView(APIView):
                 display_name=f"{data['first_name']} {data['last_name']}",
             )
         except firebase_auth.EmailAlreadyExistsError:
-            return Response(
-                {'detail': 'Un compte existe déjà avec cet email.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return _existing_account_response(data['email'])
 
         avatar_url = data.get('avatar_url') or None
 

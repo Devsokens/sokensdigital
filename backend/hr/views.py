@@ -1,3 +1,5 @@
+import uuid
+
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -60,6 +62,22 @@ class EmployeeProfileViewSet(viewsets.ModelViewSet):
         if has_role(self.request.user, *HR_MANAGER_ROLES):
             return EmployeeProfileSerializer
         return EmployeeProfileSelfSerializer
+
+    def create(self, request, *args, **kwargs):
+        """Réembauche : supprimer le compte d'une personne laisse sa fiche
+        employé. Quand on lui recrée un compte, la fiche existante est remise
+        à jour et réactivée au lieu d'échouer sur « fiche déjà existante »
+        (ce qui laissait un compte sans fiche, et bloquait l'email)."""
+        try:
+            existing = EmployeeProfile.objects.filter(user_id=uuid.UUID(str(request.data.get('user_id')))).first()
+        except ValueError:
+            existing = None  # identifiant invalide : la validation normale répond 400
+        if existing is None or not has_role(request.user, *HR_MANAGER_ROLES):
+            return super().create(request, *args, **kwargs)
+        serializer = self.get_serializer(existing, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(status=EmployeeProfile.Status.ACTIF)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def destroy(self, request, *args, **kwargs):
         """Supprimer un employé supprime aussi son compte utilisateur
