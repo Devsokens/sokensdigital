@@ -100,7 +100,7 @@ export function MonthCalendar<T>({
 
       <div className="grid grid-cols-7 overflow-hidden rounded-xl border border-neutral-200">
         {WEEKDAY_LABELS.map((label) => (
-          <div key={label} className="border-b border-neutral-200 bg-neutral-50 px-2 py-1.5 text-center text-xs font-medium text-neutral-500">
+          <div key={label} className="border-b border-neutral-200 bg-neutral-50 px-0.5 py-1.5 text-center text-xs font-medium text-neutral-500 sm:px-2">
             {label}
           </div>
         ))}
@@ -113,12 +113,14 @@ export function MonthCalendar<T>({
           return (
             <div
               key={key}
-              className={`min-h-24 border-r border-b border-neutral-100 p-1.5 last:border-r-0 ${inMonth ? "bg-white" : "bg-neutral-50/50"}`}
+              // Sur téléphone (colonnes d'environ 48 px) : cases plus basses,
+              // numéro du jour plus grand pour le toucher, heure masquée.
+              className={`min-w-0 min-h-16 border-r border-b border-neutral-100 p-1 last:border-r-0 sm:min-h-24 sm:p-1.5 ${inMonth ? "bg-white" : "bg-neutral-50/50"}`}
             >
               <button
                 type="button"
                 onClick={() => onSelectDay(key)}
-                className={`mb-1 flex size-6 items-center justify-center rounded-full text-xs ${
+                className={`mb-1 flex size-8 items-center justify-center rounded-full text-xs sm:size-6 ${
                   key === today
                     ? "bg-primary font-semibold text-primary-foreground"
                     : inMonth
@@ -143,7 +145,7 @@ export function MonthCalendar<T>({
                       style={{ background: getColor(item), color: "#ffffff" }}
                       title={getLabel(item)}
                     >
-                      {prefix && <span className="shrink-0 font-semibold opacity-90">{prefix}</span>}
+                      {prefix && <span className="hidden shrink-0 font-semibold opacity-90 sm:inline">{prefix}</span>}
                       <span className="truncate">{getLabel(item)}</span>
                     </button>
                   );
@@ -154,7 +156,8 @@ export function MonthCalendar<T>({
                     onClick={() => onSelectDay(key)}
                     className="px-1 text-[0.7rem] text-neutral-400 hover:text-neutral-600"
                   >
-                    +{overflow} autre{overflow > 1 ? "s" : ""}
+                    +{overflow}
+                    <span className="hidden sm:inline"> autre{overflow > 1 ? "s" : ""}</span>
                   </button>
                 )}
               </div>
