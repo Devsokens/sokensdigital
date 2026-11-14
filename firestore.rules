@@ -18,6 +18,13 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data;
     }
 
+    function isAdmin() {
+      return getUserData() != null && (
+        getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_RH'] ||
+        (getUserData().roles is list && ('SUPER_ADMIN' in getUserData().roles || 'RESPONSABLE_RH' in getUserData().roles))
+      );
+    }
+
     // TODO(chat): project membership lives in Django/Supabase, not
     // Firestore, so this can't `get()` a /projects/{id} doc here. Once
     // PROJECT-type chat rooms are built, Django needs to push a minimal
@@ -37,21 +44,19 @@ service cloud.firestore {
       // this profile doc) are created by a Super-Admin/RH, either via the
       // Firebase Console directly or a future admin UI. See
       // docs/backend-specifications.md §3.1.
-      allow create: if isAuth() && getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_RH'];
-      allow delete: if isAuth() && getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_RH'];
+      allow create: if isAuth() && isAdmin();
+      allow delete: if isAuth() && isAdmin();
       // Update: Super-Admin/RH can change anything (role, department...).
       // Anyone else may only touch their own doc, and only its
-      // self-editable fields — role/departmentId/email/createdAt must be
-      // left byte-for-byte identical, so a regular user can never
-      // self-promote.
+      // self-editable fields (firstName, lastName, avatarUrl, updatedAt).
+      // role/departmentId/email/createdAt are locked down by construction
+      // — only those four keys may appear in the diff, so a regular user
+      // can never self-promote or change their department/email.
       allow update: if isAuth() && (
-        getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_RH'] ||
+        isAdmin() ||
         (
           request.auth.uid == userUid &&
-          request.resource.data.role == resource.data.role &&
-          request.resource.data.departmentId == resource.data.departmentId &&
-          request.resource.data.email == resource.data.email &&
-          request.resource.data.createdAt == resource.data.createdAt
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['firstName', 'lastName', 'avatarUrl', 'updatedAt'])
         )
       );
     }
@@ -81,7 +86,7 @@ service cloud.firestore {
           request.resource.data.memberUids.size() == 2
         )
       );
-      allow update, delete: if isAuth() && getUserData().role == 'SUPER_ADMIN';
+      allow update, delete: if isAuth() && isAdmin();
 
       match /messages/{messageId} {
         // Corrige F1 (pentest du 24/09/2026) : Firestore n'hérite JAMAIS une

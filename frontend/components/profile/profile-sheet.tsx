@@ -44,22 +44,17 @@ export function ProfileSheet() {
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file || !user) return; // Added !user check here
+    if (!file || !user) return;
     setError(null);
     setUploading(true);
     try {
       const newAvatarUrl = await uploadAvatar(file);
-      console.log("Uploaded avatar URL:", newAvatarUrl); // Log added
       setAvatarUrl(newAvatarUrl);
-      const updateData = { avatar_url: newAvatarUrl };
-      console.log("Sending to updateMe:", updateData); // Log added
-      await updateMe(updateData);
-      await updateOwnProfile(user.uid, { firstName, lastName, avatarUrl: newAvatarUrl }); // Update Firestore immediately
+      await updateMe({ avatar_url: newAvatarUrl });
+      await updateOwnProfile(user.uid, { firstName, lastName, avatarUrl: newAvatarUrl });
       await refreshProfile();
-      console.log("Profile after refresh:", profile); // Log added
       setSaved(true);
-    } catch (err) {
-      console.error("Error updating profile after avatar upload:", err); // Log added
+    } catch {
       setError("Impossible de charger cette photo. Réessayez.");
     } finally {
       setUploading(false);
