@@ -48,7 +48,11 @@ export function ProfileSheet() {
     setError(null);
     setUploading(true);
     try {
-      setAvatarUrl(await uploadAvatar(file));
+      const newAvatarUrl = await uploadAvatar(file);
+      setAvatarUrl(newAvatarUrl);
+      await updateMe({ avatar_url: newAvatarUrl });
+      await refreshProfile();
+      setSaved(true);
     } catch {
       setError("Impossible de charger cette photo. Réessayez.");
     } finally {
