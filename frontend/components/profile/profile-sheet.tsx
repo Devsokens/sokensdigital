@@ -49,11 +49,17 @@ export function ProfileSheet() {
     setUploading(true);
     try {
       const newAvatarUrl = await uploadAvatar(file);
+      console.log("Uploaded avatar URL:", newAvatarUrl); // Log added
       setAvatarUrl(newAvatarUrl);
-      await updateMe({ avatar_url: newAvatarUrl });
+      const updateData = { avatar_url: newAvatarUrl };
+      console.log("Sending to updateMe:", updateData); // Log added
+      await updateMe(updateData);
+      await updateOwnProfile(user.uid, { firstName, lastName, avatarUrl: newAvatarUrl }); // Update Firestore immediately
       await refreshProfile();
+      console.log("Profile after refresh:", profile); // Log added
       setSaved(true);
-    } catch {
+    } catch (err) {
+      console.error("Error updating profile after avatar upload:", err); // Log added
       setError("Impossible de charger cette photo. Réessayez.");
     } finally {
       setUploading(false);
