@@ -44,7 +44,7 @@ export function ProfileSheet() {
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
+    if (!file || !user) return; // Added !user check here
     setError(null);
     setUploading(true);
     try {
