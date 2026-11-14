@@ -43,14 +43,20 @@ class EmployeeProfileSerializer(serializers.ModelSerializer):
     )
     contracts = ContractSerializer(many=True, read_only=True)
     payslips = PayslipSerializer(many=True, read_only=True)
+    # False une fois le compte utilisateur supprimé (core.accounts) — la
+    # fiche employé, elle, reste.
+    has_account = serializers.SerializerMethodField()
 
     class Meta:
         model = EmployeeProfile
         fields = [
             'id', 'user', 'user_id', 'position', 'hire_date',
             'gross_monthly_salary', 'base_hourly_cost', 'status',
-            'contracts', 'payslips', 'created_at',
+            'contracts', 'payslips', 'has_account', 'created_at',
         ]
+
+    def get_has_account(self, obj):
+        return obj.user.account_deleted_at is None
         read_only_fields = ['base_hourly_cost']
 
 

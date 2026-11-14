@@ -2,13 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2, MoreHorizontal, Search } from "lucide-react";
-import { listEmployees, updateEmployee } from "@/lib/api/hr";
+import { useRouter } from "next/navigation";
+import { Eye, Loader2, MoreHorizontal, Pencil, Power, Search, Trash2 } from "lucide-react";
+import { deleteEmployee, listEmployees, updateEmployee } from "@/lib/api/hr";
 import type { EmployeeProfile } from "@/lib/api/types";
 import { ApiError } from "@/lib/api/client";
 import { AddEmployeeSheet } from "@/components/admin/rh/add-employee-sheet";
 import { EmployeeQuickEditModal } from "@/components/admin/rh/employee-quick-edit-modal";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { ConfirmModal } from "@/components/admin/confirm-modal";
+import {
+  ContextMenu,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+} from "@/components/admin/context-menu";
 import { cn } from "@/lib/utils";
 import { formatFcfa } from "@/lib/format-currency";
 
@@ -34,8 +42,16 @@ function formatDate(value: string | null) {
 }
 
 
+function fullName(employee: EmployeeProfile) {
+  return `${employee.user.first_name} ${employee.user.last_name}`.trim() || employee.user.email;
+}
+
 export function EmployeeList() {
+  const router = useRouter();
   const [employees, setEmployees] = useState<EmployeeProfile[] | null>(null);
+  // Actions lancées depuis le clic droit (les modales vivent hors du menu).
+  const [editing, setEditing] = useState<EmployeeProfile | null>(null);
+  const [toDelete, setToDelete] = useState<EmployeeProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"tous" | "actifs" | "inactifs">("tous");
@@ -57,6 +73,35 @@ export function EmployeeList() {
     const nextStatus = employee.status === "ACTIF" ? "INACTIF" : "ACTIF";
     await updateEmployee(employee.id, { status: nextStatus });
     load();
+  }
+
+  // Supprime la fiche ET le compte utilisateur de la personne (backend
+  // hr.views.EmployeeProfileViewSet.destroy).
+  async function handleDelete(employee: EmployeeProfile) {
+    await deleteEmployee(employee.id);
+    setEmployees((prev) => prev && prev.filter((e) => e.id !== employee.id));
+  }
+
+  function renderContextMenu(employee: EmployeeProfile) {
+    const isActive = employee.status === "ACTIF";
+    return (
+      <>
+        <ContextMenuLabel>{fullName(employee)}</ContextMenuLabel>
+        <ContextMenuItem icon={Eye} onClick={() => router.push(`/admin/rh/${employee.id}`)}>
+          Voir la fiche
+        </ContextMenuItem>
+        <ContextMenuItem icon={Pencil} onClick={() => setEditing(employee)}>
+          Modifier
+        </ContextMenuItem>
+        <ContextMenuItem icon={Power} onClick={() => toggleStatus(employee)}>
+          Marquer {isActive ? "inactif" : "actif"}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem icon={Trash2} destructive onClick={() => setToDelete(employee)}>
+          Supprimer l&apos;employé
+        </ContextMenuItem>
+      </>
+    );
   }
 
   const filtered = useMemo(() => {
@@ -146,7 +191,15 @@ export function EmployeeList() {
               const contractLabel = currentContractLabel(e);
               const isActive = e.status === "ACTIF";
               return (
-                <tr key={e.id} className={cn("transition-colors hover:bg-neutral-50", !isActive && "opacity-60")}>
+                <ContextMenu
+                  key={e.id}
+                  render={<tr />}
+                  className={cn(
+                    "transition-colors hover:bg-neutral-50 data-[popup-open]:bg-primary/5",
+                    !isActive && "opacity-60"
+                  )}
+                  menu={renderContextMenu(e)}
+                >
                   <td className="px-5 py-3.5" data-label="Employé">
                     <Link href={`/admin/rh/${e.id}`} className="flex items-center gap-3">
                       <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-100 text-xs font-semibold text-neutral-600">
@@ -162,6 +215,11 @@ export function EmployeeList() {
                           {e.user.first_name} {e.user.last_name}
                         </span>
                         <span className="block text-xs text-neutral-400">{e.user.email}</span>
+                        {e.has_account === false && (
+                          <span className="mt-0.5 inline-block rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-500">
+                            Sans compte utilisateur
+                          </span>
+                        )}
                       </span>
                     </Link>
                   </td>
@@ -226,10 +284,17 @@ export function EmployeeList() {
                         >
                           Marquer {isActive ? "inactif" : "actif"}
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => setToDelete(e)}
+                          className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-destructive hover:bg-destructive/5"
+                        >
+                          Supprimer l&apos;employé
+                        </button>
                       </PopoverContent>
                     </Popover>
                   </td>
-                </tr>
+                </ContextMenu>
               );
             })}
             {filtered.length === 0 && (
@@ -242,6 +307,32 @@ export function EmployeeList() {
           </tbody>
         </table>
       </div>
+
+      {editing && (
+        <EmployeeQuickEditModal
+          key={editing.id}
+          employee={editing}
+          onSaved={load}
+          open
+          onOpenChange={(open) => !open && setEditing(null)}
+        />
+      )}
+
+      <ConfirmModal
+        open={toDelete !== null}
+        onOpenChange={(open) => !open && setToDelete(null)}
+        title="Supprimer l'employé"
+        description={
+          toDelete
+            ? `Supprimer définitivement la fiche de ${fullName(toDelete)} (contrats et fiches de paie compris) ? Son compte utilisateur sera supprimé avec : il ou elle ne pourra plus se connecter.`
+            : ""
+        }
+        confirmLabel="Supprimer"
+        requireTyping="SUPPRIMER"
+        onConfirm={async () => {
+          if (toDelete) await handleDelete(toDelete);
+        }}
+      />
     </div>
   );
 }

@@ -138,3 +138,80 @@ class ContactDirectoryTests(APITestCase):
 
         names = [c['first_name'] for c in self.client.get(CONTACTS_URL).json()['results']]
         self.assertEqual(names, ['Mien'])
+
+
+class ClientLeadStyleFormTests(APITestCase):
+    """Le formulaire client reprend celui du lead : contacts en bloc,
+    source, score et valeur estimée."""
+
+    def setUp(self):
+        self.admin = _user_with_role(ROLE_SUPER_ADMIN)
+        self.client.force_authenticate(user=self.admin)
+
+    def _create(self, **overrides):
+        payload = {
+            'company_name': 'Setrag', 'notes': 'Rencontré au salon',
+            'lead_source': 'EVENEMENT', 'qualification_score': 60, 'estimated_value': '2500000',
+            'contacts': [
+                {'first_name': 'Léa', 'last_name': 'Nze', 'email': 'lea@setrag.ga', 'role': 'DG'},
+                {'first_name': 'Marc', 'last_name': 'Obiang', 'email': '', 'phone': '077'},
+            ],
+        }
+        payload.update(overrides)
+        response = self.client.post(CLIENTS_URL, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.content)
+        return Client.objects.get(pk=response.json()['id'])
+
+    def test_create_saves_contacts_and_lead_fields(self):
+        client = self._create()
+
+        contacts = list(client.contacts.order_by('-is_primary', 'last_name'))
+        self.assertEqual([c.first_name for c in contacts], ['Léa', 'Marc'])
+        self.assertTrue(contacts[0].is_primary)
+        lead = client.leads.get()
+        self.assertEqual(lead.source, Lead.Source.EVENEMENT)
+        self.assertEqual(lead.qualification_score, 60)
+        self.assertEqual(str(lead.estimated_value), '2500000.00')
+        self.assertEqual(lead.status, Lead.Status.CONVERTI)
+        self.assertTrue(lead.created_from_client)
+        self.assertEqual(lead.first_name, 'Léa')
+
+    def test_client_with_chosen_source_stays_out_of_submitted_projects(self):
+        client = self._create()
+        response = self.client.get('/api/v1/marketing/submitted-projects/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [item['id'] for item in response.json()]
+        self.assertNotIn(str(client.leads.get().id), ids)
+
+    def test_retrieve_exposes_lead_fields_for_edit(self):
+        client = self._create()
+        data = self.client.get(f'{CLIENTS_URL}{client.id}/').json()
+        self.assertEqual(data['lead']['source'], 'EVENEMENT')
+        self.assertEqual(data['lead']['qualification_score'], 60)
+
+    def test_update_syncs_contacts_and_lead(self):
+        client = self._create()
+        lea = client.contacts.get(first_name='Léa')
+        response = self.client.patch(f'{CLIENTS_URL}{client.id}/', {
+            'qualification_score': 90,
+            'contacts': [
+                {'id': str(lea.id), 'first_name': 'Léa', 'last_name': 'Nze-Mba', 'email': 'lea@setrag.ga'},
+                {'first_name': 'Paul', 'last_name': 'Ella'},
+            ],
+        }, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertEqual(sorted(client.contacts.values_list('first_name', flat=True)), ['Léa', 'Paul'])
+        lea.refresh_from_db()
+        self.assertEqual(lea.last_name, 'Nze-Mba')
+        self.assertEqual(client.leads.get().qualification_score, 90)
+
+    def test_patch_without_contacts_leaves_them_untouched(self):
+        client = self._create()
+        self.client.patch(f'{CLIENTS_URL}{client.id}/', {'notes': 'maj'}, format='json')
+        self.assertEqual(client.contacts.count(), 2)
+
+    def test_existing_client_without_lead_gets_one_on_edit(self):
+        client = ClientFactory(company_name='Ancien client')
+        self.client.patch(f'{CLIENTS_URL}{client.id}/', {'lead_source': 'APPEL_ENTRANT'}, format='json')
+        self.assertEqual(client.leads.get().source, Lead.Source.APPEL_ENTRANT)

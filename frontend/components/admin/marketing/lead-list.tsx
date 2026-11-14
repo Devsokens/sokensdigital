@@ -287,16 +287,18 @@ export function LeadList() {
                     >
                       <div className="flex items-start gap-1.5">
                         <Building2 className="mt-0.5 size-3.5 shrink-0 text-neutral-400" />
-                        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-neutral-900">{title}</p>
+                        {/* Nom complet affiché, sur plusieurs lignes si besoin : couper
+                         * par « … » cachait la fin des raisons sociales longues. */}
+                        <p className="min-w-0 flex-1 text-sm leading-snug font-semibold break-words text-neutral-900">{title}</p>
                       </div>
                       {lead.company_name?.trim() && person && (
-                        <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-neutral-400">
-                          <User className="size-3 shrink-0" />
-                          <span className="truncate">{person}</span>
+                        <p className="mt-0.5 flex items-start gap-1 text-xs text-neutral-400">
+                          <User className="mt-0.5 size-3 shrink-0" />
+                          <span className="min-w-0 break-words">{person}</span>
                         </p>
                       )}
                       {!lead.company_name?.trim() && lead.email && (
-                        <p className="mt-0.5 truncate text-xs text-neutral-400">{lead.email}</p>
+                        <p className="mt-0.5 text-xs break-all text-neutral-400">{lead.email}</p>
                       )}
 
                       <div className="mt-2 flex items-center justify-between gap-2">

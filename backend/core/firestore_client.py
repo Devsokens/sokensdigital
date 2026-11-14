@@ -123,6 +123,12 @@ def update_profile_fields(firebase_uid: str, data: dict) -> None:
     })
 
 
+def delete_profile(firebase_uid: str) -> None:
+    """Supprime profiles/{uid} — suppression d'un compte plateforme
+    (core.accounts.delete_platform_account). Sans effet si absent."""
+    _get_client().collection('profiles').document(firebase_uid).delete()
+
+
 def upsert_chat_room(room_id: str, data: dict) -> None:
     """Creates or fully overwrites a chatRooms/{room_id} doc — used to keep
     Django-owned entities (Department, Project) mirrored into Firestore's

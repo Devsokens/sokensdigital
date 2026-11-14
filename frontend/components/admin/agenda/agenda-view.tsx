@@ -199,7 +199,7 @@ function AppointmentFormModal({
 
   return (
     <Modal open onOpenChange={(open) => !open && onClose()}>
-      <ModalContent title={isEdit ? "Modifier le rendez-vous" : "Nouveau rendez-vous"} className="max-w-4xl">
+      <ModalContent title={isEdit ? "Modifier le rendez-vous" : "Nouveau rendez-vous"} className="max-h-[92dvh] max-w-4xl sm:max-h-[85vh]">
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
@@ -235,7 +235,8 @@ function AppointmentFormModal({
                 <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} required />
               </label>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Date + heure : trop étroit à deux par ligne sur téléphone. */}
+              <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block">
                   <span className={labelClass}>Début</span>
                   <input type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} className={inputClass} required />

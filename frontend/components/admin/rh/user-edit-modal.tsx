@@ -25,12 +25,23 @@ export function UserEditModal({
   user,
   onSaved,
   trigger,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   user: MergedUserLike;
   onSaved: () => void;
-  trigger: React.ReactElement;
+  /** Optionnel quand le panneau est ouvert d'ailleurs (clic droit) via
+   * `open`/`onOpenChange`. */
+  trigger?: React.ReactElement;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  function setOpen(next: boolean) {
+    if (controlledOpen === undefined) setInternalOpen(next);
+    onOpenChange?.(next);
+  }
   const [step, setStep] = useState(0);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -164,7 +175,7 @@ export function UserEditModal({
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger render={trigger} />
+      {trigger && <SheetTrigger render={trigger} />}
       <SheetContent title={`Modifier — ${user.name || user.email}`} className="max-w-2xl">
         {loading ? (
           <div className="flex justify-center py-16">

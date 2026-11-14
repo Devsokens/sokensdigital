@@ -9,6 +9,17 @@ import { provisionUser, createEmployee, listDepartments } from "@/lib/api/hr";
 import { uploadAvatar } from "@/lib/api/upload";
 import type { Department } from "@/lib/api/types";
 import { ROLE_LABELS, type AppRole } from "@/lib/firebase/types";
+import { ApiError } from "@/lib/api/client";
+
+/** Message lisible d'une erreur d'API : `detail`, sinon la première erreur de champ. */
+function apiErrorDetail(err: unknown): string | null {
+  if (!(err instanceof ApiError) || !err.body || typeof err.body !== "object") return null;
+  const body = err.body as Record<string, unknown>;
+  if (typeof body.detail === "string") return body.detail;
+  const first = Object.values(body)[0];
+  if (Array.isArray(first) && typeof first[0] === "string") return first[0];
+  return typeof first === "string" ? first : null;
+}
 
 const STEPS = ["Identité", "Accès plateforme", "Informations RH"] as const;
 
@@ -55,6 +66,9 @@ export function AddEmployeeSheet({
   }));
   const [departments, setDepartments] = useState<Department[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Compte déjà existant sans fiche employé (essai précédent interrompu) :
+  // on propose de créer la fiche pour ce compte.
+  const [existingUserId, setExistingUserId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -72,6 +86,7 @@ export function AddEmployeeSheet({
     });
     setStep(initialIdentity ? 1 : 0);
     setError(null);
+    setExistingUserId(null);
   }
 
   function set<K extends keyof typeof EMPTY_FORM>(key: K, value: (typeof EMPTY_FORM)[K]) {
@@ -109,7 +124,9 @@ export function AddEmployeeSheet({
     e.preventDefault();
     if (!canAdvance()) return;
     setError(null);
+    setExistingUserId(null);
     setSaving(true);
+    let userId: string;
     try {
       const user = await provisionUser({
         email: form.email,
@@ -120,19 +137,45 @@ export function AddEmployeeSheet({
         roles: form.roles,
         department_id: form.departmentId || undefined,
       });
-      await createEmployee({
-        user_id: user.id,
-        position: form.position,
-        hire_date: form.hireDate || undefined,
-        gross_monthly_salary: form.grossMonthlySalary || undefined,
-      });
-      onCreated();
-      setOpen(false);
-      reset();
-    } catch {
-      setError(
-        "Impossible de créer cet employé — l'email est peut-être déjà utilisé, ou une étape a échoué en cours de route."
-      );
+      userId = user.id;
+    } catch (err) {
+      const body = err instanceof ApiError ? (err.body as { user_id?: string } | null) : null;
+      if (err instanceof ApiError && err.status === 409 && body?.user_id) setExistingUserId(body.user_id);
+      setError(apiErrorDetail(err) ?? "Impossible de créer le compte de cet employé.");
+      setSaving(false);
+      return;
+    }
+    try {
+      await saveEmployee(userId);
+    } catch (err) {
+      // Le compte existe désormais : un nouvel essai proposera de créer la fiche pour lui.
+      setError(`Le compte a été créé, mais pas la fiche employé : ${apiErrorDetail(err) ?? "erreur inconnue"}.`);
+      setExistingUserId(userId);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveEmployee(userId: string) {
+    await createEmployee({
+      user_id: userId,
+      position: form.position,
+      hire_date: form.hireDate || undefined,
+      gross_monthly_salary: form.grossMonthlySalary || undefined,
+    });
+    onCreated();
+    setOpen(false);
+    reset();
+  }
+
+  async function attachExisting() {
+    if (!existingUserId) return;
+    setError(null);
+    setSaving(true);
+    try {
+      await saveEmployee(existingUserId);
+    } catch (err) {
+      setError(apiErrorDetail(err) ?? "Impossible de créer la fiche employé.");
     } finally {
       setSaving(false);
     }
@@ -178,9 +221,14 @@ export function AddEmployeeSheet({
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {error && (
-            <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
-              {error}
-            </p>
+            <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
+              <p>{error}</p>
+              {existingUserId && (
+                <Button type="button" size="sm" variant="outline" onClick={attachExisting} disabled={saving}>
+                  Créer la fiche employé pour ce compte
+                </Button>
+              )}
+            </div>
           )}
 
           {step === 0 && (

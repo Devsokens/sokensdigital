@@ -12,12 +12,23 @@ export function EmployeeQuickEditModal({
   employee,
   onSaved,
   trigger,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   employee: EmployeeProfile;
   onSaved: () => void;
-  trigger: React.ReactElement;
+  /** Optionnel quand la modale est ouverte d'ailleurs (clic droit) via
+   * `open`/`onOpenChange`. */
+  trigger?: React.ReactElement;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  function setOpen(next: boolean) {
+    if (controlledOpen === undefined) setInternalOpen(next);
+    onOpenChange?.(next);
+  }
   const [position, setPosition] = useState(employee.position);
   const [hireDate, setHireDate] = useState(employee.hire_date ?? "");
   const [salary, setSalary] = useState(employee.gross_monthly_salary ?? "");
@@ -45,7 +56,7 @@ export function EmployeeQuickEditModal({
 
   return (
     <Modal open={open} onOpenChange={setOpen}>
-      <ModalTrigger render={trigger} />
+      {trigger && <ModalTrigger render={trigger} />}
       <ModalContent title={`Modifier — ${employee.user.first_name} ${employee.user.last_name}`}>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (

@@ -200,6 +200,58 @@ class ProvisionUserViewTests(APITestCase):
         mock_delete_user.assert_called_once_with('firebase-uid-456')
         self.assertFalse(User.objects.filter(firebase_uid='firebase-uid-456').exists())
 
+    @patch('core.views.create_profile')
+    @patch('firebase_admin.auth.create_user')
+    def test_long_avatar_url_is_accepted(self, mock_create_user, mock_create_profile):
+        """Les URL de photos envoyées dépassent souvent 200 caractères (ancienne
+        limite du champ) : la création plantait en 500 sur Postgres."""
+        mock_create_user.return_value = MagicMock(uid='firebase-uid-long')
+        avatar = 'https://example.supabase.co/storage/v1/object/public/avatars/' + 'a' * 300 + '.webp'
+
+        response = self.client_rh.post('/api/v1/users/provision/', self.payload(avatar_url=avatar), format='json')
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(User.objects.get(firebase_uid='firebase-uid-long').avatar_url, avatar)
+
+    def _email_exists(self):
+        from firebase_admin import auth as firebase_auth
+        return firebase_auth.EmailAlreadyExistsError('EMAIL_EXISTS', None, None)
+
+    @patch('firebase_admin.auth.create_user')
+    def test_existing_account_without_employee_profile_is_recoverable(self, mock_create_user):
+        """Essai précédent interrompu après la création du compte : on renvoie
+        l'utilisateur pour que le formulaire crée sa fiche employé."""
+        mock_create_user.side_effect = self._email_exists()
+        user = User.objects.create(email='new.employee@sokensdigital.com', first_name='New', firebase_uid='uid-1')
+
+        response = self.client_rh.post('/api/v1/users/provision/', self.payload(), format='json')
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data['user_id'], str(user.pk))
+
+    @patch('firebase_admin.auth.create_user')
+    def test_existing_employee_email_is_named(self, mock_create_user):
+        from hr.models import EmployeeProfile
+
+        mock_create_user.side_effect = self._email_exists()
+        user = User.objects.create(email='new.employee@sokensdigital.com', first_name='Ada', last_name='L', firebase_uid='uid-2')
+        EmployeeProfile.objects.create(user=user, position='Dev')
+
+        response = self.client_rh.post('/api/v1/users/provision/', self.payload(), format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Ada L', response.data['detail'])
+        self.assertNotIn('user_id', response.data)
+
+    @patch('firebase_admin.auth.create_user')
+    def test_firebase_only_account_points_to_the_console(self, mock_create_user):
+        mock_create_user.side_effect = self._email_exists()
+
+        response = self.client_rh.post('/api/v1/users/provision/', self.payload(), format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('console', response.data['detail'])
+
     @patch('firebase_admin.auth.create_user')
     def test_rh_cannot_provision_super_admin(self, mock_create_user):
         response = self.client_rh.post('/api/v1/users/provision/', self.payload(roles=['SUPER_ADMIN']), format='json')

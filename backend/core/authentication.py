@@ -56,8 +56,11 @@ class FirebaseAuthentication(authentication.BaseAuthentication):
             # `bootstrap_admin`, or created by an admin/RH endpoint ahead of
             # first login) via the deterministic email_hash, and link it
             # instead of creating a duplicate.
+            # Un compte supprimé (core.accounts) n'est jamais ré-associé ici :
+            # seul un nouveau provisionnement lui rend l'accès.
             existing = User.objects.filter(
-                firebase_uid__isnull=True, email_hash=hash_email(email)
+                firebase_uid__isnull=True, email_hash=hash_email(email),
+                account_deleted_at__isnull=True,
             ).first()
             if existing:
                 existing.firebase_uid = uid

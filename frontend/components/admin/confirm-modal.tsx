@@ -19,6 +19,7 @@ export function ConfirmModal({
   disabledReason,
   open: controlledOpen,
   onOpenChange,
+  requireTyping,
 }: {
   title: string;
   description: string;
@@ -34,6 +35,9 @@ export function ConfirmModal({
   disabledReason?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Action très critique : le bouton ne s'active qu'une fois ce mot
+   * recopié — seconde confirmation explicite, plutôt qu'un clic réflexe. */
+  requireTyping?: string;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
@@ -43,6 +47,8 @@ export function ConfirmModal({
   }
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [typed, setTyped] = useState("");
+  const typingOk = !requireTyping || typed.trim().toUpperCase() === requireTyping.toUpperCase();
 
   async function handleConfirm() {
     setRunning(true);
@@ -61,7 +67,13 @@ export function ConfirmModal({
   }
 
   return (
-    <Modal open={open} onOpenChange={setOpen}>
+    <Modal
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) setTyped("");
+        setOpen(next);
+      }}
+    >
       {trigger && <ModalTrigger render={trigger} />}
       <ModalContent title={title} className="max-w-sm">
         <div className="flex items-start gap-3">
@@ -70,6 +82,19 @@ export function ConfirmModal({
           </span>
           <p className="pt-1.5 text-sm text-neutral-600">{disabled ? disabledReason : description}</p>
         </div>
+        {requireTyping && !disabled && (
+          <label className="mt-4 block">
+            <span className="mb-1.5 block text-xs text-neutral-500">
+              Tapez <strong className="font-semibold text-neutral-800">{requireTyping}</strong> pour confirmer
+            </span>
+            <input
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              autoComplete="off"
+              className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-destructive/50"
+            />
+          </label>
+        )}
         {error && (
           <p className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
             {error}
@@ -79,7 +104,7 @@ export function ConfirmModal({
           <ModalClose render={<button type="button" className="rounded-full border border-neutral-200 px-4 py-1.5 text-xs font-semibold text-neutral-600 hover:border-neutral-300">Annuler</button>} />
           <Button
             type="button"
-            disabled={running || disabled}
+            disabled={running || disabled || !typingOk}
             onClick={handleConfirm}
             className="gap-1.5 rounded-full bg-destructive px-5 text-white hover:bg-destructive/90"
           >

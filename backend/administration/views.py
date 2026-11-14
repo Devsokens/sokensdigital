@@ -142,8 +142,9 @@ class ClientViewSet(viewsets.ModelViewSet):
         else:
             client = serializer.save()
         # Un client créé directement figure d'office parmi les convertis du
-        # tunnel commercial — voir marketing.conversion.
-        create_converted_lead_for_client(client)
+        # tunnel commercial — voir marketing.conversion. Source, score et
+        # valeur estimée du formulaire (champs du lead) vont sur ce lead.
+        create_converted_lead_for_client(client, **getattr(serializer, 'lead_extras', {}))
 
     @action(detail=True, methods=['post'], permission_classes=[IsSuperAdmin])
     def archive(self, request, pk=None):

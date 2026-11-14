@@ -54,6 +54,14 @@ export interface Client {
   rating: number | null;
   notes?: string;
   assigned_to: string | null;
+  /** Fiche détaillée uniquement : lead converti rattaché, dont le
+   * formulaire client reprend source, score et valeur estimée. */
+  lead?: {
+    id: string;
+    source: LeadSource;
+    qualification_score: number;
+    estimated_value: string | null;
+  } | null;
   created_at: string;
 }
 
@@ -211,6 +219,8 @@ export interface EmployeeProfile {
   status: EmployeeStatus;
   contracts: Contract[];
   payslips: Payslip[];
+  /** False une fois le compte utilisateur supprimé : la fiche reste. */
+  has_account?: boolean;
   created_at: string;
 }
 
