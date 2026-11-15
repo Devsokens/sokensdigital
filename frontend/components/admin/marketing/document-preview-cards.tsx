@@ -19,29 +19,45 @@ export function DocumentPreviewCards({
   pageCount,
   renderPage,
   maxScale = DEFAULT_MAX_SCALE,
+  maxViewportHeight,
 }: {
   pageCount: number;
   renderPage: (pageIndex: number) => React.ReactNode;
   /** Échelle maximale de la page A4 (0.55 dans une colonne d'éditeur). */
   maxScale?: number;
+  /** Part de la hauteur de l'écran que la page ne doit pas dépasser (0.4 =
+   * 40 %) — pour laisser voir ce qui suit sans défiler. */
+  maxViewportHeight?: number;
 }) {
   const [active, setActive] = useState(0);
   const current = Math.min(active, pageCount - 1);
   const frameRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(maxScale);
+  // Plafond venant de la hauteur de l'écran (recalculé au redimensionnement).
+  const [heightCap, setHeightCap] = useState(maxScale);
+
+  useEffect(() => {
+    if (!maxViewportHeight) return;
+    const update = () => setHeightCap((window.innerHeight * maxViewportHeight) / PAGE_H);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [maxViewportHeight]);
+
+  const cap = Math.min(maxScale, heightCap);
 
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
     const observer = new ResizeObserver(([entry]) => {
-      setScale(Math.min(maxScale, entry.contentRect.width / PAGE_W));
+      setScale(Math.min(cap, entry.contentRect.width / PAGE_W));
     });
     observer.observe(frame);
     return () => observer.disconnect();
-  }, [maxScale]);
+  }, [cap]);
 
   return (
-    <div className="w-full" style={{ maxWidth: Math.round(PAGE_W * maxScale) }}>
+    <div className="w-full" style={{ maxWidth: Math.round(PAGE_W * cap) }}>
       <div className="relative overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
         <div ref={frameRef} className="w-full overflow-hidden bg-neutral-100" style={{ height: Math.round(PAGE_H * scale) }}>
           <div style={{ transform: `scale(${scale})`, transformOrigin: "top left" }}>

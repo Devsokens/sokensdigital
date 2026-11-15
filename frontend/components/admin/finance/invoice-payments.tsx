@@ -134,7 +134,7 @@ export function InvoicePayments({ invoice, onChanged }: { invoice: Invoice; onCh
       )}
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200">
-        <table className="table-responsive w-full text-sm">
+        <table className="table-responsive w-full text-sm [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
           <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500">
             <tr>
               <th className="px-4 py-3 font-medium">Date</th>
@@ -148,7 +148,7 @@ export function InvoicePayments({ invoice, onChanged }: { invoice: Invoice; onCh
           <tbody className="divide-y divide-neutral-100">
             {payments.map((payment) => (
               <tr key={payment.id}>
-                <td className="px-4 py-3 text-neutral-500" data-label="Date">{payment.payment_date}</td>
+                <td className="px-4 py-3 text-neutral-500" data-label="Date">{new Date(payment.payment_date).toLocaleDateString("fr-FR")}</td>
                 <td className="px-4 py-3 font-medium text-neutral-900" data-label="Montant">
                   {formatFcfa(payment.amount)}
                 </td>

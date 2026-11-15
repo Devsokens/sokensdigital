@@ -48,7 +48,7 @@ export function InvoiceViewer({
         />
         <Dialog.Popup
           className={cn(
-            "fixed inset-y-0 right-0 z-50 flex h-dvh w-full max-w-3xl flex-col bg-white shadow-2xl",
+            "fixed inset-y-0 right-0 z-50 flex h-dvh w-full max-w-4xl flex-col bg-white shadow-2xl",
             "transition-transform duration-300 ease-out",
             "data-[starting-style]:translate-x-full data-[ending-style]:translate-x-full"
           )}
@@ -102,6 +102,7 @@ export function InvoiceViewer({
                     <DocumentPreviewCards
                       pageCount={1}
                       maxScale={0.8}
+                      maxViewportHeight={0.4}
                       renderPage={() => (
                         <InvoiceDocument
                           invoice={{
@@ -128,7 +129,7 @@ export function InvoiceViewer({
                 </section>
 
                 {/* Versements */}
-                <section className="mx-4 mt-6 mb-6 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:mx-6 sm:p-5">
+                <section className="mx-4 mt-4 mb-6 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:mx-6 sm:p-5">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                     <h3 className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
                       <Wallet className="size-4 text-primary" /> Versements
