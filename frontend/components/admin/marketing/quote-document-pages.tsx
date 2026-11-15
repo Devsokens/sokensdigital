@@ -79,16 +79,17 @@ export function QuoteDocumentPages({
         <div className="flex-1 px-10 py-8">
           <ContactBlock address={settings.company_address} phone={settings.company_phone} email={settings.company_email} />
 
-          <div className="mt-10 space-y-4 text-sm leading-relaxed text-neutral-800">
-            <p>Cher partenaire,</p>
-            <Paragraphs text={quote.intro_message} />
-          </div>
-
+          {/* L'objet précède la formule d'appel, comme dans une lettre. */}
           {quote.subject && (
             <p className="mt-10 text-sm font-bold tracking-wide text-neutral-900 uppercase">
               OBJET : {quote.subject}
             </p>
           )}
+
+          <div className={`${quote.subject ? "mt-6" : "mt-10"} space-y-4 text-sm leading-relaxed text-neutral-800`}>
+            <p>Cher partenaire,</p>
+            <Paragraphs text={quote.intro_message} />
+          </div>
         </div>
       </Page>}
 
