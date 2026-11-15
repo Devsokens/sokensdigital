@@ -400,5 +400,5 @@ class QuoteSettingsSerializer(serializers.ModelSerializer):
         model = QuoteSettings
         fields = [
             'company_address', 'company_phone', 'company_email', 'company_stamp_url',
-            'payment_methods', 'default_payment_terms', 'footer_note',
+            'payment_methods', 'default_payment_terms', 'footer_note', 'amount_basis',
         ]

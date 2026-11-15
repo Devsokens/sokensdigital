@@ -512,6 +512,27 @@ function QuoteSettingsForm({ onSaved }: { onSaved: () => void }) {
         </div>
       </div>
 
+      <div>
+        <span className={labelClass}>Montant affiché sur les devis</span>
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            ["TTC", "TTC", "TVA 18 % comprise"],
+            ["HT", "HT", "Hors taxes"],
+          ] as const).map(([value, label, hint]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setSettings({ ...settings, amount_basis: value })}
+              className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${(settings.amount_basis ?? "TTC") === value ? "border-primary bg-primary/10 text-neutral-900" : "border-neutral-200 text-neutral-600 hover:border-neutral-300"}`}
+            >
+              <span className="block font-medium">{label}</span>
+              <span className="block text-xs text-neutral-500">{hint}</span>
+            </button>
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-neutral-400">Appliqué au formulaire, à l&apos;aperçu, au PDF et au mail envoyé au client.</p>
+      </div>
+
       <label className="block">
         <span className={labelClass}>Mention légale (bas de page)</span>
         <textarea

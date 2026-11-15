@@ -32,6 +32,7 @@ export interface QuoteDocumentSettings {
   footer_note: string;
   payment_methods: { label: string }[];
   default_payment_terms: QuotePaymentTerm[];
+  amount_basis?: "HT" | "TTC";
 }
 
 /** The three-page devis document shell — pure presentation, no fetching.
@@ -160,7 +161,14 @@ export function QuoteDocumentPages({
               className="shrink-0 rounded-lg px-6 py-3 text-right"
               style={{ background: accentColor, ...printColorAdjust }}
             >
-              <p className="text-lg font-bold text-white">Total : {formatFCFA(total)}</p>
+              {settings.amount_basis === "HT" ? (
+                <p className="text-lg font-bold text-white">Total HT : {formatFCFA(total)}</p>
+              ) : (
+                <>
+                  <p className="text-xs text-white/80">Total HT : {formatFCFA(total)} · TVA 18 % : {formatFCFA(total * 0.18)}</p>
+                  <p className="text-lg font-bold text-white">Total TTC : {formatFCFA(total * 1.18)}</p>
+                </>
+              )}
             </div>
           </div>
         </div>

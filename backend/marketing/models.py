@@ -824,6 +824,14 @@ class QuoteSettings(LoggedModel):
     # devis PDF/print view and the public acceptance page once signed.
     company_stamp_url = models.URLField(max_length=1000, blank=True)
 
+    class AmountBasis(models.TextChoices):
+        HT = 'HT', 'Hors taxes'
+        TTC = 'TTC', 'Toutes taxes comprises'
+
+    # Montant mis en avant sur le devis (formulaire, aperçu, PDF, mail) :
+    # TTC (TVA comprise) ou HT (sans TVA).
+    amount_basis = models.CharField(max_length=3, choices=AmountBasis.choices, default=AmountBasis.TTC)
+
     def __str__(self):
         return 'Paramètres des devis'
 

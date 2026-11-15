@@ -558,6 +558,8 @@ export interface QuoteSettings {
   payment_methods: { label: string }[];
   default_payment_terms: QuotePaymentTerm[];
   footer_note: string;
+  /** Montant mis en avant sur le devis : HT ou TTC. */
+  amount_basis?: "HT" | "TTC";
 }
 
 export interface LeadsOverTimePoint {

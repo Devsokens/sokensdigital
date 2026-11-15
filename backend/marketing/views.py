@@ -909,12 +909,18 @@ class QuoteViewSet(viewsets.ModelViewSet):
             )
         attachment = mailer.Attachment(filename=f'Devis-{quote.quote_number}.pdf', content=pdf_bytes)
 
+        from marketing.models import QuoteSettings
+        if QuoteSettings.load().amount_basis == QuoteSettings.AmountBasis.HT:
+            amount_line = f"Montant total HT : {quote.total_ht} FCFA.\n"
+        else:
+            amount_line = f"Montant total TTC : {quote.total_ttc} FCFA.\n"
+
         failed = []
         for dest in recipient_emails:
             body = (
                 f"Bonjour {quote.client_name or ''},\n\n"
                 f"{custom_message}\n\n"
-                f"Montant total TTC : {quote.total_ttc} FCFA.\n"
+                f"{amount_line}"
                 "Le devis est joint à ce message au format PDF.\n\n"
                 "Cordialement,\nL'équipe Soken's Digital"
             )

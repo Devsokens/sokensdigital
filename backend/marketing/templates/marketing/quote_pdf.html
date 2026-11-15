@@ -77,9 +77,14 @@
   <table class="totals">
     <tr><td>Sous-total HT</td><td class="num">{{ subtotal }} FCFA</td></tr>
     {% if quote.discount_amount %}<tr><td>Remise</td><td class="num">− {{ discount }} FCFA</td></tr>{% endif %}
+    {% if show_ttc %}
     <tr><td>Total HT</td><td class="num">{{ total_ht }} FCFA</td></tr>
     <tr><td>TVA ({{ vat_percent }} %)</td><td class="num">{{ vat_amount }} FCFA</td></tr>
     <tr class="grand"><td>Total TTC</td><td class="num">{{ total_ttc }} FCFA</td></tr>
+    {% else %}
+    <tr class="grand"><td>Total HT</td><td class="num">{{ total_ht }} FCFA</td></tr>
+    <tr><td colspan="2" style="font-size: 8pt; color: #777;">Montants hors taxes.</td></tr>
+    {% endif %}
   </table>
 
   {% if payment_terms %}

@@ -68,6 +68,7 @@ def build_quote_pdf(quote) -> bytes:
         'vat_amount': _fcfa(Decimal(quote.total_ttc or 0) - total_ht),
         'payment_terms': payment_terms,
         'payment_methods': ', '.join(m for m in methods if m),
+        'show_ttc': settings_obj.amount_basis != QuoteSettings.AmountBasis.HT,
         'now': timezone.now(),
     }
     html = render_to_string('marketing/quote_pdf.html', context)
