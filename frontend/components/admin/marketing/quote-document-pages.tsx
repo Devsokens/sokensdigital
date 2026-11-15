@@ -76,18 +76,27 @@ export function QuoteDocumentPages({
     <>
       {/* Page 1 — cover letter */}
       {showPage1 && <Page first>
-        <Banner accentColor={accentColor} />
-        <div className="flex-1 px-10 py-8">
-          <ContactBlock address={settings.company_address} phone={settings.company_phone} email={settings.company_email} />
+        <Banner accentColor={accentColor} tall />
+        {/* Page 1 (lettre), d'après le modèle de devis papier : larges marges,
+         * coordonnées en grand, objet détaché, lettre plus petite, justifiée
+         * et légèrement en retrait. Même mise en page dans le PDF
+         * (backend/marketing/templates/marketing/quote_pdf.html). */}
+        <div className="flex-1 px-[72px] pt-11 pb-12">
+          <div className="text-base leading-snug text-neutral-800">
+            {settings.company_address.split("\n").map((line, i) => (
+              <p key={i}>{line}</p>
+            ))}
+            {settings.company_phone && <p>Tél : {settings.company_phone}</p>}
+            {settings.company_email && <p>{settings.company_email}</p>}
+          </div>
 
-          {/* L'objet précède la formule d'appel, comme dans une lettre. */}
           {quote.subject && (
-            <p className="mt-10 text-sm font-bold tracking-wide text-neutral-900 uppercase">
+            <p className="mt-16 px-3 text-justify text-[15px] leading-relaxed font-bold tracking-wide text-neutral-900 uppercase">
               OBJET : {quote.subject}
             </p>
           )}
 
-          <div className={`${quote.subject ? "mt-6" : "mt-10"} space-y-4 text-sm leading-relaxed text-neutral-800`}>
+          <div className="mt-12 space-y-[15px] px-6 text-justify text-[11.5px] leading-[1.75] text-neutral-800">
             <p>Cher partenaire,</p>
             <Paragraphs text={quote.intro_message} />
           </div>
@@ -174,87 +183,85 @@ export function QuoteDocumentPages({
         </div>
       </Page>}
 
-      {/* Page 3 — conditions & signatures */}
+      {/* Page 3 — conditions et signatures, d'après le modèle papier (même
+       * mise en page dans backend/marketing/templates/marketing/quote_pdf.html). */}
       {showPage3 && <Page first={restAsFirst}>
-        <Banner accentColor={accentColor} />
-        <div className="flex-1 px-10 py-8">
-          <p className="text-lg font-bold" style={{ color: accentColor }}>
+        <Banner accentColor={accentColor} tall />
+        <div className="flex-1 px-20 pt-[34px] pb-10 text-[11.5px] leading-relaxed text-neutral-800">
+          <p className="text-[15px] font-bold" style={{ color: accentColor }}>
             CONDITIONS DE PAIEMENT :
           </p>
-          <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm text-neutral-800">
+          <ul className="mt-3.5 list-disc space-y-[5px] pl-[18px]">
             {terms.map((term, i) => (
               <li key={i}>
-                {term.label} soit <span className="font-semibold">{formatFCFA((total * term.percentage) / 100)}</span>{" "}
-                <span className="text-neutral-500">({term.percentage}%)</span>
+                {term.label} :{" "}
+                <span className="font-bold">
+                  {term.percentage}% soit {formatFCFA((total * term.percentage) / 100)}
+                </span>
               </li>
             ))}
           </ul>
 
           {quote.project_duration && (
-            <p className="mt-6 text-sm leading-relaxed text-neutral-800">
+            <p className="mt-[22px]">
               Notre équipe s&apos;engage à réaliser la prestation dans une durée de{" "}
-              <span className="font-semibold">{quote.project_duration}</span> à compter de la validation du devis
+              <span className="font-bold">{quote.project_duration}</span> à compter de la validation du devis
               et du versement du premier acompte.
             </p>
           )}
 
           {settings.footer_note && (
-            <p className="mt-6 text-xs leading-relaxed text-neutral-600 italic">
-              <span className="not-italic font-semibold">NB : </span>
-              {settings.footer_note}
+            <p className="mt-[22px]">
+              <span className="font-bold">
+                <span className="underline">NB</span> :
+              </span>{" "}
+              <span className="italic">{settings.footer_note}</span>
             </p>
           )}
 
-          <p className="mt-6 text-sm text-neutral-800">
-            En cas d&apos;acceptation, merci de nous renvoyer ce document avec la date et votre signature.
-          </p>
+          <p className="mt-[22px]">En cas d&apos;acceptation, merci de nous renvoyer ce document avec la date et votre signature.</p>
 
-          <p className="mt-10 text-lg font-bold" style={{ color: accentColor }}>
+          <p className="mt-[34px] text-[15px] font-bold" style={{ color: accentColor }}>
             MOYENS DE PAIEMENT :
           </p>
-          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-neutral-800">
+          <ul className="mt-3.5 list-disc space-y-[5px] pl-[18px]">
             {settings.payment_methods.map((method, i) => (
               <li key={i}>{method.label}</li>
             ))}
           </ul>
 
-          <p className="mt-10 text-lg font-bold" style={{ color: accentColor }}>
+          <p className="mt-[34px] text-[15px] font-bold" style={{ color: accentColor }}>
             ACCEPTÉ PAR :
           </p>
-          <div className="mt-4 grid grid-cols-2 gap-8">
-            <div>
-              <p className="text-sm font-semibold text-neutral-900">{clientLabel}</p>
-              <div className="mt-2 flex h-24 items-center justify-center rounded-lg bg-white">
-                {quote.signature_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={quote.signature_url} alt="Signature du client" className="max-h-20 max-w-full object-contain" style={printColorAdjust} />
-                ) : (
-                  <p className="text-center text-xs text-neutral-400 italic">
-                    Signature suivi de la mention
-                    <br />
-                    lu et approuvé
-                  </p>
-                )}
+          <div className="mt-[18px] grid grid-cols-2">
+            {[
+              { who: clientLabel, image: quote.signature_url, alt: "Signature du client" },
+              { who: "SOKEN'S DIGITAL", image: settings.company_stamp_url, alt: "Cachet Soken's Digital" },
+            ].map((side) => (
+              <div key={side.alt} className="pl-16">
+                <p className="text-xs font-bold text-neutral-900">{side.who}</p>
+                <SignBox image={side.image} alt={side.alt} hint="Signature suivi de la mention lu et approuvé" />
+                <SignBox hint="Date" className="mt-[22px]" />
               </div>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-neutral-900">SOKEN&apos;S DIGITAL</p>
-              <div className="mt-2 flex h-24 items-center justify-center rounded-lg bg-white">
-                {settings.company_stamp_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={settings.company_stamp_url} alt="Cachet Soken's Digital" className="max-h-20 max-w-full object-contain" style={printColorAdjust} />
-                ) : (
-                  <p className="text-center text-xs text-neutral-400 italic">
-                    Signature suivi de la mention
-                    <br />
-                    lu et approuvé
-                  </p>
-                )}
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </Page>}
     </>
+  );
+}
+
+/** Cadre blanc de signature (page 3) : mention en tout petit en haut, image
+ * (signature du client, cachet) centrée quand elle existe. */
+function SignBox({ image, alt, hint, className = "mt-3" }: { image?: string; alt?: string; hint: string; className?: string }) {
+  return (
+    <div className={`relative flex h-[66px] w-[200px] items-center justify-center rounded-md bg-white ${className}`}>
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={image} alt={alt ?? ""} className="max-h-[58px] max-w-[180px] object-contain" style={printColorAdjust} />
+      ) : (
+        <span className="absolute inset-x-0 top-[3px] text-center text-[7.5px] text-neutral-400 italic">{hint}</span>
+      )}
+    </div>
   );
 }

@@ -32,6 +32,33 @@
   .letter { color: #262626; line-height: 1.6; }
   .letter p + p { margin-top: 12px; }
 
+  /* Page 1 (lettre), d'après le modèle de devis papier : larges marges,
+   * coordonnées en grand, objet détaché, lettre plus petite, justifiée et
+   * légèrement en retrait. */
+  .banner.cover-banner { padding: 30px 72px; }
+  .banner.cover-banner img { height: 56px; }
+  .cover { padding: 44px 72px 48px; }
+  .cover-contact { font-size: 16px; line-height: 1.4; color: #262626; }
+  .cover-subject { margin-top: 64px; padding: 0 12px; font-size: 15px; line-height: 1.6; font-weight: bold; letter-spacing: 0.02em; text-transform: uppercase; text-align: justify; color: #171717; }
+  .cover-letter { margin-top: 48px; padding: 0 24px; font-size: 11.5px; line-height: 1.75; text-align: justify; color: #262626; }
+  .cover-letter p + p { margin-top: 15px; }
+
+  /* Page 3, d'après le modèle papier : titres détachés, listes et texte
+   * en petit, NB souligné, deux cadres (signature, date) par signataire. */
+  .terms-page { padding: 34px 80px 40px; font-size: 11.5px; line-height: 1.6; color: #262626; }
+  .terms-title { margin-top: 34px; font-size: 15px; font-weight: bold; color: {{ accent }}; }
+  .terms-page > .terms-title:first-child { margin-top: 0; }
+  .terms-list { margin: 14px 0 0; padding-left: 18px; }
+  .terms-list li + li { margin-top: 5px; }
+  .terms-text { margin-top: 22px; }
+  .accept { margin-top: 18px; display: table; width: 100%; table-layout: fixed; page-break-inside: avoid; break-inside: avoid; }
+  .accept > div { display: table-cell; width: 50%; padding-left: 64px; vertical-align: top; }
+  .accept .who { font-size: 12px; font-weight: bold; color: #171717; }
+  .sign-box { position: relative; margin-top: 12px; width: 200px; height: 66px; background: #fff; border-radius: 6px; text-align: center; }
+  .sign-box + .sign-box { margin-top: 22px; }
+  .sign-box img { max-height: 58px; max-width: 180px; margin-top: 4px; }
+  .sign-box .hint { position: absolute; top: 3px; left: 0; right: 0; font-size: 7.5px; color: #a3a3a3; font-style: italic; }
+
   .info-card { position: absolute; top: 12px; right: 28px; width: 250px; padding: 12px 16px; background: #fff; border-radius: 8px; font-size: 12px; line-height: 1.45; }
   .info-card .number { font-size: 14px; font-weight: bold; color: {{ accent }}; }
   .info-card p { color: #525252; }
@@ -85,18 +112,17 @@
 
   {# Page 1 — lettre d'accompagnement #}
   <div class="page">
-    <div class="banner">{% if logo_uri %}<img src="{{ logo_uri }}" alt="Soken's Digital">{% endif %}</div>
-    <div class="content">
-      <div class="contact">
-        <p class="name">SOKEN'S DIGITAL</p>
+    <div class="banner cover-banner">{% if logo_uri %}<img src="{{ logo_uri }}" alt="Soken's Digital">{% endif %}</div>
+    <div class="content cover">
+      <div class="cover-contact">
         {% for line in address_lines %}<p>{{ line }}</p>{% endfor %}
         {% if settings.company_phone %}<p>Tél : {{ settings.company_phone }}</p>{% endif %}
-        {% if settings.company_email %}<p>Mail : {{ settings.company_email }}</p>{% endif %}
+        {% if settings.company_email %}<p>{{ settings.company_email }}</p>{% endif %}
       </div>
 
-      {% if quote.subject %}<p class="subject">OBJET : {{ quote.subject }}</p>{% endif %}
+      {% if quote.subject %}<p class="cover-subject">OBJET : {{ quote.subject }}</p>{% endif %}
 
-      <div class="letter" style="margin-top: {% if quote.subject %}24px{% else %}40px{% endif %};">
+      <div class="cover-letter">
         <p>Cher partenaire,</p>
         {% for block in intro_paragraphs %}<p>{% for line in block %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>{% endfor %}
       </div>
@@ -156,47 +182,49 @@
     </div>
   </div>
 
-  {# Page 3 — conditions et signatures #}
+  {# Page 3 — conditions et signatures, d'après le modèle papier #}
   <div class="page">
-    <div class="banner">{% if logo_uri %}<img src="{{ logo_uri }}" alt="Soken's Digital">{% endif %}</div>
-    <div class="content">
-      <p class="section-title">CONDITIONS DE PAIEMENT :</p>
-      <ul>
+    <div class="banner cover-banner">{% if logo_uri %}<img src="{{ logo_uri }}" alt="Soken's Digital">{% endif %}</div>
+    <div class="content terms-page">
+      <p class="terms-title">CONDITIONS DE PAIEMENT :</p>
+      <ul class="terms-list">
         {% for term in payment_terms %}
-          <li>{{ term.label }} soit <span class="semi">{{ term.amount }}</span> <span class="muted">({{ term.percentage }}%)</span></li>
+          <li>{{ term.label }} : <strong>{{ term.percentage }}% soit {{ term.amount }}</strong></li>
         {% endfor %}
       </ul>
 
       {% if quote.project_duration %}
-      <p class="mt6 letter">
+      <p class="terms-text">
         Notre équipe s'engage à réaliser la prestation dans une durée de
-        <span class="semi">{{ quote.project_duration }}</span> à compter de la validation du devis
+        <strong>{{ quote.project_duration }}</strong> à compter de la validation du devis
         et du versement du premier acompte.
       </p>
       {% endif %}
 
-      {% if settings.footer_note %}<p class="conditions-nb"><strong>NB : </strong>{{ settings.footer_note }}</p>{% endif %}
+      {% if settings.footer_note %}<p class="terms-text"><strong><u>NB</u> :</strong> <em>{{ settings.footer_note }}</em></p>{% endif %}
 
-      <p class="mt6">En cas d'acceptation, merci de nous renvoyer ce document avec la date et votre signature.</p>
+      <p class="terms-text">En cas d'acceptation, merci de nous renvoyer ce document avec la date et votre signature.</p>
 
-      <p class="mt10 section-title">MOYENS DE PAIEMENT :</p>
-      <ul>{% for method in payment_methods %}<li>{{ method }}</li>{% endfor %}</ul>
+      <p class="terms-title">MOYENS DE PAIEMENT :</p>
+      <ul class="terms-list">{% for method in payment_methods %}<li>{{ method }}</li>{% endfor %}</ul>
 
-      <p class="mt10 section-title">ACCEPTÉ PAR :</p>
-      <div class="signatures">
+      <p class="terms-title">ACCEPTÉ PAR :</p>
+      <div class="accept">
         <div>
           <p class="who">{{ client_label }}</p>
-          <div class="box"><div>
+          <div class="sign-box">
             {% if quote.signature_url %}<img src="{{ quote.signature_url }}" alt="Signature du client">
-            {% else %}<p class="hint">Signature suivi de la mention<br>lu et approuvé</p>{% endif %}
-          </div></div>
+            {% else %}<span class="hint">Signature suivi de la mention lu et approuvé</span>{% endif %}
+          </div>
+          <div class="sign-box"><span class="hint">Date</span></div>
         </div>
         <div>
           <p class="who">SOKEN'S DIGITAL</p>
-          <div class="box"><div>
+          <div class="sign-box">
             {% if settings.company_stamp_url %}<img src="{{ settings.company_stamp_url }}" alt="Cachet Soken's Digital">
-            {% else %}<p class="hint">Signature suivi de la mention<br>lu et approuvé</p>{% endif %}
-          </div></div>
+            {% else %}<span class="hint">Signature suivi de la mention lu et approuvé</span>{% endif %}
+          </div>
+          <div class="sign-box"><span class="hint">Date</span></div>
         </div>
       </div>
     </div>

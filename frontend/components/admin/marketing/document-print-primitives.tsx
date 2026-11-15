@@ -38,14 +38,15 @@ export function Paragraphs({ text, className }: { text: string; className?: stri
   );
 }
 
-export function Banner({ accentColor }: { accentColor: string }) {
+/** `tall` : bandeau plus haut, logo plus grand — page de garde (lettre du devis). */
+export function Banner({ accentColor, tall }: { accentColor: string; tall?: boolean }) {
   return (
     <div
-      className="flex items-center justify-between px-10 py-6"
+      className={`flex items-center justify-between ${tall ? "px-[72px] py-[30px]" : "px-10 py-6"}`}
       style={{ background: accentColor, ...printColorAdjust }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/assets/logo-sokens-digital-white.png" alt="Soken's Digital" className="h-10 w-auto" />
+      <img src="/assets/logo-sokens-digital-white.png" alt="Soken's Digital" className={`${tall ? "h-14" : "h-10"} w-auto`} />
     </div>
   );
 }
