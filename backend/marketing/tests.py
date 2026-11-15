@@ -1846,6 +1846,9 @@ class QuotePdfSendTests(APITestCase):
         self.quote.subject = 'Refonte du site'
         self.quote.save()
         html = render_quote_html(self.quote)
+        # Mêmes trois pages que l'aperçu de l'admin, objet avant la formule d'appel.
+        self.assertEqual(html.count('class="page"'), 3)
+        self.assertLess(html.index('OBJET :'), html.index('Cher partenaire'))
         self.assertIn(self.quote.quote_number, html)
         self.assertIn('Refonte du site', html)
         self.assertIn('Site vitrine', html)
