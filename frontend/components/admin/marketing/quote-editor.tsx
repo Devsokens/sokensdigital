@@ -179,19 +179,21 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
             </p>
           )}
 
+          {/* Sur téléphone, seul le libellé de l'étape en cours s'affiche. */}
           <div className="flex items-center gap-1.5">
             {STEPS.map((label, i) => (
-              <div key={label} className="flex items-center gap-1.5">
+              <div key={label} className="flex min-w-0 items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setStep(i)}
+                  aria-label={label}
                   className={cn(
                     "flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
                     step === i ? "bg-primary text-primary-foreground" : "bg-neutral-100 text-neutral-500 hover:bg-neutral-200"
                   )}
                 >
                   <span className="flex size-4 items-center justify-center rounded-full bg-white/25 text-[0.65rem]">{i + 1}</span>
-                  {label}
+                  <span className={cn("truncate", step !== i && "hidden sm:inline")}>{label}</span>
                 </button>
                 {i < STEPS.length - 1 && <ChevronRight className="size-3.5 text-neutral-300" />}
               </div>
@@ -200,7 +202,7 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
 
           {step === 0 && (
             <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-3 items-start">
+              <div className="grid items-start gap-3 sm:grid-cols-2">
                 <ClientLeadSelector
                   value={clientName}
                   onChange={setClientName}
@@ -257,49 +259,63 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
                   {lines.map((line, i) => {
                     const lineTotal = (Number(line.quantity) || 0) * (Number(line.unit_price) || 0);
                     return (
-                      <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-neutral-200 p-2.5">
+                      // Téléphone : grille 2 colonnes (textes en pleine largeur, Qté et
+                      // prix côte à côte) ; grand écran : tout sur une ou deux lignes.
+                      <div key={i} className="grid grid-cols-2 gap-2 rounded-lg border border-neutral-200 p-2.5 lg:flex lg:flex-wrap lg:items-center">
                         <input
                           value={line.service_title}
                           onChange={(e) => updateLine(i, { service_title: e.target.value })}
                           placeholder="Prestation"
-                          className={cn(inputClass, "min-w-[160px] flex-[2]")}
+                          aria-label="Prestation"
+                          className={cn(inputClass, "col-span-2 lg:min-w-[160px] lg:flex-[2]")}
                         />
                         <input
                           value={line.description}
                           onChange={(e) => updateLine(i, { description: e.target.value })}
                           placeholder="Description"
-                          className={cn(inputClass, "min-w-[160px] flex-[2]")}
+                          aria-label="Description"
+                          className={cn(inputClass, "col-span-2 lg:min-w-[160px] lg:flex-[2]")}
                         />
                         <input
                           type="number"
+                          inputMode="decimal"
                           value={line.quantity}
                           onChange={(e) => updateLine(i, { quantity: e.target.value })}
                           placeholder="Qté"
-                          className={cn(inputClass, "w-20 shrink-0")}
+                          aria-label="Quantité"
+                          className={cn(inputClass, "lg:w-20 lg:shrink-0")}
                         />
                         <input
                           type="number"
+                          inputMode="decimal"
                           value={line.unit_price}
                           onChange={(e) => updateLine(i, { unit_price: e.target.value })}
                           placeholder="Prix unitaire"
-                          className={cn(inputClass, "w-32 shrink-0")}
+                          aria-label="Prix unitaire"
+                          className={cn(inputClass, "lg:w-32 lg:shrink-0")}
                         />
                         <input
                           value={line.amount_label}
                           onChange={(e) => updateLine(i, { amount_label: e.target.value })}
                           placeholder="Montant affiché (ex. Offert)"
-                          className={cn(inputClass, "min-w-[160px] flex-1")}
+                          aria-label="Montant affiché"
+                          className={cn(inputClass, "col-span-2 lg:min-w-[160px] lg:flex-1")}
                         />
-                        <span className="w-28 shrink-0 text-right text-xs text-neutral-500">{formatFcfa(lineTotal)}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeLine(i)}
-                          disabled={lines.length === 1}
-                          aria-label="Retirer la ligne"
-                          className="shrink-0 text-neutral-400 hover:text-destructive disabled:opacity-30"
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
+                        <div className="col-span-2 flex items-center justify-between gap-3 lg:contents">
+                          <span className="text-xs text-neutral-500 lg:w-28 lg:shrink-0 lg:text-right">
+                            <span className="lg:hidden">Total de la ligne : </span>
+                            {formatFcfa(lineTotal)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeLine(i)}
+                            disabled={lines.length === 1}
+                            aria-label="Retirer la ligne"
+                            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-neutral-400 hover:bg-destructive/5 hover:text-destructive disabled:opacity-30 lg:size-auto lg:hover:bg-transparent"
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -377,11 +393,12 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
             </div>
           )}
 
-          <div className="flex items-center justify-between pt-2">
+          {/* Téléphone : actions en pleine largeur, « Annuler » en dessous. */}
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
             <Button type="button" variant="outline" onClick={() => router.push(basePath)} className="rounded-full px-4">
               Annuler
             </Button>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
               {step > 0 && (
                 <Button type="button" variant="outline" onClick={() => setStep((s) => s - 1)} className="rounded-full px-4">
                   Précédent
@@ -392,7 +409,7 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
                   Suivant
                 </Button>
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
                   <Button
                     type="submit"
                     disabled={saving}
@@ -453,7 +470,7 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
           />
         )}
 
-        <div className="xl:sticky xl:top-6 xl:self-start">
+        <div className="min-w-0 xl:sticky xl:top-6 xl:self-start">
           <p className={labelClass}>Aperçu</p>
           {settings ? (
             <>
@@ -483,7 +500,7 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
               </div>
             </>
           ) : (
-            <div className="flex h-40 w-72 items-center justify-center rounded-xl bg-neutral-100">
+            <div className="flex h-40 w-full max-w-72 items-center justify-center rounded-xl bg-neutral-100">
               <Loader2 className="size-5 animate-spin text-neutral-400" />
             </div>
           )}

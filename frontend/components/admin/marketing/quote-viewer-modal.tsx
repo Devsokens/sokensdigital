@@ -1,14 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
-import { Download, Loader2, Mail, Printer, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Loader2, Mail, Printer, X, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getQuote, getQuoteSettings, sendQuote } from "@/lib/api/marketing";
 import type { Lead, Quote, QuoteSettings } from "@/lib/api/types";
 import { QuoteDocumentPages } from "@/components/admin/marketing/quote-document-pages";
 import { SendDocumentModal } from "@/components/admin/marketing/send-document-modal";
 import { cn } from "@/lib/utils";
+
+const STATUS_LABELS: Record<string, string> = {
+  BROUILLON: "Brouillon",
+  ENVOYE: "Envoyé",
+  ACCEPTE: "Accepté",
+  REFUSE: "Refusé",
+};
 
 export function QuoteViewerModal({
   quoteId,
@@ -28,6 +35,17 @@ export function QuoteViewerModal({
   const [loading, setLoading] = useState(!initialQuote);
   const [error, setError] = useState<string | null>(null);
   const [scale, setScale] = useState(0.85);
+  const pagesAreaRef = useRef<HTMLDivElement>(null);
+
+  // À l'ouverture, la page A4 (793 px) est ajustée à la largeur disponible :
+  // lisible en entier sur téléphone, 85 % sur grand écran. Le zoom reste libre ensuite.
+  useEffect(() => {
+    const width = pagesAreaRef.current?.clientWidth;
+    if (!width) return;
+    const fit = Number(Math.min(0.85, (width - 24) / 793).toFixed(2));
+    const frame = requestAnimationFrame(() => setScale(fit));
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const [sendOpen, setSendOpen] = useState(false);
 
   useEffect(() => {
@@ -85,15 +103,17 @@ export function QuoteViewerModal({
           />
           <Dialog.Popup
             className={cn(
-              "fixed top-1/2 left-1/2 z-50 flex h-[94vh] w-[calc(100%-2rem)] max-w-5xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-[#dfe1e6] shadow-2xl print:m-0 print:h-auto print:w-full print:max-w-none print:translate-x-0 print:translate-y-0 print:rounded-none print:bg-white print:p-0",
+              "fixed top-1/2 left-1/2 z-50 flex h-dvh w-full max-w-5xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden bg-[#dfe1e6] shadow-2xl sm:h-[94vh] sm:w-[calc(100%-2rem)] sm:rounded-2xl print:m-0 print:h-auto print:w-full print:max-w-none print:translate-x-0 print:translate-y-0 print:rounded-none print:bg-white print:p-0",
               "transition-all duration-200 ease-out",
               "data-[starting-style]:scale-95 data-[starting-style]:opacity-0",
               "data-[ending-style]:scale-95 data-[ending-style]:opacity-0"
             )}
           >
             {/* Barre d'outils du visualiseur */}
-            <div className="flex shrink-0 items-center justify-between border-b border-neutral-300 bg-white px-5 py-3 shadow-sm print:hidden">
-              <div className="flex items-center gap-3">
+            {/* Téléphone : titre et fermeture en haut, outils dessous ; libellés
+              * des boutons réduits à leur icône. */}
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-neutral-300 bg-white px-3 py-2.5 shadow-sm sm:px-5 sm:py-3 print:hidden">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
                 <Dialog.Title className="text-base font-semibold text-neutral-900">
                   Devis {quote?.quote_number || quoteNumber}
                 </Dialog.Title>
@@ -113,14 +133,14 @@ export function QuoteViewerModal({
                         : "bg-neutral-100 text-neutral-600"
                     )}
                   >
-                    {quote.status}
+                    {STATUS_LABELS[quote.status] ?? quote.status}
                   </span>
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex w-full items-center gap-2 sm:w-auto">
                 {/* Contrôles de zoom */}
-                <div className="mr-2 flex items-center rounded-lg border border-neutral-200 bg-neutral-50 px-1 py-0.5">
+                <div className="flex items-center rounded-lg border border-neutral-200 bg-neutral-50 px-1 py-0.5 sm:mr-2">
                   <button
                     type="button"
                     onClick={() => setScale((s) => Math.max(0.4, Number((s - 0.1).toFixed(2))))}
@@ -146,30 +166,40 @@ export function QuoteViewerModal({
                   type="button"
                   variant="outline"
                   onClick={() => setSendOpen(true)}
-                  className="gap-1.5 rounded-full px-3.5 text-xs"
+                  aria-label="Envoyer par mail"
+                  className="ml-auto gap-1.5 rounded-full px-3 text-xs sm:ml-0 sm:px-3.5"
                 >
-                  <Mail className="size-3.5 text-neutral-600" /> Envoyer par mail
+                  <Mail className="size-3.5 text-neutral-600" /> <span className="hidden sm:inline">Envoyer par mail</span>
+                  <span className="sm:hidden">Envoyer</span>
                 </Button>
 
                 <Button
                   type="button"
                   onClick={handlePrint}
-                  className="gap-1.5 rounded-full px-4 text-xs shadow-sm"
+                  aria-label="Imprimer ou télécharger en PDF"
+                  className="gap-1.5 rounded-full px-3 text-xs shadow-sm sm:px-4"
                 >
-                  <Printer className="size-3.5" /> Imprimer / Télécharger en PDF
+                  <Printer className="size-3.5" /> <span className="hidden sm:inline">Imprimer / Télécharger en PDF</span>
+                  <span className="sm:hidden">PDF</span>
                 </Button>
 
                 <Dialog.Close
                   aria-label="Fermer"
-                  className="rounded-full p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900"
+                  className="hidden rounded-full p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 sm:block"
                 >
                   <X className="size-4" />
                 </Dialog.Close>
               </div>
+              <Dialog.Close
+                aria-label="Fermer"
+                className="order-first ml-auto rounded-full p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 sm:hidden"
+              >
+                <X className="size-5" />
+              </Dialog.Close>
             </div>
 
             {/* Zone d'affichage défilable des pages A4 */}
-            <div className="relative flex-1 overflow-y-auto p-6 print:overflow-visible print:p-0">
+            <div ref={pagesAreaRef} className="relative flex-1 overflow-auto p-3 sm:p-6 print:overflow-visible print:p-0">
               {loading && (
                 <div className="flex h-64 items-center justify-center">
                   <Loader2 className="size-8 animate-spin text-neutral-400" />
@@ -185,12 +215,8 @@ export function QuoteViewerModal({
               {quote && settings && (
                 <div
                   id="printable-quote-area"
-                  className="flex flex-col items-center gap-6 print:gap-0"
-                  style={{
-                    transform: `scale(${scale})`,
-                    transformOrigin: "top center",
-                    transition: "transform 0.15s ease-out",
-                  }}
+                  className="flex flex-col items-center gap-6 [zoom:var(--quote-zoom)] print:gap-0 print:[zoom:1]"
+                  style={{ "--quote-zoom": scale } as React.CSSProperties}
                 >
                   <QuoteDocumentPages
                     quote={quote}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -8,9 +8,9 @@ import { cn } from "@/lib/utils";
 // Page component: 210mm/297mm).
 const PAGE_W = 793;
 const PAGE_H = 1122;
-const SCALE = 0.55;
-const CARD_WIDTH = Math.round(PAGE_W * SCALE);
-const CARD_HEIGHT = Math.round(PAGE_H * SCALE);
+/** Échelle sur grand écran ; sur téléphone la carte rétrécit à la largeur
+ * disponible (l'échelle baisse d'autant). */
+const MAX_SCALE = 0.55;
 
 /** The document pages as a carousel card in the (right-hand, alongside
  * the form) preview column — one page shown at a time, large enough to
@@ -24,12 +24,24 @@ export function DocumentPreviewCards({
 }) {
   const [active, setActive] = useState(0);
   const current = Math.min(active, pageCount - 1);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(MAX_SCALE);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setScale(Math.min(MAX_SCALE, entry.contentRect.width / PAGE_W));
+    });
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <div className="w-fit">
+    <div className="w-full" style={{ maxWidth: Math.round(PAGE_W * MAX_SCALE) }}>
       <div className="relative overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
-        <div className="overflow-hidden bg-neutral-100" style={{ width: CARD_WIDTH, height: CARD_HEIGHT }}>
-          <div style={{ transform: `scale(${SCALE})`, transformOrigin: "top left" }}>
+        <div ref={frameRef} className="w-full overflow-hidden bg-neutral-100" style={{ height: Math.round(PAGE_H * scale) }}>
+          <div style={{ transform: `scale(${scale})`, transformOrigin: "top left" }}>
             {renderPage(current)}
           </div>
         </div>
@@ -40,7 +52,7 @@ export function DocumentPreviewCards({
               type="button"
               onClick={() => setActive((p) => (p - 1 + pageCount) % pageCount)}
               aria-label="Page précédente"
-              className="absolute top-1/2 left-2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-neutral-700 shadow-md hover:bg-white"
+              className="absolute top-1/2 left-2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-neutral-700 shadow-md hover:bg-white"
             >
               <ChevronLeft className="size-4" />
             </button>
@@ -48,7 +60,7 @@ export function DocumentPreviewCards({
               type="button"
               onClick={() => setActive((p) => (p + 1) % pageCount)}
               aria-label="Page suivante"
-              className="absolute top-1/2 right-2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-neutral-700 shadow-md hover:bg-white"
+              className="absolute top-1/2 right-2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-neutral-700 shadow-md hover:bg-white"
             >
               <ChevronRight className="size-4" />
             </button>
