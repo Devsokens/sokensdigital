@@ -48,7 +48,7 @@ export function InvoiceViewer({
         />
         <Dialog.Popup
           className={cn(
-            "fixed inset-y-0 right-0 z-50 flex h-dvh w-full max-w-4xl flex-col bg-white shadow-2xl",
+            "fixed inset-y-0 right-0 z-50 flex h-dvh w-full max-w-5xl flex-col bg-white shadow-2xl",
             "transition-transform duration-300 ease-out",
             "data-[starting-style]:translate-x-full data-[ending-style]:translate-x-full"
           )}

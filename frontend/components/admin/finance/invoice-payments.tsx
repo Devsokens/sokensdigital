@@ -133,7 +133,9 @@ export function InvoicePayments({ invoice, onChanged }: { invoice: Invoice; onCh
         />
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-neutral-200">
+      {/* Valeurs sur une seule ligne, sans défilement : le panneau qui affiche
+        * ce tableau est assez large pour toutes les colonnes. */}
+      <div className="overflow-hidden rounded-xl border border-neutral-200">
         <table className="table-responsive w-full text-sm [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
           <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500">
             <tr>
