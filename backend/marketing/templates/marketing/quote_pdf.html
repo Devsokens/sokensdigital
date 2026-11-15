@@ -3,77 +3,82 @@
   Copie fidèle de l'aperçu de l'admin (quote-document-pages.tsx +
   document-print-primitives.tsx) : trois pages A4 — lettre, devis,
   conditions et signatures. Les tailles reprennent les classes Tailwind de
-  l'aperçu (px-10 = 40px, text-sm = 14px…). Modifier les deux ensemble.
+  l'aperçu, en un peu plus compact (voir le style). Modifier les deux ensemble.
 {% endcomment %}
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <title>Devis {{ quote.quote_number }}</title>
 <style>
+  /* Plus compact que l'aperçu écran (marges latérales 28px, texte 12.5px) pour
+   * que le devis tienne sur sa page. Si le tableau déborde, il continue sur la
+   * page suivante : en-tête de colonnes répété, lignes jamais coupées, et les
+   * marges du contenu reprises en haut et en bas de chaque page (clone). */
   @page { size: A4; margin: 0; background: #f2f3f5; }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: "DejaVu Sans", Arial, sans-serif; color: #171717; font-size: 14px; line-height: 1.43; }
+  body { margin: 0; font-family: "DejaVu Sans", Arial, sans-serif; color: #171717; font-size: 12.5px; line-height: 1.45; }
   p { margin: 0; }
 
   .page { page-break-after: always; background: #f2f3f5; }
   .page:last-child { page-break-after: auto; }
-  .banner { position: relative; padding: 24px 40px; background: {{ accent }}; }
-  .banner img { height: 40px; width: auto; display: block; }
-  .content { padding: 32px 40px; }
+  .banner { position: relative; padding: 16px 28px; background: {{ accent }}; }
+  .banner img { height: 34px; width: auto; display: block; }
+  .content { padding: 22px 28px 26px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 
-  .contact { color: #404040; font-size: 14px; }
-  .contact .name { font-size: 16px; font-weight: bold; color: #171717; }
+  .contact { color: #404040; font-size: 12px; line-height: 1.4; }
+  .contact .name { font-size: 14px; font-weight: bold; color: #171717; }
 
-  .subject { margin-top: 40px; font-weight: bold; letter-spacing: 0.025em; text-transform: uppercase; color: #171717; }
-  .letter { color: #262626; line-height: 1.625; }
-  .letter p + p { margin-top: 16px; }
+  .subject { margin-top: 28px; font-weight: bold; letter-spacing: 0.025em; text-transform: uppercase; color: #171717; }
+  .letter { color: #262626; line-height: 1.6; }
+  .letter p + p { margin-top: 12px; }
 
-  .info-card { position: absolute; top: 16px; right: 40px; width: 288px; padding: 16px 20px; background: #fff; border-radius: 8px; font-size: 14px; }
-  .info-card .number { font-size: 16px; font-weight: bold; color: {{ accent }}; }
+  .info-card { position: absolute; top: 12px; right: 28px; width: 250px; padding: 12px 16px; background: #fff; border-radius: 8px; font-size: 12px; line-height: 1.45; }
+  .info-card .number { font-size: 14px; font-weight: bold; color: {{ accent }}; }
   .info-card p { color: #525252; }
-  .info-card .first { margin-top: 4px; }
+  .info-card .first { margin-top: 2px; }
   .duration { font-weight: 600; color: #dc2626; }
 
-  .section-title { font-size: 18px; font-weight: bold; color: {{ accent }}; }
-  .description { margin-top: 32px; }
-  .description p.body { margin-top: 8px; color: #262626; line-height: 1.625; }
+  .section-title { font-size: 15px; font-weight: bold; color: {{ accent }}; }
+  .description { margin-top: 20px; }
+  .description p.body { margin-top: 6px; color: #262626; line-height: 1.55; }
 
-  table.lines { margin-top: 24px; width: 100%; border-collapse: collapse; font-size: 14px; }
-  table.lines th { background: {{ accent }}; color: #fff; font-weight: 600; text-align: left; padding: 10px 16px; }
+  table.lines { margin-top: 16px; width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.lines thead { display: table-header-group; }
+  table.lines th { background: {{ accent }}; color: #fff; font-weight: 600; text-align: left; padding: 8px 12px; }
   table.lines th.amount, table.lines td.amount { text-align: right; }
-  table.lines td { background: #fff; padding: 12px 16px; vertical-align: top; border-bottom: 1px solid #e5e5e5; }
-  table.lines td.title { font-weight: 500; color: #171717; width: 25%; }
+  table.lines td { background: #fff; padding: 8px 12px; vertical-align: top; border-bottom: 1px solid #e5e5e5; line-height: 1.4; }
+  table.lines td.title { font-weight: 500; color: #171717; width: 26%; }
   table.lines td.desc { color: #525252; }
-  table.lines td.amount { color: #171717; width: 20%; white-space: nowrap; }
-  table.lines tr { page-break-inside: avoid; }
+  table.lines td.amount { color: #171717; width: 19%; white-space: nowrap; }
+  table.lines tr { page-break-inside: avoid; break-inside: avoid; }
 
-  .totals { margin-top: 24px; display: table; width: 100%; }
+  .totals { margin-top: 16px; display: table; width: 100%; page-break-inside: avoid; break-inside: avoid; }
   .totals > div { display: table-cell; vertical-align: bottom; }
-  .nb { max-width: 448px; padding-right: 24px; font-size: 12px; line-height: 1.625; color: #737373; font-style: italic; }
+  .nb { max-width: 420px; padding-right: 20px; font-size: 11px; line-height: 1.55; color: #737373; font-style: italic; }
   .nb strong { font-style: normal; font-weight: 600; }
   .total-box { text-align: right; width: 1%; white-space: nowrap; }
-  .total-box div { display: inline-block; padding: 12px 24px; border-radius: 8px; background: {{ accent }}; color: #fff; text-align: right; }
-  .total-box .detail { font-size: 12px; opacity: 0.8; }
-  .total-box .grand { font-size: 18px; font-weight: bold; }
+  .total-box div { display: inline-block; padding: 10px 18px; border-radius: 8px; background: {{ accent }}; color: #fff; text-align: right; }
+  .total-box .detail { font-size: 11px; opacity: 0.8; }
+  .total-box .grand { font-size: 15px; font-weight: bold; }
 
-  ul { margin: 12px 0 0; padding-left: 20px; color: #262626; }
-  ul li + li { margin-top: 6px; }
+  ul { margin: 8px 0 0; padding-left: 18px; color: #262626; }
+  ul li + li { margin-top: 4px; }
   .muted { color: #737373; }
   .semi { font-weight: 600; }
-  .mt6 { margin-top: 24px; }
-  .mt10 { margin-top: 40px; }
-  .conditions-nb { margin-top: 24px; font-size: 12px; line-height: 1.625; color: #525252; font-style: italic; }
+  .mt6 { margin-top: 18px; }
+  .mt10 { margin-top: 26px; }
+  .conditions-nb { margin-top: 18px; font-size: 11px; line-height: 1.55; color: #525252; font-style: italic; }
   .conditions-nb strong { font-style: normal; font-weight: 600; }
 
-  .signatures { margin-top: 16px; display: table; width: 100%; table-layout: fixed; }
+  .signatures { margin-top: 12px; display: table; width: 100%; table-layout: fixed; page-break-inside: avoid; break-inside: avoid; }
   .signatures > div { display: table-cell; width: 50%; }
-  .signatures > div:first-child { padding-right: 16px; }
-  .signatures > div:last-child { padding-left: 16px; }
+  .signatures > div:first-child { padding-right: 14px; }
+  .signatures > div:last-child { padding-left: 14px; }
   .signatures .who { font-weight: 600; color: #171717; }
-  .signatures .box { margin-top: 8px; height: 96px; background: #fff; border-radius: 8px; text-align: center; display: table; width: 100%; }
+  .signatures .box { margin-top: 6px; height: 88px; background: #fff; border-radius: 8px; text-align: center; display: table; width: 100%; }
   .signatures .box > div { display: table-cell; vertical-align: middle; }
-  .signatures .box img { max-height: 80px; max-width: 100%; }
-  .signatures .hint { font-size: 12px; color: #a3a3a3; font-style: italic; }
+  .signatures .box img { max-height: 74px; max-width: 100%; }
+  .signatures .hint { font-size: 11px; color: #a3a3a3; font-style: italic; }
 </style>
 </head>
 <body>
