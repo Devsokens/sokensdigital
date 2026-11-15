@@ -1,6 +1,8 @@
 import base64
 from decimal import Decimal
 
+import logging
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -83,6 +85,8 @@ PUBLIC_REPORT_RATE_WINDOW = 60  # seconds
 PUBLIC_TESTIMONIAL_RATE_LIMIT = 3  # per IP
 PUBLIC_TESTIMONIAL_RATE_WINDOW = 60  # seconds
 
+
+logger = logging.getLogger(__name__)
 
 @extend_schema(
     tags=['Marketing & Commercial'],
@@ -856,9 +860,8 @@ class QuoteViewSet(viewsets.ModelViewSet):
     @extend_schema(
         tags=['Marketing & Commercial'],
         summary='Send a quote',
-        description='BROUILLON -> ENVOYE. NOTE: no PDF generation, no email — no PDF '
-        'library or email backend configured. The client is expected to open the '
-        'public tracking link (its URL is built from tracking_token) themselves.',
+        description='BROUILLON -> ENVOYE. Le devis est généré en PDF (WeasyPrint) et '
+        'envoyé en pièce jointe aux adresses du lead (ou `recipient_emails`), sans lien.',
         responses={200: QuoteSerializer},
     )
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
@@ -886,26 +889,73 @@ class QuoteViewSet(viewsets.ModelViewSet):
                 if isinstance(c, dict) and c.get('email') and c.get('email') not in recipient_emails:
                     recipient_emails.append(c['email'])
 
-        tracking_url = f'{settings.PUBLIC_SITE_URL}/devis/{quote.tracking_token}/'
         custom_message = request.data.get('message') or (
-            f"Veuillez trouver ci-joint les détails de notre proposition pour le devis {quote.quote_number}."
+            f"Veuillez trouver ci-joint notre devis {quote.quote_number}."
         )
 
+        # Le devis part en PDF joint au mail — pas de lien à ouvrir.
         from core import mailer
+        from marketing.quote_pdf import build_quote_pdf
+        try:
+            pdf_bytes = build_quote_pdf(quote)
+        except Exception:
+            logger.exception('PDF du devis %s non généré', quote.pk)
+            quote.status = Quote.Status.BROUILLON
+            quote.sent_at = None
+            quote.save(update_fields=['status', 'sent_at'])
+            return Response(
+                {'detail': "Le PDF du devis n'a pas pu être généré : devis non envoyé. Réessayez."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        attachment = mailer.Attachment(filename=f'Devis-{quote.quote_number}.pdf', content=pdf_bytes)
+
+        failed = []
         for dest in recipient_emails:
             body = (
                 f"Bonjour {quote.client_name or ''},\n\n"
                 f"{custom_message}\n\n"
-                f"Montant Total TTC : {quote.total_ttc} FCFA\n"
-                f"Vous pouvez consulter et valider votre devis en ligne sur ce lien :\n{tracking_url}\n\n"
+                f"Montant total TTC : {quote.total_ttc} FCFA.\n"
+                "Le devis est joint à ce message au format PDF.\n\n"
                 "Cordialement,\nL'équipe Soken's Digital"
             )
             try:
-                mailer.send_mail(dest, f"Devis {quote.quote_number} — Soken's Digital", body)
+                sent = mailer.send_mail(dest, f"Devis {quote.quote_number} — Soken's Digital", body, attachments=[attachment])
+                if sent is False:
+                    failed.append(dest)
             except Exception:
-                pass
+                logger.exception('Envoi du devis %s à %s impossible', quote.pk, dest)
+                failed.append(dest)
 
+        data = QuoteSerializer(quote).data
+        if not recipient_emails:
+            data['email_warning'] = "Aucune adresse e-mail : le devis est marqué envoyé mais aucun mail n'est parti."
+        elif failed:
+            data['email_warning'] = f"Envoi impossible vers : {', '.join(failed)}."
         return Response(QuoteSerializer(quote).data)
+
+    @extend_schema(
+        tags=['Marketing & Commercial'],
+        summary='Download the quote as PDF',
+        description="Même PDF que celui joint au mail du client. Accès : ceux qui "
+        "voient déjà ce devis (get_object applique le périmètre du viewset).",
+        responses={(200, 'application/pdf'): bytes},
+    )
+    @action(detail=True, methods=['get'], url_path='pdf', permission_classes=[permissions.IsAuthenticated])
+    def pdf(self, request, pk=None):
+        from django.http import HttpResponse
+        from marketing.quote_pdf import build_quote_pdf
+        quote = self.get_object()
+        try:
+            pdf_bytes = build_quote_pdf(quote)
+        except Exception:
+            logger.exception('PDF du devis %s non généré', quote.pk)
+            return Response(
+                {'detail': "La génération PDF n'est pas disponible pour le moment."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="Devis-{quote.quote_number}.pdf"'
+        return response
 
     @extend_schema(
         tags=['Marketing & Commercial'],

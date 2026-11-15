@@ -486,3 +486,23 @@ export function rejectLead(leadId: string, reason: string) {
     body: JSON.stringify({ reason }),
   });
 }
+
+/** Télécharge le PDF du devis (le même que celui joint au mail du client).
+ * fetch direct : apiFetch lit du JSON, ici la réponse est un fichier. */
+export async function downloadQuotePdf(id: string, quoteNumber: string) {
+  const { auth } = await import("@/lib/firebase/config");
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  const response = await fetch(`${base}/api/v1/marketing/quotes/${id}/pdf/`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) throw new Error("Téléchargement du PDF impossible.");
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `Devis-${quoteNumber}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}

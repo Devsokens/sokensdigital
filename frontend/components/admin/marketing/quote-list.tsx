@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Loader2, Plus, Trash2, Send, Copy, CopyPlus, Printer, Settings, Receipt, Stamp, MoreHorizontal, Pencil } from "lucide-react";
+import { Loader2, Plus, Trash2, Send, Copy, CopyPlus, Printer, Download, Settings, Receipt, Stamp, MoreHorizontal, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetClose } from "@/components/ui/sheet";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -17,8 +17,7 @@ import {
   cloneQuote,
   convertQuoteToInvoice,
   getQuoteSettings,
-  updateQuoteSettings,
-} from "@/lib/api/marketing";
+  updateQuoteSettings, downloadQuotePdf } from "@/lib/api/marketing";
 import type { Quote, QuoteStatus, QuotePaymentTerm, QuoteSettings } from "@/lib/api/types";
 import { QuoteViewerModal } from "@/components/admin/marketing/quote-viewer-modal";
 import { ConfirmModal } from "@/components/admin/confirm-modal";
@@ -201,6 +200,13 @@ export function QuoteList({ basePath = "/admin/marketing/devis" }: { basePath?: 
                         className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50"
                       >
                         <Printer className="size-3.5" /> Aperçu / PDF
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => downloadQuotePdf(quote.id, quote.quote_number).catch(() => alert("Téléchargement du PDF impossible."))}
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50"
+                      >
+                        <Download className="size-3.5" /> Télécharger le PDF
                       </button>
                       <Link
                         href={`${basePath}/${quote.id}`}

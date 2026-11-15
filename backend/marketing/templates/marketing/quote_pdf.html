@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Devis {{ quote.quote_number }}</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm; @bottom-center { content: "Page " counter(page) " / " counter(pages); font-size: 8pt; color: #888; } }
+  body { font-family: "DejaVu Sans", Arial, sans-serif; font-size: 9.5pt; color: #1a1a1a; line-height: 1.45; }
+  .head { display: table; width: 100%; margin-bottom: 18px; }
+  .head > div { display: table-cell; vertical-align: top; }
+  .brand h1 { margin: 0; font-size: 17pt; letter-spacing: 0.5px; }
+  .brand p { margin: 2px 0; color: #555; font-size: 8.5pt; }
+  .meta { text-align: right; }
+  .meta .title { font-size: 20pt; font-weight: bold; color: #0e7490; margin: 0 0 6px; }
+  .meta p { margin: 1px 0; }
+  .client { margin: 10px 0 16px; padding: 10px 12px; background: #f4f7f8; border-left: 3px solid #0e7490; }
+  .label { color: #666; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.5px; }
+  h2 { font-size: 11pt; margin: 18px 0 6px; color: #0e7490; }
+  table.lines { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  table.lines th { background: #0e7490; color: #fff; font-size: 8.5pt; text-align: left; padding: 6px 8px; }
+  table.lines td { padding: 6px 8px; border-bottom: 1px solid #e3e3e3; vertical-align: top; }
+  .num { text-align: right; white-space: nowrap; }
+  .desc { color: #555; font-size: 8.5pt; }
+  table.totals { margin-left: auto; margin-top: 10px; border-collapse: collapse; min-width: 45%; }
+  table.totals td { padding: 4px 8px; }
+  table.totals tr.grand td { font-weight: bold; font-size: 11pt; border-top: 2px solid #0e7490; }
+  .terms td { padding: 3px 8px; }
+  .sign { margin-top: 26px; display: table; width: 100%; }
+  .sign > div { display: table-cell; width: 50%; vertical-align: top; }
+  .sign img { max-height: 70px; max-width: 180px; }
+  .footer { margin-top: 24px; font-size: 8pt; color: #777; border-top: 1px solid #ddd; padding-top: 8px; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="brand">
+      {% if logo_url %}<img src="{{ logo_url }}" alt="" style="max-height: 46px; max-width: 200px;"><br>{% endif %}
+      <h1>SOKEN'S DIGITAL</h1>
+      {% if settings.company_address %}<p>{{ settings.company_address|linebreaksbr }}</p>{% endif %}
+      {% if settings.company_phone %}<p>Tél. : {{ settings.company_phone }}</p>{% endif %}
+      {% if settings.company_email %}<p>{{ settings.company_email }}</p>{% endif %}
+    </div>
+    <div class="meta">
+      <p class="title">DEVIS</p>
+      <p><strong>N° {{ quote.quote_number }}</strong>{% if quote.version > 1 %} — version {{ quote.version }}{% endif %}</p>
+      <p>Date : {{ quote.issue_date|date:"d/m/Y" }}</p>
+      {% if quote.expiry_date %}<p>Valable jusqu'au : {{ quote.expiry_date|date:"d/m/Y" }}</p>{% endif %}
+    </div>
+  </div>
+
+  <div class="client">
+    <div class="label">Client</div>
+    <strong>{{ quote.client_name|default:"—" }}</strong>
+    {% if quote.lead and quote.lead.email %}<br>{{ quote.lead.email }}{% endif %}
+  </div>
+
+  {% if quote.subject %}<p><span class="label">Objet :</span> <strong>{{ quote.subject }}</strong></p>{% endif %}
+  {% if quote.intro_message %}<p>{{ quote.intro_message|linebreaksbr }}</p>{% endif %}
+  {% if quote.description %}<p>{{ quote.description|linebreaksbr }}</p>{% endif %}
+  {% if quote.project_duration %}<p><span class="label">Durée du projet :</span> {{ quote.project_duration }}</p>{% endif %}
+
+  <h2>Prestations</h2>
+  <table class="lines">
+    <thead><tr><th>Prestation</th><th class="num">Qté</th><th class="num">Prix unitaire</th><th class="num">Total HT</th></tr></thead>
+    <tbody>
+    {% for line in lines %}
+      <tr>
+        <td><strong>{{ line.service_title }}</strong>{% if line.description %}<div class="desc">{{ line.description|linebreaksbr }}</div>{% endif %}</td>
+        <td class="num">{{ line.quantity }}</td>
+        <td class="num">{{ line.unit_price }} FCFA</td>
+        <td class="num">{{ line.total_line }} FCFA</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <table class="totals">
+    <tr><td>Sous-total HT</td><td class="num">{{ subtotal }} FCFA</td></tr>
+    {% if quote.discount_amount %}<tr><td>Remise</td><td class="num">− {{ discount }} FCFA</td></tr>{% endif %}
+    <tr><td>Total HT</td><td class="num">{{ total_ht }} FCFA</td></tr>
+    <tr><td>TVA ({{ vat_percent }} %)</td><td class="num">{{ vat_amount }} FCFA</td></tr>
+    <tr class="grand"><td>Total TTC</td><td class="num">{{ total_ttc }} FCFA</td></tr>
+  </table>
+
+  {% if payment_terms %}
+  <h2>Modalités de paiement</h2>
+  <table class="terms">
+    {% for term in payment_terms %}<tr><td>{{ term.label }}</td><td class="num">{{ term.percentage }} %</td><td class="num">{{ term.amount }} FCFA HT</td></tr>{% endfor %}
+  </table>
+  {% endif %}
+  {% if payment_methods %}<p><span class="label">Moyens de paiement :</span> {{ payment_methods }}</p>{% endif %}
+
+  <div class="sign">
+    <div>
+      <div class="label">Pour Soken's Digital</div>
+      {% if settings.company_stamp_url %}<img src="{{ settings.company_stamp_url }}" alt="Cachet">{% endif %}
+    </div>
+    <div>
+      <div class="label">Bon pour accord — le client</div>
+      {% if quote.signature_url %}<img src="{{ quote.signature_url }}" alt="Signature du client"><br>Signé le {{ quote.signed_at|date:"d/m/Y" }}{% else %}<p style="color:#999;">Date, nom et signature</p>{% endif %}
+    </div>
+  </div>
+
+  <div class="footer">
+    {% if settings.footer_note %}{{ settings.footer_note|linebreaksbr }}<br>{% endif %}
+    Devis généré le {{ now|date:"d/m/Y" }} — Soken's Digital
+  </div>
+</body>
+</html>

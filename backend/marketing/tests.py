@@ -15,7 +15,7 @@ from core.constants import (
     ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN,
 )
 from core.models import Role, User
-from marketing.models import BlogPost, Lead, PageSection, Quote, ShowcaseProject, SocialPost, Specification
+from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, ShowcaseProject, SocialPost, Specification
 
 
 def _give_role(user, name):
@@ -1804,3 +1804,36 @@ class BlogCommentModerationViewSetTests(APITestCase):
         response = self.client_outsider.delete('/api/v1/marketing/cms/blog-comments/abc123/')
         self.assertEqual(response.status_code, 403)
         mock_delete.assert_not_called()
+
+
+class QuotePdfSendTests(APITestCase):
+    """Le devis part en PDF joint (sans lien) et se télécharge en admin."""
+
+    def setUp(self):
+        from core.constants import ROLE_COMMERCIAL
+        self.commercial = User.objects.create(email='com@sokensdigital.com', first_name='Com')
+        self.commercial.roles.add(Role.objects.get_or_create(name=ROLE_COMMERCIAL)[0])
+        self.client_c = APIClient()
+        self.client_c.force_authenticate(user=self.commercial)
+        self.lead = Lead.objects.create(company_name='ACME', email='client@acme.test', created_by=self.commercial) if hasattr(Lead, 'created_by') else Lead.objects.create(company_name='ACME', email='client@acme.test')
+        self.quote = Quote.objects.create(lead=self.lead, created_by=self.commercial, client_name='ACME')
+        QuoteLine.objects.create(quote=self.quote, service_title='Site vitrine', quantity=Decimal('1'), unit_price=Decimal('500000'))
+
+    def test_send_attaches_pdf_without_link(self):
+        from unittest.mock import patch as _patch
+        with _patch('core.mailer.send_mail', return_value=True) as fake_send:
+            res = self.client_c.post(f'/api/v1/marketing/quotes/{self.quote.id}/send/', {}, format='json')
+        self.assertEqual(res.status_code, 200, res.content)
+        args, kwargs = fake_send.call_args
+        self.assertEqual(args[0], 'client@acme.test')
+        self.assertNotIn('/devis/', args[2])
+        attachment = kwargs['attachments'][0]
+        self.assertEqual(attachment.filename, f'Devis-{self.quote.quote_number}.pdf')
+        self.assertEqual(attachment.mimetype, 'application/pdf')
+
+    def test_admin_can_download_pdf(self):
+        res = self.client_c.get(f'/api/v1/marketing/quotes/{self.quote.id}/pdf/')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res['Content-Type'], 'application/pdf')
+        self.assertIn('attachment', res['Content-Disposition'])
+        self.assertEqual(APIClient().get(f'/api/v1/marketing/quotes/{self.quote.id}/pdf/').status_code, 401)
