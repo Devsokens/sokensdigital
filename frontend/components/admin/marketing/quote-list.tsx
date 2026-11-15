@@ -64,10 +64,12 @@ export function QuoteList({ basePath = "/admin/marketing/devis" }: { basePath?: 
   async function handleSend(quote: Quote) {
     setBusyId(quote.id);
     try {
-      await sendQuote(quote.id);
+      const sent = await sendQuote(quote.id);
+      if (sent.email_warning) alert(sent.email_warning);
       load();
-    } catch {
-      setError(`Impossible d'envoyer "${quote.quote_number}" — vérifie qu'il a au moins une ligne.`);
+    } catch (err) {
+      const detail = err instanceof ApiError ? (err.body as { detail?: string } | null)?.detail : undefined;
+      setError(detail ?? `Impossible d'envoyer "${quote.quote_number}" — vérifie qu'il a au moins une ligne.`);
     } finally {
       setBusyId(null);
     }
@@ -203,7 +205,7 @@ export function QuoteList({ basePath = "/admin/marketing/devis" }: { basePath?: 
                       </button>
                       <button
                         type="button"
-                        onClick={() => downloadQuotePdf(quote.id, quote.quote_number).catch(() => alert("Téléchargement du PDF impossible."))}
+                        onClick={() => downloadQuotePdf(quote.id, quote.quote_number).catch((err: Error) => alert(err.message))}
                         className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50"
                       >
                         <Download className="size-3.5" /> Télécharger le PDF

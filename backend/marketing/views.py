@@ -937,7 +937,7 @@ class QuoteViewSet(viewsets.ModelViewSet):
             data['email_warning'] = "Aucune adresse e-mail : le devis est marqué envoyé mais aucun mail n'est parti."
         elif failed:
             data['email_warning'] = f"Envoi impossible vers : {', '.join(failed)}."
-        return Response(QuoteSerializer(quote).data)
+        return Response(data)
 
     @extend_schema(
         tags=['Marketing & Commercial'],

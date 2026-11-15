@@ -26,6 +26,12 @@ def build_quote_pdf(quote) -> bytes:
     _require_weasyprint()
     from weasyprint import HTML
 
+    return HTML(string=render_quote_html(quote)).write_pdf()
+
+
+def render_quote_html(quote) -> str:
+    """HTML du devis, avant conversion en PDF — séparé pour être testé sans
+    WeasyPrint (indisponible en dev Windows)."""
     settings_obj = QuoteSettings.load()
     site = SiteSettings.load()
     lines = list(quote.lines.all())
@@ -71,5 +77,4 @@ def build_quote_pdf(quote) -> bytes:
         'show_ttc': settings_obj.amount_basis != QuoteSettings.AmountBasis.HT,
         'now': timezone.now(),
     }
-    html = render_to_string('marketing/quote_pdf.html', context)
-    return HTML(string=html).write_pdf()
+    return render_to_string('marketing/quote_pdf.html', context)

@@ -1831,6 +1831,26 @@ class QuotePdfSendTests(APITestCase):
         self.assertEqual(attachment.filename, f'Devis-{self.quote.quote_number}.pdf')
         self.assertEqual(attachment.mimetype, 'application/pdf')
 
+    def test_failed_email_is_reported(self):
+        """Un mail qui ne part pas doit être signalé à l'admin (email_warning),
+        pas noyé dans une réponse « envoyé » sans réserve."""
+        from unittest.mock import patch as _patch
+        with _patch('core.mailer.send_mail', return_value=False):
+            res = self.client_c.post(f'/api/v1/marketing/quotes/{self.quote.id}/send/', {}, format='json')
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertIn('client@acme.test', res.data['email_warning'])
+
+    def test_pdf_template_renders_quote(self):
+        """Le gabarit réel (sans WeasyPrint) : numéro, objet, ligne et total."""
+        from marketing.quote_pdf import render_quote_html
+        self.quote.subject = 'Refonte du site'
+        self.quote.save()
+        html = render_quote_html(self.quote)
+        self.assertIn(self.quote.quote_number, html)
+        self.assertIn('Refonte du site', html)
+        self.assertIn('Site vitrine', html)
+        self.assertIn('500', html)
+
     def test_admin_can_download_pdf(self):
         res = self.client_c.get(f'/api/v1/marketing/quotes/{self.quote.id}/pdf/')
         self.assertEqual(res.status_code, 200)

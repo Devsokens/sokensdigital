@@ -56,6 +56,7 @@ export function QuoteViewerModal({
       recipient_emails: emails,
       message,
     });
+    if (updated.email_warning) alert(updated.email_warning);
     setQuote(updated);
     if (onStatusChanged) onStatusChanged(updated);
   }

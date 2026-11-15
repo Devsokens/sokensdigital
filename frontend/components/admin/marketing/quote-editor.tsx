@@ -443,10 +443,11 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
                 : []
             }
             onSend={async (emails, msg) => {
-              await sendQuote(savedQuoteForSend.id, {
+              const sent = await sendQuote(savedQuoteForSend.id, {
                 recipient_emails: emails,
                 message: msg,
               });
+              if (sent.email_warning) alert(sent.email_warning);
               router.push(`${basePath}?sent=${savedQuoteForSend.id}`);
             }}
           />

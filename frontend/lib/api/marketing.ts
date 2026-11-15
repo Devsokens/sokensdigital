@@ -192,8 +192,10 @@ export function deleteQuote(id: string) {
   return apiFetch<void>(`/api/v1/marketing/quotes/${id}/`, { method: "DELETE" });
 }
 
+/** `email_warning` : le devis est passé « envoyé », mais au moins un mail
+ * n'est pas parti (aucune adresse, ou échec vers certaines). */
 export function sendQuote(id: string, options?: { recipient_emails?: string[]; message?: string }) {
-  return apiFetch<Quote>(`/api/v1/marketing/quotes/${id}/send/`, {
+  return apiFetch<Quote & { email_warning?: string }>(`/api/v1/marketing/quotes/${id}/send/`, {
     method: "POST",
     body: options ? JSON.stringify(options) : undefined,
   });
@@ -496,7 +498,16 @@ export async function downloadQuotePdf(id: string, quoteNumber: string) {
   const response = await fetch(`${base}/api/v1/marketing/quotes/${id}/pdf/`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
-  if (!response.ok) throw new Error("Téléchargement du PDF impossible.");
+  if (!response.ok) {
+    // Message du serveur quand il y en a un (PDF non généré, accès refusé…).
+    let detail = "";
+    try {
+      detail = (await response.json())?.detail ?? "";
+    } catch {
+      // réponse non JSON (page d'erreur)
+    }
+    throw new Error(detail || `Téléchargement du PDF impossible (erreur ${response.status}).`);
+  }
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");
   link.href = url;
