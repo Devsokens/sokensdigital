@@ -255,12 +255,22 @@ export function getInvoiceEditorContext() {
   return apiFetch<InvoiceEditorContext>("/api/v1/finance/invoices/editor-context/");
 }
 
-/** Télécharge le PDF de la facture. fetch direct : apiFetch lit du JSON. */
-export async function downloadInvoicePdf(id: string, invoiceNumber: string) {
+/** Télécharge le PDF de la facture. */
+export function downloadInvoicePdf(id: string, invoiceNumber: string) {
+  return downloadPdf(`/api/v1/finance/invoices/${id}/pdf/`, `${invoiceNumber}.pdf`);
+}
+
+/** Télécharge le reçu d'un versement (une fois le versement marqué reçu). */
+export function downloadPaymentReceipt(invoiceId: string, paymentId: string, receiptNumber: string) {
+  return downloadPdf(`/api/v1/finance/invoices/${invoiceId}/payments/${paymentId}/receipt/`, `${receiptNumber}.pdf`);
+}
+
+/** fetch direct : apiFetch lit du JSON, ici la réponse est un fichier. */
+async function downloadPdf(path: string, filename: string) {
   const { auth } = await import("@/lib/firebase/config");
   const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
   const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-  const response = await fetch(`${base}/api/v1/finance/invoices/${id}/pdf/`, {
+  const response = await fetch(`${base}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!response.ok) {
@@ -275,7 +285,7 @@ export async function downloadInvoicePdf(id: string, invoiceNumber: string) {
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${invoiceNumber}.pdf`;
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   link.remove();

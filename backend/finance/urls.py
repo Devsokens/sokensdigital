@@ -44,6 +44,9 @@ urlpatterns = router.urls + [
     re_path(r'^invoices/(?P<invoice_id>[^/.]+)/payments/(?P<pk>[^/.]+)/receive/$',
             PaymentViewSet.as_view({'post': 'receive'}),
             name='invoice-payment-receive'),
+    re_path(r'^invoices/(?P<invoice_id>[^/.]+)/payments/(?P<pk>[^/.]+)/receipt/$',
+            PaymentViewSet.as_view({'get': 'receipt'}),
+            name='invoice-payment-receipt'),
 
     re_path(r'^invoices/(?P<invoice_id>[^/.]+)/receipts/$',
             PaymentReceiptViewSet.as_view({'get': 'list'}),

@@ -87,6 +87,52 @@ def render_invoice_html(invoice) -> str:
     return render_to_string('finance/invoice_pdf.html', context)
 
 
+def render_receipt_html(receipt) -> str:
+    """HTML du reçu d'un versement : montant reçu, et situation de la facture
+    en comptant les versements reçus jusqu'à celui-ci inclus."""
+    from django.utils import timezone
+    from finance.models import Payment
+    from marketing.models import QuoteSettings
+    from marketing.quote_pdf import LOGO_PATH
+
+    payment = receipt.payment
+    invoice = payment.invoice
+    settings_obj = QuoteSettings.load()
+    received = invoice.payments.filter(
+        status__in=[Payment.Status.RECU, Payment.Status.ENREGISTRE],
+        created_at__lte=payment.created_at,
+    )
+    paid_to_date = sum((p.amount for p in received), Decimal('0'))
+    remaining = max(invoice.amount_ttc - paid_to_date, Decimal('0'))
+    client_label = invoice.client.company_name if invoice.client_id else (invoice.client_name or 'Client')
+    context = {
+        'receipt': receipt,
+        'payment': payment,
+        'invoice': invoice,
+        'settings': settings_obj,
+        'accent': invoice.document_color or '#123f91',
+        'logo_uri': LOGO_PATH.as_uri() if LOGO_PATH.exists() else '',
+        'client_label': client_label,
+        'address_lines': (settings_obj.company_address or '').split('\n'),
+        'payment_date': payment.payment_date.strftime('%d/%m/%Y'),
+        'method': payment.get_payment_method_display(),
+        'amount': f'{_amount(payment.amount)} FCFA',
+        'invoice_total': f'{_amount(invoice.amount_ttc)} FCFA',
+        'paid_to_date': f'{_amount(paid_to_date)} FCFA',
+        'remaining': f'{_amount(remaining)} FCFA',
+        'settled': remaining <= 0,
+        'issued_on': timezone.localtime(receipt.created_at).strftime('%d/%m/%Y'),
+    }
+    return render_to_string('finance/payment_receipt_pdf.html', context)
+
+
+def generate_receipt_pdf(receipt) -> bytes:
+    """PDF du reçu. Lève ImportError si WeasyPrint est indisponible."""
+    if not WEASYPRINT_AVAILABLE:
+        raise ImportError('weasyprint not installed. Install via: pip install weasyprint')
+    return HTML(string=render_receipt_html(receipt), base_url=None).write_pdf()
+
+
 def generate_invoice_pdf(invoice):
     """PDF de la facture, en BytesIO. Lève ImportError si WeasyPrint (ou sa
     lib native) est indisponible sur ce serveur."""

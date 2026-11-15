@@ -755,6 +755,27 @@ class InvoiceViewSetTests(APITestCase):
         response = self.client_comptable.post(f'/api/v1/finance/invoices/{invoice.id}/send/', {}, format='json')
         self.assertEqual(response.status_code, 400)
 
+    def test_receipt_pdf_download_and_template(self):
+        from finance.models import PaymentReceipt
+        from finance.pdf import render_receipt_html
+        invoice = Invoice.objects.create(client_name='Work Class', issue_date=datetime.date(2026, 7, 15), amount_ht=Decimal('360000'), vat_rate=Decimal('0'))
+        payment = Payment.objects.create(invoice=invoice, amount=Decimal('180000'), payment_date=datetime.date(2026, 7, 16), payment_method='VIREMENT', status=Payment.Status.RECU)
+        receipt = PaymentReceipt.objects.create(payment=payment, issued_by=self.comptable)
+
+        html = render_receipt_html(receipt)
+        self.assertIn(receipt.receipt_number, html)
+        self.assertIn('180\u202f000 FCFA', html)  # reçu et reste à payer
+        self.assertIn('Virement', html)
+
+        url = f'/api/v1/finance/invoices/{invoice.id}/payments/{payment.id}/receipt/'
+        with patch('finance.pdf.generate_receipt_pdf', return_value=b'%PDF recu'):
+            response = self.client_comptable.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+
+        pending = Payment.objects.create(invoice=invoice, amount=Decimal('1000'), payment_date=datetime.date(2026, 7, 17), payment_method='ESPECES')
+        self.assertEqual(self.client_comptable.get(f'/api/v1/finance/invoices/{invoice.id}/payments/{pending.id}/receipt/').status_code, 404)
+
     def test_invoice_without_lines_or_amount_is_refused(self):
         response = self.client_comptable.post('/api/v1/finance/invoices/', {
             'client_name': 'Acme SARL', 'issue_date': '2026-07-15', 'lines': [],

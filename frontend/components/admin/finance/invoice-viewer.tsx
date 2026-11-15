@@ -103,6 +103,7 @@ export function InvoiceViewer({
                       pageCount={1}
                       maxScale={0.8}
                       maxViewportHeight={0.4}
+                      zoomable
                       renderPage={() => (
                         <InvoiceDocument
                           invoice={{

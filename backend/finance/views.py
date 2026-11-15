@@ -844,6 +844,29 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.Retr
         description='Change payment status PENDING → RECEIVED, auto-create receipt, check if fully paid',
         responses={200: PaymentSerializer},
     )
+    @extend_schema(
+        tags=['Finance & Comptabilité'],
+        summary='Télécharger le reçu du versement en PDF',
+        responses={(200, 'application/pdf'): bytes},
+    )
+    @action(detail=True, methods=['get'], permission_classes=[IsFinanceRole])
+    def receipt(self, request, pk=None, **kwargs):
+        from django.http import HttpResponse
+        from finance.pdf import generate_receipt_pdf
+
+        payment = self.get_object()
+        receipt = getattr(payment, 'receipt', None)
+        if receipt is None:
+            return Response({'detail': "Ce versement n'a pas encore de reçu : marquez-le reçu d'abord."}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            pdf_bytes = generate_receipt_pdf(receipt)
+        except Exception:
+            logger.exception('PDF du reçu %s non généré', receipt.pk)
+            return Response({'detail': "La génération PDF n'est pas disponible pour le moment."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{receipt.receipt_number}.pdf"'
+        return response
+
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def receive(self, request, pk=None, **kwargs):
         """Marquer versement reçu + auto-créer reçu."""

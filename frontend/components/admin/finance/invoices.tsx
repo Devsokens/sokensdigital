@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Download, Eye, LayoutGrid, List, Loader2, Pencil, Plus, Search } from "lucide-react";
+import { CheckCircle2, Download, Eye, LayoutGrid, List, Loader2, MoreHorizontal, Pencil, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { inputClass } from "@/components/admin/form-styles";
 import { InvoiceViewer } from "@/components/admin/finance/invoice-viewer";
 import { downloadInvoicePdf, getInvoiceEditorContext, listInvoices, validateInvoice, type InvoiceEditorContext } from "@/lib/api/finance";
@@ -105,8 +106,8 @@ export function Invoices() {
       </div>
 
       {/* Recherche, filtres et choix de la vue */}
-      <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center">
-        <label className="relative flex-1">
+      <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <label className="relative w-full lg:max-w-sm">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-neutral-400" />
           <input
             value={query}
@@ -164,16 +165,15 @@ export function Invoices() {
                 <th className="px-4 py-3 font-medium whitespace-nowrap">Montant TTC</th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap">Reste à payer</th>
                 <th className="px-4 py-3 font-medium">Statut</th>
-                <th className="px-4 py-3 font-medium">Actions</th>
+                <th className="w-12 px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
               {filtered.map((invoice) => (
-                <tr key={invoice.id}>
+                // Toute la ligne ouvre le panneau « Voir » ; le menu « ⋯ » arrête le clic.
+                <tr key={invoice.id} onClick={() => setViewingId(invoice.id)} className="cursor-pointer transition-colors hover:bg-neutral-50">
                   <td className="px-4 py-3 text-neutral-900" data-label="N°">
-                    <button type="button" onClick={() => setViewingId(invoice.id)} className="whitespace-nowrap hover:text-primary hover:underline">
-                      {invoice.invoice_number}
-                    </button>
+                    <span className="whitespace-nowrap font-medium">{invoice.invoice_number}</span>
                     {invoice.quote_number && <span className="block text-xs text-neutral-400">{invoice.quote_number}</span>}
                   </td>
                   <td className="px-4 py-3 text-neutral-700" data-label="Client">{clientOf(invoice)}</td>
@@ -184,8 +184,8 @@ export function Invoices() {
                   <td className="px-4 py-3" data-label="Statut">
                     <StatusBadge invoice={invoice} />
                   </td>
-                  <td className="px-4 py-3" data-label="Actions">
-                    <Actions invoice={invoice} acting={actingId === invoice.id} onView={() => setViewingId(invoice.id)} onPdf={() => downloadPdf(invoice)} onValidate={() => handleValidate(invoice.id)} />
+                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                    <ActionsMenu invoice={invoice} acting={actingId === invoice.id} onView={() => setViewingId(invoice.id)} onPdf={() => downloadPdf(invoice)} onValidate={() => handleValidate(invoice.id)} />
                   </td>
                 </tr>
               ))}
@@ -280,31 +280,40 @@ function DueBadge({ invoice, small }: { invoice: Invoice; small?: boolean }) {
   return <span className={cn("whitespace-nowrap text-neutral-900", small && "text-xs text-amber-700")}>{small ? `Reste ${formatFcfa(remaining)}` : formatFcfa(remaining)}</span>;
 }
 
-function Actions({ invoice, acting, onView, onPdf, onValidate }: { invoice: Invoice; acting: boolean; onView: () => void; onPdf: () => void; onValidate: () => void }) {
-  const chip = "inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-200";
+/** Actions d'une facture, dans un menu « ⋯ » comme pour les devis. */
+function ActionsMenu({ invoice, acting, onView, onPdf, onValidate }: { invoice: Invoice; acting: boolean; onView: () => void; onPdf: () => void; onValidate: () => void }) {
+  const item = "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50";
   return (
-    <div className="flex items-center gap-2">
-      <button type="button" onClick={onView} className={chip}>
-        <Eye className="size-3" /> Voir
-      </button>
-      {invoice.status === "BROUILLON" && (
-        <Link href={`/admin/finance/facturation/${invoice.id}`} className={chip}>
-          <Pencil className="size-3" /> Modifier
-        </Link>
-      )}
-      <button type="button" onClick={onPdf} className={chip}>
-        <Download className="size-3" /> PDF
-      </button>
-      {invoice.status === "BROUILLON" && (
-        <button
-          type="button"
-          disabled={acting}
-          onClick={onValidate}
-          className="rounded-full bg-primary/10 px-3 py-1 text-xs whitespace-nowrap text-primary disabled:opacity-40"
-        >
-          Valider
+    <Popover>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            aria-label={`Actions de la facture ${invoice.invoice_number}`}
+            className="flex size-7 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+          >
+            <MoreHorizontal className="size-4" />
+          </button>
+        }
+      />
+      <PopoverContent className="w-52 p-1" align="end">
+        <button type="button" onClick={onView} className={item}>
+          <Eye className="size-3.5" /> Voir et versements
         </button>
-      )}
-    </div>
+        {invoice.status === "BROUILLON" && (
+          <Link href={`/admin/finance/facturation/${invoice.id}`} className={item}>
+            <Pencil className="size-3.5" /> Modifier
+          </Link>
+        )}
+        <button type="button" onClick={onPdf} className={item}>
+          <Download className="size-3.5" /> Télécharger le PDF
+        </button>
+        {invoice.status === "BROUILLON" && (
+          <button type="button" disabled={acting} onClick={onValidate} className={cn(item, "text-primary disabled:opacity-40")}>
+            <CheckCircle2 className="size-3.5" /> Valider
+          </button>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }

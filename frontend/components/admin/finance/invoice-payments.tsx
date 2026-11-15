@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Plus, Check, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
-import { createPayment, listPayments, receivePayment } from "@/lib/api/finance";
+import { downloadPaymentReceipt, createPayment, listPayments, receivePayment } from "@/lib/api/finance";
 import { formatFcfa } from "@/lib/format-currency";
 import type { Invoice, Payment, PaymentMethod } from "@/lib/api/types";
 
@@ -162,10 +162,18 @@ export function InvoicePayments({ invoice, onChanged }: { invoice: Invoice; onCh
                 </td>
                 <td className="px-4 py-3 text-neutral-500" data-label="Reçu">
                   {payment.receipt ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <FileText className="size-3.5 text-neutral-400" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const number = payment.receipt!.receipt_number;
+                        downloadPaymentReceipt(invoice.id, payment.id, number).catch((err: Error) => setError(err.message));
+                      }}
+                      title="Télécharger le reçu en PDF"
+                      className="inline-flex items-center gap-1.5 text-primary hover:underline"
+                    >
+                      <FileText className="size-3.5" />
                       {payment.receipt.receipt_number}
-                    </span>
+                    </button>
                   ) : (
                     "—"
                   )}

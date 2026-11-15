@@ -142,9 +142,6 @@ def generate_payment_receipt_pdf(self, receipt_id: str):
         receipt_id: UUID de PaymentReceipt
     """
     from finance.models import PaymentReceipt
-    from finance.pdf import generate_invoice_pdf  # Réutiliser template pour version "receipt"
-    from django.template.loader import render_to_string
-    from django.utils import timezone
 
     try:
         receipt = PaymentReceipt.objects.get(id=receipt_id)
@@ -152,20 +149,9 @@ def generate_payment_receipt_pdf(self, receipt_id: str):
         return f'Receipt {receipt_id} not found'
 
     try:
-        from weasyprint import HTML
+        from finance.pdf import generate_receipt_pdf
 
-        payment = receipt.payment
-        invoice = payment.invoice
-
-        context = {
-            'receipt': receipt,
-            'payment': payment,
-            'invoice': invoice,
-            'issue_date': timezone.now().strftime('%d/%m/%Y'),
-        }
-
-        html_string = render_to_string('finance/payment_receipt_pdf.html', context)
-        pdf_file = HTML(string=html_string, base_url=None).write_pdf()
+        generate_receipt_pdf(receipt)
 
         return f'Receipt {receipt.receipt_number} generated'
 

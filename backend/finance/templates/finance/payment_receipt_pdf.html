@@ -1,221 +1,104 @@
 <!DOCTYPE html>
+{% comment %}
+  Reçu de versement, dans le style de la facture (finance/invoice_pdf.html) :
+  bandeau, encadré du numéro, coordonnées, détail du versement, situation de
+  la facture après ce versement, cachet. Généré par finance.pdf.render_receipt_html.
+{% endcomment %}
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reçu {{ receipt.receipt_number }}</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="utf-8">
+<title>Reçu {{ receipt.receipt_number }}</title>
+<style>
+  @page { size: A4; margin: 0; background: #f2f3f5; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "DejaVu Sans", Arial, sans-serif; color: #171717; font-size: 11.5px; line-height: 1.45; }
+  p { margin: 0; }
 
-        body {
-            font-family: Arial, sans-serif;
-            color: #333;
-            line-height: 1.6;
-            padding: 20mm;
-        }
+  .banner { position: relative; padding: 30px 72px; background: {{ accent }}; height: 116px; }
+  .banner img { height: 56px; width: auto; display: block; }
+  .info-card { position: absolute; top: 34px; right: 48px; width: 272px; padding: 16px 20px; background: #fff; border-radius: 8px; }
+  .info-card .title { font-size: 20px; font-weight: bold; letter-spacing: 0.03em; color: {{ accent }}; }
+  .info-card .number { font-size: 13px; font-weight: bold; color: {{ accent }}; white-space: nowrap; }
+  .info-card p.meta { margin-top: 8px; font-size: 11.5px; }
 
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            border-bottom: 3px solid #2c5aa0;
-            padding-bottom: 15px;
-        }
+  .content { padding: 48px 56px 40px; }
+  .company { padding-left: 24px; font-size: 11.5px; line-height: 1.55; color: #262626; }
+  .company .name { font-size: 14px; font-weight: bold; color: #171717; margin-bottom: 4px; }
 
-        .header h1 {
-            font-size: 28px;
-            color: #2c5aa0;
-            margin-bottom: 5px;
-        }
+  .statement { margin-top: 40px; padding: 18px 24px; background: #fff; border-left: 4px solid {{ accent }}; border-radius: 6px; font-size: 12px; line-height: 1.7; }
+  .statement strong { color: {{ accent }}; }
 
-        .header .subtitle {
-            font-size: 14px;
-            color: #666;
-        }
+  table.details { margin-top: 32px; width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  table.details th { background: {{ accent }}; color: #fff; font-weight: normal; letter-spacing: 0.04em; text-transform: uppercase; padding: 14px 10px; border: 1px solid #d4d4d8; text-align: center; }
+  table.details td { padding: 12px 10px; border: 1px solid #a1a1aa; text-align: center; }
+  table.details td.amount { font-weight: bold; white-space: nowrap; }
 
-        .receipt-number {
-            background-color: #f5f5f5;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 20px 0;
-            font-weight: bold;
-            text-align: center;
-        }
+  table.totals { margin: 36px 0 0 auto; border-collapse: collapse; font-size: 12px; }
+  table.totals td { padding: 7px 10px; }
+  table.totals td.label { text-align: right; color: {{ accent }}; letter-spacing: 0.03em; text-transform: uppercase; }
+  table.totals td.value { text-align: right; min-width: 110px; white-space: nowrap; }
+  table.totals tr.paid td.value { background: {{ accent }}; color: #fff; }
 
-        .info-section {
-            margin-bottom: 20px;
-        }
-
-        .info-section h3 {
-            font-size: 12px;
-            text-transform: uppercase;
-            color: #2c5aa0;
-            margin-bottom: 8px;
-            font-weight: bold;
-        }
-
-        .info-section p {
-            font-size: 11px;
-            margin-bottom: 3px;
-        }
-
-        .two-columns {
-            display: flex;
-            gap: 30px;
-            margin-bottom: 30px;
-        }
-
-        .column {
-            flex: 1;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-        }
-
-        table th {
-            background-color: #f5f5f5;
-            padding: 8px;
-            text-align: left;
-            font-size: 11px;
-            font-weight: bold;
-            color: #2c5aa0;
-            border-bottom: 2px solid #2c5aa0;
-        }
-
-        table td {
-            padding: 8px;
-            font-size: 11px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .amount-cell {
-            text-align: right;
-            font-weight: bold;
-        }
-
-        .declaration {
-            background-color: #e8f5e9;
-            border-left: 4px solid #2c5aa0;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 3px;
-        }
-
-        .declaration p {
-            font-size: 10px;
-            margin-bottom: 5px;
-        }
-
-        .footer {
-            border-top: 1px solid #ddd;
-            padding-top: 10px;
-            font-size: 10px;
-            color: #666;
-            text-align: center;
-            margin-top: 30px;
-        }
-
-        .stamp {
-            text-align: center;
-            margin-top: 20px;
-            padding: 15px;
-            border: 2px dashed #2c5aa0;
-            border-radius: 5px;
-            color: #2c5aa0;
-            font-weight: bold;
-            font-size: 14px;
-        }
-    </style>
+  .sign { margin-top: 56px; display: table; width: 100%; }
+  .sign > div { display: table-cell; vertical-align: top; }
+  .sign .title { font-size: 13px; font-weight: bold; color: {{ accent }}; }
+  .sign-box { margin-top: 12px; width: 180px; height: 84px; background: #fff; border-radius: 6px; text-align: center; }
+  .sign-box img { max-height: 74px; max-width: 168px; margin-top: 5px; }
+  .note { margin-top: 48px; font-size: 9.5px; color: #737373; }
+</style>
 </head>
 <body>
-    <div class="header">
-        <h1>REÇU DE VERSEMENT</h1>
-        <p class="subtitle">Sokens Digital — Agence Numérique</p>
+  <div class="banner">
+    {% if logo_uri %}<img src="{{ logo_uri }}" alt="Soken's Digital">{% endif %}
+    <div class="info-card">
+      <p class="title">REÇU</p>
+      <p class="number">N° {{ receipt.receipt_number }}</p>
+      <p class="meta">Date : {{ payment_date }}</p>
+      <p class="meta">Client : {{ client_label }}</p>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="company">
+      <p class="name">SOKEN'S DIGITAL</p>
+      {% for line in address_lines %}<p>{{ line }}</p>{% endfor %}
+      {% if settings.company_phone %}<p>Tél : {{ settings.company_phone }}</p>{% endif %}
+      {% if settings.company_email %}<p>Mail : {{ settings.company_email }}</p>{% endif %}
     </div>
 
-    <div class="receipt-number">
-        Reçu N°: {{ receipt.receipt_number }}
-    </div>
+    <p class="statement">
+      Nous reconnaissons avoir reçu de <strong>{{ client_label }}</strong> la somme de
+      <strong>{{ amount }}</strong> ({{ method }}), en règlement {% if settled %}du solde{% else %}partiel{% endif %}
+      de la facture <strong>{{ invoice.invoice_number }}</strong> du {{ invoice.issue_date|date:"d/m/Y" }}.
+    </p>
 
-    <div class="two-columns">
-        <div class="column">
-            <div class="info-section">
-                <h3>De:</h3>
-                <p>Sokens Digital</p>
-                <p>Agence numérique</p>
-                <p>Email: contact@sokensdigital.com</p>
-            </div>
-        </div>
-
-        <div class="column">
-            <div class="info-section">
-                <h3>Vers:</h3>
-                {% if invoice.client %}
-                    <p><strong>{{ invoice.client.company_name }}</strong></p>
-                    {% if invoice.client.email %}<p>{{ invoice.client.email }}</p>{% endif %}
-                {% else %}
-                    <p><strong>{{ invoice.client_name }}</strong></p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    <div class="two-columns">
-        <div class="column">
-            <div class="info-section">
-                <h3>Facture:</h3>
-                <p><strong>{{ invoice.invoice_number }}</strong></p>
-                <p>Date: {{ invoice.issue_date|date:"d/m/Y" }}</p>
-                <p>Montant total: {{ invoice.amount_ttc|floatformat:2 }} FCFA</p>
-            </div>
-        </div>
-
-        <div class="column">
-            <div class="info-section">
-                <h3>Versement:</h3>
-                <p>Date: {{ issue_date }}</p>
-                <p>Méthode: {{ payment.get_payment_method_display }}</p>
-            </div>
-        </div>
-    </div>
-
-    <table>
-        <thead>
-            <tr>
-                <th style="width: 60%">Description</th>
-                <th style="width: 20%">Montant versé</th>
-                <th style="width: 20%">Référence</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td>Versement partiel — Facture {{ invoice.invoice_number }}</td>
-                <td class="amount-cell">{{ payment.amount|floatformat:2 }} FCFA</td>
-                <td style="text-align: center;">{{ payment.id|truncatechars:8 }}</td>
-            </tr>
-        </tbody>
+    <table class="details">
+      <thead><tr><th>Facture</th><th>Date du versement</th><th>Mode de paiement</th><th>Montant reçu</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>{{ invoice.invoice_number }}</td>
+          <td>{{ payment_date }}</td>
+          <td>{{ method }}{% if payment.notes %}<br><span style="font-size: 10px; color: #737373;">{{ payment.notes }}</span>{% endif %}</td>
+          <td class="amount">{{ amount }}</td>
+        </tr>
+      </tbody>
     </table>
 
-    <div class="declaration">
-        <p><strong>Déclaration:</strong></p>
-        <p>Nous reconnaissons avoir reçu du client dénommé ci-dessus la somme de {{ payment.amount|floatformat:2 }} FCFA en règlement partiel de la facture {{ invoice.invoice_number }} datée du {{ invoice.issue_date|date:"d/m/Y" }}.</p>
-        <p>Cette somme n'engage que la part spécifiée ci-dessus et ne constitue pas une acceptation des autres conditions de paiement antérieures.</p>
+    <table class="totals">
+      <tr><td class="label">Total de la facture</td><td class="value">{{ invoice_total }}</td></tr>
+      <tr class="paid"><td class="label">Payé à ce jour</td><td class="value">{{ paid_to_date }}</td></tr>
+      <tr><td class="label">Reste à payer</td><td class="value">{{ remaining }}</td></tr>
+    </table>
+
+    <div class="sign">
+      <div></div>
+      <div style="width: 220px;">
+        <p class="title">POUR SOKEN'S DIGITAL :</p>
+        <div class="sign-box">{% if settings.company_stamp_url %}<img src="{{ settings.company_stamp_url }}" alt="Cachet Soken's Digital">{% endif %}</div>
+      </div>
     </div>
 
-    <div class="stamp">
-        ✓ REÇU ACQUITTÉ
-    </div>
-
-    <div class="footer">
-        <p>Généré le {{ issue_date }}</p>
-        <p>Sokens Digital — Plateforme de gestion</p>
-        <p>Ce reçu constitue une preuve légale de versement</p>
-    </div>
+    <p class="note">Reçu émis le {{ issued_on }}{% if receipt.issued_by %} par {{ receipt.issued_by.first_name }} {{ receipt.issued_by.last_name }}{% endif %}. Ce document ne remplace pas la facture.</p>
+  </div>
 </body>
 </html>
