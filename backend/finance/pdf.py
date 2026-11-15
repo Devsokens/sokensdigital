@@ -42,8 +42,7 @@ def render_invoice_html(invoice) -> str:
     if invoice.lines:
         lines = [
             {
-                # Une puce par ligne de la description, comme sur le modèle papier.
-                'items': [part.strip() for part in (line.get('description') or '').split('\n') if part.strip()],
+                'description': (line.get('description') or '').strip(),
                 'quantity': _quantity(line.get('quantity')),
                 'unit_price': _amount(line.get('unit_price')),
                 'total': _amount(Decimal(str(line.get('quantity') or 0)) * Decimal(str(line.get('unit_price') or 0))),
@@ -54,7 +53,7 @@ def render_invoice_html(invoice) -> str:
     else:
         # Facture saisie avec un montant global (ancien format) : une ligne.
         label = f'Prestations — devis {invoice.quote.quote_number}' if invoice.quote_id else 'Prestations'
-        lines = [{'items': [label], 'quantity': '1', 'unit_price': _amount(invoice.amount_ht), 'total': _amount(invoice.amount_ht)}]
+        lines = [{'description': label, 'quantity': '1', 'unit_price': _amount(invoice.amount_ht), 'total': _amount(invoice.amount_ht)}]
 
     amount_paid = invoice.amount_paid
     discount = Decimal(invoice.discount_amount or 0)

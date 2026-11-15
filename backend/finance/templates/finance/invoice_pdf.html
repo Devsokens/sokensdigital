@@ -17,8 +17,9 @@
 
   .banner { position: relative; padding: 30px 72px; background: {{ accent }}; height: 116px; }
   .banner img { height: 56px; width: auto; display: block; }
-  .info-card { position: absolute; top: 40px; right: 48px; width: 268px; padding: 16px 20px; background: #fff; border-radius: 8px; }
-  .info-card .number { font-size: 17px; font-weight: bold; color: {{ accent }}; white-space: nowrap; }
+  .info-card { position: absolute; top: 34px; right: 48px; width: 272px; padding: 16px 20px; background: #fff; border-radius: 8px; }
+  .info-card .title { font-size: 20px; font-weight: bold; letter-spacing: 0.03em; color: {{ accent }}; }
+  .info-card .number { font-size: 13px; font-weight: bold; color: {{ accent }}; white-space: nowrap; }
   .info-card p.meta { margin-top: 8px; font-size: 11.5px; }
   .info-card p.ref { margin-top: 4px; font-size: 10px; color: #737373; }
 
@@ -32,7 +33,6 @@
   table.lines th { background: {{ accent }}; color: #fff; font-weight: normal; letter-spacing: 0.04em; text-transform: uppercase; padding: 16px 10px; border: 1px solid #d4d4d8; text-align: center; }
   table.lines td { padding: 12px 10px; border: 1px solid #a1a1aa; text-align: center; vertical-align: top; background: #f2f3f5; }
   table.lines td.desc { text-align: left; }
-  table.lines td.desc ul { margin: 0; padding-left: 16px; }
   table.lines td.price { font-weight: bold; }
   table.lines td.price .note { display: block; margin-top: 2px; font-weight: normal; font-size: 10px; line-height: 1.35; }
   table.lines tr { page-break-inside: avoid; break-inside: avoid; }
@@ -73,7 +73,8 @@
   <div class="banner">
     {% if logo_uri %}<img src="{{ logo_uri }}" alt="Soken's Digital">{% endif %}
     <div class="info-card">
-      <p class="number">FACTURE N° {{ display_number }}</p>
+      <p class="title">FACTURE</p>
+      <p class="number">N° {{ display_number }}</p>
       <p class="meta">Date : {{ invoice.issue_date|date:"d/m/Y" }}</p>
       <p class="meta">Client : {{ client_label }}</p>
       {% if quote_number %}<p class="meta ref">Réf. devis : {{ quote_number }}</p>{% endif %}
@@ -93,7 +94,7 @@
       <tbody>
       {% for line in lines %}
         <tr>
-          <td class="desc"><ul>{% for item in line.items %}<li>{{ item }}</li>{% endfor %}</ul></td>
+          <td class="desc">{{ line.description|linebreaksbr }}</td>
           <td>{{ line.quantity }}</td>
           <td class="price">{{ line.unit_price }}{% if line.note %}<span class="note">{{ line.note }}</span>{% endif %}</td>
           <td>{{ line.total }}</td>

@@ -750,7 +750,7 @@ class InvoiceViewSetTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         option = next(q for q in response.json()['quotes'] if q['id'] == str(quote.id))
         self.assertEqual(option['client_name'], 'RE2M')
-        self.assertEqual(option['lines'][0]['description'], 'Site vitrine — 6 pages')
+        self.assertEqual(option['lines'][0]['description'], 'Site vitrine')
         self.assertEqual(len(option['lines']), 1)
         self.assertEqual(Decimal(option['discount_amount']), Decimal('1000'))
         self.assertEqual(Decimal(option['total']), Decimal('499000'))

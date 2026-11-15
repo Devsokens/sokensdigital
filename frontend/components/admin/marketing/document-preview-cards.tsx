@@ -8,9 +8,9 @@ import { cn } from "@/lib/utils";
 // Page component: 210mm/297mm).
 const PAGE_W = 793;
 const PAGE_H = 1122;
-/** Échelle sur grand écran ; sur téléphone la carte rétrécit à la largeur
- * disponible (l'échelle baisse d'autant). */
-const MAX_SCALE = 0.55;
+/** Échelle par défaut sur grand écran ; sur téléphone la carte rétrécit à
+ * la largeur disponible (l'échelle baisse d'autant). */
+const DEFAULT_MAX_SCALE = 0.55;
 
 /** The document pages as a carousel card in the (right-hand, alongside
  * the form) preview column — one page shown at a time, large enough to
@@ -18,27 +18,30 @@ const MAX_SCALE = 0.55;
 export function DocumentPreviewCards({
   pageCount,
   renderPage,
+  maxScale = DEFAULT_MAX_SCALE,
 }: {
   pageCount: number;
   renderPage: (pageIndex: number) => React.ReactNode;
+  /** Échelle maximale de la page A4 (0.55 dans une colonne d'éditeur). */
+  maxScale?: number;
 }) {
   const [active, setActive] = useState(0);
   const current = Math.min(active, pageCount - 1);
   const frameRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(MAX_SCALE);
+  const [scale, setScale] = useState(maxScale);
 
   useEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
     const observer = new ResizeObserver(([entry]) => {
-      setScale(Math.min(MAX_SCALE, entry.contentRect.width / PAGE_W));
+      setScale(Math.min(maxScale, entry.contentRect.width / PAGE_W));
     });
     observer.observe(frame);
     return () => observer.disconnect();
-  }, []);
+  }, [maxScale]);
 
   return (
-    <div className="w-full" style={{ maxWidth: Math.round(PAGE_W * MAX_SCALE) }}>
+    <div className="w-full" style={{ maxWidth: Math.round(PAGE_W * maxScale) }}>
       <div className="relative overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
         <div ref={frameRef} className="w-full overflow-hidden bg-neutral-100" style={{ height: Math.round(PAGE_H * scale) }}>
           <div style={{ transform: `scale(${scale})`, transformOrigin: "top left" }}>

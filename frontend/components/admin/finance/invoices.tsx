@@ -1,20 +1,34 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, Download, Loader2, Pencil, Plus } from "lucide-react";
+import { Download, Eye, LayoutGrid, List, Loader2, Pencil, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { downloadInvoicePdf, listInvoices, validateInvoice } from "@/lib/api/finance";
-import { InvoicePayments } from "@/components/admin/finance/invoice-payments";
+import { inputClass } from "@/components/admin/form-styles";
+import { InvoiceViewer } from "@/components/admin/finance/invoice-viewer";
+import { downloadInvoicePdf, getInvoiceEditorContext, listInvoices, validateInvoice, type InvoiceEditorContext } from "@/lib/api/finance";
 import { formatFcfa } from "@/lib/format-currency";
+import { cn } from "@/lib/utils";
 import type { Invoice } from "@/lib/api/types";
+
+type StatusFilter = "TOUS" | "BROUILLON" | "VALIDEE";
+type PaymentFilter = "TOUS" | "A_PAYER" | "PAYEE";
+
+const due = (invoice: Invoice) => Math.max(Number(invoice.amount_ttc) - Number(invoice.amount_paid), 0);
+const clientOf = (invoice: Invoice) => invoice.client_name || "Sans client";
 
 export function Invoices() {
   const [invoices, setInvoices] = useState<Invoice[] | null>(null);
+  const [context, setContext] = useState<InvoiceEditorContext | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
+
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("TOUS");
+  const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>("TOUS");
+  const [view, setView] = useState<"liste" | "clients">("liste");
 
   async function load() {
     try {
@@ -27,6 +41,8 @@ export function Invoices() {
 
   useEffect(() => {
     load();
+    // Coordonnées de la société pour l'aperçu du panneau « Voir ».
+    getInvoiceEditorContext().then(setContext).catch(() => setContext(null));
   }, []);
 
   async function handleValidate(id: string) {
@@ -42,6 +58,27 @@ export function Invoices() {
     }
   }
 
+  function downloadPdf(invoice: Invoice) {
+    downloadInvoicePdf(invoice.id, invoice.invoice_number).catch((err: Error) => setActionError(err.message));
+  }
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (invoices ?? []).filter((invoice) => {
+      if (statusFilter !== "TOUS" && invoice.status !== statusFilter) return false;
+      if (paymentFilter === "A_PAYER" && due(invoice) <= 0) return false;
+      if (paymentFilter === "PAYEE" && due(invoice) > 0) return false;
+      if (!q) return true;
+      return [invoice.invoice_number, invoice.client_name, invoice.quote_number ?? ""].some((v) => v.toLowerCase().includes(q));
+    });
+  }, [invoices, query, statusFilter, paymentFilter]);
+
+  const byClient = useMemo(() => {
+    const groups = new Map<string, Invoice[]>();
+    for (const invoice of filtered) groups.set(clientOf(invoice), [...(groups.get(clientOf(invoice)) ?? []), invoice]);
+    return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], "fr"));
+  }, [filtered]);
+
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!invoices) {
     return (
@@ -50,6 +87,8 @@ export function Invoices() {
       </div>
     );
   }
+
+  const viewing = invoices.find((i) => i.id === viewingId) ?? null;
 
   return (
     <div>
@@ -65,107 +104,207 @@ export function Invoices() {
         </Link>
       </div>
 
+      {/* Recherche, filtres et choix de la vue */}
+      <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center">
+        <label className="relative flex-1">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-neutral-400" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Rechercher un n° de facture, un client, un devis…"
+            aria-label="Rechercher"
+            className={cn(inputClass, "pl-9")}
+          />
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)} className={cn(inputClass, "w-auto")} aria-label="Statut">
+            <option value="TOUS">Tous les statuts</option>
+            <option value="BROUILLON">Brouillons</option>
+            <option value="VALIDEE">Validées</option>
+          </select>
+          <select value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value as PaymentFilter)} className={cn(inputClass, "w-auto")} aria-label="Paiement">
+            <option value="TOUS">Tous les paiements</option>
+            <option value="A_PAYER">Reste à payer</option>
+            <option value="PAYEE">Payées</option>
+          </select>
+          <div className="flex items-center rounded-full border border-neutral-200 p-0.5">
+            {([
+              ["liste", List, "Vue liste"],
+              ["clients", LayoutGrid, "Vue par client"],
+            ] as const).map(([value, Icon, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setView(value)}
+                aria-label={label}
+                aria-pressed={view === value}
+                title={label}
+                className={cn("flex size-8 items-center justify-center rounded-full", view === value ? "bg-neutral-900 text-white" : "text-neutral-500 hover:bg-neutral-100")}
+              >
+                <Icon className="size-4" />
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {actionError && (
         <p className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">
           {actionError}
         </p>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
-        <table className="table-responsive w-full text-sm">
-          <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
-            <tr>
-              <th className="px-4 py-3 font-medium">N°</th>
-              <th className="px-4 py-3 font-medium">Client</th>
-              <th className="px-4 py-3 font-medium">Montant TTC</th>
-              <th className="px-4 py-3 font-medium">Reste à payer</th>
-              <th className="px-4 py-3 font-medium">Statut</th>
-              <th className="px-4 py-3 font-medium">Action</th>
-              <th className="w-32 px-4 py-3 font-medium">Versements</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-100">
-            {invoices.map((invoice) => (
-              <Fragment key={invoice.id}>
+      {view === "liste" ? (
+        <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
+          <table className="table-responsive w-full text-sm">
+            <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
               <tr>
-                <td className="px-4 py-3 text-neutral-900" data-label="N°">
-                  <Link href={`/admin/finance/facturation/${invoice.id}`} className="hover:text-primary hover:underline">
-                    {invoice.invoice_number}
-                  </Link>
-                  {invoice.quote_number && <span className="ml-1.5 text-xs text-neutral-400">{invoice.quote_number}</span>}
-                </td>
-                <td className="px-4 py-3 text-neutral-700" data-label="Client">{invoice.client_name}</td>
-                <td className="px-4 py-3 text-neutral-900" data-label="Montant TTC">{formatFcfa(invoice.amount_ttc)}</td>
-                <td className="px-4 py-3" data-label="Reste à payer">
-                  {Number(invoice.amount_ttc) - Number(invoice.amount_paid) <= 0 ? (
-                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Payée</span>
-                  ) : (
-                    <span className="text-neutral-900">{formatFcfa(Number(invoice.amount_ttc) - Number(invoice.amount_paid))}</span>
-                  )}
-                </td>
-                <td className="px-4 py-3" data-label="Statut">
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${
-                    invoice.status === "VALIDEE" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-                  }`}>
-                    {invoice.status === "VALIDEE" ? "Validée" : "Brouillon"}
-                  </span>
-                </td>
-                <td className="px-4 py-3" data-label="Action">
-                  <div className="flex flex-wrap items-center gap-2">
-                  <Link
-                    href={`/admin/finance/facturation/${invoice.id}`}
-                    className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-200"
-                  >
-                    <Pencil className="size-3" /> {invoice.status === "BROUILLON" ? "Modifier" : "Ouvrir"}
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => downloadInvoicePdf(invoice.id, invoice.invoice_number).catch((err: Error) => setActionError(err.message))}
-                    className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-200"
-                  >
-                    <Download className="size-3" /> PDF
-                  </button>
-                  {invoice.status === "BROUILLON" && (
-                    <button
-                      disabled={actingId === invoice.id}
-                      onClick={() => handleValidate(invoice.id)}
-                      className="rounded-full bg-primary/10 px-3 py-1 text-xs text-primary disabled:opacity-40"
-                    >
-                      Valider
-                    </button>
-                  )}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedId((id) => (id === invoice.id ? null : invoice.id))}
-                    className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900"
-                  >
-                    <ChevronDown
-                      className={`size-3.5 transition-transform ${expandedId === invoice.id ? "rotate-180" : ""}`}
-                    />
-                    {expandedId === invoice.id ? "Masquer" : "Voir"}
-                  </button>
-                </td>
+                <th className="px-4 py-3 font-medium">N°</th>
+                <th className="px-4 py-3 font-medium">Client</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap">Montant TTC</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap">Reste à payer</th>
+                <th className="px-4 py-3 font-medium">Statut</th>
+                <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
-              {expandedId === invoice.id && (
+            </thead>
+            <tbody className="divide-y divide-neutral-100">
+              {filtered.map((invoice) => (
+                <tr key={invoice.id}>
+                  <td className="px-4 py-3 text-neutral-900" data-label="N°">
+                    <button type="button" onClick={() => setViewingId(invoice.id)} className="whitespace-nowrap hover:text-primary hover:underline">
+                      {invoice.invoice_number}
+                    </button>
+                    {invoice.quote_number && <span className="block text-xs text-neutral-400">{invoice.quote_number}</span>}
+                  </td>
+                  <td className="px-4 py-3 text-neutral-700" data-label="Client">{clientOf(invoice)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-neutral-900" data-label="Montant TTC">{formatFcfa(invoice.amount_ttc)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap" data-label="Reste à payer">
+                    <DueBadge invoice={invoice} />
+                  </td>
+                  <td className="px-4 py-3" data-label="Statut">
+                    <StatusBadge invoice={invoice} />
+                  </td>
+                  <td className="px-4 py-3" data-label="Actions">
+                    <Actions invoice={invoice} acting={actingId === invoice.id} onView={() => setViewingId(invoice.id)} onPdf={() => downloadPdf(invoice)} onValidate={() => handleValidate(invoice.id)} />
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="bg-neutral-50/60 px-4 py-5">
-                    <InvoicePayments invoice={invoice} />
+                  <td colSpan={6} className="px-4 py-8 text-center text-neutral-400">
+                    {invoices.length === 0 ? "Aucune facture pour l'instant." : "Aucune facture ne correspond à la recherche."}
                   </td>
                 </tr>
               )}
-              </Fragment>
-            ))}
-            {invoices.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-neutral-400">Aucune facture pour l&apos;instant.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {byClient.map(([client, list]) => {
+            const total = list.reduce((sum, i) => sum + Number(i.amount_ttc), 0);
+            const remaining = list.reduce((sum, i) => sum + due(i), 0);
+            return (
+              <div key={client} className="flex flex-col rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 truncate font-semibold text-neutral-900" title={client}>{client}</p>
+                  <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
+                    {list.length} facture{list.length > 1 ? "s" : ""}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-neutral-500">
+                  <span>Facturé <span className="font-medium whitespace-nowrap text-neutral-900">{formatFcfa(total)}</span></span>
+                  <span>
+                    Reste{" "}
+                    <span className={cn("font-medium whitespace-nowrap", remaining > 0 ? "text-amber-700" : "text-emerald-700")}>{formatFcfa(remaining)}</span>
+                  </span>
+                </div>
+                <ul className="mt-3 divide-y divide-neutral-100 border-t border-neutral-100">
+                  {list.map((invoice) => (
+                    <li key={invoice.id}>
+                      <button
+                        type="button"
+                        onClick={() => setViewingId(invoice.id)}
+                        className="flex w-full items-center justify-between gap-3 py-2 text-left text-sm hover:text-primary"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate">{invoice.invoice_number}</span>
+                          <span className="text-xs text-neutral-400">
+                            {new Date(invoice.issue_date).toLocaleDateString("fr-FR")}
+                            {invoice.quote_number ? ` · ${invoice.quote_number}` : ""}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className="block whitespace-nowrap">{formatFcfa(invoice.amount_ttc)}</span>
+                          <DueBadge invoice={invoice} small />
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+          {byClient.length === 0 && (
+            <p className="col-span-full rounded-xl border border-dashed border-neutral-200 py-10 text-center text-sm text-neutral-400">
+              {invoices.length === 0 ? "Aucune facture pour l'instant." : "Aucune facture ne correspond à la recherche."}
+            </p>
+          )}
+        </div>
+      )}
+
+      <InvoiceViewer
+        invoice={viewing}
+        settings={context?.settings ?? null}
+        onClose={() => setViewingId(null)}
+        onChanged={load}
+        onPdf={() => viewing && downloadPdf(viewing)}
+      />
+    </div>
+  );
+}
+
+function StatusBadge({ invoice }: { invoice: Invoice }) {
+  return (
+    <span className={cn("rounded-full px-2 py-0.5 text-xs whitespace-nowrap", invoice.status === "VALIDEE" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
+      {invoice.status === "VALIDEE" ? "Validée" : "Brouillon"}
+    </span>
+  );
+}
+
+function DueBadge({ invoice, small }: { invoice: Invoice; small?: boolean }) {
+  const remaining = due(invoice);
+  if (remaining <= 0) {
+    return <span className={cn("rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700", small ? "text-[11px]" : "text-xs")}>Payée</span>;
+  }
+  return <span className={cn("whitespace-nowrap text-neutral-900", small && "text-xs text-amber-700")}>{small ? `Reste ${formatFcfa(remaining)}` : formatFcfa(remaining)}</span>;
+}
+
+function Actions({ invoice, acting, onView, onPdf, onValidate }: { invoice: Invoice; acting: boolean; onView: () => void; onPdf: () => void; onValidate: () => void }) {
+  const chip = "inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-200";
+  return (
+    <div className="flex items-center gap-2">
+      <button type="button" onClick={onView} className={chip}>
+        <Eye className="size-3" /> Voir
+      </button>
+      {invoice.status === "BROUILLON" && (
+        <Link href={`/admin/finance/facturation/${invoice.id}`} className={chip}>
+          <Pencil className="size-3" /> Modifier
+        </Link>
+      )}
+      <button type="button" onClick={onPdf} className={chip}>
+        <Download className="size-3" /> PDF
+      </button>
+      {invoice.status === "BROUILLON" && (
+        <button
+          type="button"
+          disabled={acting}
+          onClick={onValidate}
+          className="rounded-full bg-primary/10 px-3 py-1 text-xs whitespace-nowrap text-primary disabled:opacity-40"
+        >
+          Valider
+        </button>
+      )}
     </div>
   );
 }

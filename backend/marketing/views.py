@@ -1025,11 +1025,11 @@ class QuoteViewSet(viewsets.ModelViewSet):
         if quote.invoices.exists():
             return Response({'detail': 'Ce devis a déjà été converti en facture.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Mêmes lignes que le devis, sa remise devient la réduction de la
-        # facture (traçabilité de l'écart avec le devis).
+        # Mêmes prestations que le devis (libellés seuls), sa remise devient
+        # la réduction de la facture (traçabilité de l'écart avec le devis).
         lines = [
             {
-                'description': ' — '.join(part for part in (line.service_title, line.description) if part),
+                'description': line.service_title,
                 'quantity': str(line.quantity),
                 'unit_price': str(line.unit_price),
                 'note': '',

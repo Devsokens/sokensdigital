@@ -33,7 +33,9 @@ const STATUS_COLORS: Record<Payment["status"], string> = {
  * fait foi pour la comptabilité, et le recalculer ici ouvrirait la porte à
  * deux vérités qui divergent.
  */
-export function InvoicePayments({ invoice }: { invoice: Invoice }) {
+/** `onChanged` : appelé après un nouveau versement ou une réception, pour
+ * rafraîchir ce qui dépend du montant payé (aperçu, liste). */
+export function InvoicePayments({ invoice, onChanged }: { invoice: Invoice; onChanged?: () => void }) {
   const [payments, setPayments] = useState<Payment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -60,6 +62,7 @@ export function InvoicePayments({ invoice }: { invoice: Invoice }) {
     try {
       await receivePayment(invoice.id, payment.id);
       await load();
+      onChanged?.();
     } catch {
       setError("Impossible d'enregistrer la réception de ce versement.");
     } finally {
@@ -125,6 +128,7 @@ export function InvoicePayments({ invoice }: { invoice: Invoice }) {
           onSaved={() => {
             setShowForm(false);
             load();
+            onChanged?.();
           }}
         />
       )}

@@ -57,9 +57,10 @@ export function InvoiceDocument({
     <Page first>
       <div className="relative">
         <Banner accentColor={accentColor} tall />
-        <div className="absolute top-10 right-12 w-[268px] rounded-lg bg-white px-5 py-4 text-[11.5px]" style={printColorAdjust}>
-          <p className="text-[17px] font-bold whitespace-nowrap" style={{ color: accentColor }}>
-            FACTURE N° {invoice.invoice_number || "—"}
+        <div className="absolute top-[34px] right-12 w-[272px] rounded-lg bg-white px-5 py-4 text-[11.5px]" style={printColorAdjust}>
+          <p className="text-xl font-bold tracking-wide" style={{ color: accentColor }}>FACTURE</p>
+          <p className="text-[13px] font-bold whitespace-nowrap" style={{ color: accentColor }}>
+            N° {invoice.invoice_number || "—"}
           </p>
           <p className="mt-2">Date : {invoice.issue_date ? new Date(invoice.issue_date).toLocaleDateString("fr-FR") : "—"}</p>
           <p className="mt-2">Client : {clientLabel}</p>
@@ -93,14 +94,7 @@ export function InvoiceDocument({
           <tbody>
             {lines.map((line, i) => (
               <tr key={i} className="align-top">
-                <td className="border border-neutral-400 px-2.5 py-3">
-                  {/* Une puce par ligne de la description, comme sur le modèle papier. */}
-                  <ul className="list-disc pl-4">
-                    {line.description.split("\n").filter((part) => part.trim()).map((part, j) => (
-                      <li key={j}>{part.trim()}</li>
-                    ))}
-                  </ul>
-                </td>
+                <td className="border border-neutral-400 px-2.5 py-3 whitespace-pre-line">{line.description.trim()}</td>
                 <td className="border border-neutral-400 px-2.5 py-3 text-center">{quantity(line.quantity)}</td>
                 <td className="border border-neutral-400 px-2.5 py-3 text-center">
                   <span className="font-bold">{amount(Number(line.unit_price) || 0)}</span>

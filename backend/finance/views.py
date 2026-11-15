@@ -530,7 +530,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         for quote in quotes:
             lines = [
                 {
-                    'description': ' — '.join(part for part in (line.service_title, line.description) if part),
+                    'description': line.service_title,
                     'quantity': str(line.quantity),
                     'unit_price': str(line.unit_price),
                 }
