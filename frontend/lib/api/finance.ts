@@ -223,6 +223,15 @@ export interface InvoiceEditorContext {
   }[];
 }
 
+/** Envoie la facture par e-mail : PDF de la facture, et celui du devis lié.
+ * `email_warning` : envoi impossible vers certaines adresses. */
+export function sendInvoice(id: string, options: { recipient_emails: string[]; message?: string }) {
+  return apiFetch<Invoice & { email_warning?: string }>(`/api/v1/finance/invoices/${id}/send/`, {
+    method: "POST",
+    body: JSON.stringify(options),
+  });
+}
+
 /** Enregistre le reste dû comme versement reçu (avec reçu). */
 export function markInvoicePaid(id: string, paymentMethod?: string) {
   return apiFetch<Invoice>(`/api/v1/finance/invoices/${id}/mark-paid/`, {

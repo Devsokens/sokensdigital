@@ -41,6 +41,17 @@ def build_quote_pdf(quote) -> bytes:
     return HTML(string=render_quote_html(quote)).write_pdf()
 
 
+def quote_total_label(quote) -> str:
+    """Montant total du devis tel qu'affiché sur le document : « Montant
+    total TTC : 1 180 000 FCFA » (ou HT selon les paramètres). Recalculé à
+    partir des lignes, comme le PDF, plutôt que lu dans les totaux stockés."""
+    lines = list(quote.lines.all())
+    total = sum((line.total_line for line in lines), Decimal('0')) - Decimal(quote.discount_amount or 0)
+    if QuoteSettings.load().amount_basis == QuoteSettings.AmountBasis.HT:
+        return f'Montant total HT : {_fcfa(total)}'
+    return f'Montant total TTC : {_fcfa(total * (1 + DEFAULT_VAT_RATE))}'
+
+
 def render_quote_html(quote) -> str:
     """HTML du devis, avant conversion en PDF — séparé pour être testé sans
     WeasyPrint (indisponible en dev Windows)."""

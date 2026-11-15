@@ -728,6 +728,33 @@ class InvoiceViewSetTests(APITestCase):
         html = render_invoice_html(Invoice.objects.get(pk=response.json()['id']))
         self.assertIn('soit 20 % du montant total', html)
 
+    def test_send_attaches_invoice_and_quote(self):
+        from io import BytesIO
+        from marketing.models import Lead, Quote, QuoteLine
+        lead = Lead.objects.create(company_name='SMAG', email='contact@smag.test')
+        quote = Quote.objects.create(client_name='FONDATION SMAG', lead=lead)
+        QuoteLine.objects.create(quote=quote, service_title='Site vitrine', quantity=Decimal('1'), unit_price=Decimal('100000'))
+        invoice = Invoice.objects.create(
+            client_name='FONDATION SMAG', quote=quote, issue_date=datetime.date(2026, 7, 15), amount_ht=Decimal('0'), vat_rate=Decimal('0'),
+            lines=[{'description': 'Site vitrine', 'quantity': '1', 'unit_price': '100000'}],
+        )
+        with patch('finance.pdf.generate_invoice_pdf', return_value=BytesIO(b'%PDF facture')), \
+                patch('marketing.quote_pdf.build_quote_pdf', return_value=b'%PDF devis'), \
+                patch('core.mailer.send_mail', return_value=True) as fake_send:
+            response = self.client_comptable.post(f'/api/v1/finance/invoices/{invoice.id}/send/', {}, format='json')
+
+        self.assertEqual(response.status_code, 200, response.content)
+        args, kwargs = fake_send.call_args
+        self.assertEqual(args[0], 'contact@smag.test')
+        self.assertIn('100\u202f000 FCFA', args[2])
+        names = [a.filename for a in kwargs['attachments']]
+        self.assertEqual(names, [f'{invoice.invoice_number}.pdf', f'Devis-{quote.quote_number}.pdf'])
+
+    def test_send_without_any_address_is_refused(self):
+        invoice = Invoice.objects.create(client_name='Acme', issue_date=datetime.date(2026, 7, 15), amount_ht=Decimal('1000'))
+        response = self.client_comptable.post(f'/api/v1/finance/invoices/{invoice.id}/send/', {}, format='json')
+        self.assertEqual(response.status_code, 400)
+
     def test_invoice_without_lines_or_amount_is_refused(self):
         response = self.client_comptable.post('/api/v1/finance/invoices/', {
             'client_name': 'Acme SARL', 'issue_date': '2026-07-15', 'lines': [],

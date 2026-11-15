@@ -600,6 +600,69 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         tags=['Finance & Comptabilité'],
+        summary='Envoyer la facture par e-mail',
+        description="La facture en PDF, et le devis d'origine s'il y en a un, en pièces jointes. "
+        "`recipient_emails` (sinon les adresses du client) et `message` facultatifs.",
+        responses={200: InvoiceSerializer},
+    )
+    @action(detail=True, methods=['post'], url_path='send', permission_classes=[IsFinanceRole])
+    def send(self, request, pk=None):
+        from core import mailer
+        from finance.pdf import _amount, generate_invoice_pdf, get_invoice_filename
+
+        invoice = self.get_object()
+        recipient_emails = request.data.get('recipient_emails') or []
+        if isinstance(recipient_emails, str):
+            recipient_emails = [e.strip() for e in recipient_emails.split(',') if e.strip()]
+        if not recipient_emails:
+            recipient_emails = InvoiceSerializer(invoice).data['contact_emails']
+        if not recipient_emails:
+            return Response({'detail': "Aucune adresse e-mail : ajoutez un destinataire."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            attachments = [mailer.Attachment(filename=get_invoice_filename(invoice), content=generate_invoice_pdf(invoice).getvalue())]
+            if invoice.quote_id:
+                from marketing.quote_pdf import build_quote_pdf
+                attachments.append(mailer.Attachment(
+                    filename=f'Devis-{invoice.quote.quote_number}.pdf', content=build_quote_pdf(invoice.quote),
+                ))
+        except Exception:
+            logger.exception('PDF de la facture %s non généré', invoice.pk)
+            return Response(
+                {'detail': "Le PDF n'a pas pu être généré : facture non envoyée. Réessayez."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        paid = invoice.amount_paid
+        amounts = f'Montant total : {_amount(invoice.amount_ttc)} FCFA.\n'
+        if paid:
+            amounts += (
+                f'Déjà payé : {_amount(paid)} FCFA — reste à payer : '
+                f'{_amount(max(invoice.amount_ttc - paid, Decimal("0")))} FCFA.\n'
+            )
+        joined = 'La facture et le devis correspondant sont joints' if invoice.quote_id else 'La facture est jointe'
+        custom_message = request.data.get('message') or f'Veuillez trouver ci-joint notre facture {invoice.invoice_number}.'
+        body = (
+            f"Bonjour {invoice.client_name or ''},\n\n{custom_message}\n\n{amounts}"
+            f"{joined} à ce message au format PDF.\n\nCordialement,\nL'équipe Soken's Digital"
+        )
+
+        failed = []
+        for dest in recipient_emails:
+            try:
+                if mailer.send_mail(dest, f"Facture {invoice.invoice_number} — Soken's Digital", body, attachments=attachments) is False:
+                    failed.append(dest)
+            except Exception:
+                logger.exception('Envoi de la facture %s à %s impossible', invoice.pk, dest)
+                failed.append(dest)
+
+        data = InvoiceSerializer(invoice).data
+        if failed:
+            data['email_warning'] = f"Envoi impossible vers : {', '.join(failed)}."
+        return Response(data)
+
+    @extend_schema(
+        tags=['Finance & Comptabilité'],
         summary='Télécharger la facture en PDF',
         responses={(200, 'application/pdf'): bytes},
     )

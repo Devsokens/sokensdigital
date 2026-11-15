@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, Download, FileText, Loader2, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Download, FileText, Loader2, Mail, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { DocumentPreviewCards } from "@/components/admin/marketing/document-preview-cards";
 import { DOCUMENT_COLOR_SWATCHES } from "@/components/admin/marketing/document-print-primitives";
 import { InvoiceDocument, invoiceTotals } from "@/components/admin/finance/invoice-document";
+import { SendInvoiceModal } from "@/components/admin/finance/invoice-viewer";
 import { ApiError } from "@/lib/api/client";
 import {
   createInvoice,
@@ -66,6 +67,7 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
   const [saving, setSaving] = useState(false);
   const [paying, setPaying] = useState(false);
   const [payMethod, setPayMethod] = useState("ESPECES");
+  const [sendOpen, setSendOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -187,14 +189,20 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
           {current ? `Facture ${current.invoice_number}` : "Nouvelle facture"}
         </h1>
         {current && (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => downloadInvoicePdf(current.id, current.invoice_number).catch((err: Error) => setError(err.message))}
-            className="gap-1.5 rounded-full px-4"
-          >
-            <Download className="size-4" /> Télécharger le PDF
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" onClick={() => setSendOpen(true)} className="gap-1.5 rounded-full px-4">
+              <Mail className="size-4" /> Envoyer par mail
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => downloadInvoicePdf(current.id, current.invoice_number).catch((err: Error) => setError(err.message))}
+              className="gap-1.5 rounded-full px-4"
+            >
+              <Download className="size-4" /> Télécharger le PDF
+            </Button>
+            <SendInvoiceModal invoice={current} open={sendOpen} onOpenChange={setSendOpen} />
+          </div>
         )}
       </div>
 

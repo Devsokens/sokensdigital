@@ -914,11 +914,9 @@ class QuoteViewSet(viewsets.ModelViewSet):
             )
         attachment = mailer.Attachment(filename=f'Devis-{quote.quote_number}.pdf', content=pdf_bytes)
 
-        from marketing.models import QuoteSettings
-        if QuoteSettings.load().amount_basis == QuoteSettings.AmountBasis.HT:
-            amount_line = f"Montant total HT : {quote.total_ht} FCFA.\n"
-        else:
-            amount_line = f"Montant total TTC : {quote.total_ttc} FCFA.\n"
+        # Même total que sur le document, sans décimales (« 1 180 000 FCFA »).
+        from marketing.quote_pdf import quote_total_label
+        amount_line = f"{quote_total_label(quote)}.\n"
 
         failed = []
         for dest in recipient_emails:

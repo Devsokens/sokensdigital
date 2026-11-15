@@ -1848,6 +1848,15 @@ class QuotePdfSendTests(APITestCase):
         self.assertEqual(res.status_code, 400)
         self.assertIn('accepté', res.data['detail'])
 
+    def test_email_shows_document_total_without_decimals(self):
+        from unittest.mock import patch as _patch
+        with _patch('core.mailer.send_mail', return_value=True) as fake_send:
+            self.client_c.post(f'/api/v1/marketing/quotes/{self.quote.id}/send/', {}, format='json')
+        body = fake_send.call_args[0][2]
+        self.assertIn('590\u202f000 FCFA', body)  # 500 000 HT + TVA 18 %
+        self.assertNotIn(',00', body)
+        self.assertNotIn('.00', body)
+
     def test_failed_email_is_reported(self):
         """Un mail qui ne part pas doit être signalé à l'admin (email_warning),
         pas noyé dans une réponse « envoyé » sans réserve."""

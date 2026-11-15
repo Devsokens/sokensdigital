@@ -3,11 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Dialog } from "@base-ui/react/dialog";
-import { Download, Pencil, Wallet, X } from "lucide-react";
+import { Download, Mail, Pencil, Wallet, X } from "lucide-react";
 import { DocumentPreviewCards } from "@/components/admin/marketing/document-preview-cards";
 import { InvoiceDocument } from "@/components/admin/finance/invoice-document";
 import { InvoicePayments } from "@/components/admin/finance/invoice-payments";
-import type { InvoiceEditorContext } from "@/lib/api/finance";
+import { SendDocumentModal } from "@/components/admin/marketing/send-document-modal";
+import { sendInvoice, type InvoiceEditorContext } from "@/lib/api/finance";
 import { formatFcfa } from "@/lib/format-currency";
 import { cn } from "@/lib/utils";
 import type { Invoice } from "@/lib/api/types";
@@ -31,6 +32,7 @@ export function InvoiceViewer({
   onPdf: () => void;
 }) {
   const [shown, setShown] = useState<Invoice | null>(invoice);
+  const [sendOpen, setSendOpen] = useState(false);
   if (invoice && invoice !== shown) setShown(invoice);
   const current = invoice ?? shown;
   const remaining = current ? Math.max(Number(current.amount_ttc) - Number(current.amount_paid), 0) : 0;
@@ -78,10 +80,17 @@ export function InvoiceViewer({
                   )}
                   <button
                     type="button"
+                    onClick={() => setSendOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 px-3.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                  >
+                    <Mail className="size-3.5" /> Envoyer par mail
+                  </button>
+                  <button
+                    type="button"
                     onClick={onPdf}
                     className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
                   >
-                    <Download className="size-3.5" /> Télécharger le PDF
+                    <Download className="size-3.5" /> PDF
                   </button>
                 </div>
               </div>
@@ -135,6 +144,39 @@ export function InvoiceViewer({
           )}
         </Dialog.Popup>
       </Dialog.Portal>
+      {current && (
+        <SendInvoiceModal invoice={current} open={sendOpen} onOpenChange={setSendOpen} onSent={onChanged} />
+      )}
     </Dialog.Root>
+  );
+}
+
+/** Même fenêtre d'envoi que pour les devis ; la facture part en PDF, avec
+ * le PDF du devis lié quand il y en a un. */
+export function SendInvoiceModal({
+  invoice,
+  open,
+  onOpenChange,
+  onSent,
+}: {
+  invoice: Invoice;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSent?: () => void;
+}) {
+  return (
+    <SendDocumentModal
+      open={open}
+      onOpenChange={onOpenChange}
+      documentTitle={`Facture ${invoice.invoice_number}${invoice.quote_number ? ` (+ devis ${invoice.quote_number})` : ""}`}
+      documentNumber={invoice.invoice_number}
+      recipientName={invoice.client_name}
+      suggestedEmails={invoice.contact_emails ?? []}
+      onSend={async (emails, message) => {
+        const sent = await sendInvoice(invoice.id, { recipient_emails: emails, message });
+        if (sent.email_warning) alert(sent.email_warning);
+        onSent?.();
+      }}
+    />
   );
 }

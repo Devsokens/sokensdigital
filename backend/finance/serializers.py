@@ -214,6 +214,8 @@ class InvoiceSerializer(serializers.ModelSerializer):
     client_company_name = serializers.CharField(source='client.company_name', read_only=True, allow_null=True)
     quote_number = serializers.CharField(source='quote.quote_number', read_only=True, allow_null=True)
     amount_paid = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    # Adresses proposées à l'envoi : client, puis demande (lead) du devis lié.
+    contact_emails = serializers.SerializerMethodField()
     # Calculé à partir des lignes quand il y en a : facultatif à la saisie.
     amount_ht = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
 
@@ -222,7 +224,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'invoice_number', 'client', 'client_name', 'client_company_name', 'quote', 'quote_number',
             'issue_date', 'due_date', 'lines', 'discount_amount', 'discount_reason', 'document_color',
-            'amount_ht', 'vat_rate', 'amount_ttc', 'amount_paid', 'status', 'created_by',
+            'amount_ht', 'vat_rate', 'amount_ttc', 'amount_paid', 'contact_emails', 'status', 'created_by',
             'validated_by', 'validated_at', 'created_at',
         ]
         read_only_fields = [
@@ -250,6 +252,16 @@ class InvoiceSerializer(serializers.ModelSerializer):
         elif data.get('amount_ht', getattr(instance, 'amount_ht', None)) is None:
             raise serializers.ValidationError({'lines': 'Ajoutez au moins une ligne.'})
         return data
+
+    def get_contact_emails(self, obj):
+        emails = []
+        if obj.client_id and obj.client.email:
+            emails.append(obj.client.email)
+        lead = obj.quote.lead if obj.quote_id else None
+        if lead:
+            emails.append(lead.email)
+            emails += [c.get('email') for c in (lead.contacts or []) if isinstance(c, dict)]
+        return list(dict.fromkeys(e for e in emails if e))
 
     def validate_lines(self, value):
         """Chaque ligne : description, quantité > 0, prix unitaire (négatif pour une remise)."""

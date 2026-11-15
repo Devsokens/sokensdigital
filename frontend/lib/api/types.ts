@@ -939,6 +939,8 @@ export interface Invoice {
   amount_ttc: string;
   /** Versements reçus ou enregistrés. */
   amount_paid: string;
+  /** Adresses proposées à l'envoi : client, puis demande du devis lié. */
+  contact_emails: string[];
   status: InvoiceStatus;
   created_by: UserBrief | null;
   validated_by: UserBrief | null;
