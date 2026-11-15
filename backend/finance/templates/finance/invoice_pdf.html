@@ -1,260 +1,151 @@
 <!DOCTYPE html>
+{% comment %}
+  Facture, d'après le modèle papier de Soken's Digital — même mise en page
+  que l'aperçu de l'admin (frontend/components/admin/finance/invoice-document.tsx).
+  Modifier les deux ensemble. Une page ; si le tableau déborde, il continue
+  sur la page suivante avec son en-tête de colonnes répété.
+{% endcomment %}
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Facture {{ invoice.invoice_number }}</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="utf-8">
+<title>Facture {{ invoice.invoice_number }}</title>
+<style>
+  @page { size: A4; margin: 0; background: #f2f3f5; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "DejaVu Sans", Arial, sans-serif; color: #171717; font-size: 11.5px; line-height: 1.45; }
+  p { margin: 0; }
 
-        body {
-            font-family: Arial, sans-serif;
-            color: #333;
-            line-height: 1.6;
-            padding: 20mm;
-        }
+  .banner { position: relative; padding: 30px 72px; background: {{ accent }}; height: 116px; }
+  .banner img { height: 56px; width: auto; display: block; }
+  .info-card { position: absolute; top: 40px; right: 48px; width: 268px; padding: 16px 20px; background: #fff; border-radius: 8px; }
+  .info-card .number { font-size: 17px; font-weight: bold; color: {{ accent }}; white-space: nowrap; }
+  .info-card p.meta { margin-top: 8px; font-size: 11.5px; }
+  .info-card p.ref { margin-top: 4px; font-size: 10px; color: #737373; }
 
-        .header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 40px;
-            border-bottom: 2px solid #2c5aa0;
-            padding-bottom: 20px;
-        }
+  .content { padding: 48px 56px 40px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 
-        .company-info h1 {
-            color: #2c5aa0;
-            font-size: 24px;
-            margin-bottom: 5px;
-        }
+  .company { padding-left: 24px; font-size: 11.5px; line-height: 1.55; color: #262626; }
+  .company .name { font-size: 14px; font-weight: bold; color: #171717; margin-bottom: 4px; }
 
-        .company-info p {
-            font-size: 12px;
-            color: #666;
-        }
+  table.lines { margin-top: 36px; width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  table.lines thead { display: table-header-group; }
+  table.lines th { background: {{ accent }}; color: #fff; font-weight: normal; letter-spacing: 0.04em; text-transform: uppercase; padding: 16px 10px; border: 1px solid #d4d4d8; text-align: center; }
+  table.lines td { padding: 12px 10px; border: 1px solid #a1a1aa; text-align: center; vertical-align: top; background: #f2f3f5; }
+  table.lines td.desc { text-align: left; }
+  table.lines td.desc ul { margin: 0; padding-left: 16px; }
+  table.lines td.price { font-weight: bold; }
+  table.lines td.price .note { display: block; margin-top: 2px; font-weight: normal; font-size: 10px; line-height: 1.35; }
+  table.lines tr { page-break-inside: avoid; break-inside: avoid; }
+  table.lines th.desc { width: 50%; }
+  table.lines th.qty { width: 8%; }
+  table.lines th.price { width: 25%; }
 
-        .invoice-meta {
-            text-align: right;
-        }
+  .summary { margin-top: 44px; display: table; width: 100%; page-break-inside: avoid; break-inside: avoid; }
+  .summary > div { display: table-cell; vertical-align: top; }
+  .methods { width: 52%; padding-top: 44px; }
+  .methods .title { font-size: 13px; font-weight: bold; color: {{ accent }}; }
+  .methods ul { margin: 12px 0 0; padding-left: 16px; font-size: 10.5px; }
+  .methods li + li { margin-top: 2px; }
 
-        .invoice-meta p {
-            font-size: 12px;
-            margin-bottom: 5px;
-        }
+  table.totals { margin-left: auto; border-collapse: collapse; font-size: 12px; }
+  table.totals td { padding: 7px 10px; }
+  table.totals td.label { text-align: right; color: {{ accent }}; letter-spacing: 0.03em; text-transform: uppercase; }
+  table.totals td.value { text-align: right; min-width: 92px; white-space: nowrap; }
+  table.totals tr.due td.value { background: {{ accent }}; color: #fff; }
+  table.totals tr.detail td { font-size: 10.5px; padding-top: 3px; padding-bottom: 3px; }
+  table.totals tr.detail td.label { color: #737373; }
+  table.totals tr.paid td.value { border-bottom: 2px solid {{ accent }}; }
+  table.totals tr.discount td.value { color: #b91c1c; }
 
-        .invoice-meta .label {
-            font-weight: bold;
-            color: #2c5aa0;
-        }
-
-        .parties {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 40px;
-        }
-
-        .party {
-            width: 45%;
-        }
-
-        .party h3 {
-            font-size: 12px;
-            text-transform: uppercase;
-            color: #2c5aa0;
-            margin-bottom: 10px;
-            font-weight: bold;
-        }
-
-        .party p {
-            font-size: 11px;
-            margin-bottom: 3px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-
-        table thead {
-            background-color: #f5f5f5;
-            border-top: 2px solid #2c5aa0;
-            border-bottom: 2px solid #2c5aa0;
-        }
-
-        table th {
-            padding: 10px;
-            text-align: left;
-            font-weight: bold;
-            color: #2c5aa0;
-            font-size: 12px;
-        }
-
-        table td {
-            padding: 8px 10px;
-            font-size: 11px;
-            border-bottom: 1px solid #eee;
-        }
-
-        table tr:last-child td {
-            border-bottom: 2px solid #2c5aa0;
-        }
-
-        .amount-column {
-            text-align: right;
-        }
-
-        .totals {
-            width: 40%;
-            margin-left: auto;
-            margin-bottom: 30px;
-        }
-
-        .totals table {
-            margin: 0;
-        }
-
-        .totals table td {
-            padding: 8px 10px;
-            font-size: 11px;
-        }
-
-        .totals .label {
-            font-weight: bold;
-            text-align: left;
-        }
-
-        .totals .total-ttc {
-            background-color: #2c5aa0;
-            color: white;
-            font-weight: bold;
-            font-size: 13px;
-        }
-
-        .notes {
-            background-color: #f9f9f9;
-            border-left: 3px solid #2c5aa0;
-            padding: 10px;
-            margin-bottom: 20px;
-            font-size: 11px;
-        }
-
-        .footer {
-            border-top: 1px solid #ddd;
-            padding-top: 10px;
-            font-size: 10px;
-            color: #666;
-            text-align: center;
-            margin-top: 20px;
-        }
-
-        .footer p {
-            margin-bottom: 3px;
-        }
-
-        .status {
-            display: inline-block;
-            padding: 5px 10px;
-            border-radius: 3px;
-            font-weight: bold;
-            font-size: 12px;
-        }
-
-        .status.brouillon {
-            background-color: #ffebee;
-            color: #c62828;
-        }
-
-        .status.validee {
-            background-color: #e8f5e9;
-            color: #2e7d32;
-        }
-    </style>
+  .accept { margin-top: 56px; page-break-inside: avoid; break-inside: avoid; }
+  .accept .title { padding-left: 24px; font-size: 13px; font-weight: bold; color: {{ accent }}; }
+  .signers { margin-top: 20px; display: table; width: 100%; table-layout: fixed; }
+  .signers > div { display: table-cell; vertical-align: top; }
+  .signer { display: table; width: 100%; }
+  .signer > * { display: table-cell; vertical-align: middle; }
+  .signer .who { width: 42%; padding-left: 36px; font-size: 10.5px; font-weight: bold; }
+  .sign-box { position: relative; width: 148px; height: 76px; background: #fff; border-radius: 6px; text-align: center; }
+  .sign-box img { max-height: 66px; max-width: 136px; margin-top: 6px; }
+  .sign-box .hint { position: absolute; top: 5px; left: 0; right: 0; font-size: 6.5px; color: #a3a3a3; font-style: italic; }
+</style>
 </head>
 <body>
-    <div class="header">
-        <div class="company-info">
-            <h1>Sokens Digital</h1>
-            <p>Agence numérique</p>
-            <p>Email: contact@sokensdigital.com</p>
-        </div>
+  <div class="banner">
+    {% if logo_uri %}<img src="{{ logo_uri }}" alt="Soken's Digital">{% endif %}
+    <div class="info-card">
+      <p class="number">FACTURE N° {{ display_number }}</p>
+      <p class="meta">Date : {{ invoice.issue_date|date:"d/m/Y" }}</p>
+      <p class="meta">Client : {{ client_label }}</p>
+      {% if quote_number %}<p class="meta ref">Réf. devis : {{ quote_number }}</p>{% endif %}
+    </div>
+  </div>
 
-        <div class="invoice-meta">
-            <p><span class="label">FACTURE</span></p>
-            <p><span class="label">N°:</span> {{ invoice.invoice_number }}</p>
-            <p><span class="label">Émise le:</span> {{ issue_date }}</p>
-            <p><span class="label">À payer avant:</span> {{ due_date }}</p>
-            <p><span class="status {% if invoice.status == 'BROUILLON' %}brouillon{% else %}validee{% endif %}">{{ invoice.get_status_display }}</span></p>
-        </div>
+  <div class="content">
+    <div class="company">
+      <p class="name">SOKEN'S DIGITAL</p>
+      {% for line in address_lines %}<p>{{ line }}</p>{% endfor %}
+      {% if settings.company_phone %}<p>Tél : {{ settings.company_phone }}</p>{% endif %}
+      {% if settings.company_email %}<p>Mail : {{ settings.company_email }}</p>{% endif %}
     </div>
 
-    <div class="parties">
-        <div class="party">
-            <h3>Entreprise</h3>
-            <p>Sokens Digital</p>
-            <p>Capitale: FCFA</p>
-            <p>Email: contact@sokensdigital.com</p>
-        </div>
-
-        <div class="party">
-            <h3>Facturation</h3>
-            <p>{{ client_display }}</p>
-            {% if invoice.client %}
-                {% if invoice.client.email %}<p>{{ invoice.client.email }}</p>{% endif %}
-                {% if invoice.client.phone %}<p>{{ invoice.client.phone }}</p>{% endif %}
-                {% if invoice.client.address %}<p>{{ invoice.client.address }}</p>{% endif %}
-            {% endif %}
-        </div>
-    </div>
-
-    <table>
-        <thead>
-            <tr>
-                <th style="width: 50%">Description</th>
-                <th style="width: 15%" class="amount-column">Montant HT</th>
-                <th style="width: 15%" class="amount-column">TVA ({{ invoice.vat_rate }}%)</th>
-                <th style="width: 20%" class="amount-column">Montant TTC</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td>Prestations de service</td>
-                <td class="amount-column">{{ invoice.amount_ht|floatformat:2 }} FCFA</td>
-                <td class="amount-column">{{ vat_amount|floatformat:2 }} FCFA</td>
-                <td class="amount-column"><strong>{{ invoice.amount_ttc|floatformat:2 }} FCFA</strong></td>
-            </tr>
-        </tbody>
+    <table class="lines">
+      <thead><tr><th class="desc">Description</th><th class="qty">Qté</th><th class="price">Prix unitaire</th><th>Total</th></tr></thead>
+      <tbody>
+      {% for line in lines %}
+        <tr>
+          <td class="desc"><ul>{% for item in line.items %}<li>{{ item }}</li>{% endfor %}</ul></td>
+          <td>{{ line.quantity }}</td>
+          <td class="price">{{ line.unit_price }}{% if line.note %}<span class="note">{{ line.note }}</span>{% endif %}</td>
+          <td>{{ line.total }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
     </table>
 
-    <div class="totals">
-        <table>
-            <tr>
-                <td class="label">Montant HT:</td>
-                <td class="amount-column">{{ invoice.amount_ht|floatformat:2 }} FCFA</td>
-            </tr>
-            <tr>
-                <td class="label">TVA ({{ invoice.vat_rate }}%):</td>
-                <td class="amount-column">{{ vat_amount|floatformat:2 }} FCFA</td>
-            </tr>
-            <tr class="total-ttc">
-                <td class="label">MONTANT TTC:</td>
-                <td class="amount-column">{{ invoice.amount_ttc|floatformat:2 }} FCFA</td>
-            </tr>
+    <div class="summary">
+      <div class="methods">
+        {% if payment_methods %}
+        <p class="title">MOYENS DE PAIEMENT :</p>
+        <ul>{% for method in payment_methods %}<li>{{ method }}</li>{% endfor %}</ul>
+        {% endif %}
+      </div>
+      <div>
+        <table class="totals">
+          {% if show_discount %}
+          <tr class="detail"><td class="label">Sous-total</td><td class="value">{{ subtotal }}</td></tr>
+          <tr class="detail discount"><td class="label">Réduction{% if discount_reason %} ({{ discount_reason }}){% endif %}</td><td class="value">− {{ discount }}</td></tr>
+          {% endif %}
+          {% if show_vat %}
+          <tr class="detail"><td class="label">Total HT</td><td class="value">{{ amount_ht }}</td></tr>
+          <tr class="detail"><td class="label">TVA {{ vat_percent }} %</td><td class="value">{{ vat_amount }}</td></tr>
+          {% endif %}
+          <tr class="due"><td class="label">Total à payer</td><td class="value">{{ amount_ttc }}</td></tr>
+          <tr class="paid"><td class="label">Déjà payé</td><td class="value">{{ amount_paid }}</td></tr>
+          <tr><td class="label">Reste à payer</td><td class="value">{{ amount_due }}</td></tr>
         </table>
+      </div>
     </div>
 
-    <div class="notes">
-        <strong>Conditions de paiement:</strong> Paiement à réception. En cas de non-paiement à la date d'échéance, des intérêts de retard seront appliqués conformément à la loi.
+    <div class="accept">
+      <p class="title">ACCEPTÉ PAR :</p>
+      <div class="signers">
+        <div>
+          <div class="signer">
+            <p class="who">{{ client_label }}</p>
+            <div><div class="sign-box"><span class="hint">Signature suivi de la mention lu et approuvé</span></div></div>
+          </div>
+        </div>
+        <div>
+          <div class="signer">
+            <p class="who">SOKEN'S DIGITAL</p>
+            <div><div class="sign-box">
+              {% if settings.company_stamp_url %}<img src="{{ settings.company_stamp_url }}" alt="Cachet Soken's Digital">
+              {% else %}<span class="hint">Signature suivi de la mention lu et approuvé</span>{% endif %}
+            </div></div>
+          </div>
+        </div>
+      </div>
     </div>
-
-    <div class="footer">
-        <p>Généré le {{ generated_at }}</p>
-        <p>Cette facture a été générée automatiquement et ne requiert pas de signature.</p>
-        <p>Sokens Digital — Plateforme de gestion</p>
-    </div>
+  </div>
 </body>
 </html>

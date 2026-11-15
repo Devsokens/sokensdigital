@@ -671,6 +671,105 @@ class InvoiceViewSetTests(APITestCase):
         total_credit = sum((line.credit for line in lines), Decimal('0'))
         self.assertEqual(total_debit, total_credit)
 
+    def test_lines_compute_amounts(self):
+        """Avec des lignes, le HT est leur somme (remise négative comprise)."""
+        response = self.client_comptable.post('/api/v1/finance/invoices/', {
+            'client_name': '2NY Consulting LTD', 'issue_date': '2026-07-15', 'vat_rate': '0',
+            'lines': [
+                {'description': 'Affiche Edito', 'quantity': '2', 'unit_price': '10000'},
+                {'description': 'Remise', 'quantity': '1', 'unit_price': '-5000'},
+            ],
+        }, format='json')
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(Decimal(response.json()['amount_ht']), Decimal('15000.00'))
+        self.assertEqual(Decimal(response.json()['amount_ttc']), Decimal('15000.00'))
+        self.assertEqual(Decimal(response.json()['amount_paid']), Decimal('0'))
+
+    def test_discount_reduces_amount_and_is_traced(self):
+        """Réduction à part des lignes (traçable) : HT = lignes − réduction."""
+        response = self.client_comptable.post('/api/v1/finance/invoices/', {
+            'client_name': 'RE2M', 'issue_date': '2026-07-15', 'vat_rate': '0',
+            'lines': [{'description': 'Site vitrine', 'quantity': '1', 'unit_price': '600000'}],
+            'discount_amount': '50000', 'discount_reason': 'Geste commercial',
+        }, format='json')
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(Decimal(response.json()['amount_ht']), Decimal('550000.00'))
+        self.assertEqual(response.json()['discount_reason'], 'Geste commercial')
+
+        too_big = self.client_comptable.post('/api/v1/finance/invoices/', {
+            'client_name': 'RE2M', 'issue_date': '2026-07-15',
+            'lines': [{'description': 'Site vitrine', 'quantity': '1', 'unit_price': '600000'}],
+            'discount_amount': '600000',
+        }, format='json')
+        self.assertEqual(too_big.status_code, 400)
+
+    def test_mark_paid_records_remaining_amount(self):
+        invoice = Invoice.objects.create(client_name='Work Class', issue_date=datetime.date(2026, 7, 15), amount_ht=Decimal('360000'), vat_rate=Decimal('0'))
+        Payment.objects.create(invoice=invoice, amount=Decimal('180000'), payment_date=datetime.date(2026, 7, 16), payment_method='ESPECES', status=Payment.Status.RECU)
+
+        response = self.client_comptable.post(f'/api/v1/finance/invoices/{invoice.id}/mark-paid/', {'payment_method': 'VIREMENT'}, format='json')
+
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(Decimal(response.json()['amount_paid']), Decimal('360000'))
+        last = invoice.payments.order_by('-created_at').first()
+        self.assertEqual(last.amount, Decimal('180000'))
+        self.assertTrue(hasattr(last, 'receipt'))
+        again = self.client_comptable.post(f'/api/v1/finance/invoices/{invoice.id}/mark-paid/', {}, format='json')
+        self.assertEqual(again.status_code, 400)
+
+    def test_line_note_is_kept_and_rendered(self):
+        from finance.pdf import render_invoice_html
+        response = self.client_comptable.post('/api/v1/finance/invoices/', {
+            'client_name': 'Work Class', 'issue_date': '2026-07-15', 'vat_rate': '0',
+            'lines': [{'description': 'Analyse et maquettes', 'quantity': '1', 'unit_price': '72000', 'note': 'soit 20 % du montant total'}],
+        }, format='json')
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()['lines'][0]['note'], 'soit 20 % du montant total')
+        html = render_invoice_html(Invoice.objects.get(pk=response.json()['id']))
+        self.assertIn('soit 20 % du montant total', html)
+
+    def test_invoice_without_lines_or_amount_is_refused(self):
+        response = self.client_comptable.post('/api/v1/finance/invoices/', {
+            'client_name': 'Acme SARL', 'issue_date': '2026-07-15', 'lines': [],
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_amount_paid_counts_received_payments_only(self):
+        invoice = Invoice.objects.create(client_name='Acme', issue_date=datetime.date(2026, 7, 15), amount_ht=Decimal('10000'), vat_rate=Decimal('0'))
+        Payment.objects.create(invoice=invoice, amount=Decimal('4000'), payment_date=datetime.date(2026, 7, 16), payment_method='ESPECES', status=Payment.Status.RECU)
+        Payment.objects.create(invoice=invoice, amount=Decimal('3000'), payment_date=datetime.date(2026, 7, 17), payment_method='ESPECES')
+        self.assertEqual(invoice.amount_paid, Decimal('4000'))
+
+    def test_editor_context_lists_quotes_with_lines(self):
+        from marketing.models import Quote, QuoteLine
+        quote = Quote.objects.create(client_name='RE2M', discount_amount=Decimal('1000'))
+        QuoteLine.objects.create(quote=quote, service_title='Site vitrine', description='6 pages', quantity=Decimal('1'), unit_price=Decimal('500000'))
+
+        response = self.client_comptable.get('/api/v1/finance/invoices/editor-context/')
+
+        self.assertEqual(response.status_code, 200)
+        option = next(q for q in response.json()['quotes'] if q['id'] == str(quote.id))
+        self.assertEqual(option['client_name'], 'RE2M')
+        self.assertEqual(option['lines'][0]['description'], 'Site vitrine — 6 pages')
+        self.assertEqual(len(option['lines']), 1)
+        self.assertEqual(Decimal(option['discount_amount']), Decimal('1000'))
+        self.assertEqual(Decimal(option['total']), Decimal('499000'))
+        self.assertIsInstance(option['payment_terms'], list)
+        self.assertIn('payment_methods', response.json()['settings'])
+
+    def test_pdf_template_renders_lines_and_balance(self):
+        from finance.pdf import render_invoice_html
+        invoice = Invoice.objects.create(
+            client_name='2NY Consulting LTD', issue_date=datetime.date(2026, 10, 28), amount_ht=Decimal('0'), vat_rate=Decimal('0'),
+            lines=[{'description': 'Affiche Edito', 'quantity': '1', 'unit_price': '10000'}],
+        )
+        Payment.objects.create(invoice=invoice, amount=Decimal('10000'), payment_date=datetime.date(2026, 10, 28), payment_method='ESPECES', status=Payment.Status.RECU)
+        html = render_invoice_html(invoice)
+        self.assertIn('Affiche Edito', html)
+        self.assertIn('2NY Consulting LTD', html)
+        self.assertIn('Reste à payer', html)
+        self.assertIn('0 FCFA', html)
+
     def test_validate_without_open_period_rejected(self):
         self.period.status = AccountingPeriod.Status.CLOTUREE
         self.period.save(update_fields=['status'])

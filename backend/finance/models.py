@@ -296,6 +296,19 @@ class Invoice(LoggedModel):
     vat_rate = models.DecimalField(max_digits=4, decimal_places=2, default=DEFAULT_VAT_RATE)
     amount_ttc = models.DecimalField(max_digits=12, decimal_places=2, editable=False)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.BROUILLON)
+    # Lignes du document : [{description, quantity, unit_price, note}] — note
+    # facultative affichée sous le prix (« soit 20 % du montant total » pour
+    # une ligne d'acompte). Quand il y en
+    # a, amount_ht en est la somme (voir save) ; une facture sans ligne (ancien
+    # format, saisie d'un montant global) garde son amount_ht tel quel.
+    lines = models.JSONField(default=list, blank=True)
+    # Réduction accordée sur la facture (HT), avec son motif : les lignes
+    # restent celles du devis, la réduction apparaît à part sur le document
+    # pour garder la trace de l'écart avec le devis.
+    discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
+    discount_reason = models.CharField(max_length=255, blank=True)
+    # Couleur du bandeau et des titres du document, comme pour les devis.
+    document_color = models.CharField(max_length=7, default='#123f91')
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
     validated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='validated_invoices')
     validated_at = models.DateTimeField(null=True, blank=True)
@@ -307,12 +320,30 @@ class Invoice(LoggedModel):
     def __str__(self):
         return self.invoice_number
 
+    def lines_total(self) -> Decimal:
+        total = Decimal('0')
+        for line in self.lines or []:
+            qty = Decimal(str(line.get('quantity') or 0))
+            price = Decimal(str(line.get('unit_price') or 0))
+            total += qty * price
+        return total.quantize(Decimal('0.01'))
+
+    @property
+    def amount_paid(self) -> Decimal:
+        """Versements reçus ou enregistrés en comptabilité (pas ceux en attente)."""
+        paid = self.payments.filter(
+            status__in=[Payment.Status.RECU, Payment.Status.ENREGISTRE],
+        ).aggregate(total=models.Sum('amount'))['total']
+        return paid or Decimal('0')
+
     def save(self, *args, **kwargs):
         if not self.invoice_number:
             year = timezone.now().year
             last = Invoice.objects.filter(invoice_number__startswith=f'FAC-{year}-').order_by('-invoice_number').first()
             seq = int(last.invoice_number.split('-')[2]) + 1 if last else 1
             self.invoice_number = f'FAC-{year}-{seq:05d}'
+        if self.lines:
+            self.amount_ht = self.lines_total() - (self.discount_amount or Decimal('0'))
         self.amount_ttc = (self.amount_ht * (1 + self.vat_rate)).quantize(Decimal('0.01'))
         super().save(*args, **kwargs)
 

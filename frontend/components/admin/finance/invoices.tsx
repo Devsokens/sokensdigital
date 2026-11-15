@@ -1,11 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import { ChevronDown, Loader2, Plus } from "lucide-react";
+import Link from "next/link";
+import { ChevronDown, Download, Loader2, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/sheet";
-import { inputClass, labelClass } from "@/components/admin/form-styles";
-import { createInvoice, listInvoices, validateInvoice } from "@/lib/api/finance";
+import { downloadInvoicePdf, listInvoices, validateInvoice } from "@/lib/api/finance";
 import { InvoicePayments } from "@/components/admin/finance/invoice-payments";
 import { formatFcfa } from "@/lib/format-currency";
 import type { Invoice } from "@/lib/api/types";
@@ -13,7 +12,6 @@ import type { Invoice } from "@/lib/api/types";
 export function Invoices() {
   const [invoices, setInvoices] = useState<Invoice[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -60,18 +58,11 @@ export function Invoices() {
           <h1 className="text-2xl font-semibold text-neutral-900">Facturation</h1>
           <p className="text-sm text-neutral-500">Validation finale des factures et écriture de régularisation automatique.</p>
         </div>
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger
-            render={
-              <Button data-tour="module-finance-facturation" className="gap-1.5 rounded-full px-4">
-                <Plus className="size-4" /> Nouvelle facture
-              </Button>
-            }
-          />
-          <SheetContent title="Nouvelle facture (brouillon)">
-            <InvoiceForm onSaved={() => { setOpen(false); load(); }} />
-          </SheetContent>
-        </Sheet>
+        <Link href="/admin/finance/facturation/nouveau">
+          <Button data-tour="module-finance-facturation" className="gap-1.5 rounded-full px-4">
+            <Plus className="size-4" /> Nouvelle facture
+          </Button>
+        </Link>
       </div>
 
       {actionError && (
@@ -87,6 +78,7 @@ export function Invoices() {
               <th className="px-4 py-3 font-medium">N°</th>
               <th className="px-4 py-3 font-medium">Client</th>
               <th className="px-4 py-3 font-medium">Montant TTC</th>
+              <th className="px-4 py-3 font-medium">Reste à payer</th>
               <th className="px-4 py-3 font-medium">Statut</th>
               <th className="px-4 py-3 font-medium">Action</th>
               <th className="w-32 px-4 py-3 font-medium">Versements</th>
@@ -96,9 +88,21 @@ export function Invoices() {
             {invoices.map((invoice) => (
               <Fragment key={invoice.id}>
               <tr>
-                <td className="px-4 py-3 text-neutral-900" data-label="N°">{invoice.invoice_number}</td>
+                <td className="px-4 py-3 text-neutral-900" data-label="N°">
+                  <Link href={`/admin/finance/facturation/${invoice.id}`} className="hover:text-primary hover:underline">
+                    {invoice.invoice_number}
+                  </Link>
+                  {invoice.quote_number && <span className="ml-1.5 text-xs text-neutral-400">{invoice.quote_number}</span>}
+                </td>
                 <td className="px-4 py-3 text-neutral-700" data-label="Client">{invoice.client_name}</td>
                 <td className="px-4 py-3 text-neutral-900" data-label="Montant TTC">{formatFcfa(invoice.amount_ttc)}</td>
+                <td className="px-4 py-3" data-label="Reste à payer">
+                  {Number(invoice.amount_ttc) - Number(invoice.amount_paid) <= 0 ? (
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Payée</span>
+                  ) : (
+                    <span className="text-neutral-900">{formatFcfa(Number(invoice.amount_ttc) - Number(invoice.amount_paid))}</span>
+                  )}
+                </td>
                 <td className="px-4 py-3" data-label="Statut">
                   <span className={`rounded-full px-2 py-0.5 text-xs ${
                     invoice.status === "VALIDEE" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
@@ -107,6 +111,20 @@ export function Invoices() {
                   </span>
                 </td>
                 <td className="px-4 py-3" data-label="Action">
+                  <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={`/admin/finance/facturation/${invoice.id}`}
+                    className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-200"
+                  >
+                    <Pencil className="size-3" /> {invoice.status === "BROUILLON" ? "Modifier" : "Ouvrir"}
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => downloadInvoicePdf(invoice.id, invoice.invoice_number).catch((err: Error) => setActionError(err.message))}
+                    className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700 hover:bg-neutral-200"
+                  >
+                    <Download className="size-3" /> PDF
+                  </button>
                   {invoice.status === "BROUILLON" && (
                     <button
                       disabled={actingId === invoice.id}
@@ -116,6 +134,7 @@ export function Invoices() {
                       Valider
                     </button>
                   )}
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   <button
@@ -132,7 +151,7 @@ export function Invoices() {
               </tr>
               {expandedId === invoice.id && (
                 <tr>
-                  <td colSpan={6} className="bg-neutral-50/60 px-4 py-5">
+                  <td colSpan={7} className="bg-neutral-50/60 px-4 py-5">
                     <InvoicePayments invoice={invoice} />
                   </td>
                 </tr>
@@ -141,73 +160,12 @@ export function Invoices() {
             ))}
             {invoices.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-neutral-400">Aucune facture pour l&apos;instant.</td>
+                <td colSpan={7} className="px-4 py-8 text-center text-neutral-400">Aucune facture pour l&apos;instant.</td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
     </div>
-  );
-}
-
-function InvoiceForm({ onSaved }: { onSaved: () => void }) {
-  const [clientName, setClientName] = useState("");
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
-  const [dueDate, setDueDate] = useState("");
-  const [amountHt, setAmountHt] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSaving(true);
-    try {
-      await createInvoice({
-        client_name: clientName, issue_date: issueDate,
-        due_date: dueDate || null, amount_ht: amountHt,
-      });
-      onSaved();
-    } catch {
-      setError("Impossible de créer la facture.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs text-destructive">{error}</p>
-      )}
-      <label className="block">
-        <span className={labelClass}>Client</span>
-        <input value={clientName} onChange={(e) => setClientName(e.target.value)} className={inputClass} required />
-      </label>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block">
-          <span className={labelClass}>Date d&apos;émission</span>
-          <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} className={inputClass} required />
-        </label>
-        <label className="block">
-          <span className={labelClass}>Échéance</span>
-          <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />
-        </label>
-      </div>
-      <label className="block">
-        <span className={labelClass}>Montant HT</span>
-        <input type="number" step="0.01" value={amountHt} onChange={(e) => setAmountHt(e.target.value)} className={inputClass} required />
-      </label>
-      <p className="text-xs text-neutral-400">
-        TVA appliquée à 18 % (taux provisoire — non confirmé par la direction financière).
-      </p>
-      <div className="flex items-center justify-between pt-2">
-        <SheetClose render={<Button type="button" variant="outline" className="rounded-full px-4">Annuler</Button>} />
-        <Button type="submit" disabled={saving} className="rounded-full px-5">
-          {saving ? <Loader2 className="size-4 animate-spin" /> : "Créer"}
-        </Button>
-      </div>
-    </form>
   );
 }

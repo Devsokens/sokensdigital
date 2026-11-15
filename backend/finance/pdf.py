@@ -1,12 +1,18 @@
-"""PDF generation for invoices — uses weasyprint for reliable rendering."""
+"""PDF des factures (WeasyPrint), d'après le modèle papier de Soken's Digital.
 
+Même mise en page que l'aperçu de l'admin
+(frontend/components/admin/finance/invoice-document.tsx). Les coordonnées de
+la société, les moyens de paiement et le cachet viennent des paramètres des
+devis (marketing.QuoteSettings), partagés par tous les documents commerciaux.
+"""
+
+from decimal import Decimal, ROUND_HALF_UP
 from io import BytesIO
-from datetime import datetime
+
 from django.template.loader import render_to_string
-from django.utils.text import slugify
 
 try:
-    from weasyprint import HTML, CSS
+    from weasyprint import HTML
     WEASYPRINT_AVAILABLE = True
 except (ImportError, OSError):
     # OSError (pas seulement ImportError): weasyprint plante au chargement
@@ -15,48 +21,82 @@ except (ImportError, OSError):
     WEASYPRINT_AVAILABLE = False
 
 
+def _amount(value) -> str:
+    """« 10 000 » — arrondi à l'unité, espace fine comme séparateur."""
+    amount = Decimal(value or 0).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+    return f'{amount:,.0f}'.replace(',', ' ')
+
+
+def _quantity(value) -> str:
+    value = Decimal(str(value or 0))
+    return f'{value.normalize():f}' if value == value.to_integral() else f'{value:.2f}'.replace('.', ',')
+
+
+def render_invoice_html(invoice) -> str:
+    """HTML de la facture, avant conversion en PDF — séparé pour être testé
+    sans WeasyPrint."""
+    from marketing.models import QuoteSettings
+    from marketing.quote_pdf import LOGO_PATH
+
+    settings_obj = QuoteSettings.load()
+    if invoice.lines:
+        lines = [
+            {
+                # Une puce par ligne de la description, comme sur le modèle papier.
+                'items': [part.strip() for part in (line.get('description') or '').split('\n') if part.strip()],
+                'quantity': _quantity(line.get('quantity')),
+                'unit_price': _amount(line.get('unit_price')),
+                'total': _amount(Decimal(str(line.get('quantity') or 0)) * Decimal(str(line.get('unit_price') or 0))),
+                'note': line.get('note', ''),
+            }
+            for line in invoice.lines
+        ]
+    else:
+        # Facture saisie avec un montant global (ancien format) : une ligne.
+        label = f'Prestations — devis {invoice.quote.quote_number}' if invoice.quote_id else 'Prestations'
+        lines = [{'items': [label], 'quantity': '1', 'unit_price': _amount(invoice.amount_ht), 'total': _amount(invoice.amount_ht)}]
+
+    amount_paid = invoice.amount_paid
+    discount = Decimal(invoice.discount_amount or 0)
+    client_label = invoice.client.company_name if invoice.client_id else (invoice.client_name or 'Client')
+    context = {
+        'invoice': invoice,
+        'settings': settings_obj,
+        'accent': invoice.document_color or '#123f91',
+        'logo_uri': LOGO_PATH.as_uri() if LOGO_PATH.exists() else '',
+        'display_number': invoice.invoice_number,
+        'client_label': client_label,
+        'address_lines': (settings_obj.company_address or '').split('\n'),
+        'lines': lines,
+        'quote_number': invoice.quote.quote_number if invoice.quote_id else '',
+        'show_discount': discount > 0,
+        'subtotal': f'{_amount(invoice.amount_ht + discount)} FCFA',
+        'discount': f'{_amount(discount)} FCFA',
+        'discount_reason': invoice.discount_reason,
+        'show_vat': bool(invoice.vat_rate),
+        'vat_percent': _quantity(Decimal(invoice.vat_rate) * 100),
+        'amount_ht': f'{_amount(invoice.amount_ht)} FCFA',
+        'vat_amount': f'{_amount(invoice.amount_ttc - invoice.amount_ht)} FCFA',
+        'amount_ttc': f'{_amount(invoice.amount_ttc)} FCFA',
+        'amount_paid': f'{_amount(amount_paid)} FCFA',
+        'amount_due': f'{_amount(max(invoice.amount_ttc - amount_paid, Decimal("0")))} FCFA',
+        'payment_methods': [
+            m.get('label', '') if isinstance(m, dict) else str(m)
+            for m in (settings_obj.payment_methods or [])
+        ],
+    }
+    return render_to_string('finance/invoice_pdf.html', context)
+
+
 def generate_invoice_pdf(invoice):
-    """
-    Generate a PDF invoice from an Invoice model instance.
-
-    Args:
-        invoice: finance.Invoice instance
-
-    Returns:
-        BytesIO PDF content, or None if weasyprint not installed
-
-    Raises:
-        ImportError if weasyprint not available
-    """
+    """PDF de la facture, en BytesIO. Lève ImportError si WeasyPrint (ou sa
+    lib native) est indisponible sur ce serveur."""
     if not WEASYPRINT_AVAILABLE:
         raise ImportError('weasyprint not installed. Install via: pip install weasyprint')
 
-    # Get client name from either Client FK or legacy client_name field
-    client_display = ''
-    if invoice.client:
-        client_display = f"{invoice.client.company_name}"
-        if invoice.client.siret:
-            client_display += f" (SIRET: {invoice.client.siret})"
-    else:
-        client_display = invoice.client_name
-
-    context = {
-        'invoice': invoice,
-        'client_display': client_display,
-        'issue_date': invoice.issue_date.strftime('%d/%m/%Y'),
-        'due_date': invoice.due_date.strftime('%d/%m/%Y') if invoice.due_date else 'À l\'établissement',
-        'vat_amount': invoice.amount_ttc - invoice.amount_ht,
-        'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M'),
-    }
-
-    # Render HTML template
-    html_string = render_to_string('finance/invoice_pdf.html', context)
-
-    # Convert to PDF
     pdf_file = BytesIO()
-    HTML(string=html_string, base_url=None).write_pdf(pdf_file)
+    HTML(string=render_invoice_html(invoice), base_url=None).write_pdf(pdf_file)
     pdf_file.seek(0)
-
     return pdf_file
 
 

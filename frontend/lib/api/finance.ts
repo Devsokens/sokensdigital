@@ -7,6 +7,7 @@ import type {
   DisbursementRequest,
   FinanceDashboard,
   Invoice,
+  InvoiceLine,
   JournalEntry,
   Paginated,
   TaxDeclaration,
@@ -187,8 +188,89 @@ export interface InvoiceInput {
   client_name: string;
   issue_date: string;
   due_date?: string | null;
-  amount_ht: string;
+  /** Facultatif quand des lignes sont fournies (le HT en est la somme). */
+  amount_ht?: string;
   vat_rate?: string;
+  lines?: InvoiceLine[];
+  discount_amount?: string;
+  discount_reason?: string;
+  document_color?: string;
+  /** Devis d'origine, quand la facture en a repris les lignes. */
+  quote?: string | null;
+}
+
+/** Données de l'éditeur : devis récupérables et coordonnées de la société. */
+export interface InvoiceEditorContext {
+  settings: {
+    company_address: string;
+    company_phone: string;
+    company_email: string;
+    company_stamp_url: string;
+    payment_methods: { label: string }[];
+  };
+  quotes: {
+    id: string;
+    quote_number: string;
+    client_name: string;
+    status: string;
+    document_color: string;
+    lines: InvoiceLine[];
+    /** Remise du devis, reprise comme réduction de la facture. */
+    discount_amount: string;
+    /** Total du devis (lignes − remise) : base des acomptes. */
+    total: string;
+    payment_terms: { label: string; percentage: number }[];
+  }[];
+}
+
+/** Enregistre le reste dû comme versement reçu (avec reçu). */
+export function markInvoicePaid(id: string, paymentMethod?: string) {
+  return apiFetch<Invoice>(`/api/v1/finance/invoices/${id}/mark-paid/`, {
+    method: "POST",
+    body: JSON.stringify(paymentMethod ? { payment_method: paymentMethod } : {}),
+  });
+}
+
+export function getInvoice(id: string) {
+  return apiFetch<Invoice>(`/api/v1/finance/invoices/${id}/`);
+}
+
+export function updateInvoice(id: string, data: Partial<InvoiceInput>) {
+  return apiFetch<Invoice>(`/api/v1/finance/invoices/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function getInvoiceEditorContext() {
+  return apiFetch<InvoiceEditorContext>("/api/v1/finance/invoices/editor-context/");
+}
+
+/** Télécharge le PDF de la facture. fetch direct : apiFetch lit du JSON. */
+export async function downloadInvoicePdf(id: string, invoiceNumber: string) {
+  const { auth } = await import("@/lib/firebase/config");
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  const response = await fetch(`${base}/api/v1/finance/invoices/${id}/pdf/`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    let detail = "";
+    try {
+      detail = (await response.json())?.detail ?? "";
+    } catch {
+      // réponse non JSON (page d'erreur)
+    }
+    throw new Error(detail || `Téléchargement du PDF impossible (erreur ${response.status}).`);
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${invoiceNumber}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 export function createInvoice(data: InvoiceInput) {

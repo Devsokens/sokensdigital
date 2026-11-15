@@ -510,6 +510,117 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Une facture validée ne peut plus être modifiée.'}, status=status.HTTP_400_BAD_REQUEST)
         return super().update(request, *args, **kwargs)
 
+    @extend_schema(
+        tags=['Finance & Comptabilité'],
+        summary="Données de l'éditeur de facture",
+        description="Devis récupérables (avec leurs lignes, pour pré-remplir une facture) et "
+        "coordonnées de la société pour l'aperçu (paramètres des devis).",
+    )
+    @action(detail=False, methods=['get'], url_path='editor-context', permission_classes=[IsFinanceRole])
+    def editor_context(self, request):
+        from marketing.models import Quote, QuoteSettings
+
+        settings_obj = QuoteSettings.load()
+        default_terms = settings_obj.default_payment_terms or []
+        quotes = (
+            Quote.objects.exclude(status=Quote.Status.REFUSE)
+            .prefetch_related('lines').order_by('-created_at')[:100]
+        )
+        quote_options = []
+        for quote in quotes:
+            lines = [
+                {
+                    'description': ' — '.join(part for part in (line.service_title, line.description) if part),
+                    'quantity': str(line.quantity),
+                    'unit_price': str(line.unit_price),
+                }
+                for line in quote.lines.all()
+            ]
+            quote_options.append({
+                'id': str(quote.id),
+                'quote_number': quote.quote_number,
+                'client_name': quote.client_name,
+                'status': quote.status,
+                'document_color': quote.document_color,
+                'lines': lines,
+                # Remise déjà accordée dans le devis : reprise comme réduction.
+                'discount_amount': str(quote.discount_amount or 0),
+                # Base des acomptes : total des prestations moins la remise.
+                'total': str(sum((line.total_line for line in quote.lines.all()), Decimal('0')) - (quote.discount_amount or 0)),
+                'payment_terms': [
+                    {'label': t.get('label', ''), 'percentage': t.get('percentage', 0)}
+                    for t in (quote.payment_terms or default_terms) if isinstance(t, dict)
+                ],
+            })
+        return Response({
+            'settings': {
+                'company_address': settings_obj.company_address,
+                'company_phone': settings_obj.company_phone,
+                'company_email': settings_obj.company_email,
+                'company_stamp_url': settings_obj.company_stamp_url,
+                'payment_methods': settings_obj.payment_methods or [],
+            },
+            'quotes': quote_options,
+        })
+
+    @extend_schema(
+        tags=['Finance & Comptabilité'],
+        summary='Marquer la facture comme payée',
+        description="Enregistre le reste dû comme un versement reçu (avec son reçu). "
+        "`payment_method` facultatif (AUTRE par défaut). Comptable, Directeur financier, Super-Admin.",
+        responses={200: InvoiceSerializer},
+    )
+    @action(detail=True, methods=['post'], url_path='mark-paid', permission_classes=[permissions.IsAuthenticated])
+    def mark_paid(self, request, pk=None):
+        if not has_role(request.user, *COMPTABLE_ROLES, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        invoice = self.get_object()
+        due = invoice.amount_ttc - invoice.amount_paid
+        if due <= 0:
+            return Response({'detail': 'Cette facture est déjà entièrement payée.'}, status=status.HTTP_400_BAD_REQUEST)
+        method = request.data.get('payment_method') or Payment.PaymentMethod.AUTRE
+        if method not in Payment.PaymentMethod.values:
+            return Response({'detail': 'Moyen de paiement inconnu.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Versements encore en attente : on ne les compte pas deux fois, le
+        # solde est encaissé en une fois et ils restent à traiter à part.
+        pending = invoice.payments.filter(status=Payment.Status.EN_ATTENTE).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        if pending:
+            return Response(
+                {'detail': f'{pending} FCFA de versements sont encore en attente : marquez-les reçus avant de solder la facture.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        payment = Payment.objects.create(
+            invoice=invoice, amount=due, payment_date=timezone.now().date(), payment_method=method,
+            status=Payment.Status.RECU, received_by=request.user, received_at=timezone.now(),
+            notes='Solde enregistré via « Marquer comme payée ».',
+        )
+        PaymentReceipt.objects.create(payment=payment, issued_by=request.user)
+        invoice.refresh_from_db()
+        return Response(InvoiceSerializer(invoice).data)
+
+    @extend_schema(
+        tags=['Finance & Comptabilité'],
+        summary='Télécharger la facture en PDF',
+        responses={(200, 'application/pdf'): bytes},
+    )
+    @action(detail=True, methods=['get'], url_path='pdf', permission_classes=[IsFinanceRole])
+    def pdf(self, request, pk=None):
+        from django.http import HttpResponse
+        from finance.pdf import generate_invoice_pdf, get_invoice_filename
+
+        invoice = self.get_object()
+        try:
+            pdf_file = generate_invoice_pdf(invoice)
+        except Exception:
+            logger.exception('PDF de la facture %s non généré', invoice.pk)
+            return Response(
+                {'detail': "La génération PDF n'est pas disponible pour le moment."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        response = HttpResponse(pdf_file.getvalue(), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{get_invoice_filename(invoice)}"'
+        return response
+
     def perform_destroy(self, instance):
         # Suppression d'une facture déjà validée/envoyée = action très
         # critique (décision du 10/09/2026) — e-mail en plus du push. Une

@@ -212,26 +212,68 @@ class InvoiceSerializer(serializers.ModelSerializer):
     created_by = UserBriefSerializer(read_only=True)
     validated_by = UserBriefSerializer(read_only=True)
     client_company_name = serializers.CharField(source='client.company_name', read_only=True, allow_null=True)
+    quote_number = serializers.CharField(source='quote.quote_number', read_only=True, allow_null=True)
+    amount_paid = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    # Calculé à partir des lignes quand il y en a : facultatif à la saisie.
+    amount_ht = serializers.DecimalField(max_digits=12, decimal_places=2, required=False)
 
     class Meta:
         model = Invoice
         fields = [
-            'id', 'invoice_number', 'client', 'client_name', 'client_company_name', 'quote', 'issue_date', 'due_date',
-            'amount_ht', 'vat_rate', 'amount_ttc', 'status', 'created_by',
+            'id', 'invoice_number', 'client', 'client_name', 'client_company_name', 'quote', 'quote_number',
+            'issue_date', 'due_date', 'lines', 'discount_amount', 'discount_reason', 'document_color',
+            'amount_ht', 'vat_rate', 'amount_ttc', 'amount_paid', 'status', 'created_by',
             'validated_by', 'validated_at', 'created_at',
         ]
         read_only_fields = [
-            'invoice_number', 'quote', 'amount_ttc', 'status', 'created_by', 'validated_by', 'validated_at',
+            'invoice_number', 'amount_ttc', 'status', 'created_by', 'validated_by', 'validated_at',
             'client_company_name',
         ]
 
     def validate(self, data):
         """Ensure either client or client_name is provided."""
-        client = data.get('client')
-        client_name = data.get('client_name', '').strip()
+        instance = self.instance
+        client = data.get('client', getattr(instance, 'client', None))
+        client_name = data.get('client_name', getattr(instance, 'client_name', '') or '').strip()
         if not client and not client_name:
             raise serializers.ValidationError('Either client or client_name must be provided.')
+        lines = data.get('lines', getattr(instance, 'lines', None) or [])
+        discount = data.get('discount_amount', getattr(instance, 'discount_amount', None)) or Decimal('0')
+        if discount < 0:
+            raise serializers.ValidationError({'discount_amount': 'La réduction ne peut pas être négative.'})
+        if lines:
+            total = sum(Decimal(str(l['quantity'])) * Decimal(str(l['unit_price'])) for l in lines)
+            if total <= 0:
+                raise serializers.ValidationError({'lines': 'Le total des lignes doit être positif.'})
+            if discount >= total:
+                raise serializers.ValidationError({'discount_amount': 'La réduction doit être inférieure au total des prestations.'})
+        elif data.get('amount_ht', getattr(instance, 'amount_ht', None)) is None:
+            raise serializers.ValidationError({'lines': 'Ajoutez au moins une ligne.'})
         return data
+
+    def validate_lines(self, value):
+        """Chaque ligne : description, quantité > 0, prix unitaire (négatif pour une remise)."""
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Format de lignes invalide.')
+        cleaned = []
+        for line in value:
+            if not isinstance(line, dict):
+                raise serializers.ValidationError('Format de ligne invalide.')
+            description = str(line.get('description') or '').strip()
+            try:
+                quantity = Decimal(str(line.get('quantity') or 0))
+                unit_price = Decimal(str(line.get('unit_price') or 0))
+            except Exception:
+                raise serializers.ValidationError('Quantité ou prix unitaire invalide.')
+            if not description and not unit_price:
+                continue  # ligne vide laissée dans le formulaire
+            # Prix négatif accepté (ligne de remise) ; le total de la facture
+            # reste contrôlé dans validate().
+            if quantity <= 0:
+                raise serializers.ValidationError('La quantité doit être positive.')
+            note = str(line.get('note') or '').strip()[:255]
+            cleaned.append({'description': description, 'quantity': str(quantity), 'unit_price': str(unit_price), 'note': note})
+        return cleaned
 
     def validate_amount_ht(self, value):
         if value <= 0:

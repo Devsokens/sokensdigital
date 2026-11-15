@@ -911,15 +911,34 @@ export interface JournalEntry {
 
 export type InvoiceStatus = "BROUILLON" | "VALIDEE";
 
+/** Ligne d'une facture (montants en chaînes décimales, comme renvoyés par l'API). */
+export interface InvoiceLine {
+  description: string;
+  quantity: string;
+  unit_price: string;
+  /** Affichée sous le prix, ex. « soit 20 % du montant total » (acompte). */
+  note?: string;
+}
+
 export interface Invoice {
   id: string;
   invoice_number: string;
   client_name: string;
+  quote: string | null;
+  quote_number: string | null;
   issue_date: string;
   due_date: string | null;
+  /** Vide pour une facture saisie avec un montant global (ancien format). */
+  lines: InvoiceLine[];
+  /** Réduction HT accordée sur la facture, à part des lignes (traçabilité). */
+  discount_amount: string;
+  discount_reason: string;
+  document_color: string;
   amount_ht: string;
   vat_rate: string;
   amount_ttc: string;
+  /** Versements reçus ou enregistrés. */
+  amount_paid: string;
   status: InvoiceStatus;
   created_by: UserBrief | null;
   validated_by: UserBrief | null;
