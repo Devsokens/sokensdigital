@@ -1831,6 +1831,23 @@ class QuotePdfSendTests(APITestCase):
         self.assertEqual(attachment.filename, f'Devis-{self.quote.quote_number}.pdf')
         self.assertEqual(attachment.mimetype, 'application/pdf')
 
+    def test_sent_quote_can_be_resent(self):
+        """Un devis déjà envoyé se renvoie (mail perdu, nouvelle adresse) ; un
+        devis accepté, lui, est figé."""
+        from unittest.mock import patch as _patch
+        self.quote.status = Quote.Status.ENVOYE
+        self.quote.save()
+        with _patch('core.mailer.send_mail', return_value=True) as fake_send:
+            res = self.client_c.post(f'/api/v1/marketing/quotes/{self.quote.id}/send/', {}, format='json')
+        self.assertEqual(res.status_code, 200, res.content)
+        fake_send.assert_called_once()
+
+        self.quote.status = Quote.Status.ACCEPTE
+        self.quote.save()
+        res = self.client_c.post(f'/api/v1/marketing/quotes/{self.quote.id}/send/', {}, format='json')
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('accepté', res.data['detail'])
+
     def test_failed_email_is_reported(self):
         """Un mail qui ne part pas doit être signalé à l'admin (email_warning),
         pas noyé dans une réponse « envoyé » sans réserve."""

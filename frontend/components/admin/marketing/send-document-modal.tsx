@@ -6,6 +6,7 @@ import { Mail, Send, X, Plus, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { cn } from "@/lib/utils";
+import { ApiError } from "@/lib/api/client";
 
 export interface SendDocumentModalProps {
   open: boolean;
@@ -69,7 +70,9 @@ export function SendDocumentModal({
       await onSend(selectedEmails, message);
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors de l'envoi de l'e-mail.");
+      // Le message du serveur (devis déjà accepté, sans ligne…) plutôt que « API … failed with 400 ».
+      const detail = err instanceof ApiError ? (err.body as { detail?: string } | null)?.detail : undefined;
+      setError(detail ?? (err instanceof Error ? err.message : "Erreur lors de l'envoi de l'e-mail."));
     } finally {
       setSending(false);
     }

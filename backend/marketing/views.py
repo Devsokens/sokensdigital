@@ -870,10 +870,16 @@ class QuoteViewSet(viewsets.ModelViewSet):
         if not has_role(request.user, *COMMERCIAL_ROLES) or quote.created_by_id != request.user.id:
             if not has_role(request.user, ROLE_SUPER_ADMIN):
                 return Response(status=status.HTTP_403_FORBIDDEN)
-        if quote.status != Quote.Status.BROUILLON:
-            return Response({'detail': 'Seul un devis en brouillon peut être envoyé.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Un devis déjà envoyé peut être renvoyé (nouvelle adresse, mail perdu) :
+        # même PDF, statut inchangé. Accepté ou refusé, il est figé.
+        if quote.status not in (Quote.Status.BROUILLON, Quote.Status.ENVOYE):
+            return Response(
+                {'detail': f"Un devis {quote.get_status_display().lower()} ne peut plus être envoyé. Dupliquez-le pour en faire une nouvelle version."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if not quote.lines.exists():
             return Response({'detail': 'Impossible d\'envoyer un devis sans ligne de prestation.'}, status=status.HTTP_400_BAD_REQUEST)
+        previous_status, previous_sent_at = quote.status, quote.sent_at
         quote.status = Quote.Status.ENVOYE
         quote.sent_at = timezone.now()
         quote.save(update_fields=['status', 'sent_at'])
@@ -900,8 +906,7 @@ class QuoteViewSet(viewsets.ModelViewSet):
             pdf_bytes = build_quote_pdf(quote)
         except Exception:
             logger.exception('PDF du devis %s non généré', quote.pk)
-            quote.status = Quote.Status.BROUILLON
-            quote.sent_at = None
+            quote.status, quote.sent_at = previous_status, previous_sent_at
             quote.save(update_fields=['status', 'sent_at'])
             return Response(
                 {'detail': "Le PDF du devis n'a pas pu être généré : devis non envoyé. Réessayez."},
