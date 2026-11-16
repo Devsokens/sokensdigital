@@ -557,6 +557,8 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 'company_address': settings_obj.company_address,
                 'company_phone': settings_obj.company_phone,
                 'company_email': settings_obj.company_email,
+                'company_rccm': settings_obj.company_rccm,
+                'company_nif': settings_obj.company_nif,
                 'company_stamp_url': settings_obj.company_stamp_url,
                 'payment_methods': settings_obj.payment_methods or [],
             },

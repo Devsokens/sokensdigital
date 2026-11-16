@@ -27,6 +27,7 @@
 
   .company { padding-left: 24px; font-size: 11.5px; line-height: 1.55; color: #262626; }
   .company .name { font-size: 14px; font-weight: bold; color: #171717; margin-bottom: 4px; }
+  .company .legal { margin-top: 6px; font-size: 10px; letter-spacing: 0.02em; color: #737373; }
 
   table.lines { margin-top: 36px; width: 100%; border-collapse: collapse; font-size: 11.5px; }
   table.lines thead { display: table-header-group; }
@@ -87,6 +88,9 @@
       {% for line in address_lines %}<p>{{ line }}</p>{% endfor %}
       {% if settings.company_phone %}<p>Tél : {{ settings.company_phone }}</p>{% endif %}
       {% if settings.company_email %}<p>Mail : {{ settings.company_email }}</p>{% endif %}
+      {% if settings.company_rccm or settings.company_nif %}
+      <p class="legal">{% if settings.company_rccm %}RCCM : {{ settings.company_rccm }}{% endif %}{% if settings.company_rccm and settings.company_nif %} &nbsp;·&nbsp; {% endif %}{% if settings.company_nif %}NIF : {{ settings.company_nif }}{% endif %}</p>
+      {% endif %}
     </div>
 
     <table class="lines">

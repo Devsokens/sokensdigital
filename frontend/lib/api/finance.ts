@@ -205,6 +205,8 @@ export interface InvoiceEditorContext {
     company_address: string;
     company_phone: string;
     company_email: string;
+    company_rccm: string;
+    company_nif: string;
     company_stamp_url: string;
     payment_methods: { label: string }[];
   };

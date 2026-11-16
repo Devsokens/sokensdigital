@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 745 615" fill="#cfcfcf">
+  <!-- Balance de la justice : filigrane par défaut des contrats (modèle papier). -->
+  <circle cx="365" cy="20" r="17"/>
+  <path d="M361 34 L369 34 L378 520 Q382 560 420 566 L470 572 Q520 580 540 610 L190 610 Q215 580 270 572 L320 566 Q348 560 352 520 Z"/>
+  <path d="M105 9 L365 64 L630 127 L630 133 L365 78 L105 15 Z"/>
+  <circle cx="100" cy="12" r="9"/>
+  <circle cx="636" cy="131" r="9"/>
+  <g stroke="#cfcfcf" stroke-width="7" stroke-linecap="round" fill="none">
+    <path d="M122 16 L40 288 M122 16 L205 288"/>
+    <path d="M612 129 L528 403 M612 129 L697 403"/>
+  </g>
+  <path d="M0 286 H245 V294 Q225 335 122 337 Q20 335 0 294 Z"/>
+  <path d="M470 401 H740 V409 Q720 450 605 452 Q490 450 470 409 Z"/>
+</svg>

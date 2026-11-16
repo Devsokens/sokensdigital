@@ -76,6 +76,13 @@ export function InvoiceDocument({
           ))}
           {settings.company_phone && <p>Tél : {settings.company_phone}</p>}
           {settings.company_email && <p>Mail : {settings.company_email}</p>}
+          {(settings.company_rccm || settings.company_nif) && (
+            <p className="mt-1.5 text-[10px] tracking-wide text-neutral-500">
+              {[settings.company_rccm && `RCCM : ${settings.company_rccm}`, settings.company_nif && `NIF : ${settings.company_nif}`]
+                .filter(Boolean)
+                .join("  ·  ")}
+            </p>
+          )}
         </div>
 
         <table className="mt-9 w-full border-collapse">

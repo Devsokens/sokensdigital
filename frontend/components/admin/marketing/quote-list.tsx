@@ -457,7 +457,25 @@ export function QuoteSettingsForm({ onSaved }: { onSaved: () => void }) {
             className={inputClass}
           />
         </label>
+        <label className="block">
+          <span className={labelClass}>N° RCCM</span>
+          <input
+            value={settings.company_rccm ?? ""}
+            onChange={(e) => setSettings({ ...settings, company_rccm: e.target.value })}
+            placeholder="GA-LBV-01-…"
+            className={inputClass}
+          />
+        </label>
+        <label className="block">
+          <span className={labelClass}>NIF</span>
+          <input
+            value={settings.company_nif ?? ""}
+            onChange={(e) => setSettings({ ...settings, company_nif: e.target.value })}
+            className={inputClass}
+          />
+        </label>
       </div>
+      <p className="-mt-2 text-xs text-neutral-400">Le RCCM et le NIF figurent sur les factures, sous les coordonnées de la société.</p>
 
       <StampUploadField
         value={settings.company_stamp_url}

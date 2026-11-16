@@ -10,6 +10,7 @@ from marketing.workflow_views import LeadWorkflowActionView, RejectLeadView, Sub
 from marketing.views import (
     BlogCommentModerationViewSet,
     BlogPostViewSet,
+    ContractSettingsView,
     ImageUploadView,
     LeadViewSet,
     PageSectionViewSet,
@@ -28,6 +29,7 @@ from marketing.views import (
     PublicTestimonialSubmitView,
     QuoteSettingsView,
     QuoteViewSet,
+    ServiceContractViewSet,
     ShowcaseProjectViewSet,
     SiteSettingsView,
     SocialMediaCredentialsView,
@@ -45,6 +47,7 @@ router.register('cms/page-sections', PageSectionViewSet, basename='page-section'
 router.register('cms/showcase-projects', ShowcaseProjectViewSet, basename='showcase-project')
 router.register('social-posts', SocialPostViewSet, basename='social-post')
 router.register('quotes', QuoteViewSet, basename='quote')
+router.register('contracts', ServiceContractViewSet, basename='service-contract')
 router.register('specifications', SpecificationViewSet, basename='specification')
 router.register('cms/blog-comments', BlogCommentModerationViewSet, basename='blog-comment-moderation')
 
@@ -54,6 +57,7 @@ urlpatterns = [
     path('cms/upload-video/', VideoUploadView.as_view(), name='upload-video'),
     path('cms/site-settings/', SiteSettingsView.as_view(), name='site-settings'),
     path('quote-settings/', QuoteSettingsView.as_view(), name='quote-settings'),
+    path('contract-settings/', ContractSettingsView.as_view(), name='contract-settings'),
     path('social-media-credentials/', SocialMediaCredentialsView.as_view(), name='social-media-credentials'),
     path('submitted-projects/', SubmittedProjectListView.as_view(), name='submitted-projects'),
     path('leads/<uuid:pk>/workflow/', LeadWorkflowActionView.as_view(), name='lead-workflow'),

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Building2,
   FileText,
@@ -26,6 +27,18 @@ import {
 import { EmploymentContractViewerModal } from "@/components/admin/rh/employment-contract-viewer-modal";
 import { SendDocumentModal } from "@/components/admin/marketing/send-document-modal";
 import { cn } from "@/lib/utils";
+import {
+  deleteServiceContract,
+  downloadServiceContractPdf,
+  listServiceContracts,
+  type ServiceContract,
+} from "@/lib/api/contracts";
+
+const SERVICE_STATUS: Record<ServiceContract["status"], { label: string; className: string }> = {
+  BROUILLON: { label: "Brouillon", className: "bg-neutral-100 text-neutral-600" },
+  ENVOYE: { label: "Envoyé au client", className: "bg-sky-100 text-sky-800" },
+  SIGNE: { label: "Signé", className: "bg-emerald-100 text-emerald-800" },
+};
 
 const STATUS_LABELS: Record<string, string> = {
   BROUILLON: "Brouillon",
@@ -74,11 +87,15 @@ export function EmploymentContractList({
 }: {
   basePath?: string;
 }) {
+  const router = useRouter();
   const [contracts, setContracts] = useState<EmploymentContractDocument[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewing, setViewing] = useState<EmploymentContractDocument | null>(null);
   const [sendingContract, setSendingContract] = useState<EmploymentContractDocument | null>(null);
   const [partyFilter, setPartyFilter] = useState<PartyFilter>("tous");
+  // Contrats de prestation enregistrés côté serveur (modèle de contrat).
+  const [serviceContracts, setServiceContracts] = useState<ServiceContract[]>([]);
+  const [serviceError, setServiceError] = useState<string | null>(null);
 
   const visibleContracts = useMemo(
     () =>
@@ -91,8 +108,15 @@ export function EmploymentContractList({
   async function load() {
     setLoading(true);
     try {
-      const data = await listEmploymentContracts();
+      const [data, services] = await Promise.all([
+        listEmploymentContracts(),
+        listServiceContracts().catch(() => {
+          setServiceError("Les contrats de prestation n'ont pas pu être chargés.");
+          return [] as ServiceContract[];
+        }),
+      ]);
       setContracts(data);
+      setServiceContracts(services);
     } finally {
       setLoading(false);
     }
@@ -117,7 +141,7 @@ export function EmploymentContractList({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={`${basePath}/nouveau?type=client`}>
+          <Link href={`${basePath}/prestation/nouveau`}>
             <Button variant="outline" className="gap-1.5 rounded-full px-4">
               <Building2 className="size-4" /> Contrat client
             </Button>
@@ -146,6 +170,8 @@ export function EmploymentContractList({
         ))}
       </div>
 
+      {serviceError && <p className="mb-3 text-xs text-destructive">{serviceError}</p>}
+
       {loading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="size-6 animate-spin text-neutral-400" />
@@ -165,6 +191,83 @@ export function EmploymentContractList({
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-200">
+              {partyFilter !== "SALARIE" &&
+                serviceContracts.map((item) => (
+                  <tr key={item.id} className="cursor-pointer hover:bg-neutral-50/50" onClick={() => router.push(`${basePath}/prestation/${item.id}`)}>
+                    <td className="px-4 py-3 font-mono font-semibold text-primary">
+                      <span className="flex items-center gap-1.5">
+                        <FileText className="size-3.5 text-neutral-400" />
+                        {item.contract_number}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-medium text-neutral-800">
+                      <div className="flex items-center gap-1.5">
+                        <Building2 className="size-3.5 shrink-0 text-neutral-400" />
+                        {item.client_name || "Client à préciser"}
+                      </div>
+                      {item.client_email && <div className="text-xs text-neutral-400">{item.client_email}</div>}
+                    </td>
+                    <td className="px-4 py-3 text-neutral-600">
+                      <div className="max-w-64 truncate">
+                        {item.services_description.replace(/^- /gm, "").split("\n").filter(Boolean).join(", ") || "—"}
+                      </div>
+                      {item.quote_number && <div className="text-xs text-neutral-400">Devis {item.quote_number}</div>}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-neutral-700">Prestation</td>
+                    <td className="px-4 py-3">
+                      <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", SERVICE_STATUS[item.status].className)}>
+                        {SERVICE_STATUS[item.status].label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-neutral-500">{formatDate(item.start_date)}</td>
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                      <Popover>
+                        <PopoverTrigger
+                          render={
+                            <button
+                              type="button"
+                              aria-label="Actions"
+                              className="inline-flex size-7 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+                            >
+                              <MoreHorizontal className="size-4" />
+                            </button>
+                          }
+                        />
+                        <PopoverContent className="w-52 p-1" align="end">
+                          <Link
+                            href={`${basePath}/prestation/${item.id}`}
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50"
+                          >
+                            <Pencil className="size-3.5" /> Ouvrir
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => downloadServiceContractPdf(item.id, item.contract_number).catch((err: Error) => alert(err.message))}
+                            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50"
+                          >
+                            <Printer className="size-3.5" /> Télécharger le PDF
+                          </button>
+                          <ConfirmModal
+                            title="Supprimer le contrat"
+                            description={`Supprimer définitivement "${item.contract_number}" (${item.client_name || "sans client"}) ? Cette action est irréversible.`}
+                            onConfirm={async () => {
+                              await deleteServiceContract(item.id);
+                              load();
+                            }}
+                            trigger={
+                              <button
+                                type="button"
+                                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-destructive hover:bg-destructive/5"
+                              >
+                                <Trash2 className="size-3.5" /> Supprimer
+                              </button>
+                            }
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </td>
+                  </tr>
+                ))}
               {visibleContracts &&
                 visibleContracts.map((item) => (
                   <tr key={item.id} className="hover:bg-neutral-50/50">
@@ -274,7 +377,7 @@ export function EmploymentContractList({
                     </td>
                   </tr>
                 ))}
-              {visibleContracts && visibleContracts.length === 0 && (
+              {visibleContracts && visibleContracts.length === 0 && (partyFilter === "SALARIE" || serviceContracts.length === 0) && (
                 <tr>
                   <td colSpan={7} className="px-4 py-12 text-center text-neutral-400">
                     Aucun contrat pour le moment.

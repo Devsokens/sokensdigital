@@ -19,7 +19,7 @@ from rest_framework.views import APIView
 
 from core.constants import (
     ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_MARKETING, ROLE_COMMERCIAL, ROLE_PROJECT_MANAGER,
-    ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER, ROLE_DEVELOPER,
+    ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER, ROLE_DEVELOPER, ROLE_RH_MANAGER, ROLE_ADMIN,
 )
 from core.firestore_client import (
     adjust_blog_like_count,
@@ -36,8 +36,8 @@ from core.permissions import has_role
 from core.sanitize import sanitize_plain_text
 from core.storage import upload_image, upload_video
 from marketing.models import (
-    BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject,
-    SiteSettings, SocialMediaCredentials, SocialPost, Specification, TestimonialSubmission,
+    BlogPost, ContractSettings, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ServiceContract,
+    ShowcaseProject, SiteSettings, SocialMediaCredentials, SocialPost, Specification, TestimonialSubmission,
 )
 from marketing.conversion import convert_lead_to_client
 from marketing.emails import send_lead_acknowledgement
@@ -47,6 +47,7 @@ from marketing.serializers import (
     BlogCommentCreateSerializer,
     BlogPostPublicSerializer,
     BlogPostSerializer,
+    ContractSettingsSerializer,
     LeadPublicCreateSerializer,
     LeadSerializer,
     PageSectionPublicSerializer,
@@ -54,6 +55,7 @@ from marketing.serializers import (
     QuoteSerializer,
     QuoteSettingsSerializer,
     QuoteTrackSerializer,
+    ServiceContractSerializer,
     ShowcaseProjectPublicSerializer,
     ShowcaseProjectSerializer,
     SiteSettingsSerializer,
@@ -68,6 +70,9 @@ MARKETING_ROLES = (ROLE_RESPONSABLE_MARKETING,)
 COMMERCIAL_ROLES = (ROLE_COMMERCIAL,)
 FINANCE_CONVERT_ROLES = (ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER)
 CHEF_DE_PROJET_ROLES = (ROLE_PROJECT_MANAGER,)
+# Contrats de prestation : rédigés par les RH / l'administration (module
+# Contrats), le commercial et la finance.
+CONTRACT_ROLES = (ROLE_RH_MANAGER, ROLE_ADMIN, ROLE_COMMERCIAL, ROLE_RESPONSABLE_MARKETING, ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER)
 # Cahier des charges is a shared Technique + Marketing document — every
 # role from both departments (plus Super-Admin) can read/write any of
 # them, no per-owner restriction (collaborative internal doc, unlike Quote).
@@ -264,7 +269,7 @@ class CanUploadImage(permissions.BasePermission):
     produisent les devis et factures — cachet / signature des documents."""
 
     def has_permission(self, request, view):
-        return has_role(request.user, *MARKETING_ROLES, *COMMERCIAL_ROLES, *FINANCE_CONVERT_ROLES, ROLE_SUPER_ADMIN)
+        return has_role(request.user, *MARKETING_ROLES, *COMMERCIAL_ROLES, *FINANCE_CONVERT_ROLES, *CONTRACT_ROLES, ROLE_SUPER_ADMIN)
 
 
 class CanEditDocumentSettings(permissions.BasePermission):
@@ -1396,3 +1401,159 @@ class SendDocumentEmailView(APIView):
             'recipients': recipient_emails,
         })
 
+
+
+class CanManageContracts(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return has_role(request.user, *CONTRACT_ROLES, ROLE_SUPER_ADMIN)
+
+
+@extend_schema(tags=['Marketing & Commercial'])
+class ContractSettingsView(APIView):
+    """Singleton : identité du Prestataire, signataire, ville, filigrane."""
+
+    permission_classes = [CanManageContracts]
+
+    def get(self, request):
+        return Response(ContractSettingsSerializer(ContractSettings.load()).data)
+
+    def patch(self, request):
+        serializer = ContractSettingsSerializer(ContractSettings.load(), data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+@extend_schema(tags=['Marketing & Commercial'])
+class ServiceContractViewSet(viewsets.ModelViewSet):
+    """Contrats de prestation de services (modèle de Soken's Digital)."""
+
+    serializer_class = ServiceContractSerializer
+    permission_classes = [CanManageContracts]
+    # Liste complète (quelques dizaines de contrats) : pas de pagination.
+    pagination_class = None
+
+    def get_queryset(self):
+        return ServiceContract.objects.select_related('quote', 'created_by', 'client')
+
+    def perform_create(self, serializer):
+        extra = {'created_by': self.request.user}
+        if not serializer.validated_data.get('provider_signatory'):
+            extra['provider_signatory'] = ContractSettings.load().provider_signatory
+        serializer.save(**extra)
+
+    @extend_schema(summary="Données de l'éditeur : paramètres, devis et clients à reprendre")
+    @action(detail=False, methods=['get'], url_path='editor-context')
+    def editor_context(self, request):
+        from administration.models import Client
+        from marketing.contract_pdf import contract_settings_dict
+
+        quotes = []
+        for quote in Quote.objects.select_related('lead').prefetch_related('lines').order_by('-created_at')[:200]:
+            lines = list(quote.lines.all())
+            total_ht = sum((line.total_line for line in lines), Decimal('0')) - Decimal(quote.discount_amount or 0)
+            quotes.append({
+                'id': str(quote.id),
+                'quote_number': quote.quote_number,
+                'client_name': quote.client_name,
+                'client_email': (quote.lead.email if quote.lead else '') or '',
+                'client_id': str(quote.lead.client_id) if quote.lead and quote.lead.client_id else None,
+                'subject': quote.subject,
+                'description': quote.description,
+                'project_duration': quote.project_duration,
+                'lines': [{'service_title': l.service_title, 'description': l.description} for l in lines],
+                'total_ht': str(total_ht.quantize(Decimal('1'))),
+                'payment_terms': quote.payment_terms or [],
+                'document_color': quote.document_color,
+            })
+        clients = [
+            {
+                'id': str(c.id),
+                'company_name': c.company_name,
+                'address': ', '.join(x for x in [c.address.strip(), c.city.strip(), c.country.strip()] if x),
+                'email': c.email,
+            }
+            for c in Client.objects.order_by('company_name')
+        ]
+        return Response({
+            'settings': contract_settings_dict(),
+            'quote_amount_basis': QuoteSettings.load().amount_basis,
+            'quotes': quotes,
+            'clients': clients,
+        })
+
+    @extend_schema(summary='Télécharger le contrat en PDF', responses={(200, 'application/pdf'): bytes})
+    @action(detail=True, methods=['get'])
+    def pdf(self, request, pk=None):
+        from django.http import HttpResponse
+        from marketing.contract_pdf import build_contract_pdf
+
+        contract = self.get_object()
+        try:
+            pdf_bytes = build_contract_pdf(contract)
+        except Exception:
+            logger.exception('PDF du contrat %s non généré', contract.pk)
+            return Response(
+                {'detail': "La génération PDF n'est pas disponible pour le moment."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="Contrat-{contract.contract_number}.pdf"'
+        return response
+
+    @extend_schema(summary='Envoyer le contrat au client (PDF joint)')
+    @action(detail=True, methods=['post'])
+    def send(self, request, pk=None):
+        from core import mailer
+        from marketing.contract_pdf import build_contract_pdf
+
+        contract = self.get_object()
+        if contract.status == ServiceContract.Status.SIGNE:
+            return Response({'detail': 'Ce contrat est déjà signé.'}, status=status.HTTP_400_BAD_REQUEST)
+        recipient_emails = request.data.get('recipient_emails') or []
+        if isinstance(recipient_emails, str):
+            recipient_emails = [e.strip() for e in recipient_emails.split(',') if e.strip()]
+        if not recipient_emails and contract.client_email:
+            recipient_emails = [contract.client_email]
+        if not recipient_emails:
+            return Response({'detail': 'Indiquez au moins une adresse e-mail.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            pdf_bytes = build_contract_pdf(contract)
+        except Exception:
+            logger.exception('PDF du contrat %s non généré', contract.pk)
+            return Response(
+                {'detail': "Le PDF du contrat n'a pas pu être généré : contrat non envoyé. Réessayez."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        attachment = mailer.Attachment(filename=f'Contrat-{contract.contract_number}.pdf', content=pdf_bytes)
+        custom_message = request.data.get('message') or (
+            'Veuillez trouver ci-joint le contrat de prestation de services relatif à notre collaboration.'
+        )
+        body = (
+            f"Bonjour {contract.client_name or ''},\n\n"
+            f"{custom_message}\n\n"
+            "Le contrat est joint à ce message au format PDF. Merci de nous le retourner "
+            "paraphé et signé, précédé de la mention « Lu et approuvé ».\n\n"
+            "Cordialement,\nL'équipe Soken's Digital"
+        )
+        failed = []
+        for dest in recipient_emails:
+            try:
+                sent = mailer.send_mail(
+                    dest, f"Contrat {contract.contract_number} — Soken's Digital", body, attachments=[attachment],
+                )
+                if sent is False:
+                    failed.append(dest)
+            except Exception:
+                logger.exception('Envoi du contrat %s à %s impossible', contract.pk, dest)
+                failed.append(dest)
+
+        if len(failed) < len(recipient_emails):
+            contract.status = ServiceContract.Status.ENVOYE
+            contract.sent_at = timezone.now()
+            contract.save(update_fields=['status', 'sent_at', 'updated_at'])
+        data = ServiceContractSerializer(contract).data
+        if failed:
+            data['email_warning'] = f"Envoi impossible vers : {', '.join(failed)}."
+        return Response(data)

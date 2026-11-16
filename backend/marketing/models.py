@@ -816,6 +816,11 @@ class QuoteSettings(LoggedModel):
     company_address = models.TextField(blank=True)
     company_phone = models.CharField(max_length=100, blank=True)
     company_email = models.CharField(max_length=255, blank=True)
+    # Mentions obligatoires sur les factures (le contrat de prestation, art.
+    # 7.3 : « une facture mentionnant son identité, son NIF et son numéro
+    # RCCM »). Valeurs de la société par défaut.
+    company_rccm = models.CharField(max_length=100, blank=True, default='GA-LBV-01-2026-B12-00774')
+    company_nif = models.CharField(max_length=100, blank=True, default='2026 0105 7321D')
     payment_methods = models.JSONField(default=list, blank=True)
     default_payment_terms = models.JSONField(default=list, blank=True)
     footer_note = models.TextField(blank=True)
@@ -874,3 +879,157 @@ class TestimonialSubmission(models.Model):
 
     def __str__(self):
         return f'{self.name} — {self.get_status_display()}'
+
+
+DEFAULT_CONTRACT_PROVIDER_IDENTITY = (
+    "SOKEN’S DIGITAL, Société à Responsabilité Limitée, dont le domicile est situé à l’entrée "
+    "en face de la station de Louis, immatriculée au RCCM sous le n° GA-LBV-01-2026-B12-00774, "
+    "NIF n° 2026 0105 7321D, représentée par Jackie Thierry Enock MOUBEYI en qualité de Gérant."
+)
+DEFAULT_CONTRACT_PREAMBLE = (
+    "Le Client souhaite confier au Prestataire la réalisation de prestations de conception de "
+    "solutions digitales pour accélérer sa transformation numérique. Le Prestataire déclare "
+    "disposer des compétences, des moyens et des autorisations nécessaires pour les exécuter."
+)
+
+
+def default_contract_schedule():
+    """Échéancier du modèle de contrat (article 7.3)."""
+    return [
+        {'label': 'À la signature du contrat et réception de la facture', 'percentage': 20},
+        {'label': 'Au lancement des travaux', 'percentage': 30},
+        {'label': 'À la livraison des livrables', 'percentage': 50},
+    ]
+
+
+class ContractSettings(LoggedModel):
+    """Singleton (même convention que QuoteSettings) : ce qui est commun à
+    tous les contrats de prestation — identité du Prestataire, signataire,
+    ville, filigrane de fond de page."""
+
+    class Watermark(models.TextChoices):
+        BALANCE = 'BALANCE', 'Balance (par défaut)'
+        IMAGE = 'IMAGE', 'Image personnalisée'
+        AUCUN = 'AUCUN', 'Aucun filigrane'
+
+    provider_identity = models.TextField(default=DEFAULT_CONTRACT_PROVIDER_IDENTITY)
+    provider_signatory = models.CharField(
+        max_length=255, default='Jackie Thierry Enock MOUBEYI, Gérant',
+    )
+    # Ville de signature et des juridictions compétentes (articles 16 et 17).
+    city = models.CharField(max_length=100, default='Libreville')
+    watermark = models.CharField(max_length=10, choices=Watermark.choices, default=Watermark.BALANCE)
+    watermark_url = models.URLField(max_length=1000, blank=True)
+    # Opacité de l'image personnalisée (la balance est déjà grise claire).
+    watermark_opacity = models.PositiveSmallIntegerField(default=15)
+    # Cachet / signature des paramètres des documents, dans le cadre du
+    # Prestataire.
+    apply_stamp = models.BooleanField(default=True)
+
+    def __str__(self):
+        return 'Paramètres des contrats'
+
+    @classmethod
+    def load(cls) -> 'ContractSettings':
+        obj = cls.objects.first()
+        return obj if obj is not None else cls.objects.create()
+
+
+class ServiceContract(LoggedModel):
+    """Contrat de prestation de services avec un client, d'après le modèle
+    de Soken's Digital (droit gabonais). Le texte des articles est fixe
+    (marketing.contract_document) ; seules les variables sont ici. Les
+    coordonnées du client sont copiées, pour que le contrat ne change pas
+    si la fiche client est modifiée ensuite."""
+
+    class Status(models.TextChoices):
+        BROUILLON = 'BROUILLON', 'Brouillon'
+        ENVOYE = 'ENVOYE', 'Envoyé'
+        SIGNE = 'SIGNE', 'Signé'
+
+    class Renewal(models.TextChoices):
+        TERME = 'TERME', 'Prend fin à son terme'
+        RENOUVELABLE = 'RENOUVELABLE', 'Renouvelable par accord écrit'
+
+    class AmountBasis(models.TextChoices):
+        HT = 'HT', 'Hors taxes'
+        TTC = 'TTC', 'Toutes taxes comprises'
+
+    contract_number = models.CharField(max_length=20, unique=True, editable=False)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.BROUILLON)
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='service_contracts',
+    )
+    client = models.ForeignKey(
+        'administration.Client', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='service_contracts',
+    )
+    quote = models.ForeignKey(
+        Quote, on_delete=models.SET_NULL, null=True, blank=True, related_name='contracts',
+    )
+
+    # Le Client
+    client_name = models.CharField(max_length=255, blank=True)
+    client_legal_form = models.CharField(max_length=255, blank=True)
+    client_address = models.CharField(max_length=500, blank=True)
+    client_rccm = models.CharField(max_length=100, blank=True)
+    client_nif = models.CharField(max_length=100, blank=True)
+    client_representative = models.CharField(max_length=255, blank=True)
+    client_email = models.CharField(max_length=255, blank=True)
+
+    preamble = models.TextField(default=DEFAULT_CONTRACT_PREAMBLE, blank=True)
+    services_description = models.TextField(blank=True)
+
+    # Article 4 — Durée
+    start_date = models.DateField(null=True, blank=True)
+    duration = models.CharField(max_length=100, blank=True)
+    renewal = models.CharField(max_length=15, choices=Renewal.choices, default=Renewal.TERME)
+    renewal_notice_days = models.PositiveSmallIntegerField(default=30)
+
+    # Article 7 — Prix et paiement
+    amount = models.DecimalField(max_digits=14, decimal_places=0, default=Decimal('0'))
+    amount_basis = models.CharField(max_length=3, choices=AmountBasis.choices, default=AmountBasis.HT)
+    payment_schedule = models.JSONField(default=default_contract_schedule, blank=True)
+    first_payment_days = models.PositiveSmallIntegerField(default=30)
+    payment_methods = models.CharField(max_length=255, default='par chèque, par mobile money ou en espèces', blank=True)
+    late_penalty_rate = models.DecimalField(max_digits=4, decimal_places=1, default=Decimal('2'))
+
+    # Article 8 — Frais et débours
+    expenses_covered = models.BooleanField(default=False)
+    expenses_threshold = models.DecimalField(max_digits=14, decimal_places=0, null=True, blank=True)
+
+    # Articles 9 et 10
+    confidentiality_years = models.PositiveSmallIntegerField(default=5)
+    liability_cap = models.CharField(max_length=255, default='au montant total du prix du contrat', blank=True)
+    insurance = models.CharField(max_length=500, blank=True)
+
+    # Annexes
+    annex_specifications = models.TextField(blank=True)
+    annex_pricing = models.TextField(blank=True)
+
+    # Signatures
+    signing_date = models.DateField(null=True, blank=True)
+    client_signatory = models.CharField(max_length=255, blank=True)
+    provider_signatory = models.CharField(max_length=255, blank=True)
+
+    document_color = models.CharField(max_length=7, default='#1f3864')
+    show_header = models.BooleanField(default=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta(LoggedModel.Meta):
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.contract_number
+
+    def save(self, *args, **kwargs):
+        if not self.contract_number:
+            year = timezone.now().year
+            last = (
+                ServiceContract.objects.filter(contract_number__startswith=f'CTR-{year}-')
+                .order_by('-contract_number').first()
+            )
+            seq = int(last.contract_number.split('-')[2]) + 1 if last else 1
+            self.contract_number = f'CTR-{year}-{seq:04d}'
+        super().save(*args, **kwargs)

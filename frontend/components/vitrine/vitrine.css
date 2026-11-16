@@ -174,8 +174,9 @@
 .sd-orb{animation:sd-orb 14s linear infinite}
 .sd-page-blog .sd-orb{animation-duration:16s}
 @keyframes sd-orb{to{transform:rotate(360deg)}}
-.sd-logo{filter:grayscale(1);opacity:.7;transition:filter .3s ease,opacity .3s ease}
-.sd-logo:hover{filter:none;opacity:1}
+/* Logos partenaires en couleur ; léger agrandissement au survol. */
+.sd-logo{transition:transform .3s ease}
+.sd-logo:hover{transform:scale(1.06)}
 /* Bouton d'appel : téléphone qui sonne */
 .sd .sd-call{position:relative;flex:none;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid oklch(var(--sd-primary) / .45);background:oklch(var(--sd-primary) / .1);color:oklch(var(--sd-primary-hi));transition:background-color .2s ease,transform .2s ease}
 .sd .sd-call:hover{background:oklch(var(--sd-primary) / .2);color:oklch(var(--sd-primary-hi));transform:translateY(-1px)}

@@ -5,7 +5,7 @@ import { AddItem, Editable, ItemTools, useEditor } from "../editable";
 import { FONT_DISPLAY } from "../ui";
 
 /** Bandeau des logos partenaires sous le hero : logos clients du CMS
- * (atténués, en couleur au survol). Sur le site, un client sans logo affiche
+ * (en couleur, en grand). Sur le site, un client sans logo affiche
  * son nom (contenu par défaut) ou rien ; dans l'éditeur, il affiche un
  * emplacement « Ajouter le logo », et le nom se modifie sous chaque logo.
  * Pas de libellé visible ; le titre de la section sert d'intitulé accessible. */
@@ -15,7 +15,7 @@ export function HomeTrust({ section }: { section: Section }) {
 
   return (
     <section aria-label={section.title} style={{ borderTop: "1px solid rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "oklch(var(--sd-bg-deep))" }}>
-      <div style={{ maxWidth: "1240px", margin: "0 auto", padding: "26px clamp(20px, 4vw, 40px)", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "16px clamp(36px, 5vw, 80px)" }}>
+      <div style={{ maxWidth: "1240px", margin: "0 auto", padding: "34px clamp(20px, 4vw, 40px)", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "22px clamp(36px, 5vw, 80px)" }}>
         {partners.map((partner, i) => {
           if (!editor && !partner.logo && !partner.name) return null;
           const hint = `Logo de ${partner.name || "ce client"} (fond transparent de préférence).`;
@@ -25,7 +25,7 @@ export function HomeTrust({ section }: { section: Section }) {
               {partner.logo ? (
                 <Editable section={section} path={{ scope: "item", index: i, key: "logo_url" }} kind="image" value={partner.logo} hint={hint}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img className="sd-logo" src={partner.logo} alt={partner.name} loading="lazy" decoding="async" style={{ display: "block", height: "48px", width: "auto", maxWidth: "170px", objectFit: "contain" }} />
+                  <img className="sd-logo" src={partner.logo} alt={partner.name} loading="lazy" decoding="async" style={{ display: "block", height: "clamp(56px, 7vw, 76px)", width: "auto", maxWidth: "clamp(150px, 20vw, 240px)", objectFit: "contain" }} />
                 </Editable>
               ) : editor ? (
                 <Editable section={section} path={{ scope: "item", index: i, key: "logo_url" }} kind="image" value="" hint={hint}>

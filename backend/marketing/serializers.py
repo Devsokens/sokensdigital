@@ -4,7 +4,7 @@ from core.models import User
 from core.sanitize import sanitize_html, sanitize_plain_text
 from core.serializers import UserBriefSerializer
 from marketing.models import (
-    BlogPost, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ShowcaseProject,
+    BlogPost, ContractSettings, Lead, PageSection, Quote, QuoteLine, QuoteSettings, ServiceContract, ShowcaseProject,
     SiteSettings, SocialMediaCredentials, SocialPost, Specification, SpecificationLine,
     TestimonialSubmission,
 )
@@ -399,6 +399,98 @@ class QuoteSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuoteSettings
         fields = [
-            'company_address', 'company_phone', 'company_email', 'company_stamp_url',
+            'company_address', 'company_phone', 'company_email', 'company_rccm', 'company_nif', 'company_stamp_url',
             'payment_methods', 'default_payment_terms', 'footer_note', 'amount_basis',
         ]
+
+
+class ContractSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContractSettings
+        fields = [
+            'provider_identity', 'provider_signatory', 'city', 'watermark', 'watermark_url',
+            'watermark_opacity', 'apply_stamp',
+        ]
+
+    def validate_watermark_opacity(self, value):
+        if not 1 <= value <= 100:
+            raise serializers.ValidationError("L'opacité doit être comprise entre 1 et 100 %.")
+        return value
+
+
+class ServiceContractSerializer(serializers.ModelSerializer):
+    """Contrat de prestation de services. Seul un brouillon se modifie ;
+    envoyé ou signé, son contenu est figé (le statut reste modifiable)."""
+
+    quote_number = serializers.CharField(source='quote.quote_number', read_only=True, default=None)
+    created_by_name = serializers.SerializerMethodField()
+
+    CONTENT_FIELDS = (
+        'client', 'quote', 'client_name', 'client_legal_form', 'client_address', 'client_rccm',
+        'client_nif', 'client_representative', 'client_email', 'preamble', 'services_description',
+        'start_date', 'duration', 'renewal', 'renewal_notice_days', 'amount', 'amount_basis',
+        'payment_schedule', 'first_payment_days', 'payment_methods', 'late_penalty_rate',
+        'expenses_covered', 'expenses_threshold', 'confidentiality_years', 'liability_cap',
+        'insurance', 'annex_specifications', 'annex_pricing', 'signing_date', 'client_signatory',
+        'provider_signatory', 'document_color', 'show_header',
+    )
+
+    class Meta:
+        model = ServiceContract
+        fields = [
+            'id', 'contract_number', 'status', 'quote_number', 'created_by_name', 'sent_at',
+            'created_at', 'updated_at',
+            'client', 'quote', 'client_name', 'client_legal_form', 'client_address', 'client_rccm',
+            'client_nif', 'client_representative', 'client_email', 'preamble', 'services_description',
+            'start_date', 'duration', 'renewal', 'renewal_notice_days', 'amount', 'amount_basis',
+            'payment_schedule', 'first_payment_days', 'payment_methods', 'late_penalty_rate',
+            'expenses_covered', 'expenses_threshold', 'confidentiality_years', 'liability_cap',
+            'insurance', 'annex_specifications', 'annex_pricing', 'signing_date', 'client_signatory',
+            'provider_signatory', 'document_color', 'show_header',
+        ]
+        read_only_fields = ['contract_number', 'sent_at', 'created_at', 'updated_at']
+
+    def get_created_by_name(self, obj):
+        user = obj.created_by
+        if not user:
+            return ''
+        full = f"{user.first_name or ''} {user.last_name or ''}".strip()
+        return full or user.email or ''
+
+    def validate_payment_schedule(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("L'échéancier doit être une liste.")
+        cleaned, total = [], 0
+        for term in value:
+            if not isinstance(term, dict):
+                raise serializers.ValidationError('Échéance invalide.')
+            label = sanitize_plain_text(str(term.get('label') or '')).strip()
+            try:
+                pct = float(term.get('percentage') or 0)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError('Pourcentage invalide.')
+            if pct <= 0 or pct > 100:
+                raise serializers.ValidationError('Chaque échéance doit être comprise entre 0 et 100 %.')
+            total += pct
+            cleaned.append({'label': label, 'percentage': int(pct) if pct.is_integer() else pct})
+        if cleaned and abs(total - 100) > 0.01:
+            raise serializers.ValidationError(f'Les échéances totalisent {total:g} % au lieu de 100 %.')
+        return cleaned
+
+    def validate_amount(self, value):
+        if value < 0:
+            raise serializers.ValidationError('Le montant ne peut pas être négatif.')
+        return value
+
+    def validate(self, attrs):
+        instance = self.instance
+        if instance and instance.status != ServiceContract.Status.BROUILLON:
+            changed = [
+                f for f in self.CONTENT_FIELDS
+                if f in attrs and attrs[f] != getattr(instance, f)
+            ]
+            if changed:
+                raise serializers.ValidationError(
+                    {'detail': 'Ce contrat a été envoyé : son contenu ne peut plus être modifié. Repassez-le en brouillon pour le corriger.'}
+                )
+        return attrs

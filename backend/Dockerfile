@@ -29,12 +29,16 @@ WORKDIR /app
 # treasury/pdf.py rattrapent en desactivant la generation PDF : app
 # demarre, mais factures, recus de versement et pieces de caisse ne sont
 # plus telechargeables, en silence. Ces paquets ne sont pas optionnels.
+# fonts-liberation / carlito : equivalents metriques de Times New Roman et
+# Calibri, les polices du modele de contrat (marketing/contract_pdf.html).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     libpango-1.0-0 \
     libpangoft2-1.0-0 \
     libharfbuzz0b \
     libcairo2 \
+    fonts-liberation \
+    fonts-crosextra-carlito \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/wheels /wheels
