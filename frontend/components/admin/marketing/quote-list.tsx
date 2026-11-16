@@ -355,7 +355,9 @@ function StampUploadField({ value, onChange }: { value: string; onChange: (url: 
   );
 }
 
-function QuoteSettingsForm({ onSaved }: { onSaved: () => void }) {
+/** Paramètres des documents commerciaux (devis et factures) : coordonnées,
+ * cachet / signature, moyens de paiement… Aussi ouvert depuis la Facturation. */
+export function QuoteSettingsForm({ onSaved }: { onSaved: () => void }) {
   const [settings, setSettings] = useState<QuoteSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);

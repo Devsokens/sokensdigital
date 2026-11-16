@@ -776,6 +776,14 @@ class InvoiceViewSetTests(APITestCase):
         pending = Payment.objects.create(invoice=invoice, amount=Decimal('1000'), payment_date=datetime.date(2026, 7, 17), payment_method='ESPECES')
         self.assertEqual(self.client_comptable.get(f'/api/v1/finance/invoices/{invoice.id}/payments/{pending.id}/receipt/').status_code, 404)
 
+    def test_comptable_can_edit_document_settings(self):
+        """Le cachet / la signature des factures se règle aussi depuis la finance."""
+        response = self.client_comptable.patch('/api/v1/marketing/quote-settings/', {
+            'company_stamp_url': 'https://cdn.test/cachet.png',
+        }, format='json')
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['company_stamp_url'], 'https://cdn.test/cachet.png')
+
     def test_invoice_without_lines_or_amount_is_refused(self):
         response = self.client_comptable.post('/api/v1/finance/invoices/', {
             'client_name': 'Acme SARL', 'issue_date': '2026-07-15', 'lines': [],

@@ -259,6 +259,27 @@ class IsMarketing(permissions.BasePermission):
         return has_role(request.user, *MARKETING_ROLES, ROLE_SUPER_ADMIN)
 
 
+class CanUploadImage(permissions.BasePermission):
+    """Envoi d'image : le marketing (site vitrine), et aussi ceux qui
+    produisent les devis et factures — cachet / signature des documents."""
+
+    def has_permission(self, request, view):
+        return has_role(request.user, *MARKETING_ROLES, *COMMERCIAL_ROLES, *FINANCE_CONVERT_ROLES, ROLE_SUPER_ADMIN)
+
+
+class CanEditDocumentSettings(permissions.BasePermission):
+    """Paramètres des documents commerciaux (coordonnées, cachet, moyens de
+    paiement), partagés par les devis et les factures : lisibles et
+    modifiables par le commercial, le marketing et la finance ; lisibles
+    par le chef de projet."""
+
+    def has_permission(self, request, view):
+        editors = (*COMMERCIAL_ROLES, *MARKETING_ROLES, *FINANCE_CONVERT_ROLES, ROLE_SUPER_ADMIN)
+        if request.method in permissions.SAFE_METHODS:
+            return has_role(request.user, *editors, *CHEF_DE_PROJET_ROLES)
+        return has_role(request.user, *editors)
+
+
 @extend_schema_view(
     list=extend_schema(
         tags=['Marketing & Commercial'],
@@ -396,7 +417,7 @@ class SocialMediaCredentialsView(APIView):
     responses={201: {'type': 'object', 'properties': {'url': {'type': 'string'}}}},
 )
 class ImageUploadView(APIView):
-    permission_classes = [IsMarketing]
+    permission_classes = [CanUploadImage]
     parser_classes = [MultiPartParser]
 
     def post(self, request):
@@ -1100,7 +1121,7 @@ class QuoteSettingsView(APIView):
     itself (Commercial/Chef de Projet/Super-Admin), not IsMarketing, since
     this is devis document config, not site-vitrine CMS content."""
 
-    permission_classes = [IsCommercialOwnerOrReadCollaborator]
+    permission_classes = [CanEditDocumentSettings]
 
     def get(self, request):
         return Response(QuoteSettingsSerializer(QuoteSettings.load()).data)

@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Download, Eye, LayoutGrid, List, Loader2, MoreHorizontal, Pencil, Plus, Search } from "lucide-react";
+import { CheckCircle2, Download, Eye, LayoutGrid, List, Loader2, MoreHorizontal, Pencil, Plus, Search, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { QuoteSettingsForm } from "@/components/admin/marketing/quote-list";
 import { inputClass } from "@/components/admin/form-styles";
 import { InvoiceViewer } from "@/components/admin/finance/invoice-viewer";
 import { downloadInvoicePdf, getInvoiceEditorContext, listInvoices, validateInvoice, type InvoiceEditorContext } from "@/lib/api/finance";
@@ -25,6 +27,7 @@ export function Invoices() {
   const [actingId, setActingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("TOUS");
@@ -98,12 +101,36 @@ export function Invoices() {
           <h1 className="text-2xl font-semibold text-neutral-900">Facturation</h1>
           <p className="text-sm text-neutral-500">Validation finale des factures et écriture de régularisation automatique.</p>
         </div>
-        <Link href="/admin/finance/facturation/nouveau">
-          <Button data-tour="module-finance-facturation" className="gap-1.5 rounded-full px-4">
-            <Plus className="size-4" /> Nouvelle facture
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Paramètres des documents"
+            title="Paramètres des documents (coordonnées, cachet / signature, moyens de paiement)"
+            className="size-9 rounded-full p-0"
+          >
+            <Settings className="size-4" />
           </Button>
-        </Link>
+          <Link href="/admin/finance/facturation/nouveau">
+            <Button data-tour="module-finance-facturation" className="gap-1.5 rounded-full px-4">
+              <Plus className="size-4" /> Nouvelle facture
+            </Button>
+          </Link>
+        </div>
       </div>
+
+      {/* Mêmes paramètres que les devis : coordonnées, cachet / signature,
+        * moyens de paiement — utilisés aussi par les factures et les reçus. */}
+      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <SheetContent title="Paramètres des documents">
+          <QuoteSettingsForm
+            onSaved={() => {
+              setSettingsOpen(false);
+              getInvoiceEditorContext().then(setContext).catch(() => {});
+            }}
+          />
+        </SheetContent>
+      </Sheet>
 
       {/* Recherche, filtres et choix de la vue */}
       <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
