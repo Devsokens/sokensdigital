@@ -248,6 +248,12 @@ export function EmploymentContractEditor({
 
   function handlePartyTypeChange(next: ContractPartyType) {
     if (next === partyType) return;
+    // Un nouveau contrat client se rédige sur le modèle de contrat de
+    // prestation (components/admin/contracts), plus dans cet éditeur.
+    if (next === "CLIENT" && !contract) {
+      router.push("/admin/rh/contrats-travail/prestation/nouveau");
+      return;
+    }
     setPartyType(next);
     setContractType(CONTRACT_TYPES[next][0].value);
     setClauses(DEFAULT_CLAUSES[next]);

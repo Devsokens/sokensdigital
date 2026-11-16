@@ -141,14 +141,14 @@ export function EmploymentContractList({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={`${basePath}/prestation/nouveau`}>
+          <Link href={`${basePath}/nouveau`}>
             <Button variant="outline" className="gap-1.5 rounded-full px-4">
-              <Building2 className="size-4" /> Contrat client
+              <User className="size-4" /> Contrat de travail
             </Button>
           </Link>
-          <Link href={`${basePath}/nouveau`}>
+          <Link href={`${basePath}/prestation/nouveau`}>
             <Button className="gap-1.5 rounded-full px-4 shadow-sm">
-              <Plus className="size-4" /> Contrat de travail
+              <Plus className="size-4" /> Contrat de prestation
             </Button>
           </Link>
         </div>
