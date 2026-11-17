@@ -738,29 +738,34 @@ def upload_lead_document(file, lead_id: str) -> str:
     )
 
 
-# Anciennes URLs signées figées en base (documents de lead envoyés via
-# l'upload de la messagerie, PDF du formulaire public de demande de projet) :
-# elles expirent au bout de 7 jours. On les re-signe à la lecture, mais
-# uniquement pour ces emplacements connus — jamais pour un chemin
-# arbitraire, qui ouvrirait n'importe quel fichier privé.
-_RESIGNABLE_PREFIXES = {
-    ATTACHMENTS_BUCKET_NAME: ('chat-attachments/', 'leads/'),
-    PROJECT_REQUEST_BUCKET_NAME: ('',),
-}
-_SIGNED_URL_RE = re.compile(r'/storage/v1/object/sign/([^/?]+)/([^?]+)')
+# Anciennes URLs signées figées en base (ex. PDF du formulaire public de
+# demande de projet) : elles expirent au bout de 7 jours. On les re-signe
+# à la lecture, mais seulement sous un préfixe EXACT fourni par l'appelant
+# (le dossier propre à l'objet), sur l'hôte Supabase configuré : le chemin
+# lu dans l'URL n'est jamais une autorisation en soi, sans quoi une URL
+# fabriquée ferait signer n'importe quel fichier privé.
+_SIGNED_URL_RE = re.compile(r'^(https://[^/]+)/storage/v1/object/sign/([^/?#]+)/([^?#]+)')
 
 
-def resign_stored_url(stored_url: str, ttl_seconds: int = SIGNED_URL_TTL_SECONDS) -> str:
-    """Renvoie un lien frais pour une URL signée Supabase stockée en base,
-    ou l'URL d'origine si elle n'est pas re-signable (autre hôte, autre
-    dossier, Supabase indisponible)."""
+def resign_stored_url(stored_url: str, bucket_name: str, allowed_prefix: str,
+                      ttl_seconds: int = SIGNED_URL_TTL_SECONDS) -> str:
+    """Lien frais pour une URL signée stockée en base, si elle désigne un
+    objet de `bucket_name` sous `allowed_prefix` ; sinon l'URL d'origine."""
+    import posixpath
     from urllib.parse import unquote
-    match = _SIGNED_URL_RE.search(stored_url or '')
+    if not allowed_prefix or not allowed_prefix.endswith('/'):
+        return stored_url
+    match = _SIGNED_URL_RE.match(stored_url or '')
     if not match:
         return stored_url
-    bucket, path = match.group(1), unquote(match.group(2))
-    prefixes = _RESIGNABLE_PREFIXES.get(bucket)
-    if prefixes is None or '..' in path or not any(path.startswith(p) for p in prefixes):
+    host, bucket, raw_path = match.groups()
+    configured = (os.environ.get('SUPABASE_URL') or '').rstrip('/')
+    if not configured or host != configured or bucket != bucket_name:
+        return stored_url
+    path = unquote(raw_path)
+    if '%' in path or '\\' in path or path != posixpath.normpath(path) or '..' in path.split('/'):
+        return stored_url
+    if not path.startswith(allowed_prefix):
         return stored_url
     try:
         return _sign_private_url(bucket, path, ttl_seconds)

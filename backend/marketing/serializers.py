@@ -56,7 +56,7 @@ class LeadSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         # Liens de consultation signés à chaque lecture : un document joint
         # doit rester consultable, pas seulement 7 jours après son envoi.
-        from core.storage import resign_stored_url, sign_private_path
+        from core.storage import PROJECT_REQUEST_BUCKET_NAME, resign_stored_url, sign_private_path
         data = super().to_representation(instance)
         docs = []
         for doc in data.get('documents') or []:
@@ -64,17 +64,25 @@ class LeadSerializer(serializers.ModelSerializer):
                 continue
             doc = {k: v for k, v in doc.items() if k != 'path'}
             stored = next((d for d in (instance.documents or []) if isinstance(d, dict) and d.get('id') == doc.get('id')), {})
+            # Seuls les documents dont le serveur a fixé le chemin (dossier
+            # du lead) sont signés ; un ancien lien écrit par le client n'est
+            # jamais re-signé (il pourrait viser un autre fichier privé).
+            path = stored.get('path') or ''
             try:
-                if stored.get('path'):
-                    doc['url'] = sign_private_path(stored['path'])
-                elif doc.get('url'):
-                    doc['url'] = resign_stored_url(doc['url'])
+                if path.startswith(f'leads/{instance.pk}/'):
+                    doc['url'] = sign_private_path(path)
+                elif path:
+                    doc['url'] = ''
             except Exception:
                 doc['url'] = ''
             docs.append(doc)
         data['documents'] = docs
-        if data.get('attachment_url'):
-            data['attachment_url'] = resign_stored_url(data['attachment_url'])
+        # Pièce du formulaire public : écrite par le serveur seul, dans le
+        # dossier de la référence de suivi du lead.
+        if data.get('attachment_url') and instance.tracking_reference:
+            data['attachment_url'] = resign_stored_url(
+                data['attachment_url'], PROJECT_REQUEST_BUCKET_NAME, f'{instance.tracking_reference}/',
+            )
         return data
 
     def validate_documents(self, value):

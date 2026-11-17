@@ -1930,11 +1930,20 @@ class LeadDocumentsTests(APITestCase):
         self.lead.refresh_from_db()
         self.assertEqual(self.lead.documents, [])
 
-    def test_resign_only_known_locations(self):
+    def test_resign_only_exact_prefix_on_configured_host(self):
+        import os
         from core.storage import resign_stored_url
-        with patch('core.storage._sign_private_url', return_value='https://signed.test/new') as sign:
-            old = 'https://x.supabase.co/storage/v1/object/sign/pieces_jointes/chat-attachments/a.pdf?token=old'
-            self.assertEqual(resign_stored_url(old), 'https://signed.test/new')
-            other = 'https://x.supabase.co/storage/v1/object/sign/pieces_jointes/clients/c/secret.pdf?token=t'
-            self.assertEqual(resign_stored_url(other), other)
+        host = 'https://proj.supabase.co'
+        ok = f'{host}/storage/v1/object/sign/demandes-projet/REF-1/2026/11/a.pdf?token=old'
+        with patch.dict(os.environ, {'SUPABASE_URL': host}), \
+                patch('core.storage._sign_private_url', return_value='https://signed.test/new') as sign:
+            self.assertEqual(resign_stored_url(ok, 'demandes-projet', 'REF-1/'), 'https://signed.test/new')
+            for bad in (
+                f'{host}/storage/v1/object/sign/demandes-projet/REF-2/a.pdf?token=t',          # autre lead
+                f'{host}/storage/v1/object/sign/pieces_jointes/REF-1/a.pdf?token=t',           # autre bucket
+                'https://evil.co/storage/v1/object/sign/demandes-projet/REF-1/a.pdf?token=t',  # autre hôte
+                f'{host}/storage/v1/object/sign/demandes-projet/REF-1/../REF-2/a.pdf',          # traversée
+                f'{host}/storage/v1/object/sign/demandes-projet/REF-1/%252e%252e/x.pdf',        # double encodage
+            ):
+                self.assertEqual(resign_stored_url(bad, 'demandes-projet', 'REF-1/'), bad)
             self.assertEqual(sign.call_count, 1)
