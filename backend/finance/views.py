@@ -569,6 +569,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             'tax_rates': {
                 'vat_rate': str(FinanceSettings.load().vat_rate),
                 'css_rate': str(FinanceSettings.load().css_rate),
+                'extra_taxes': FinanceSettings.load().extra_taxes or [],
             },
             'quotes': quote_options,
         })
@@ -755,6 +756,14 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             css_code = FinanceSettings.load().default_css_collected_account_code or '4478'
             css_account, _ = Account.objects.get_or_create(code=css_code, defaults={'name': 'CSS collectée', 'account_class': Account.AccountClass.TVA})
             TransactionLine.objects.create(entry=entry, account=css_account, label=f'CSS {invoice.invoice_number}', debit=Decimal('0'), credit=css_amount)
+        # Autres taxes (paramètres Finance) : une ligne chacune au compte des
+        # autres taxes collectées. Le TTC les inclut, l'écriture reste équilibrée.
+        other_code = FinanceSettings.load().default_other_taxes_account_code or '447'
+        for tax in invoice.extra_taxes or []:
+            amount = Decimal(str(tax.get('amount') or 0))
+            if amount:
+                other_account, _ = Account.objects.get_or_create(code=other_code, defaults={'name': 'État, autres impôts et taxes', 'account_class': Account.AccountClass.TVA})
+                TransactionLine.objects.create(entry=entry, account=other_account, label=f"{tax.get('name', 'Taxe')} {invoice.invoice_number}", debit=Decimal('0'), credit=amount)
 
         invoice.status = Invoice.Status.VALIDEE
         invoice.validated_by = request.user
@@ -1243,6 +1252,7 @@ class PublicInvoiceVerificationView(APIView):
             'vat_amount': invoice.vat_amount,
             'css_rate': invoice.css_rate,
             'css_amount': invoice.css_amount,
+            'extra_taxes': [{'name': t.get('name'), 'percent': t.get('percent'), 'amount': t.get('amount')} for t in (invoice.extra_taxes or [])],
             'amount_ttc': invoice.amount_ttc,
             'status': invoice.get_status_display(),
         })
@@ -1270,13 +1280,13 @@ class TaxRatesView(APIView):
         if not has_role(request.user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN):
             return Response({'detail': 'Seuls le Directeur financier et le Super-Admin modifient les taux.'}, status=status.HTTP_403_FORBIDDEN)
         settings_obj = FinanceSettings.load()
-        before = {'vat_rate': str(settings_obj.vat_rate), 'css_rate': str(settings_obj.css_rate)}
+        before = {'vat_rate': str(settings_obj.vat_rate), 'css_rate': str(settings_obj.css_rate), 'extra_taxes': settings_obj.extra_taxes}
         serializer = TaxRatesSerializer(settings_obj, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         AuditLog.objects.log_action(
             request.user, 'TAUX_FISCAUX_MODIFIES', 'FinanceSettings', settings_obj.pk,
-            details={'avant': before, 'apres': {'vat_rate': str(settings_obj.vat_rate), 'css_rate': str(settings_obj.css_rate)}},
+            details={'avant': before, 'apres': {'vat_rate': str(settings_obj.vat_rate), 'css_rate': str(settings_obj.css_rate), 'extra_taxes': settings_obj.extra_taxes}},
             ip_address=request.META.get('REMOTE_ADDR'),
         )
         return Response(serializer.data)

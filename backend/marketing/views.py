@@ -1473,6 +1473,12 @@ class ServiceContractViewSet(viewsets.ModelViewSet):
         extra = {'created_by': self.request.user}
         if not serializer.validated_data.get('provider_signatory'):
             extra['provider_signatory'] = ContractSettings.load().provider_signatory
+        if (
+            serializer.validated_data.get('contract_type') == ServiceContract.ContractType.PARTENARIAT
+            and 'preamble' not in serializer.validated_data
+        ):
+            from marketing.contract_document import DEFAULT_PARTNERSHIP_PREAMBLE
+            extra['preamble'] = DEFAULT_PARTNERSHIP_PREAMBLE
         serializer.save(**extra)
 
     @extend_schema(summary="Données de l'éditeur : paramètres, devis et clients à reprendre")
@@ -1560,8 +1566,10 @@ class ServiceContractViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         attachment = mailer.Attachment(filename=f'Contrat-{contract.contract_number}.pdf', content=pdf_bytes)
+        from marketing.contract_document import document_title
+        title = document_title(contract.contract_type)
         custom_message = request.data.get('message') or (
-            'Veuillez trouver ci-joint le contrat de prestation de services relatif à notre collaboration.'
+            f'Veuillez trouver ci-joint le {title.lower()} relatif à notre collaboration.'
         )
         body = (
             f"Bonjour {contract.client_name or ''},\n\n"
@@ -1574,7 +1582,7 @@ class ServiceContractViewSet(viewsets.ModelViewSet):
         for dest in recipient_emails:
             try:
                 sent = mailer.send_mail(
-                    dest, f"Contrat {contract.contract_number} — Soken's Digital", body, attachments=[attachment],
+                    dest, f"{title} {contract.contract_number} — Soken's Digital", body, attachments=[attachment],
                 )
                 if sent is False:
                     failed.append(dest)

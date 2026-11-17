@@ -5,7 +5,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { DocumentPreviewCards } from "@/components/admin/marketing/document-preview-cards";
 import { printColorAdjust } from "@/components/admin/marketing/document-print-primitives";
 import type { ContractDocumentSettings, ServiceContractFields } from "@/lib/api/contracts";
-import { contractBlocks, type ContractBlock } from "@/components/admin/contracts/contract-blocks";
+import { documentBlocks, documentTitle, type ContractBlock } from "@/components/admin/contracts/contract-blocks";
 
 /* Aperçu du contrat, page par page, avec les mêmes mesures que le PDF
  * (backend/marketing/templates/marketing/contract_pdf.html) : marges, tailles,
@@ -99,8 +99,8 @@ function Block({ block, accent, stampUrl, style }: { block: ContractBlock; accen
       return (
         <div style={{ ...style, display: "grid", gridTemplateColumns: "1fr 1fr", fontSize: 14 }}>
           {[
-            { who: "Pour le Client", name: block.client, stamp: "" },
-            { who: "Pour le Prestataire", name: block.provider, stamp: stampUrl },
+            { who: block.left_label, name: block.client, stamp: "" },
+            { who: block.right_label, name: block.provider, stamp: stampUrl },
           ].map((side) => (
             <div key={side.who} style={{ paddingRight: 16 }}>
               <p style={{ fontWeight: 700 }}>{side.who}</p>
@@ -181,7 +181,9 @@ function ContractPage({
   header,
   watermark,
   stampUrl,
+  title,
 }: {
+  title: string;
   index: number;
   total: number;
   blocks: ContractBlock[];
@@ -228,7 +230,7 @@ function ContractPage({
         className="absolute inset-x-0 text-center"
         style={{ top: PAGE_H - BOTTOM + 26, fontFamily: "Calibri, Carlito, Arial, sans-serif", fontSize: 10.5, color: "#7f7f7f" }}
       >
-        Contrat de prestation de services – Page {index + 1}
+        {title} – Page {index + 1}
       </p>
     </div>
   );
@@ -245,7 +247,7 @@ export function ContractPreview({
   maxScale?: number;
   zoomable?: boolean;
 }) {
-  const blocks = useMemo(() => contractBlocks(contract, settings), [contract, settings]);
+  const blocks = useMemo(() => documentBlocks(contract, settings), [contract, settings]);
   const accent = contract.document_color || "#1f3864";
   const header = contract.show_header;
   const stampUrl = settings.apply_stamp ? settings.company_stamp_url : "";
@@ -282,6 +284,7 @@ export function ContractPreview({
       header={header}
       watermark={watermark}
       stampUrl={stampUrl}
+      title={documentTitle(contract.contract_type)}
     />
   );
 

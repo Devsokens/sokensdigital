@@ -114,3 +114,30 @@ class ServiceContractTests(APITestCase):
         response = self.rh.get(f'{BASE}editor-context/')
         self.assertEqual(response.status_code, 200)
         self.assertIn('provider_identity', response.json()['settings'])
+
+
+class PartnershipContractTests(APITestCase):
+    def setUp(self):
+        self.rh = _user('rh2@sokensdigital.com', ROLE_RH_MANAGER)
+
+    def test_partnership_has_its_own_model(self):
+        response = self.rh.post(BASE, {
+            'contract_type': 'PARTENARIAT', 'client_name': 'Fondation SMAG',
+            'partnership_purpose': '- Former les jeunes au numérique', 'exclusivity': True,
+        }, format='json')
+        self.assertEqual(response.status_code, 201, response.content)
+        data = response.json()
+        self.assertIn('Le Partenaire souhaite', data['preamble'])
+        html = render_contract_html(ServiceContract.objects.get(pk=data['id']))
+        self.assertIn('CONTRAT DE PARTENARIAT', html)
+        self.assertIn('Former les jeunes au numérique', html)
+        self.assertIn('concurrent direct', html)
+        self.assertIn('Pour le Partenaire', html)
+        self.assertIn('Contrat de partenariat – Page', html)
+        self.assertNotIn('francs CFA', html)
+
+    def test_prestation_unchanged(self):
+        contract = ServiceContract.objects.create(client_name='X')
+        html = render_contract_html(contract)
+        self.assertIn('CONTRAT DE PRESTATION DE SERVICES', html)
+        self.assertIn('Pour le Prestataire', html)

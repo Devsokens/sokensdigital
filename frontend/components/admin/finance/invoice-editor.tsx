@@ -62,6 +62,11 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
   // Taux dynamiques : ceux de la facture, sinon ceux des paramètres
   // Finance (chargés avec le contexte de l'éditeur), ajustables ici.
   const [vatPercent, setVatPercent] = useState(invoice ? String(Math.round(Number(invoice.vat_rate) * 1000) / 10) : "");
+  // Autres taxes appliquées (en plus de la TVA et de la CSS) ; une nouvelle
+  // facture reprend celles cochées d'office dans les paramètres Finance.
+  const [extraTaxes, setExtraTaxes] = useState<{ name: string; percent: string }[]>(
+    (invoice?.extra_taxes ?? []).map(({ name, percent }) => ({ name, percent })),
+  );
   const [cssPercent, setCssPercent] = useState(
     invoice?.css_rate !== undefined ? String(Math.round(Number(invoice.css_rate) * 1000) / 10) : "",
   );
@@ -83,17 +88,25 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
           const pct = (rate: string) => String(Math.round(Number(rate) * 1000) / 10);
           setVatPercent((v) => (v === "" ? pct(ctx.tax_rates!.vat_rate) : v));
           setCssPercent((v) => (v === "" ? pct(ctx.tax_rates!.css_rate) : v));
+          if (!invoice) {
+            setExtraTaxes((ctx.tax_rates.extra_taxes ?? []).filter((t) => t.enabled).map(({ name, percent }) => ({ name, percent })));
+          }
         }
       })
       .catch(() => setError("Impossible de charger les devis et les coordonnées de la société."));
-  }, []);
+  }, [invoice]);
 
   const quote = context?.quotes.find((q) => q.id === pickedQuote);
   const linkedQuoteNumber = context?.quotes.find((q) => q.id === quoteId)?.quote_number ?? current?.quote_number ?? null;
   const vatRate = (Number(vatPercent) || 0) / 100;
   const cssRate = (Number(cssPercent) || 0) / 100;
   const paid = Number(current?.amount_paid ?? 0);
-  const totals = invoiceTotals(lines, Number(discount) || 0, vatRate, paid, cssRate);
+  const totals = invoiceTotals(lines, Number(discount) || 0, vatRate, paid, cssRate, extraTaxes);
+  // Autres taxes proposées : celles des paramètres, plus celles déjà sur la facture.
+  const extraChoices = [
+    ...(context?.tax_rates?.extra_taxes ?? []).map(({ name, percent }) => ({ name, percent })),
+    ...extraTaxes.filter((t) => !(context?.tax_rates?.extra_taxes ?? []).some((s) => s.name === t.name)),
+  ];
 
   const preview = useMemo(
     () => ({
@@ -105,10 +118,11 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
       discount_reason: discountReason,
       vat_rate: vatRate,
       css_rate: cssRate,
+      extra_taxes: extraTaxes,
       amount_paid: paid,
       quote_number: linkedQuoteNumber,
     }),
-    [current?.invoice_number, clientName, issueDate, lines, discount, discountReason, vatRate, paid, linkedQuoteNumber],
+    [current?.invoice_number, clientName, issueDate, lines, discount, discountReason, vatRate, cssRate, extraTaxes, paid, linkedQuoteNumber],
   );
 
   function confirmReplace() {
@@ -167,6 +181,7 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
       discount_reason: discountReason.trim(),
       vat_rate: String(vatRate),
       css_rate: String(cssRate),
+      extra_taxes: extraTaxes,
       document_color: documentColor,
       quote: quoteId,
     };
@@ -303,6 +318,34 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
               </label>
             </div>
 
+            {extraChoices.length > 0 && (
+              <div>
+                <span className={labelClass}>Autres taxes</span>
+                <div className="flex flex-wrap gap-2">
+                  {extraChoices.map((tax) => {
+                    const active = extraTaxes.some((t) => t.name === tax.name);
+                    return (
+                      <button
+                        key={tax.name}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() =>
+                          setExtraTaxes((prev) => (active ? prev.filter((t) => t.name !== tax.name) : [...prev, { name: tax.name, percent: tax.percent }]))
+                        }
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                          active ? "border-primary bg-primary/10 text-primary" : "border-neutral-200 text-neutral-500 hover:border-neutral-300",
+                        )}
+                      >
+                        <span className={cn("size-3 rounded-sm border", active ? "border-primary bg-primary" : "border-neutral-300")} />
+                        {tax.name} {String(Number(tax.percent)).replace(".", ",")} %
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <span className={labelClass}>Lignes</span>
@@ -379,7 +422,15 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
               )}
               <div>
                 Total à payer : <span className="font-semibold text-neutral-900">{formatFcfa(totals.ttc)}</span>
-                {vatRate > 0 && <span className="text-xs"> (dont TVA {formatFcfa(totals.vat)})</span>}
+                {(vatRate > 0 || cssRate > 0 || totals.extras.length > 0) && (
+                  <span className="text-xs">
+                    {" "}(dont {[
+                      vatRate > 0 && `TVA ${formatFcfa(totals.vat)}`,
+                      cssRate > 0 && `CSS ${formatFcfa(totals.css)}`,
+                      ...totals.extras.map((t) => `${t.name} ${formatFcfa(t.amount)}`),
+                    ].filter(Boolean).join(", ")})
+                  </span>
+                )}
               </div>
             </div>
           </fieldset>

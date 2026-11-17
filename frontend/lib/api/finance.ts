@@ -1,5 +1,6 @@
 import { apiFetch } from "@/lib/api/client";
 import type {
+  InvoiceExtraTax,
   Account,
   AccountingPeriod,
   BankStatementImport,
@@ -192,6 +193,7 @@ export interface InvoiceInput {
   amount_ht?: string;
   vat_rate?: string;
   css_rate?: string;
+  extra_taxes?: InvoiceExtraTax[];
   lines?: InvoiceLine[];
   discount_amount?: string;
   discount_reason?: string;
@@ -212,7 +214,7 @@ export interface InvoiceEditorContext {
     payment_methods: { label: string }[];
   };
   /** Taux par défaut des nouvelles factures (paramètres Finance). */
-  tax_rates?: { vat_rate: string; css_rate: string };
+  tax_rates?: { vat_rate: string; css_rate: string; extra_taxes?: ExtraTaxSetting[] };
   quotes: {
     id: string;
     quote_number: string;
@@ -406,9 +408,17 @@ export function receivePayment(invoiceId: string, paymentId: string) {
 }
 
 
+/** Autre taxe des paramètres Finance : enabled = appliquée d'office aux nouvelles factures. */
+export interface ExtraTaxSetting {
+  name: string;
+  percent: string;
+  enabled: boolean;
+}
+
 export interface TaxRates {
   vat_rate: string;
   css_rate: string;
+  extra_taxes: ExtraTaxSetting[];
   updated_at?: string;
 }
 

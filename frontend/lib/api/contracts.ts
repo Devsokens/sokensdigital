@@ -11,7 +11,10 @@ export interface ContractScheduleTerm {
 }
 
 /** Champs modifiables d'un contrat (formulaire, aperçu, PDF). */
+export type ContractKind = "PRESTATION" | "PARTENARIAT";
+
 export interface ServiceContractFields {
+  contract_type: ContractKind;
   client: string | null;
   quote: string | null;
   client_name: string;
@@ -45,6 +48,12 @@ export interface ServiceContractFields {
   provider_signatory: string;
   document_color: string;
   show_header: boolean;
+  /** Partenariat : objet, engagements réciproques (lignes « - »), finances, exclusivité. */
+  partnership_purpose: string;
+  provider_commitments: string;
+  partner_commitments: string;
+  financial_terms: string;
+  exclusivity: boolean;
 }
 
 export interface ServiceContract extends ServiceContractFields {

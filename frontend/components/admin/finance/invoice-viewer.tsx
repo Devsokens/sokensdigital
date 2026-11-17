@@ -117,6 +117,7 @@ export function InvoiceViewer({
                             discount_reason: current.discount_reason,
                             vat_rate: Number(current.vat_rate),
                             css_rate: current.css_rate !== undefined ? Number(current.css_rate) : 0.01,
+                            extra_taxes: current.extra_taxes ?? [],
                             amount_paid: Number(current.amount_paid),
                             quote_number: current.quote_number,
                           }}

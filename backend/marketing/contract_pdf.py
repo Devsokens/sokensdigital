@@ -12,7 +12,7 @@ from django.template.loader import render_to_string
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
 
-from marketing.contract_document import contract_blocks
+from marketing.contract_document import document_blocks, document_title
 from marketing.models import ContractSettings, QuoteSettings
 from marketing.quote_pdf import LOGO_PATH
 
@@ -59,7 +59,7 @@ def render_contract_html(contract) -> str:
 
     data = ServiceContractSerializer(contract).data
     settings_obj = contract_settings_dict()
-    blocks = contract_blocks(data, settings_obj)
+    blocks = document_blocks(data, settings_obj)
     for block in blocks:
         if 'text' in block:
             block['html'] = rich(block['text'])
@@ -74,6 +74,7 @@ def render_contract_html(contract) -> str:
     stamp = settings_obj['company_stamp_url'] if settings_obj['apply_stamp'] else ''
     return render_to_string('marketing/contract_pdf.html', {
         'contract': contract,
+        'title': document_title(contract.contract_type),
         'blocks': blocks,
         'accent': contract.document_color or '#1f3864',
         'show_header': contract.show_header,

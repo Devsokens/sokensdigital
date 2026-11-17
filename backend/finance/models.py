@@ -304,6 +304,10 @@ class Invoice(LoggedModel):
     vat_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'), editable=False)
     css_rate = models.DecimalField(max_digits=4, decimal_places=3, default=DEFAULT_CSS_RATE)
     css_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'), editable=False)
+    # Autres taxes, en plus de la TVA et de la CSS : [{name, percent, amount}]
+    # — percent en % (2.5 = 2,5 %), amount calculé à l'enregistrement sur le
+    # HT. Copiées des paramètres Finance à l'émission, puis figées.
+    extra_taxes = models.JSONField(default=list, blank=True)
     amount_ttc = models.DecimalField(max_digits=12, decimal_places=2, editable=False)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.BROUILLON)
     # Lignes du document : [{description, quantity, unit_price, note}] — note
@@ -357,7 +361,12 @@ class Invoice(LoggedModel):
         cents = Decimal('0.01')
         self.vat_amount = (self.amount_ht * (self.vat_rate or 0)).quantize(cents)
         self.css_amount = (self.amount_ht * (self.css_rate or 0)).quantize(cents)
-        self.amount_ttc = (self.amount_ht + self.vat_amount + self.css_amount).quantize(cents)
+        extra_total = Decimal('0')
+        for tax in self.extra_taxes or []:
+            amount = (self.amount_ht * Decimal(str(tax.get('percent') or 0)) / 100).quantize(cents)
+            tax['amount'] = str(amount)
+            extra_total += amount
+        self.amount_ttc = (self.amount_ht + self.vat_amount + self.css_amount + extra_total).quantize(cents)
         super().save(*args, **kwargs)
 
 
@@ -543,6 +552,14 @@ class FinanceSettings(models.Model):
     default_css_collected_account_code = models.CharField(
         max_length=20, default='4478', blank=True,
         help_text='Code compte CSS collectée (ex: 4478)',
+    )
+    # Autres taxes des factures, en plus de la TVA et de la CSS :
+    # [{name, percent, enabled}] — enabled = appliquée d'office aux
+    # nouvelles factures. Comptabilisées au compte ci-dessous.
+    extra_taxes = models.JSONField(default=list, blank=True)
+    default_other_taxes_account_code = models.CharField(
+        max_length=20, default='447', blank=True,
+        help_text='Code compte des autres taxes collectées (ex: 447)',
     )
 
     # Comptes par défaut pour écritures auto (factures, décaissements)

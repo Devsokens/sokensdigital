@@ -14,6 +14,8 @@ import {
   Printer,
   Trash2,
   User,
+  ChevronDown,
+  Handshake,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -33,6 +35,12 @@ import {
   listServiceContracts,
   type ServiceContract,
 } from "@/lib/api/contracts";
+
+const NEW_CONTRACT_CHOICES = [
+  { href: "/nouveau", label: "Contrat de travail", hint: "CDI, CDD, stage ou freelance avec un collaborateur.", icon: User },
+  { href: "/prestation/nouveau", label: "Contrat de prestation de services", hint: "Mission réalisée pour un client, avec prix et échéancier.", icon: Building2 },
+  { href: "/partenariat/nouveau", label: "Contrat de partenariat", hint: "Collaboration entre deux structures, engagements réciproques.", icon: Handshake },
+];
 
 const SERVICE_STATUS: Record<ServiceContract["status"], { label: string; className: string }> = {
   BROUILLON: { label: "Brouillon", className: "bg-neutral-100 text-neutral-600" },
@@ -141,16 +149,36 @@ export function EmploymentContractList({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={`${basePath}/nouveau`}>
-            <Button variant="outline" className="gap-1.5 rounded-full px-4">
-              <User className="size-4" /> Contrat de travail
-            </Button>
-          </Link>
-          <Link href={`${basePath}/prestation/nouveau`}>
-            <Button className="gap-1.5 rounded-full px-4 shadow-sm">
-              <Plus className="size-4" /> Contrat de prestation
-            </Button>
-          </Link>
+          {/* Nouveau contrat : on choisit le modèle dans la liste qui s'ouvre. */}
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button className="gap-1.5 rounded-full px-4 shadow-sm">
+                  <Plus className="size-4" /> Nouveau contrat <ChevronDown className="size-3.5 opacity-80" />
+                </Button>
+              }
+            />
+            <PopoverContent className="w-80 p-1.5" align="end">
+              {NEW_CONTRACT_CHOICES.map((choice) => {
+                const Icon = choice.icon;
+                return (
+                  <Link
+                    key={choice.href}
+                    href={`${basePath}${choice.href}`}
+                    className="flex items-start gap-3 rounded-lg px-3 py-2.5 hover:bg-neutral-50"
+                  >
+                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <Icon className="size-4" />
+                    </span>
+                    <span>
+                      <span className="block text-sm font-semibold text-neutral-900">{choice.label}</span>
+                      <span className="block text-xs leading-snug text-neutral-500">{choice.hint}</span>
+                    </span>
+                  </Link>
+                );
+              })}
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
@@ -213,7 +241,7 @@ export function EmploymentContractList({
                       </div>
                       {item.quote_number && <div className="text-xs text-neutral-400">Devis {item.quote_number}</div>}
                     </td>
-                    <td className="px-4 py-3 font-semibold text-neutral-700">Prestation</td>
+                    <td className="px-4 py-3 font-semibold text-neutral-700">{item.contract_type === "PARTENARIAT" ? "Partenariat" : "Prestation"}</td>
                     <td className="px-4 py-3">
                       <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", SERVICE_STATUS[item.status].className)}>
                         {SERVICE_STATUS[item.status].label}

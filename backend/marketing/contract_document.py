@@ -279,6 +279,8 @@ def contract_blocks(c: dict, settings: dict) -> list[dict]:
         {'t': 'closing', 'text': f"Fait à {city}, le {_or(long_date(c.get('signing_date')), 'date')}, en deux exemplaires originaux, un pour chaque Partie."},
         {
             't': 'signatures',
+            'left_label': 'Pour le Client',
+            'right_label': 'Pour le Prestataire',
             'client': (c.get('client_signatory') or '').strip(),
             'provider': (c.get('provider_signatory') or '').strip() or settings.get('provider_signatory') or '',
         },
@@ -321,3 +323,163 @@ def typography(text: str) -> str:
     ):
         text = text.replace(old, new)
     return text
+
+
+# --- Contrat de partenariat ------------------------------------------------
+# Modèle à part : ni prix ni échéancier, mais des engagements réciproques,
+# des dispositions financières libres et une exclusivité facultative.
+
+DEFAULT_PARTNERSHIP_PREAMBLE = (
+    'Soken’s Digital est une entreprise spécialisée dans la conception de solutions digitales. '
+    'Le Partenaire souhaite s’associer à Soken’s Digital afin de mener des actions communes. '
+    'Les Parties ont souhaité formaliser les conditions de leur collaboration.'
+)
+DEFAULT_PROVIDER_COMMITMENTS = (
+    '- Mettre à disposition son expertise en conception de solutions digitales pour les actions communes ;\n'
+    '- Affecter au partenariat les ressources humaines et techniques convenues entre les Parties ;\n'
+    '- Informer le Partenaire de l’avancement des actions et de toute difficulté rencontrée ;\n'
+    '- Mentionner le Partenaire dans ses communications relatives aux actions communes.'
+)
+DEFAULT_PARTNER_COMMITMENTS = (
+    '- Contribuer aux actions communes selon les moyens convenus entre les Parties ;\n'
+    '- Faire connaître l’offre de Soken’s Digital auprès de son réseau et de ses bénéficiaires ;\n'
+    '- Fournir en temps utile les informations, contenus et accès nécessaires ;\n'
+    '- Mentionner Soken’s Digital dans ses communications relatives aux actions communes.'
+)
+DEFAULT_FINANCIAL_TERMS = (
+    'Sauf stipulation contraire, chaque Partie supporte les coûts liés à l’exécution de ses propres '
+    'engagements. Toute contribution financière, toute rémunération ou tout partage de recettes lié '
+    'au partenariat fait l’objet d’un accord écrit préalable des Parties, annexé au présent contrat.'
+)
+
+
+def _party_text(c: dict) -> str:
+    return (
+        f"{_or(c.get('client_name'), 'Dénomination sociale ou nom et prénom')}"
+        f", {_or(c.get('client_legal_form'), 'forme juridique, capital social en FCFA')}"
+        f", dont le siège est situé à {_or(c.get('client_address'), 'adresse complète, Gabon')}"
+        f", immatriculé(e) au RCCM sous le n° {_or(c.get('client_rccm'), 'numéro')}"
+        f", NIF n° {_or(c.get('client_nif'), 'numéro')}"
+        f", représenté(e) par {_or(c.get('client_representative'), 'nom, prénom et qualité du signataire')}"
+        ', dûment habilité(e) à cet effet.'
+    )
+
+
+def partnership_blocks(c: dict, settings: dict) -> list[dict]:
+    city = settings.get('city') or 'Libreville'
+    b: list[dict] = [
+        {'t': 'title', 'text': 'CONTRAT DE PARTENARIAT'},
+        {'t': 'section', 'text': 'ENTRE LES SOUSSIGNÉS'},
+        {'t': 'p', 'text': settings.get('provider_identity') or ''},
+        {'t': 'p', 'text': 'Ci-après désignée « **Soken’s Digital** »,'},
+        {'t': 'p', 'text': '**ET**'},
+        {'t': 'p', 'text': _party_text(c)},
+        {'t': 'p', 'text': 'Ci-après désigné « **le Partenaire** »,'},
+        {'t': 'p', 'text': 'Soken’s Digital et le Partenaire sont désignés ensemble « les Parties » et individuellement « une Partie ».'},
+        {'t': 'section', 'text': 'PRÉAMBULE'},
+    ]
+    b += [{'t': 'p', 'text': p} for p in _paragraphs(c.get('preamble'))]
+    b.append({'t': 'p', 'text': 'Les Parties se sont rapprochées et ont convenu ce qui suit.'})
+
+    b.append({'t': 'article', 'text': 'Article 1 – Objet'})
+    purpose = _text_blocks(c.get('partnership_purpose'))
+    if purpose:
+        b.append({'t': 'p', 'text': 'Le présent contrat a pour objet de définir les conditions dans lesquelles les Parties collaborent en vue de :'})
+        b += purpose
+    else:
+        b.append({'t': 'p', 'text': 'Le présent contrat a pour objet de définir les conditions dans lesquelles les Parties collaborent en vue de : [objet précis du partenariat, actions communes, public visé].'})
+
+    b += [
+        {'t': 'article', 'text': 'Article 2 – Nature du partenariat'},
+        {'t': 'p', 'text': 'Le présent contrat ne crée entre les Parties ni société, ni association, ni entreprise commune dotée de la personnalité morale, ni lien de subordination. Chaque Partie conserve son indépendance juridique, commerciale et financière, reste seule responsable de ses actes et ne peut engager l’autre Partie sans son accord écrit préalable.'},
+    ]
+
+    start = _or(long_date(c.get('start_date')), 'date')
+    duration = (c.get('duration') or '').strip()
+    if duration:
+        if c.get('renewal') == 'RENOUVELABLE':
+            end = f"Il est renouvelable par accord écrit des Parties, au plus tard {c.get('renewal_notice_days') or 30} jours avant l’échéance."
+        else:
+            end = 'Il prend fin de plein droit à son terme.'
+        duration_text = f'Le contrat prend effet le {start} pour une durée de {duration}. {end}'
+    else:
+        duration_text = f'Le contrat prend effet le {start} pour une durée indéterminée. Chaque Partie peut y mettre fin dans les conditions de l’article 14.'
+    b += [
+        {'t': 'article', 'text': 'Article 3 – Durée'},
+        {'t': 'p', 'text': duration_text},
+        {'t': 'section', 'text': 'ENGAGEMENTS DES PARTIES'},
+        {'t': 'article', 'text': 'Article 4 – Engagements de Soken’s Digital'},
+        {'t': 'p', 'text': 'Soken’s Digital s’engage à :'},
+    ]
+    b += _text_blocks(c.get('provider_commitments')) or [{'t': 'li', 'text': '[engagements de Soken’s Digital]'}]
+    b += [
+        {'t': 'article', 'text': 'Article 5 – Engagements du Partenaire'},
+        {'t': 'p', 'text': 'Le Partenaire s’engage à :'},
+    ]
+    b += _text_blocks(c.get('partner_commitments')) or [{'t': 'li', 'text': '[engagements du Partenaire]'}]
+    b += [
+        {'t': 'article', 'text': 'Article 6 – Engagements communs et suivi'},
+        {'t': 'p', 'text': 'Les Parties coopèrent de bonne foi et se tiennent mutuellement informées de toute information utile au partenariat. Elles désignent chacune un référent chargé de son suivi et font le point au moins une fois par trimestre sur l’avancement des actions communes.'},
+        {'t': 'article', 'text': 'Article 7 – Dispositions financières'},
+    ]
+    b += _text_blocks(c.get('financial_terms')) or [{'t': 'p', 'text': DEFAULT_FINANCIAL_TERMS}]
+
+    if c.get('exclusivity'):
+        exclusivity = 'Pendant toute la durée du contrat, chaque Partie s’interdit de conclure un partenariat ayant le même objet avec un concurrent direct de l’autre Partie, sauf accord écrit préalable de celle-ci.'
+    else:
+        exclusivity = 'Le présent partenariat est conclu sans exclusivité : chaque Partie reste libre de conclure d’autres partenariats, y compris dans le même domaine.'
+    years = c.get('confidentiality_years') or 5
+    b += [
+        {'t': 'article', 'text': 'Article 8 – Exclusivité'},
+        {'t': 'p', 'text': exclusivity},
+        {'t': 'article', 'text': 'Article 9 – Communication et usage des marques'},
+        {'t': 'p', 'text': 'Chaque Partie autorise l’autre à utiliser sa dénomination, sa marque et son logo pour communiquer sur le partenariat, sur tout support, pendant la durée du contrat. Toute communication est soumise à l’accord préalable de l’autre Partie et respecte sa charte graphique. Cette autorisation prend fin avec le contrat.'},
+        {'t': 'article', 'text': 'Article 10 – Propriété intellectuelle'},
+        {'t': 'p', 'text': 'Chaque Partie reste propriétaire de ses marques, logos, savoir-faire, outils et contenus préexistants. Les créations réalisées en commun dans le cadre du partenariat appartiennent conjointement aux Parties, sauf accord écrit contraire précisant leur répartition et leurs conditions d’exploitation.'},
+        {'t': 'article', 'text': 'Article 11 – Confidentialité'},
+        {'t': 'p', 'text': f'Chaque Partie s’engage à garder strictement confidentielles les informations de toute nature (techniques, commerciales, financières, personnelles) dont elle a connaissance du fait du contrat, et à ne les utiliser que pour son exécution. Cette obligation s’applique pendant toute la durée du contrat et pendant {years} ans après son terme.'},
+        {'t': 'sub', 'text': 'Protection des données à caractère personnel'},
+        {'t': 'p', 'text': 'Lorsque le partenariat implique le traitement de données à caractère personnel, chaque Partie s’engage à respecter la législation gabonaise en vigueur sur la protection de ces données, à ne les traiter que pour les finalités du partenariat, à en assurer la sécurité et à les restituer ou les détruire à la fin du contrat.'},
+        {'t': 'article', 'text': 'Article 12 – Responsabilité'},
+        {'t': 'p', 'text': 'Chaque Partie est seule responsable de l’exécution de ses propres engagements et des dommages qu’elle cause à l’autre Partie ou aux tiers. Aucune Partie ne répond des engagements pris par l’autre envers des tiers.'},
+        {'t': 'article', 'text': 'Article 13 – Force majeure'},
+        {'t': 'p', 'text': 'Aucune Partie n’est responsable de l’inexécution de ses obligations lorsqu’elle résulte d’un événement imprévisible, irrésistible et extérieur à sa volonté. La Partie concernée informe l’autre sans délai. Si l’événement dure plus de 30 jours, chaque Partie peut résilier le contrat par lettre recommandée, sans indemnité.'},
+        {'t': 'article', 'text': 'Article 14 – Résiliation'},
+        {'t': 'p', 'text': '**14.1 Pour manquement.** En cas de manquement grave d’une Partie à ses obligations, non réparé dans un délai de 15 jours après mise en demeure par lettre recommandée avec accusé de réception, l’autre Partie peut résilier le contrat de plein droit, sans préjudice de dommages et intérêts.'},
+        {'t': 'p', 'text': '**14.2 Pour convenance.** Chaque Partie peut mettre fin au contrat, sans motif, moyennant un préavis écrit de 30 jours. Les actions engagées à la date de résiliation sont menées à leur terme, sauf accord contraire des Parties.'},
+        {'t': 'article', 'text': 'Article 15 – Cession'},
+        {'t': 'p', 'text': 'Le présent contrat est conclu en considération de la personne des Parties. Il ne peut être cédé ou transféré, en tout ou partie, sans l’accord écrit préalable de l’autre Partie.'},
+        {'t': 'article', 'text': 'Article 16 – Intégralité et modification'},
+        {'t': 'p', 'text': 'Le contrat et ses annexes expriment l’intégralité de l’accord des Parties et remplacent tout accord antérieur sur le même objet. Toute modification doit faire l’objet d’un avenant écrit signé des deux Parties.'},
+        {'t': 'article', 'text': 'Article 17 – Loi applicable et règlement des litiges'},
+        {'t': 'p', 'text': f'Le contrat est soumis au droit gabonais. Les Parties s’efforcent de régler à l’amiable tout différend relatif à sa formation, son interprétation ou son exécution, dans un délai de 30 jours à compter de la notification du différend. À défaut, le litige est soumis aux juridictions compétentes de {city}.'},
+        {'t': 'article', 'text': 'Article 18 – Élection de domicile'},
+        {'t': 'p', 'text': 'Pour l’exécution du contrat, les Parties font élection de domicile en leurs sièges ou adresses respectifs indiqués en tête des présentes.'},
+        {'t': 'closing', 'text': f"Fait à {city}, le {_or(long_date(c.get('signing_date')), 'date')}, en deux exemplaires originaux, un pour chaque Partie."},
+        {
+            't': 'signatures',
+            'left_label': 'Pour le Partenaire',
+            'right_label': 'Pour Soken’s Digital',
+            'client': (c.get('client_signatory') or '').strip(),
+            'provider': (c.get('provider_signatory') or '').strip() or settings.get('provider_signatory') or '',
+        },
+    ]
+    annex = _text_blocks(c.get('annex_specifications'))
+    if annex:
+        b.append({'t': 'annex', 'text': 'ANNEXE – Plan d’actions', 'break': True})
+        b += annex
+    for block in b:
+        if 'text' in block:
+            block['text'] = typography(block['text'])
+    return b
+
+
+def document_blocks(c: dict, settings: dict) -> list[dict]:
+    """Blocs du document selon le type de contrat."""
+    if c.get('contract_type') == 'PARTENARIAT':
+        return partnership_blocks(c, settings)
+    return contract_blocks(c, settings)
+
+
+def document_title(contract_type: str) -> str:
+    return 'Contrat de partenariat' if contract_type == 'PARTENARIAT' else 'Contrat de prestation de services'

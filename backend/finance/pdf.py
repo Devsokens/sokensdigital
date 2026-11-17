@@ -85,6 +85,10 @@ def render_invoice_html(invoice) -> str:
         'show_css': bool(invoice.css_rate),
         'css_percent': _quantity(Decimal(invoice.css_rate or 0) * 100),
         'css_amount': f'{_amount(invoice.css_amount)} FCFA',
+        'extra_taxes': [
+            {'name': t.get('name', ''), 'percent': _quantity(t.get('percent')), 'amount': f"{_amount(Decimal(str(t.get('amount') or 0)))} FCFA"}
+            for t in (invoice.extra_taxes or [])
+        ],
         'qr_uri': qr_uri,
         'fiscal_signature': sign_invoice(invoice),
         'verification_url': verification_url(invoice),

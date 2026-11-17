@@ -478,7 +478,8 @@ class ServiceContractSerializer(serializers.ModelSerializer):
         'payment_schedule', 'first_payment_days', 'payment_methods', 'late_penalty_rate',
         'expenses_covered', 'expenses_threshold', 'confidentiality_years', 'liability_cap',
         'insurance', 'annex_specifications', 'annex_pricing', 'signing_date', 'client_signatory',
-        'provider_signatory', 'document_color', 'show_header',
+        'provider_signatory', 'document_color', 'show_header', 'contract_type', 'partnership_purpose',
+        'provider_commitments', 'partner_commitments', 'financial_terms', 'exclusivity',
     )
 
     class Meta:
@@ -492,7 +493,8 @@ class ServiceContractSerializer(serializers.ModelSerializer):
             'payment_schedule', 'first_payment_days', 'payment_methods', 'late_penalty_rate',
             'expenses_covered', 'expenses_threshold', 'confidentiality_years', 'liability_cap',
             'insurance', 'annex_specifications', 'annex_pricing', 'signing_date', 'client_signatory',
-            'provider_signatory', 'document_color', 'show_header',
+            'provider_signatory', 'document_color', 'show_header', 'contract_type', 'partnership_purpose',
+            'provider_commitments', 'partner_commitments', 'financial_terms', 'exclusivity',
         ]
         read_only_fields = ['contract_number', 'sent_at', 'created_at', 'updated_at']
 

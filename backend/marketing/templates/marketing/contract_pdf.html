@@ -10,13 +10,13 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>Contrat {{ contract.contract_number }}</title>
+<title>{{ title }} {{ contract.contract_number }}</title>
 <style>
   @page {
     size: A4;
     margin: {% if show_header %}124px{% else %}76px{% endif %} 80px 76px 80px;
     @bottom-center {
-      content: "Contrat de prestation de services – Page " counter(page);
+      content: "{{ title }} – Page " counter(page);
       font-family: Calibri, Carlito, "DejaVu Sans", Arial, sans-serif;
       font-size: 10.5px;
       color: #7f7f7f;
@@ -97,13 +97,13 @@
   {% elif b.t == 'signatures' %}
     <div class="b signs">
       <div>
-        <p class="who">Pour le Client</p>
+        <p class="who">{{ b.left_label }}</p>
         <p>Nom et qualité&nbsp;: {{ b.client|default:"" }}</p>
         <p>Signature précédée de la mention «&nbsp;Lu et approuvé&nbsp;»&nbsp;:</p>
         <div class="space"></div>
       </div>
       <div>
-        <p class="who">Pour le Prestataire</p>
+        <p class="who">{{ b.right_label }}</p>
         <p>Nom et qualité&nbsp;: {{ b.provider|default:"" }}</p>
         <p>Signature précédée de la mention «&nbsp;Lu et approuvé&nbsp;»&nbsp;:</p>
         {% if stamp_url %}<img class="stamp" src="{{ stamp_url }}" alt="Cachet Soken's Digital">{% else %}<div class="space"></div>{% endif %}

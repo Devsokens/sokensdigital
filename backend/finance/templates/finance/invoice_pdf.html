@@ -135,6 +135,8 @@
           {% if not show_vat %}<tr class="detail"><td class="label">Total HT</td><td class="value">{{ amount_ht }}</td></tr>{% endif %}
           <tr class="detail"><td class="label">CSS {{ css_percent }} %</td><td class="value">{{ css_amount }}</td></tr>
           {% endif %}
+          {% if extra_taxes and not show_vat and not show_css %}<tr class="detail"><td class="label">Total HT</td><td class="value">{{ amount_ht }}</td></tr>{% endif %}
+          {% for tax in extra_taxes %}<tr class="detail"><td class="label">{{ tax.name }} {{ tax.percent }} %</td><td class="value">{{ tax.amount }}</td></tr>{% endfor %}
           <tr class="detail"><td class="label">Total TTC</td><td class="value">{{ amount_ttc }}</td></tr>
           <tr class="due"><td class="label">Total à payer</td><td class="value">{{ amount_ttc }}</td></tr>
           <tr class="paid"><td class="label">Déjà payé</td><td class="value">{{ amount_paid }}</td></tr>
@@ -172,7 +174,7 @@
         <p style="margin: 0 0 3px;">Scannez ce QR code pour vérifier que cette facture a bien été émise par Soken's Digital et que ses montants n'ont pas été modifiés. Code de contrôle : <strong>{{ fiscal_signature }}</strong>.</p>
         <p style="margin: 0 0 3px; word-break: break-all;">{{ verification_url }}</p>
         <p style="margin: 6px 0 0;">
-          Montants exprimés en francs CFA (XAF). TVA {{ vat_percent }} %{% if show_css %} et CSS {{ css_percent }} % (Contribution Spéciale de Solidarité){% endif %} calculées sur le montant hors taxes.
+          Montants exprimés en francs CFA (XAF). TVA {{ vat_percent }} %{% if show_css %} et CSS {{ css_percent }} % (Contribution Spéciale de Solidarité){% endif %}{% for tax in extra_taxes %}, {{ tax.name }} {{ tax.percent }} %{% endfor %} calculées sur le montant hors taxes.
           {% if due_date %}Paiement à régler au plus tard le {{ due_date }}.{% else %}Paiement à réception de facture.{% endif %}
           Tout retard de paiement peut donner lieu à des pénalités de retard. Pas d'escompte pour paiement anticipé.
           {% if quote_number %}Facture émise en application du devis {{ quote_number }}.{% endif %}

@@ -552,6 +552,13 @@ export interface Specification extends SpecificationListItem {
   lines: SpecificationLine[];
 }
 
+/** Autre taxe d'une facture : percent en % (« 2.5 » = 2,5 %). */
+export interface InvoiceExtraTax {
+  name: string;
+  percent: string;
+  amount?: string;
+}
+
 export interface QuoteSettings {
   company_address: string;
   company_phone: string;
@@ -944,6 +951,8 @@ export interface Invoice {
   /** Contribution Spéciale de Solidarité (taux décimal, 0.01 = 1 %). */
   css_rate?: string;
   css_amount?: string;
+  /** Autres taxes (en plus de la TVA et de la CSS), taux en %. */
+  extra_taxes?: InvoiceExtraTax[];
   amount_ttc: string;
   /** Versements reçus ou enregistrés. */
   amount_paid: string;

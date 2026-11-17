@@ -224,7 +224,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'invoice_number', 'client', 'client_name', 'client_company_name', 'quote', 'quote_number',
             'issue_date', 'due_date', 'lines', 'discount_amount', 'discount_reason', 'document_color',
-            'amount_ht', 'vat_rate', 'vat_amount', 'css_rate', 'css_amount', 'amount_ttc', 'amount_paid',
+            'amount_ht', 'vat_rate', 'vat_amount', 'css_rate', 'css_amount', 'extra_taxes', 'amount_ttc', 'amount_paid',
             'contact_emails', 'status', 'created_by', 'validated_by', 'validated_at', 'created_at',
         ]
         read_only_fields = [
@@ -301,6 +301,9 @@ class InvoiceSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Le taux de TVA doit être compris entre 0 et 1.')
         return value
 
+    def validate_extra_taxes(self, value):
+        return clean_extra_taxes(value, with_enabled=False)
+
     def validate_css_rate(self, value):
         # Taux dynamique (paramètres Finance, ajustable par facture), mais
         # borné : un taux négatif ou démesuré fausserait la taxe facturée.
@@ -318,6 +321,11 @@ class InvoiceSerializer(serializers.ModelSerializer):
             validated_data['vat_rate'] = settings_obj.vat_rate
         if 'css_rate' not in self.initial_data:
             validated_data['css_rate'] = settings_obj.css_rate
+        if 'extra_taxes' not in self.initial_data:
+            validated_data['extra_taxes'] = [
+                {'name': t['name'], 'percent': t['percent']}
+                for t in (settings_obj.extra_taxes or []) if t.get('enabled')
+            ]
         return super().create(validated_data)
 
 
@@ -464,14 +472,47 @@ class PaymentSerializer(serializers.ModelSerializer):
         return data
 
 
+def clean_extra_taxes(value, with_enabled):
+    """Autres taxes [{name, percent(, enabled)}] : nom obligatoire et
+    unique (ni TVA ni CSS, déjà gérées à part), taux entre 0 et 100 %."""
+    if not isinstance(value, list):
+        raise serializers.ValidationError('Liste de taxes attendue.')
+    cleaned, names = [], set()
+    for tax in value:
+        if not isinstance(tax, dict):
+            raise serializers.ValidationError('Taxe invalide.')
+        name = str(tax.get('name') or '').strip()[:60]
+        if not name:
+            raise serializers.ValidationError('Chaque taxe doit avoir un nom.')
+        if name.upper() in ('TVA', 'CSS'):
+            raise serializers.ValidationError(f'La {name.upper()} a déjà son propre taux : ajoutez seulement les autres taxes.')
+        if name.lower() in names:
+            raise serializers.ValidationError(f'La taxe « {name} » apparaît deux fois.')
+        names.add(name.lower())
+        try:
+            percent = Decimal(str(tax.get('percent')))
+        except Exception:
+            raise serializers.ValidationError(f'Taux invalide pour « {name} ».')
+        if not Decimal('0') < percent <= Decimal('100'):
+            raise serializers.ValidationError(f'Le taux de « {name} » doit être compris entre 0 et 100 %.')
+        item = {'name': name, 'percent': str(percent.normalize())}
+        if with_enabled:
+            item['enabled'] = bool(tax.get('enabled'))
+        cleaned.append(item)
+    return cleaned
+
+
 class TaxRatesSerializer(serializers.ModelSerializer):
     """Taux par défaut des nouvelles factures (paramètres Finance)."""
 
     class Meta:
         from finance.models import FinanceSettings
         model = FinanceSettings
-        fields = ['vat_rate', 'css_rate', 'updated_at']
+        fields = ['vat_rate', 'css_rate', 'extra_taxes', 'updated_at']
         read_only_fields = ['updated_at']
+
+    def validate_extra_taxes(self, value):
+        return clean_extra_taxes(value, with_enabled=True)
 
     def validate_vat_rate(self, value):
         from finance.models import MAX_VAT_RATE

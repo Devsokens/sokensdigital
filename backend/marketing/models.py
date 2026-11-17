@@ -8,6 +8,7 @@ from django.utils.text import slugify
 from django_cryptography.fields import encrypt
 
 from core.models import LoggedModel, User
+from marketing import contract_document as contract_defaults
 
 # Placeholder — no confirmed VAT rate for Soken's Digital's jurisdiction
 # anywhere in the specs gathered so far. 18% is the common OHADA/CEMAC
@@ -955,7 +956,14 @@ class ServiceContract(LoggedModel):
         HT = 'HT', 'Hors taxes'
         TTC = 'TTC', 'Toutes taxes comprises'
 
+    class ContractType(models.TextChoices):
+        PRESTATION = 'PRESTATION', 'Prestation de services'
+        PARTENARIAT = 'PARTENARIAT', 'Partenariat'
+
     contract_number = models.CharField(max_length=20, unique=True, editable=False)
+    # Prestation (modèle de prestation de services) ou partenariat (modèle
+    # et clauses à part, voir contract_document.partnership_blocks).
+    contract_type = models.CharField(max_length=12, choices=ContractType.choices, default=ContractType.PRESTATION)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.BROUILLON)
     created_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name='service_contracts',
@@ -1002,6 +1010,14 @@ class ServiceContract(LoggedModel):
     confidentiality_years = models.PositiveSmallIntegerField(default=5)
     liability_cap = models.CharField(max_length=255, default='au montant total du prix du contrat', blank=True)
     insurance = models.CharField(max_length=500, blank=True)
+
+    # Partenariat : objet, engagements réciproques (lignes « - »),
+    # dispositions financières, exclusivité.
+    partnership_purpose = models.TextField(blank=True)
+    provider_commitments = models.TextField(blank=True, default=contract_defaults.DEFAULT_PROVIDER_COMMITMENTS)
+    partner_commitments = models.TextField(blank=True, default=contract_defaults.DEFAULT_PARTNER_COMMITMENTS)
+    financial_terms = models.TextField(blank=True, default=contract_defaults.DEFAULT_FINANCIAL_TERMS)
+    exclusivity = models.BooleanField(default=False)
 
     # Annexes
     annex_specifications = models.TextField(blank=True)

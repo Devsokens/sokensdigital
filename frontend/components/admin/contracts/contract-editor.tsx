@@ -11,6 +11,13 @@ import { DOCUMENT_COLOR_SWATCHES } from "@/components/admin/marketing/document-p
 import { SendDocumentModal } from "@/components/admin/marketing/send-document-modal";
 import { ContractPreview } from "@/components/admin/contracts/contract-pages";
 import { ContractSettingsForm } from "@/components/admin/contracts/contract-settings-form";
+import {
+  DEFAULT_FINANCIAL_TERMS,
+  DEFAULT_PARTNER_COMMITMENTS,
+  DEFAULT_PARTNERSHIP_PREAMBLE,
+  DEFAULT_PROVIDER_COMMITMENTS,
+  documentTitle,
+} from "@/components/admin/contracts/contract-blocks";
 import { ApiError } from "@/lib/api/client";
 import {
   createServiceContract,
@@ -19,6 +26,7 @@ import {
   sendServiceContract,
   updateServiceContract,
   type ContractEditorContext,
+  type ContractKind,
   type ServiceContract,
   type ServiceContractFields,
 } from "@/lib/api/contracts";
@@ -31,6 +39,12 @@ const DEFAULT_PREAMBLE =
   "Le Client souhaite confier au Prestataire la réalisation de prestations de conception de solutions digitales pour accélérer sa transformation numérique. Le Prestataire déclare disposer des compétences, des moyens et des autorisations nécessaires pour les exécuter.";
 
 export const EMPTY_CONTRACT: ServiceContractFields = {
+  contract_type: "PRESTATION",
+  partnership_purpose: "",
+  provider_commitments: DEFAULT_PROVIDER_COMMITMENTS,
+  partner_commitments: DEFAULT_PARTNER_COMMITMENTS,
+  financial_terms: DEFAULT_FINANCIAL_TERMS,
+  exclusivity: false,
   client: null,
   quote: null,
   client_name: "",
@@ -108,10 +122,18 @@ function Field({ label, className, children }: { label: string; className?: stri
 /** Contrat de prestation de services : formulaire à gauche, aperçu paginé à
  * droite (même document que le PDF). Peut reprendre un devis (client,
  * prestations, montant, échéancier) ou un client du CRM. */
-export function ContractEditor({ contract }: { contract?: ServiceContract }) {
+export function ContractEditor({ contract, initialType = "PRESTATION" }: { contract?: ServiceContract; initialType?: ContractKind }) {
   const router = useRouter();
   const [current, setCurrent] = useState<ServiceContract | undefined>(contract);
-  const [form, setForm] = useState<ServiceContractFields>(contract ? fieldsOf(contract) : EMPTY_CONTRACT);
+  const [form, setForm] = useState<ServiceContractFields>(
+    contract
+      ? fieldsOf(contract)
+      : initialType === "PARTENARIAT"
+        ? { ...EMPTY_CONTRACT, contract_type: "PARTENARIAT", preamble: DEFAULT_PARTNERSHIP_PREAMBLE }
+        : EMPTY_CONTRACT,
+  );
+  const partnership = form.contract_type === "PARTENARIAT";
+  const title = documentTitle(form.contract_type);
   const [context, setContext] = useState<ContractEditorContext | null>(null);
   const [pickedQuote, setPickedQuote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -231,11 +253,11 @@ export function ContractEditor({ contract }: { contract?: ServiceContract }) {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-900">
-            {current ? `Contrat ${current.contract_number}` : "Nouveau contrat de prestation"}
+            {current ? `${title} ${current.contract_number}` : `Nouveau ${title.charAt(0).toLowerCase()}${title.slice(1)}`}
           </h1>
           {current && (
             <p className="text-sm text-neutral-500">
-              {current.status === "BROUILLON" ? "Brouillon" : current.status === "ENVOYE" ? "Envoyé au client" : "Signé"}
+              {current.status === "BROUILLON" ? "Brouillon" : current.status === "ENVOYE" ? (partnership ? "Envoyé au partenaire" : "Envoyé au client") : "Signé"}
               {linkedQuote ? ` · devis ${linkedQuote}` : ""}
             </p>
           )}
@@ -290,15 +312,18 @@ export function ContractEditor({ contract }: { contract?: ServiceContract }) {
           )}
 
           <fieldset disabled={locked} className="space-y-4">
-            {context && (context.quotes.length > 0 || context.clients.length > 0) && (
+            {context && ((!partnership && context.quotes.length > 0) || context.clients.length > 0) && (
               <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5">
                 <p className="flex items-center gap-1.5 text-sm font-semibold text-neutral-900">
-                  <FileText className="size-4 text-primary" /> Reprendre un devis ou un client
+                  <FileText className="size-4 text-primary" /> {partnership ? "Reprendre un client du CRM" : "Reprendre un devis ou un client"}
                 </p>
-                <p className="mt-0.5 text-xs text-neutral-500">
-                  Le devis apporte le client, les prestations (article 3 et annexe 1), le montant et l&apos;échéancier
-                  {linkedQuote ? ` — lié : ${linkedQuote}` : ""}.
-                </p>
+                {!partnership && (
+                  <p className="mt-0.5 text-xs text-neutral-500">
+                    Le devis apporte le client, les prestations (article 3 et annexe 1), le montant et l&apos;échéancier
+                    {linkedQuote ? ` — lié : ${linkedQuote}` : ""}.
+                  </p>
+                )}
+                {!partnership && (
                 <div className="mt-2.5 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                   <select value={pickedQuote} onChange={(e) => setPickedQuote(e.target.value)} className={inputClass} aria-label="Devis">
                     <option value="">Choisir un devis…</option>
@@ -312,9 +337,10 @@ export function ContractEditor({ contract }: { contract?: ServiceContract }) {
                     Reprendre le devis
                   </Button>
                 </div>
+                )}
                 {context.clients.length > 0 && (
                   <select value="" onChange={(e) => importClient(e.target.value)} className={cn(inputClass, "mt-2")} aria-label="Client du CRM">
-                    <option value="">…ou reprendre un client du CRM</option>
+                    <option value="">{partnership ? "Choisir un client ou partenaire du CRM…" : "…ou reprendre un client du CRM"}</option>
                     {context.clients.map((c) => (
                       <option key={c.id} value={c.id}>{c.company_name}</option>
                     ))}
@@ -323,7 +349,7 @@ export function ContractEditor({ contract }: { contract?: ServiceContract }) {
               </div>
             )}
 
-            <Section title="Le Client">
+            <Section title={partnership ? "Le Partenaire" : "Le Client"}>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Dénomination sociale ou nom et prénom">
                   <input value={form.client_name} onChange={(e) => set({ client_name: e.target.value })} className={inputClass} />
@@ -349,6 +375,79 @@ export function ContractEditor({ contract }: { contract?: ServiceContract }) {
               </div>
             </Section>
 
+            {partnership && (
+              <>
+                <Section title="Objet du partenariat">
+                  <Field label="Préambule">
+                    <textarea value={form.preamble} onChange={(e) => set({ preamble: e.target.value })} rows={3} className={cn(inputClass, "resize-y")} />
+                  </Field>
+                  <Field label="Objet (article 1) — une ligne commençant par « - » par action commune">
+                    <textarea
+                      value={form.partnership_purpose}
+                      onChange={(e) => set({ partnership_purpose: e.target.value })}
+                      rows={4}
+                      placeholder={"- Former les jeunes aux métiers du numérique\n- Co-organiser des événements"}
+                      className={cn(inputClass, "resize-y")}
+                    />
+                  </Field>
+                </Section>
+
+                <Section title="Durée">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="Prise d'effet">
+                      <input type="date" value={form.start_date ?? ""} onChange={(e) => set({ start_date: e.target.value || null })} className={inputClass} />
+                    </Field>
+                    <Field label="Durée (vide = durée indéterminée)">
+                      <input value={form.duration} onChange={(e) => set({ duration: e.target.value })} placeholder="1 an" className={inputClass} />
+                    </Field>
+                    {form.duration.trim() && (
+                      <Field label="À l'échéance">
+                        <select value={form.renewal} onChange={(e) => set({ renewal: e.target.value as ServiceContractFields["renewal"] })} className={inputClass}>
+                          <option value="TERME">Prend fin de plein droit</option>
+                          <option value="RENOUVELABLE">Renouvelable par accord écrit</option>
+                        </select>
+                      </Field>
+                    )}
+                    {form.duration.trim() && form.renewal === "RENOUVELABLE" && (
+                      <Field label="Accord au plus tard (jours avant)">
+                        <input type="number" min={1} value={form.renewal_notice_days} onChange={(e) => set({ renewal_notice_days: Number(e.target.value) || 0 })} className={inputClass} />
+                      </Field>
+                    )}
+                  </div>
+                </Section>
+
+                <Section title="Engagements des Parties">
+                  <Field label="Soken's Digital s'engage à (article 4) — une ligne « - » par engagement">
+                    <textarea value={form.provider_commitments} onChange={(e) => set({ provider_commitments: e.target.value })} rows={5} className={cn(inputClass, "resize-y")} />
+                  </Field>
+                  <Field label="Le Partenaire s'engage à (article 5)">
+                    <textarea value={form.partner_commitments} onChange={(e) => set({ partner_commitments: e.target.value })} rows={5} className={cn(inputClass, "resize-y")} />
+                  </Field>
+                </Section>
+
+                <Section title="Dispositions financières et clauses">
+                  <Field label="Dispositions financières (article 7) — apports, partage de recettes, prise en charge des coûts">
+                    <textarea value={form.financial_terms} onChange={(e) => set({ financial_terms: e.target.value })} rows={4} className={cn(inputClass, "resize-y")} />
+                  </Field>
+                  <label className="flex items-center gap-2.5 text-sm text-neutral-800">
+                    <input type="checkbox" checked={form.exclusivity} onChange={(e) => set({ exclusivity: e.target.checked })} className="size-4 accent-primary" />
+                    Partenariat exclusif (pas de partenariat identique avec un concurrent)
+                  </label>
+                  <Field label="Confidentialité après le terme (ans)" className="sm:w-60">
+                    <input type="number" min={0} value={form.confidentiality_years} onChange={(e) => set({ confidentiality_years: Number(e.target.value) || 0 })} className={inputClass} />
+                  </Field>
+                </Section>
+
+                <Section title="Annexe (facultative)">
+                  <Field label="Plan d'actions — jalons, calendrier, référents">
+                    <textarea value={form.annex_specifications} onChange={(e) => set({ annex_specifications: e.target.value })} rows={4} className={cn(inputClass, "resize-y")} />
+                  </Field>
+                </Section>
+              </>
+            )}
+
+            {!partnership && (
+            <>
             <Section title="Objet et prestations">
               <Field label="Préambule">
                 <textarea value={form.preamble} onChange={(e) => set({ preamble: e.target.value })} rows={3} className={cn(inputClass, "resize-y")} />
@@ -480,16 +579,18 @@ export function ContractEditor({ contract }: { contract?: ServiceContract }) {
                 <textarea value={form.annex_pricing} onChange={(e) => set({ annex_pricing: e.target.value })} rows={2} className={cn(inputClass, "resize-y")} />
               </Field>
             </Section>
+            </>
+            )}
 
             <Section title="Signatures">
               <div className="grid gap-3 sm:grid-cols-3">
                 <Field label="Date de signature">
                   <input type="date" value={form.signing_date ?? ""} onChange={(e) => set({ signing_date: e.target.value || null })} className={inputClass} />
                 </Field>
-                <Field label="Pour le Client (nom et qualité)">
+                <Field label={partnership ? "Pour le Partenaire (nom et qualité)" : "Pour le Client (nom et qualité)"}>
                   <input value={form.client_signatory} onChange={(e) => set({ client_signatory: e.target.value })} className={inputClass} />
                 </Field>
-                <Field label="Pour le Prestataire">
+                <Field label={partnership ? "Pour Soken's Digital" : "Pour le Prestataire"}>
                   <input value={form.provider_signatory} onChange={(e) => set({ provider_signatory: e.target.value })} className={inputClass} />
                 </Field>
               </div>
@@ -501,7 +602,7 @@ export function ContractEditor({ contract }: { contract?: ServiceContract }) {
               Retour
             </Button>
             {!locked && (
-              <Button type="submit" disabled={saving || (form.payment_schedule.length > 0 && scheduleTotal !== 100)} className="rounded-full px-6">
+              <Button type="submit" disabled={saving || (!partnership && form.payment_schedule.length > 0 && scheduleTotal !== 100)} className="rounded-full px-6">
                 {saving ? <Loader2 className="size-4 animate-spin" /> : current ? "Enregistrer" : "Créer le contrat"}
               </Button>
             )}
@@ -568,7 +669,7 @@ export function ContractEditor({ contract }: { contract?: ServiceContract }) {
         <SendDocumentModal
           open={sendOpen}
           onOpenChange={setSendOpen}
-          documentTitle={`Contrat de prestation de services ${current.contract_number}`}
+          documentTitle={`${title} ${current.contract_number}`}
           documentNumber={current.contract_number}
           recipientName={current.client_name}
           suggestedEmails={current.client_email ? [current.client_email] : []}

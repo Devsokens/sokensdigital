@@ -244,6 +244,19 @@ def post_invoice_journal_entry(invoice_id: str):
             credit=invoice.css_amount,
         )
 
+    for tax in invoice.extra_taxes or []:
+        amount = Decimal(str(tax.get('amount') or 0))
+        if amount:
+            TransactionLine.objects.create(
+                entry=entry,
+                account_id=Account.objects.get_or_create(
+                    code=settings.default_other_taxes_account_code or '447',
+                    defaults={'name': 'État, autres impôts et taxes', 'account_class': Account.AccountClass.TVA},
+                )[0].id,
+                label=f"{tax.get('name', 'Taxe')} {tax.get('percent')}%",
+                credit=amount,
+            )
+
     return f'Invoice {invoice.invoice_number} posted'
 
 
