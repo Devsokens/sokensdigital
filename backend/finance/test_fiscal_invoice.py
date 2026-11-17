@@ -54,3 +54,14 @@ class FiscalInvoiceTests(APITestCase):
         self.assertEqual(Decimal(body['css_amount']), Decimal('1000.00'))
         bad = APIClient().get(url, {'n': self.invoice.invoice_number, 's': 'FAKE'}).json()
         self.assertEqual(bad, {'valid': False})
+
+
+class CssRateValidationTests(APITestCase):
+    def test_css_rate_limited_to_legal_values(self):
+        from finance.serializers import InvoiceSerializer
+        base = {'client_name': 'X', 'issue_date': '2026-11-01', 'amount_ht': '1000', 'vat_rate': '0.18'}
+        for bad in ('0.5', '-0.01', '0.02'):
+            self.assertFalse(InvoiceSerializer(data={**base, 'css_rate': bad}).is_valid())
+        for ok in ('0', '0.01'):
+            serializer = InvoiceSerializer(data={**base, 'css_rate': ok})
+            self.assertTrue(serializer.is_valid(), serializer.errors)

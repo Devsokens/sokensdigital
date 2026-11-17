@@ -301,6 +301,13 @@ class InvoiceSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Le taux de TVA doit être compris entre 0 et 1.')
         return value
 
+    def validate_css_rate(self, value):
+        # CSS : seules valeurs légales, exonéré (0) ou 1 % du HT — un taux
+        # libre permettrait de gonfler ou d'annuler la taxe facturée.
+        if value not in (Decimal('0'), Decimal('0.01')):
+            raise serializers.ValidationError('Le taux de CSS doit être 0 ou 0,01 (1 %).')
+        return value
+
 
 class BankTransactionSerializer(serializers.ModelSerializer):
     class Meta:
