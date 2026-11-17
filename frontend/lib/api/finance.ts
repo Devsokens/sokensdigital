@@ -191,6 +191,7 @@ export interface InvoiceInput {
   /** Facultatif quand des lignes sont fournies (le HT en est la somme). */
   amount_ht?: string;
   vat_rate?: string;
+  css_rate?: string;
   lines?: InvoiceLine[];
   discount_amount?: string;
   discount_reason?: string;
@@ -210,6 +211,8 @@ export interface InvoiceEditorContext {
     company_stamp_url: string;
     payment_methods: { label: string }[];
   };
+  /** Taux par défaut des nouvelles factures (paramètres Finance). */
+  tax_rates?: { vat_rate: string; css_rate: string };
   quotes: {
     id: string;
     quote_number: string;
@@ -400,4 +403,21 @@ export function receivePayment(invoiceId: string, paymentId: string) {
     `/api/v1/finance/invoices/${invoiceId}/payments/${paymentId}/receive/`,
     { method: "POST", body: JSON.stringify({}) },
   );
+}
+
+
+export interface TaxRates {
+  vat_rate: string;
+  css_rate: string;
+  updated_at?: string;
+}
+
+/** Taux de TVA et de CSS appliqués par défaut aux nouvelles factures. */
+export function getTaxRates() {
+  return apiFetch<TaxRates>("/api/v1/finance/settings/tax-rates/");
+}
+
+/** Directeur financier / Super-Admin uniquement (403 sinon). */
+export function updateTaxRates(data: Partial<TaxRates>) {
+  return apiFetch<TaxRates>("/api/v1/finance/settings/tax-rates/", { method: "PATCH", body: JSON.stringify(data) });
 }

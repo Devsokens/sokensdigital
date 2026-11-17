@@ -302,11 +302,23 @@ class InvoiceSerializer(serializers.ModelSerializer):
         return value
 
     def validate_css_rate(self, value):
-        # CSS : seules valeurs légales, exonéré (0) ou 1 % du HT — un taux
-        # libre permettrait de gonfler ou d'annuler la taxe facturée.
-        if value not in (Decimal('0'), Decimal('0.01')):
-            raise serializers.ValidationError('Le taux de CSS doit être 0 ou 0,01 (1 %).')
+        # Taux dynamique (paramètres Finance, ajustable par facture), mais
+        # borné : un taux négatif ou démesuré fausserait la taxe facturée.
+        from finance.models import MAX_CSS_RATE
+        if not (0 <= value <= MAX_CSS_RATE):
+            raise serializers.ValidationError('Le taux de CSS doit être compris entre 0 et 0,2 (20 %).')
         return value
+
+    def create(self, validated_data):
+        # Taux non précisés : ceux des paramètres Finance au moment de
+        # l'émission (ils restent ensuite figés sur la facture).
+        from finance.models import FinanceSettings
+        settings_obj = FinanceSettings.load()
+        if 'vat_rate' not in self.initial_data:
+            validated_data['vat_rate'] = settings_obj.vat_rate
+        if 'css_rate' not in self.initial_data:
+            validated_data['css_rate'] = settings_obj.css_rate
+        return super().create(validated_data)
 
 
 class BankTransactionSerializer(serializers.ModelSerializer):
@@ -450,3 +462,25 @@ class PaymentSerializer(serializers.ModelSerializer):
                 ),
             })
         return data
+
+
+class TaxRatesSerializer(serializers.ModelSerializer):
+    """Taux par défaut des nouvelles factures (paramètres Finance)."""
+
+    class Meta:
+        from finance.models import FinanceSettings
+        model = FinanceSettings
+        fields = ['vat_rate', 'css_rate', 'updated_at']
+        read_only_fields = ['updated_at']
+
+    def validate_vat_rate(self, value):
+        from finance.models import MAX_VAT_RATE
+        if not (0 <= value <= MAX_VAT_RATE):
+            raise serializers.ValidationError('Le taux de TVA doit être compris entre 0 et 1.')
+        return value
+
+    def validate_css_rate(self, value):
+        from finance.models import MAX_CSS_RATE
+        if not (0 <= value <= MAX_CSS_RATE):
+            raise serializers.ValidationError('Le taux de CSS doit être compris entre 0 et 0,2 (20 %).')
+        return value

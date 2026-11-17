@@ -59,8 +59,12 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
   const [lines, setLines] = useState<InvoiceLine[]>(invoice?.lines.length ? invoice.lines : [{ ...EMPTY_LINE }]);
   const [discount, setDiscount] = useState(invoice && Number(invoice.discount_amount) ? String(Math.round(Number(invoice.discount_amount))) : "");
   const [discountReason, setDiscountReason] = useState(invoice?.discount_reason ?? "");
-  const [vatPercent, setVatPercent] = useState(invoice ? String(Math.round(Number(invoice.vat_rate) * 1000) / 10) : "18");
-  const cssRate = invoice?.css_rate !== undefined ? Number(invoice.css_rate) : 0.01;
+  // Taux dynamiques : ceux de la facture, sinon ceux des paramètres
+  // Finance (chargés avec le contexte de l'éditeur), ajustables ici.
+  const [vatPercent, setVatPercent] = useState(invoice ? String(Math.round(Number(invoice.vat_rate) * 1000) / 10) : "");
+  const [cssPercent, setCssPercent] = useState(
+    invoice?.css_rate !== undefined ? String(Math.round(Number(invoice.css_rate) * 1000) / 10) : "",
+  );
   const [documentColor, setDocumentColor] = useState(invoice?.document_color ?? "#123f91");
   const [quoteId, setQuoteId] = useState<string | null>(invoice?.quote ?? null);
   const [pickedQuote, setPickedQuote] = useState("");
@@ -73,13 +77,21 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
 
   useEffect(() => {
     getInvoiceEditorContext()
-      .then(setContext)
+      .then((ctx) => {
+        setContext(ctx);
+        if (ctx.tax_rates) {
+          const pct = (rate: string) => String(Math.round(Number(rate) * 1000) / 10);
+          setVatPercent((v) => (v === "" ? pct(ctx.tax_rates!.vat_rate) : v));
+          setCssPercent((v) => (v === "" ? pct(ctx.tax_rates!.css_rate) : v));
+        }
+      })
       .catch(() => setError("Impossible de charger les devis et les coordonnées de la société."));
   }, []);
 
   const quote = context?.quotes.find((q) => q.id === pickedQuote);
   const linkedQuoteNumber = context?.quotes.find((q) => q.id === quoteId)?.quote_number ?? current?.quote_number ?? null;
   const vatRate = (Number(vatPercent) || 0) / 100;
+  const cssRate = (Number(cssPercent) || 0) / 100;
   const paid = Number(current?.amount_paid ?? 0);
   const totals = invoiceTotals(lines, Number(discount) || 0, vatRate, paid, cssRate);
 
@@ -154,6 +166,7 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
       discount_amount: discount ? String(Number(discount)) : "0",
       discount_reason: discountReason.trim(),
       vat_rate: String(vatRate),
+      css_rate: String(cssRate),
       document_color: documentColor,
       quote: quoteId,
     };
@@ -283,6 +296,10 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
               <label className="block">
                 <span className={labelClass}>TVA (%)</span>
                 <input type="number" inputMode="decimal" min={0} max={100} value={vatPercent} onChange={(e) => setVatPercent(e.target.value)} className={inputClass} />
+              </label>
+              <label className="block">
+                <span className={labelClass}>CSS (%)</span>
+                <input type="number" inputMode="decimal" step="0.1" min={0} max={20} value={cssPercent} onChange={(e) => setCssPercent(e.target.value)} className={inputClass} />
               </label>
             </div>
 

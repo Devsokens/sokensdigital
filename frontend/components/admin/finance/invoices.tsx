@@ -9,6 +9,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { QuoteSettingsForm } from "@/components/admin/marketing/quote-list";
 import { inputClass } from "@/components/admin/form-styles";
 import { InvoiceViewer } from "@/components/admin/finance/invoice-viewer";
+import { TaxRatesForm } from "@/components/admin/finance/tax-rates-form";
 import { downloadInvoicePdf, getInvoiceEditorContext, listInvoices, validateInvoice, type InvoiceEditorContext } from "@/lib/api/finance";
 import { formatFcfa } from "@/lib/format-currency";
 import { cn } from "@/lib/utils";
@@ -123,6 +124,7 @@ export function Invoices() {
         * moyens de paiement — utilisés aussi par les factures et les reçus. */}
       <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
         <SheetContent title="Paramètres des documents">
+          <TaxRatesForm />
           <QuoteSettingsForm
             onSaved={() => {
               setSettingsOpen(false);

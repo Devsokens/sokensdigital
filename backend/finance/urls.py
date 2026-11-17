@@ -12,6 +12,7 @@ from finance.views import (
     PaymentReceiptViewSet,
     TaxDeclarationViewSet,
     fec_export,
+    TaxRatesView,
     encaissements,
     finance_dashboard,
 )
@@ -33,6 +34,7 @@ router.register('tax-declarations', TaxDeclarationViewSet, basename='tax-declara
 urlpatterns = router.urls + [
     path('accounting-periods/<uuid:period_id>/fec-export/', fec_export, name='fec-export'),
     path('dashboard/', finance_dashboard, name='finance-dashboard'),
+    path('settings/tax-rates/', TaxRatesView.as_view(), name='finance-tax-rates'),
     path('encaissements/', encaissements, name='finance-encaissements'),
 
     re_path(r'^invoices/(?P<invoice_id>[^/.]+)/payments/$',

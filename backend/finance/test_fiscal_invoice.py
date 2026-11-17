@@ -56,12 +56,44 @@ class FiscalInvoiceTests(APITestCase):
         self.assertEqual(bad, {'valid': False})
 
 
-class CssRateValidationTests(APITestCase):
-    def test_css_rate_limited_to_legal_values(self):
+class TaxRatesTests(APITestCase):
+    """Taux dynamiques : paramétrables, appliqués aux nouvelles factures, bornés."""
+
+    def setUp(self):
+        from core.constants import ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER
+        from core.models import Role, User
+        self.df = User.objects.create(email='df@x.dev')
+        self.df.roles.add(Role.objects.get_or_create(name=ROLE_DIRECTEUR_FINANCIER)[0])
+        self.compta = User.objects.create(email='compta@x.dev')
+        self.compta.roles.add(Role.objects.get_or_create(name=ROLE_COMPTABLE)[0])
+        self.df_client = APIClient()
+        self.df_client.force_authenticate(user=self.df)
+        self.compta_client = APIClient()
+        self.compta_client.force_authenticate(user=self.compta)
+
+    def test_rates_are_configurable_and_applied_to_new_invoices(self):
+        url = '/api/v1/finance/settings/tax-rates/'
+        self.assertEqual(self.compta_client.patch(url, {'css_rate': '0.02'}, format='json').status_code, 403)
+        res = self.df_client.patch(url, {'vat_rate': '0.16', 'css_rate': '0.02'}, format='json')
+        self.assertEqual(res.status_code, 200, res.content)
+        res = self.compta_client.post('/api/v1/finance/invoices/', {
+            'client_name': 'X', 'issue_date': '2026-11-01', 'amount_ht': '1000',
+        }, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        self.assertEqual(Decimal(res.json()['vat_rate']), Decimal('0.16'))
+        self.assertEqual(Decimal(res.json()['css_rate']), Decimal('0.02'))
+        self.assertEqual(Decimal(res.json()['amount_ttc']), Decimal('1180.00'))
+        # Taux précisé sur la facture : prioritaire.
+        res = self.compta_client.post('/api/v1/finance/invoices/', {
+            'client_name': 'Y', 'issue_date': '2026-11-01', 'amount_ht': '1000', 'vat_rate': '0.18', 'css_rate': '0.01',
+        }, format='json')
+        self.assertEqual(Decimal(res.json()['amount_ttc']), Decimal('1190.00'))
+
+    def test_rates_are_bounded(self):
+        url = '/api/v1/finance/settings/tax-rates/'
+        for bad in ({'css_rate': '-0.01'}, {'css_rate': '0.5'}, {'vat_rate': '1.5'}):
+            self.assertEqual(self.df_client.patch(url, bad, format='json').status_code, 400)
         from finance.serializers import InvoiceSerializer
         base = {'client_name': 'X', 'issue_date': '2026-11-01', 'amount_ht': '1000', 'vat_rate': '0.18'}
-        for bad in ('0.5', '-0.01', '0.02'):
-            self.assertFalse(InvoiceSerializer(data={**base, 'css_rate': bad}).is_valid())
-        for ok in ('0', '0.01'):
-            serializer = InvoiceSerializer(data={**base, 'css_rate': ok})
-            self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertFalse(InvoiceSerializer(data={**base, 'css_rate': '0.5'}).is_valid())
+        self.assertTrue(InvoiceSerializer(data={**base, 'css_rate': '0.015'}).is_valid())

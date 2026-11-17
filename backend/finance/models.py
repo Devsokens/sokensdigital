@@ -14,6 +14,9 @@ from projects.models import Project
 DEFAULT_VAT_RATE = Decimal('0.18')
 # Contribution Spéciale de Solidarité (Gabon) : 1 % du montant HT.
 DEFAULT_CSS_RATE = Decimal('0.01')
+# Bornes de sécurité des taux (paramétrables à l'intérieur de ces limites).
+MAX_VAT_RATE = Decimal('1')
+MAX_CSS_RATE = Decimal('0.2')
 
 
 class DisbursementRequest(LoggedModel):
@@ -532,6 +535,14 @@ class FinanceSettings(models.Model):
     vat_rate = models.DecimalField(
         max_digits=4, decimal_places=2, default=DEFAULT_VAT_RATE,
         help_text='Taux TVA appliqué par défaut aux nouvelles factures (ex: 0.18 = 18%)',
+    )
+    css_rate = models.DecimalField(
+        max_digits=4, decimal_places=3, default=DEFAULT_CSS_RATE,
+        help_text='Taux de CSS appliqué par défaut aux nouvelles factures (ex: 0.01 = 1%)',
+    )
+    default_css_collected_account_code = models.CharField(
+        max_length=20, default='4478', blank=True,
+        help_text='Code compte CSS collectée (ex: 4478)',
     )
 
     # Comptes par défaut pour écritures auto (factures, décaissements)

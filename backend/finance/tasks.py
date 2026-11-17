@@ -237,7 +237,8 @@ def post_invoice_journal_entry(invoice_id: str):
         TransactionLine.objects.create(
             entry=entry,
             account_id=Account.objects.get_or_create(
-                code='4478', defaults={'name': 'CSS collectée', 'account_class': Account.AccountClass.TVA},
+                code=settings.default_css_collected_account_code or '4478',
+                defaults={'name': 'CSS collectée', 'account_class': Account.AccountClass.TVA},
             )[0].id,
             label=f'CSS {invoice.css_rate*100:.0f}%',
             credit=invoice.css_amount,
