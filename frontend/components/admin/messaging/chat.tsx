@@ -1,5 +1,6 @@
 "use client";
 
+import { openChatAttachment } from "@/lib/api/upload";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -357,6 +358,11 @@ export function Chat() {
                       target="_blank"
                       rel="noreferrer"
                       download={m.attachment?.name}
+                      onClick={(e) => {
+                        if (!activeRoomId) return;
+                        e.preventDefault();
+                        openChatAttachment(activeRoomId, m.id);
+                      }}
                       className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-neutral-700 hover:bg-neutral-50"
                     >
                       <Paperclip className="size-3.5 shrink-0 text-neutral-400" />
@@ -383,6 +389,7 @@ export function Chat() {
                           </div>
                         )}
                         <MessageBubble
+                          roomId={activeRoomId}
                           message={message}
                           isSelf={message.authorUid === user?.uid}
                           replyCount={repliesOf(message.id).length}
@@ -400,6 +407,7 @@ export function Chat() {
                 <div className="shrink-0 border-t border-neutral-200 p-3">
                   {canPostInActiveRoom ? (
                     <Composer
+                      roomId={activeRoomId}
                       onSend={(text) => handleSend(text)}
                       pendingAttachment={pendingAttachment}
                       onAttach={setPendingAttachment}
@@ -434,6 +442,7 @@ export function Chat() {
                   <div className="flex-1 overflow-y-auto px-4 py-4">
                     <div className="rounded-xl border border-neutral-200 bg-white p-3">
                       <MessageBubble
+                        roomId={activeRoomId}
                         message={threadRoot}
                         isSelf={threadRoot.authorUid === user?.uid}
                         replyCount={0}
@@ -447,6 +456,7 @@ export function Chat() {
                       {repliesOf(threadRoot.id).map((reply) => (
                         <MessageBubble
                           key={reply.id}
+                          roomId={activeRoomId}
                           message={reply}
                           isSelf={reply.authorUid === user?.uid}
                           replyCount={0}
@@ -518,6 +528,7 @@ function RoomButton({
 }
 
 function MessageBubble({
+  roomId,
   message,
   isSelf,
   replyCount,
@@ -527,6 +538,7 @@ function MessageBubble({
   currentUid,
   compact,
 }: {
+  roomId?: string | null;
   message: ChatMessage;
   isSelf: boolean;
   replyCount: number;
@@ -572,6 +584,13 @@ function MessageBubble({
             target="_blank"
             rel="noreferrer"
             download={message.attachment.name}
+            onClick={(e) => {
+              // Lien frais à chaque ouverture : un fichier partagé ne
+              // devient jamais indisponible avec le temps.
+              if (!roomId) return;
+              e.preventDefault();
+              openChatAttachment(roomId, message.id);
+            }}
             className="mt-2 flex max-w-[320px] items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5"
           >
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-neutral-500">
@@ -673,7 +692,9 @@ function Composer({
   pendingLink,
   onLink,
   compact,
+  roomId,
 }: {
+  roomId?: string | null;
   onSend: (text: string) => void;
   pendingAttachment?: ChatMessage["attachment"];
   onAttach?: (attachment: ChatMessage["attachment"]) => void;
@@ -689,10 +710,12 @@ function Composer({
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file || !onAttach) return;
+    if (!file || !onAttach || !roomId) return;
     setUploading(true);
     try {
-      onAttach(await uploadChatAttachment(file));
+      onAttach(await uploadChatAttachment(file, roomId));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Envoi du fichier impossible.");
     } finally {
       setUploading(false);
     }

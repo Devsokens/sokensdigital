@@ -771,3 +771,17 @@ def resign_stored_url(stored_url: str, bucket_name: str, allowed_prefix: str,
         return _sign_private_url(bucket, path, ttl_seconds)
     except Exception:
         return stored_url
+
+
+
+def upload_chat_attachment(file, room_id: str) -> str:
+    """Pièce jointe de messagerie : bucket privé `pieces_jointes`, dossier
+    `chat-attachments/{room_id}/`. Retourne le CHEMIN : le lien est signé à
+    chaque ouverture, après vérification de l'accès au salon — un fichier
+    partagé reste consultable sans limite de durée, jamais par un tiers."""
+    extension, content_type = _resolve_upload_type(file, ADMIN_ATTACHMENT_MIME_BY_EXTENSION)
+    if file.size > MAX_ATTACHMENT_SIZE:
+        raise ValidationError('Le fichier dépasse la taille maximale autorisée (15 Mo).')
+    return _upload_to_private_bucket(
+        ATTACHMENTS_BUCKET_NAME, file.read(), content_type, extension, f'chat-attachments/{room_id}',
+    )

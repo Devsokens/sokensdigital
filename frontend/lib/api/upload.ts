@@ -103,3 +103,55 @@ export function uploadAvatar(file: File): Promise<string> {
 export function uploadChatFile(file: File): Promise<string> {
   return uploadToEndpoint("/api/v1/uploads/chat-attachment/", file);
 }
+
+/** Pièce jointe rangée dans le dossier du salon : renvoie son chemin
+ * (stocké dans le message) et un premier lien. */
+export async function uploadChatFileToRoom(file: File, roomId: string): Promise<{ url: string; path: string }> {
+  const user = auth.currentUser;
+  const token = user ? await user.getIdToken() : null;
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("room", roomId);
+  const response = await fetch(`${API_BASE_URL}/api/v1/uploads/chat-attachment/`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  if (!response.ok) {
+    let detail = `Échec de l'upload (${response.status})`;
+    try {
+      const body = await response.json();
+      if (body.detail) detail = body.detail;
+    } catch {
+      // no JSON body
+    }
+    throw new Error(detail);
+  }
+  return (await response.json()) as { url: string; path: string };
+}
+
+/** Lien frais vers la pièce jointe d'un message (membres du salon). */
+export async function getChatAttachmentLink(roomId: string, messageId: string): Promise<string> {
+  const user = auth.currentUser;
+  const token = user ? await user.getIdToken() : null;
+  const qs = new URLSearchParams({ room: roomId, message: messageId });
+  const response = await fetch(`${API_BASE_URL}/api/v1/uploads/chat-attachment/link/?${qs}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) throw new Error("Fichier indisponible.");
+  return ((await response.json()) as { url: string }).url;
+}
+
+/** Ouvre la pièce jointe dans un nouvel onglet avec un lien frais. L'onglet
+ * est ouvert tout de suite (sinon bloqué comme pop-up), puis redirigé. */
+export async function openChatAttachment(roomId: string, messageId: string) {
+  const tab = window.open("", "_blank");
+  try {
+    const url = await getChatAttachmentLink(roomId, messageId);
+    if (tab) tab.location.href = url;
+    else window.location.href = url;
+  } catch {
+    tab?.close();
+    alert("Ce fichier n'est pas disponible.");
+  }
+}

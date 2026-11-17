@@ -144,9 +144,26 @@ class ChatAttachmentUploadView(APIView):
     parser_classes = [MultiPartParser]
 
     def post(self, request):
+        from core.storage import sign_private_path, upload_chat_attachment
         file = request.FILES.get('file')
         if not file:
             return Response({'detail': 'Aucun fichier fourni.'}, status=status.HTTP_400_BAD_REQUEST)
+        room_id = (request.data.get('room') or '').strip()
+        if room_id:
+            # Fichier rangé dans le dossier du salon, après vérification de
+            # l'accès : son chemin (pas une URL figée) est mis dans le
+            # message, et le lien est signé à chaque ouverture.
+            if not _can_access_room(request.user, room_id):
+                return Response(status=status.HTTP_403_FORBIDDEN)
+            try:
+                path = upload_chat_attachment(file, room_id)
+                url = sign_private_path(path)
+            except ValidationError as exc:
+                return Response({'detail': exc.message}, status=status.HTTP_400_BAD_REQUEST)
+            except RuntimeError as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+            return Response({'url': url, 'path': path}, status=status.HTTP_201_CREATED)
+        # Ancien client sans salon : comportement d'origine.
         try:
             url = upload_file(file, folder='chat-attachments')
         except ValidationError as exc:
@@ -154,6 +171,60 @@ class ChatAttachmentUploadView(APIView):
         except RuntimeError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
         return Response({'url': url}, status=status.HTTP_201_CREATED)
+
+
+def _can_access_room(user, room_id: str) -> bool:
+    from core import firestore_client
+    if not getattr(user, 'firebase_uid', None) or '/' in room_id:
+        return False
+    try:
+        room = firestore_client.get_chat_room(room_id)
+        return firestore_client.user_can_read_chat_room(user.firebase_uid, room)
+    except Exception:
+        logger.exception('Accès au salon %s non vérifiable', room_id)
+        return False
+
+
+class ChatAttachmentLinkView(APIView):
+    """Lien frais (1 h) vers la pièce jointe d'un message, pour un membre du
+    salon. La pièce est lue dans le message Firestore lui-même (jamais un
+    chemin fourni par le client) : un fichier partagé reste consultable sans
+    limite de durée, et seulement par ceux qui ont accès au salon."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from core import firestore_client
+        from core.storage import ATTACHMENTS_BUCKET_NAME, resign_stored_url, sign_private_path
+        room_id = (request.query_params.get('room') or '').strip()
+        message_id = (request.query_params.get('message') or '').strip()
+        if not room_id or not message_id or '/' in message_id:
+            return Response({'detail': 'room et message sont requis.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not _can_access_room(request.user, room_id):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        try:
+            message = firestore_client.get_chat_message(room_id, message_id)
+        except Exception:
+            logger.exception('Message %s/%s illisible', room_id, message_id)
+            return Response(status=status.HTTP_502_BAD_GATEWAY)
+        attachment = (message or {}).get('attachment') or {}
+        path = attachment.get('path') or ''
+        try:
+            if path:
+                if not path.startswith(f'chat-attachments/{room_id}/') or '..' in path:
+                    return Response(status=status.HTTP_404_NOT_FOUND)
+                url = sign_private_path(path, 3600)
+            elif attachment.get('url'):
+                # Ancien message (avant le stockage du chemin) : lien re-signé
+                # dans le dossier des pièces de messagerie, accès au salon
+                # vérifié ci-dessus.
+                url = resign_stored_url(attachment['url'], ATTACHMENTS_BUCKET_NAME, 'chat-attachments/', 3600)
+            else:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+        except Exception:
+            logger.exception('Lien de pièce jointe non signé (%s/%s)', room_id, message_id)
+            return Response(status=status.HTTP_502_BAD_GATEWAY)
+        return Response({'url': url})
 
 
 class IsSuperAdmin(permissions.BasePermission):

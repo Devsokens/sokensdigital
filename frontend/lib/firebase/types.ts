@@ -153,7 +153,9 @@ export interface ChatMessage {
   createdAt: unknown;
   /** Set when this message is a thread reply. */
   parentMessageId?: string | null;
-  attachment?: { name: string; url: string; size: number; contentType: string } | null;
+  /** `path` : chemin de stockage (lien signé à chaque ouverture) ; `url` :
+   * lien initial, seul présent sur les anciens messages. */
+  attachment?: { name: string; url: string; path?: string; size: number; contentType: string } | null;
   linkedEntity?: { type: LinkedEntityType; id: string; label: string } | null;
   /** emoji → uids who reacted with it. */
   reactions?: Record<string, string[]>;

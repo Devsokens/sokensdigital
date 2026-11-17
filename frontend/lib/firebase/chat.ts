@@ -17,7 +17,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
-import { uploadChatFile } from "@/lib/api/upload";
+import { uploadChatFileToRoom } from "@/lib/api/upload";
 import type { ChatMessage, ChatRoom, LinkedEntityType } from "@/lib/firebase/types";
 
 /** firestore.rules only allows a `list` query whose filters structurally
@@ -204,9 +204,9 @@ export async function sendMessage(
  * `attachment` on sendMessage — kept as two steps (rather than doing it
  * inside sendMessage) so the UI can show upload progress before the
  * message actually appears in the thread. */
-export async function uploadChatAttachment(file: File): Promise<ChatMessage["attachment"]> {
-  const url = await uploadChatFile(file);
-  return { name: file.name, url, size: file.size, contentType: file.type };
+export async function uploadChatAttachment(file: File, roomId: string): Promise<ChatMessage["attachment"]> {
+  const { url, path } = await uploadChatFileToRoom(file, roomId);
+  return { name: file.name, url, path, size: file.size, contentType: file.type };
 }
 
 export async function toggleReaction(

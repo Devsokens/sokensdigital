@@ -333,3 +333,35 @@ def adjust_blog_like_count(slug: str, delta: int) -> int:
         return new_value
 
     return _apply(client.transaction())
+
+
+
+def get_chat_room(room_id: str) -> dict | None:
+    snapshot = _get_client().collection('chatRooms').document(room_id).get()
+    return snapshot.to_dict() if snapshot.exists else None
+
+
+def get_chat_message(room_id: str, message_id: str) -> dict | None:
+    snapshot = (
+        _get_client().collection('chatRooms').document(room_id)
+        .collection('messages').document(message_id).get()
+    )
+    return snapshot.to_dict() if snapshot.exists else None
+
+
+def user_can_read_chat_room(firebase_uid: str, room: dict) -> bool:
+    """Mêmes règles que firestore.rules (chatRooms read) : salon entreprise
+    pour tous, salon de département pour ses membres, projet et direct pour
+    les membres listés."""
+    if not firebase_uid or not room:
+        return False
+    room_type = room.get('roomType')
+    if room_type == 'COMPANY':
+        return True
+    if room_type in ('PROJECT', 'DIRECT'):
+        return firebase_uid in (room.get('memberUids') or [])
+    if room_type == 'DEPARTMENT':
+        profile = _get_client().collection('profiles').document(firebase_uid).get()
+        department_id = (profile.to_dict() or {}).get('departmentId') if profile.exists else None
+        return bool(department_id) and department_id == room.get('departmentId')
+    return False
