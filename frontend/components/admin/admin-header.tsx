@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useAuth } from "@/lib/auth/auth-context";
 import { signOutUser } from "@/lib/firebase/auth";
 import { ROLE_LABELS, profileRoles, type Notification } from "@/lib/firebase/types";
-import { subscribeToNotifications, markNotificationRead } from "@/lib/firebase/notifications";
+import { subscribeToNotifications, markNotificationRead, markAllNotificationsRead, clearReadNotifications } from "@/lib/firebase/notifications";
 import {
   enablePush,
   getPushPermission,
@@ -415,7 +415,32 @@ function NotificationBell() {
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0">
         <div className="border-b border-neutral-100 px-4 py-3">
-          <p className="text-sm font-semibold text-neutral-900">Notifications</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-neutral-900">Notifications</p>
+            <div className="flex items-center gap-1">
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => markAllNotificationsRead().catch(() => {})}
+                  className="rounded-md px-2 py-1 text-[11px] font-medium text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900"
+                >
+                  Tout marquer lu
+                </button>
+              )}
+              {notifications.some((n) => n.isRead) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!confirm("Effacer toutes les notifications déjà lues ?")) return;
+                    clearReadNotifications().catch(() => alert("Impossible d'effacer les notifications."));
+                  }}
+                  className="rounded-md px-2 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/10"
+                >
+                  Effacer les lues
+                </button>
+              )}
+            </div>
+          </div>
           <PushToggle />
           <TestNotificationButton />
         </div>

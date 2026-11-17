@@ -331,3 +331,27 @@ class EmailFormatTests(APITestCase):
         self.assertIn('<meta charset="utf-8">', html)
         self.assertIn('<title>Sujet</title>', html)
         self.assertTrue(html.endswith('</body></html>'))
+
+
+class NotificationClearReadTests(APITestCase):
+    """Effacer les notifications lues : seulement celles de l'utilisateur."""
+
+    def setUp(self):
+        self.user = User.objects.create(email='n@x.dev', firebase_uid='uid-n')
+        self.api = APIClient()
+        self.api.force_authenticate(user=self.user)
+
+    @patch('core.firestore_client.delete_read_notifications', return_value=3)
+    def test_clear_read_uses_own_uid(self, delete):
+        res = self.api.post('/api/v1/notifications/clear-read/')
+        self.assertEqual(res.json(), {'deleted': 3})
+        delete.assert_called_once_with('uid-n')
+
+    @patch('core.firestore_client.mark_notifications_read', return_value=1)
+    def test_mark_read_validates_ids(self, mark):
+        self.assertEqual(self.api.post('/api/v1/notifications/mark-read/', {'ids': ['../x']}, format='json').status_code, 400)
+        self.assertEqual(self.api.post('/api/v1/notifications/mark-read/', {'ids': ['abc123']}, format='json').json(), {'updated': 1})
+        mark.assert_called_with('uid-n', ['abc123'])
+
+    def test_anonymous_refused(self):
+        self.assertEqual(APIClient().post('/api/v1/notifications/clear-read/').status_code, 401)

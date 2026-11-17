@@ -365,3 +365,47 @@ def user_can_read_chat_room(firebase_uid: str, room: dict) -> bool:
         department_id = (profile.to_dict() or {}).get('departmentId') if profile.exists else None
         return bool(department_id) and department_id == room.get('departmentId')
     return False
+
+
+
+def mark_notifications_read(recipient_uid: str, notification_ids: list[str] | None = None) -> int:
+    """Marque comme lues les notifications DU destinataire (toutes, ou la
+    liste donnée) ; une notification d'un autre utilisateur est ignorée."""
+    from firebase_admin import firestore
+    client = _get_client()
+    if notification_ids:
+        docs = [client.collection('notifications').document(i).get() for i in notification_ids[:200]]
+    else:
+        docs = list(
+            client.collection('notifications')
+            .where('recipientId', '==', recipient_uid).where('isRead', '==', False).limit(500).stream()
+        )
+    batch, count = client.batch(), 0
+    for snap in docs:
+        data = snap.to_dict() if snap.exists else None
+        if not data or data.get('recipientId') != recipient_uid or data.get('isRead'):
+            continue
+        batch.update(snap.reference, {'isRead': True, 'readAt': firestore.SERVER_TIMESTAMP})
+        count += 1
+    if count:
+        batch.commit()
+    return count
+
+
+def delete_read_notifications(recipient_uid: str) -> int:
+    """Supprime les notifications déjà lues du destinataire — jamais les
+    non lues, jamais celles d'un autre utilisateur."""
+    client = _get_client()
+    deleted = 0
+    while True:
+        docs = list(
+            client.collection('notifications')
+            .where('recipientId', '==', recipient_uid).where('isRead', '==', True).limit(400).stream()
+        )
+        if not docs:
+            return deleted
+        batch = client.batch()
+        for snap in docs:
+            batch.delete(snap.reference)
+        batch.commit()
+        deleted += len(docs)

@@ -1,11 +1,9 @@
 import {
   collection,
-  doc,
   limit,
   onSnapshot,
   orderBy,
   query,
-  updateDoc,
   where,
   type Unsubscribe,
 } from "firebase/firestore";
@@ -38,6 +36,31 @@ export function subscribeToNotifications(
   );
 }
 
+async function notificationsApi(path: string, body?: unknown) {
+  const { auth } = await import("@/lib/firebase/config");
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  const response = await fetch(`${base}/api/v1/notifications/${path}/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify(body ?? {}),
+  });
+  if (!response.ok) throw new Error("Action sur les notifications impossible.");
+  return response.json();
+}
+
+/** Marquage « lu » via le serveur (Admin SDK) : fiable quelles que soient
+ * les règles Firestore déployées. */
 export async function markNotificationRead(notificationId: string): Promise<void> {
-  await updateDoc(doc(db, "notifications", notificationId), { isRead: true });
+  await notificationsApi("mark-read", { ids: [notificationId] });
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  await notificationsApi("mark-read");
+}
+
+/** Efface les notifications déjà lues de l'utilisateur connecté. */
+export async function clearReadNotifications(): Promise<number> {
+  const data = (await notificationsApi("clear-read")) as { deleted: number };
+  return data.deleted;
 }

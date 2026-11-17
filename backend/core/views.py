@@ -1280,3 +1280,42 @@ class TestNotificationView(APIView):
             'email': email_sent,
             'email_backend': settings.EMAIL_BACKEND.rsplit('.', 1)[-1],
         })
+
+
+
+class NotificationsMarkReadView(APIView):
+    """Marque comme lues les notifications de l'utilisateur connecté
+    (`ids` facultatif : toutes sinon)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from core import firestore_client
+        ids = request.data.get('ids') or None
+        if ids is not None and (not isinstance(ids, list) or not all(isinstance(i, str) and i.isalnum() for i in ids)):
+            return Response({'detail': 'ids invalides.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not request.user.firebase_uid:
+            return Response({'updated': 0})
+        try:
+            count = firestore_client.mark_notifications_read(request.user.firebase_uid, ids)
+        except Exception:
+            logger.exception('Notifications non marquées lues pour %s', request.user.pk)
+            return Response(status=status.HTTP_502_BAD_GATEWAY)
+        return Response({'updated': count})
+
+
+class NotificationsClearReadView(APIView):
+    """Efface les notifications déjà lues de l'utilisateur connecté."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from core import firestore_client
+        if not request.user.firebase_uid:
+            return Response({'deleted': 0})
+        try:
+            count = firestore_client.delete_read_notifications(request.user.firebase_uid)
+        except Exception:
+            logger.exception('Notifications lues non effacées pour %s', request.user.pk)
+            return Response(status=status.HTTP_502_BAD_GATEWAY)
+        return Response({'deleted': count})

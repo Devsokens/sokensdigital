@@ -205,7 +205,7 @@ service cloud.firestore {
       // texte/lien de sa propre notification, ou changer `recipientId` pour
       // la faire apparaître dans la boîte de quelqu'un d'autre.
       allow update: if isAuth() && resource.data.recipientId == request.auth.uid &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'readAt']);
       allow create, delete: if false; // Création déléguée aux scripts applicatifs (aucune Cloud Function en free tier — voir §0)
     }
 
