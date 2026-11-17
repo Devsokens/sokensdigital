@@ -17,12 +17,16 @@ const MAX_SIZE = 10 * 1024 * 1024;
 /** Pièces jointes d'un devis ou d'une facture fournisseur : photos (PNG,
  * JPG — appareil photo direct sur mobile) ou PDF, 10 Mo max. Les droits
  * sont vérifiés par l'API (rôles finance). */
-export function AttachmentsButton({ target, objectId, documentType, label }: {
+export function AttachmentsButton({ target, objectId, documentType, documentTypes, label, buttonLabel = "Pièces" }: {
   target: AttachmentTarget;
   objectId: string;
-  documentType: "QUOTE" | "INVOICE";
+  documentType: "QUOTE" | "INVOICE" | "RECEIPT" | "OTHER";
+  /** Types proposés au téléversement (ex. facture payée / reçu de caisse). */
+  documentTypes?: { value: "QUOTE" | "INVOICE" | "RECEIPT" | "OTHER"; label: string }[];
   label: string;
+  buttonLabel?: string;
 }) {
+  const [chosenType, setChosenType] = useState(documentType);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<DocumentAttachment[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -45,7 +49,7 @@ export function AttachmentsButton({ target, objectId, documentType, label }: {
     try {
       for (const file of Array.from(files)) {
         if (file.size > MAX_SIZE) throw new Error(`${file.name} dépasse 10 Mo.`);
-        const added = await uploadAttachment(target, objectId, file, documentType);
+        const added = await uploadAttachment(target, objectId, file, chosenType);
         setItems((prev) => [added, ...(prev ?? [])]);
       }
     } catch (e) {
@@ -73,7 +77,7 @@ export function AttachmentsButton({ target, objectId, documentType, label }: {
         onClick={() => setOpen(true)}
         className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 px-3 py-1 text-xs text-neutral-600 transition-colors hover:border-primary/40 hover:text-primary"
       >
-        <Paperclip className="size-3.5" /> Pièces
+        <Paperclip className="size-3.5" /> {buttonLabel}
       </button>
       {open && (
         <Modal open onOpenChange={(v) => !v && setOpen(false)}>
@@ -87,6 +91,20 @@ export function AttachmentsButton({ target, objectId, documentType, label }: {
                 className="hidden"
                 onChange={(e) => handleFiles(e.target.files)}
               />
+              {documentTypes && (
+                <div className="flex flex-wrap gap-2">
+                  {documentTypes.map((t) => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setChosenType(t.value)}
+                      className={`rounded-full border px-3 py-1 text-xs ${chosenType === t.value ? "border-primary bg-primary/10 text-neutral-900" : "border-neutral-200 text-neutral-600"}`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <button
                 type="button"
                 disabled={busy}
@@ -114,7 +132,8 @@ export function AttachmentsButton({ target, objectId, documentType, label }: {
                           <FileText className="size-8 text-neutral-400" />
                         </span>
                       )}
-                      <span className="block truncate px-2 py-1.5 text-[11px] text-neutral-600">{a.file_name}</span>
+                      <span className="block truncate px-2 pt-1.5 text-[10px] font-medium text-neutral-500 uppercase">{a.document_type_display}</span>
+                      <span className="block truncate px-2 pb-1.5 text-[11px] text-neutral-600">{a.file_name}</span>
                     </a>
                     <button
                       type="button"

@@ -1,7 +1,7 @@
 import { apiFetch } from "@/lib/api/client";
 
 /** Cibles autorisées côté serveur (core.attachment_views.ATTACHABLE_MODELS). */
-export type AttachmentTarget = "procurement.supplierquote" | "procurement.supplierinvoice";
+export type AttachmentTarget = "procurement.supplierquote" | "procurement.supplierinvoice" | "finance.disbursementrequest";
 
 export interface DocumentAttachment {
   id: string;

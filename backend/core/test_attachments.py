@@ -316,3 +316,20 @@ class PrivateBucketGuardTests(TestCase):
     def test_refuses_when_the_bucket_can_be_neither_created_nor_read(self):
         with self.assertRaises(RuntimeError):
             self._ensure(get_status=404)
+
+
+class DisbursementPaymentPiecesTests(AttachmentFixturesMixin, APITestCase):
+    """Pièces complémentaires d'un besoin (facture payée, reçu de caisse) :
+    seulement une fois le décaissement validé."""
+
+    def test_pieces_only_after_validation(self):
+        from finance.models import DisbursementRequest
+        besoin = DisbursementRequest.objects.create(amount=5000, beneficiary='X', reason='Y')
+        self.client.force_authenticate(user=self.comptable)
+        payload = lambda: self._payload(content_type='finance.disbursementrequest', object_id=str(besoin.pk), document_type='RECEIPT')  # noqa: E731
+        self.assertEqual(self.client.post(self.list_url, payload(), format='multipart').status_code, 400)
+        besoin.status = DisbursementRequest.Status.APPROUVE
+        besoin.save(update_fields=['status'])
+        response = self.client.post(self.list_url, payload(), format='multipart')
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data['document_type'], 'RECEIPT')

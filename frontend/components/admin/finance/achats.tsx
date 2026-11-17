@@ -11,6 +11,7 @@ import { formatFcfa } from "@/lib/format-currency";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useIsGerant } from "@/lib/admin/use-is-gerant";
 import { AttachmentsButton } from "@/components/admin/finance/attachments-button";
+import { uploadAttachment, type AttachmentTarget } from "@/lib/api/attachments";
 import { profileRoles } from "@/lib/firebase/types";
 import { listDepartments } from "@/lib/api/hr";
 import { listDisbursementRequests } from "@/lib/api/finance";
@@ -452,15 +453,22 @@ function SupplierQuoteForm({ requests, suppliers, onSaved }: { requests: Procure
   const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? "");
   const [quoteDate, setQuoteDate] = useState(new Date().toISOString().slice(0, 10));
   const [amountHt, setAmountHt] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (files.length === 0) {
+      setError("Joignez le devis du fournisseur (photo ou PDF).");
+      return;
+    }
     setSaving(true);
     try {
-      await createSupplierQuote({ procurement: procurementId, supplier: supplierId, quote_date: quoteDate, amount_ht: amountHt });
+      const created = await createSupplierQuote({ procurement: procurementId, supplier: supplierId, quote_date: quoteDate, amount_ht: amountHt });
+      const failed = await uploadAll("procurement.supplierquote", created.id, files, "QUOTE");
+      if (failed.length) alert(`Devis créé, mais ces fichiers n'ont pas pu être joints : ${failed.join(", ")}. Ajoutez-les via « Pièces ».`);
       onSaved();
     } catch {
       setError("Impossible de créer le devis.");
@@ -494,6 +502,7 @@ function SupplierQuoteForm({ requests, suppliers, onSaved }: { requests: Procure
           <input type="number" step="0.01" value={amountHt} onChange={(e) => setAmountHt(e.target.value)} className={inputClass} required />
         </label>
       </div>
+      <DocumentPicker label="Devis du fournisseur (obligatoire)" files={files} onChange={setFiles} />
       <p className="text-xs text-neutral-400">TVA 18 % appliquée automatiquement.</p>
       <div className="flex items-center justify-between pt-2">
         <SheetClose render={<Button type="button" variant="outline" className="rounded-full px-4">Annuler</Button>} />
@@ -615,18 +624,25 @@ function SupplierInvoiceForm({ requests, suppliers, onSaved }: { requests: Procu
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().slice(0, 10));
   const [amountHt, setAmountHt] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (files.length === 0) {
+      setError("Joignez la facture du fournisseur (photo ou PDF).");
+      return;
+    }
     setSaving(true);
     try {
-      await createSupplierInvoice({
+      const created = await createSupplierInvoice({
         supplier: supplierId, procurement: procurementId,
         invoice_number: invoiceNumber, invoice_date: invoiceDate, amount_ht: amountHt,
       });
+      const failed = await uploadAll("procurement.supplierinvoice", created.id, files, "INVOICE");
+      if (failed.length) alert(`Facture créée, mais ces fichiers n'ont pas pu être joints : ${failed.join(", ")}. Ajoutez-les via « Pièces ».`);
       onSaved();
     } catch {
       setError("Impossible de créer la facture.");
@@ -664,6 +680,7 @@ function SupplierInvoiceForm({ requests, suppliers, onSaved }: { requests: Procu
           <input type="number" step="0.01" value={amountHt} onChange={(e) => setAmountHt(e.target.value)} className={inputClass} required />
         </label>
       </div>
+      <DocumentPicker label="Facture du fournisseur (obligatoire)" files={files} onChange={setFiles} />
       <div className="flex items-center justify-between pt-2">
         <SheetClose render={<Button type="button" variant="outline" className="rounded-full px-4">Annuler</Button>} />
         <Button type="submit" disabled={saving} className="rounded-full px-5">
@@ -797,5 +814,55 @@ function SupplierForm({ onSaved }: { onSaved: () => void }) {
         </Button>
       </div>
     </form>
+  );
+}
+
+
+/** Téléverse les fichiers choisis sur un document fraîchement créé ;
+ * renvoie les noms de ceux qui ont échoué. */
+async function uploadAll(target: AttachmentTarget, id: string, files: File[], type: "QUOTE" | "INVOICE") {
+  const failed: string[] = [];
+  for (const file of files) {
+    try {
+      await uploadAttachment(target, id, file, type);
+    } catch {
+      failed.push(file.name);
+    }
+  }
+  return failed;
+}
+
+/** Choix des documents scannés (photo PNG/JPG — appareil photo sur mobile —
+ * ou PDF, 10 Mo max), joints dès la création. */
+function DocumentPicker({ label, files, onChange }: { label: string; files: File[]; onChange: (files: File[]) => void }) {
+  return (
+    <div>
+      <span className={labelClass}>{label}</span>
+      <label className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-neutral-200 px-4 py-4 text-center text-xs text-neutral-500 hover:border-primary/50 hover:text-primary">
+        <input
+          type="file"
+          accept="image/png,image/jpeg,application/pdf"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            const picked = Array.from(e.target.files ?? []).filter((f) => f.size <= 10 * 1024 * 1024);
+            onChange([...files, ...picked]);
+            e.target.value = "";
+          }}
+        />
+        <span className="font-medium">Ajouter une photo ou un PDF</span>
+        <span className="text-neutral-400">PNG, JPG ou PDF — 10 Mo max par fichier</span>
+      </label>
+      {files.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {files.map((f, i) => (
+            <li key={`${f.name}-${i}`} className="flex items-center justify-between gap-2 rounded-lg bg-neutral-50 px-3 py-1.5 text-xs text-neutral-700">
+              <span className="truncate">{f.name}</span>
+              <button type="button" onClick={() => onChange(files.filter((_, j) => j !== i))} className="shrink-0 text-destructive">Retirer</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

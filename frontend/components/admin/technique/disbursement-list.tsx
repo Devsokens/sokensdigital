@@ -21,6 +21,7 @@ import {
 } from "@/lib/api/finance";
 import { listProjects } from "@/lib/api/projects";
 import { ApiError } from "@/lib/api/client";
+import { AttachmentsButton } from "@/components/admin/finance/attachments-button";
 import { SignaturePad, type SignaturePadHandle } from "@/components/signature-pad";
 import { listUsers } from "@/lib/api/hr";
 import { getMe } from "@/lib/api/me";
@@ -231,6 +232,20 @@ export function DisbursementList({ mode = "department", departmentLabel }: { mod
                       >
                         <Eye className="size-3.5" /> Voir
                       </button>
+                      {isFinanceView && (req.status === "APPROUVE" || req.status === "EXECUTE") && (
+                        <AttachmentsButton
+                          target="finance.disbursementrequest"
+                          objectId={req.id}
+                          documentType="INVOICE"
+                          documentTypes={[
+                            { value: "INVOICE", label: "Facture payée" },
+                            { value: "RECEIPT", label: "Reçu de caisse" },
+                            { value: "OTHER", label: "Autre justificatif" },
+                          ]}
+                          label={req.reference ?? "Besoin"}
+                          buttonLabel="Pièces de paiement"
+                        />
+                      )}
                       {canApproveThis && (
                         <>
                           <SignApproveModal

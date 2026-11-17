@@ -189,6 +189,18 @@ class DocumentAttachmentViewSet(viewsets.ModelViewSet):
         content_type, object_id, label = self._target()
         self._assert_can_attach(label)
 
+        # Besoin : les pièces complémentaires (facture payée, reçu de caisse)
+        # se joignent une fois le décaissement validé — pas avant, pour ne
+        # pas mélanger justificatifs de paiement et demande en cours.
+        if label == 'finance.disbursementrequest':
+            from finance.models import DisbursementRequest
+            besoin = DisbursementRequest.objects.filter(pk=object_id).only('status').first()
+            if besoin and besoin.status not in (DisbursementRequest.Status.APPROUVE, DisbursementRequest.Status.EXECUTE):
+                return Response(
+                    {'detail': "Les pièces complémentaires se joignent après validation du décaissement."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         uploaded = request.FILES.get('file')
         if not uploaded:
             return Response(
