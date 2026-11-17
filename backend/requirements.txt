@@ -29,6 +29,7 @@ pytest-django
 pytest-cov
 factory-boy
 weasyprint
+segno==1.6.6
 google-api-python-client
 google-auth
 cloudinary

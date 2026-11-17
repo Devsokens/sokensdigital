@@ -641,7 +641,8 @@ class InvoiceViewSetTests(APITestCase):
             'client_name': 'Acme SARL', 'issue_date': '2026-07-15', 'amount_ht': '1000', 'vat_rate': '0.18',
         }, format='json')
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(Decimal(response.json()['amount_ttc']), Decimal('1180.00'))
+        # HT 1000 + TVA 18 % (180) + CSS 1 % (10).
+        self.assertEqual(Decimal(response.json()['amount_ttc']), Decimal('1190.00'))
         self.assertEqual(response.json()['status'], 'BROUILLON')
 
     def test_negative_vat_rate_is_refused(self):
@@ -682,7 +683,8 @@ class InvoiceViewSetTests(APITestCase):
         }, format='json')
         self.assertEqual(response.status_code, 201, response.content)
         self.assertEqual(Decimal(response.json()['amount_ht']), Decimal('15000.00'))
-        self.assertEqual(Decimal(response.json()['amount_ttc']), Decimal('15000.00'))
+        # Sans TVA, mais CSS 1 % : 15000 + 150.
+        self.assertEqual(Decimal(response.json()['amount_ttc']), Decimal('15150.00'))
         self.assertEqual(Decimal(response.json()['amount_paid']), Decimal('0'))
 
     def test_discount_reduces_amount_and_is_traced(self):
@@ -704,7 +706,7 @@ class InvoiceViewSetTests(APITestCase):
         self.assertEqual(too_big.status_code, 400)
 
     def test_mark_paid_records_remaining_amount(self):
-        invoice = Invoice.objects.create(client_name='Work Class', issue_date=datetime.date(2026, 7, 15), amount_ht=Decimal('360000'), vat_rate=Decimal('0'))
+        invoice = Invoice.objects.create(client_name='Work Class', issue_date=datetime.date(2026, 7, 15), amount_ht=Decimal('360000'), vat_rate=Decimal('0'), css_rate=Decimal('0'))
         Payment.objects.create(invoice=invoice, amount=Decimal('180000'), payment_date=datetime.date(2026, 7, 16), payment_method='ESPECES', status=Payment.Status.RECU)
 
         response = self.client_comptable.post(f'/api/v1/finance/invoices/{invoice.id}/mark-paid/', {'payment_method': 'VIREMENT'}, format='json')
@@ -746,7 +748,7 @@ class InvoiceViewSetTests(APITestCase):
         self.assertEqual(response.status_code, 200, response.content)
         args, kwargs = fake_send.call_args
         self.assertEqual(args[0], 'contact@smag.test')
-        self.assertIn('100\u202f000 FCFA', args[2])
+        self.assertIn('101\u202f000 FCFA', args[2])  # HT 100 000 + CSS 1 %
         names = [a.filename for a in kwargs['attachments']]
         self.assertEqual(names, [f'{invoice.invoice_number}.pdf', f'Devis-{quote.quote_number}.pdf'])
 
@@ -758,7 +760,7 @@ class InvoiceViewSetTests(APITestCase):
     def test_receipt_pdf_download_and_template(self):
         from finance.models import PaymentReceipt
         from finance.pdf import render_receipt_html
-        invoice = Invoice.objects.create(client_name='Work Class', issue_date=datetime.date(2026, 7, 15), amount_ht=Decimal('360000'), vat_rate=Decimal('0'))
+        invoice = Invoice.objects.create(client_name='Work Class', issue_date=datetime.date(2026, 7, 15), amount_ht=Decimal('360000'), vat_rate=Decimal('0'), css_rate=Decimal('0'))
         payment = Payment.objects.create(invoice=invoice, amount=Decimal('180000'), payment_date=datetime.date(2026, 7, 16), payment_method='VIREMENT', status=Payment.Status.RECU)
         receipt = PaymentReceipt.objects.create(payment=payment, issued_by=self.comptable)
 

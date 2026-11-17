@@ -25,6 +25,10 @@ class Client(LoggedModel):
     siret = models.CharField(max_length=14, unique=True, null=True, blank=True)
     sector = models.CharField(max_length=255, blank=True)
     address = models.TextField(blank=True)
+    # Identification fiscale imprimée sur les factures : NIF du client
+    # lorsqu'il est assujetti à la TVA.
+    nif = models.CharField('NIF', max_length=50, blank=True)
+    vat_subject = models.BooleanField('Assujetti à la TVA', default=True)
     city = models.CharField(max_length=100, blank=True)
     postal_code = models.CharField(max_length=20, blank=True)
     country = models.CharField(max_length=100, blank=True)

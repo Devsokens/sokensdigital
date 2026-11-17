@@ -224,11 +224,11 @@ class InvoiceSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'invoice_number', 'client', 'client_name', 'client_company_name', 'quote', 'quote_number',
             'issue_date', 'due_date', 'lines', 'discount_amount', 'discount_reason', 'document_color',
-            'amount_ht', 'vat_rate', 'amount_ttc', 'amount_paid', 'contact_emails', 'status', 'created_by',
-            'validated_by', 'validated_at', 'created_at',
+            'amount_ht', 'vat_rate', 'vat_amount', 'css_rate', 'css_amount', 'amount_ttc', 'amount_paid',
+            'contact_emails', 'status', 'created_by', 'validated_by', 'validated_at', 'created_at',
         ]
         read_only_fields = [
-            'invoice_number', 'amount_ttc', 'status', 'created_by', 'validated_by', 'validated_at',
+            'invoice_number', 'vat_amount', 'css_amount', 'amount_ttc', 'status', 'created_by', 'validated_by', 'validated_at',
             'client_company_name',
         ]
 

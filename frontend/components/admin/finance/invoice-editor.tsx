@@ -59,7 +59,8 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
   const [lines, setLines] = useState<InvoiceLine[]>(invoice?.lines.length ? invoice.lines : [{ ...EMPTY_LINE }]);
   const [discount, setDiscount] = useState(invoice && Number(invoice.discount_amount) ? String(Math.round(Number(invoice.discount_amount))) : "");
   const [discountReason, setDiscountReason] = useState(invoice?.discount_reason ?? "");
-  const [vatPercent, setVatPercent] = useState(invoice ? String(Math.round(Number(invoice.vat_rate) * 1000) / 10) : "0");
+  const [vatPercent, setVatPercent] = useState(invoice ? String(Math.round(Number(invoice.vat_rate) * 1000) / 10) : "18");
+  const cssRate = invoice?.css_rate !== undefined ? Number(invoice.css_rate) : 0.01;
   const [documentColor, setDocumentColor] = useState(invoice?.document_color ?? "#123f91");
   const [quoteId, setQuoteId] = useState<string | null>(invoice?.quote ?? null);
   const [pickedQuote, setPickedQuote] = useState("");
@@ -80,7 +81,7 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
   const linkedQuoteNumber = context?.quotes.find((q) => q.id === quoteId)?.quote_number ?? current?.quote_number ?? null;
   const vatRate = (Number(vatPercent) || 0) / 100;
   const paid = Number(current?.amount_paid ?? 0);
-  const totals = invoiceTotals(lines, Number(discount) || 0, vatRate, paid);
+  const totals = invoiceTotals(lines, Number(discount) || 0, vatRate, paid, cssRate);
 
   const preview = useMemo(
     () => ({
@@ -91,6 +92,7 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
       discount_amount: Number(discount) || 0,
       discount_reason: discountReason,
       vat_rate: vatRate,
+      css_rate: cssRate,
       amount_paid: paid,
       quote_number: linkedQuoteNumber,
     }),

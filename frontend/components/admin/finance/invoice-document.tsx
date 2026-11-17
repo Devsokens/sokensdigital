@@ -18,6 +18,8 @@ export interface InvoiceDocumentData {
   discount_reason: string;
   /** Taux décimal (0.18 = 18 %). */
   vat_rate: number;
+  /** Contribution Spéciale de Solidarité, taux décimal (0.01 = 1 %). */
+  css_rate?: number;
   amount_paid: number;
   /** Devis d'origine, rappelé dans l'encadré pour la traçabilité. */
   quote_number?: string | null;
@@ -32,12 +34,15 @@ function quantity(value: string) {
   return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(".", ",");
 }
 
-/** Mêmes calculs que le serveur : HT = lignes − réduction, TTC = HT × (1 + TVA). */
-export function invoiceTotals(lines: InvoiceLine[], discount: number, vatRate: number, paid: number) {
+/** Mêmes calculs que le serveur : HT = lignes − réduction,
+ * TTC = HT + TVA + CSS (Contribution Spéciale de Solidarité, 1 % par défaut). */
+export function invoiceTotals(lines: InvoiceLine[], discount: number, vatRate: number, paid: number, cssRate = 0.01) {
   const subtotal = lines.reduce((sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.unit_price) || 0), 0);
   const ht = subtotal - discount;
-  const ttc = ht * (1 + vatRate);
-  return { subtotal, discount, ht, vat: ttc - ht, ttc, paid, due: Math.max(ttc - paid, 0) };
+  const vat = Math.round(ht * vatRate * 100) / 100;
+  const css = Math.round(ht * cssRate * 100) / 100;
+  const ttc = ht + vat + css;
+  return { subtotal, discount, ht, vat, css, ttc, paid, due: Math.max(ttc - paid, 0) };
 }
 
 export function InvoiceDocument({
@@ -49,7 +54,8 @@ export function InvoiceDocument({
   settings: InvoiceEditorContext["settings"];
   accentColor: string;
 }) {
-  const totals = invoiceTotals(invoice.lines, invoice.discount_amount, invoice.vat_rate, invoice.amount_paid);
+  const cssRate = invoice.css_rate ?? 0.01;
+  const totals = invoiceTotals(invoice.lines, invoice.discount_amount, invoice.vat_rate, invoice.amount_paid, cssRate);
   const clientLabel = invoice.client_name || "Client";
   const lines = invoice.lines.filter((l) => l.description || Number(l.unit_price));
 
@@ -146,7 +152,7 @@ export function InvoiceDocument({
                   </tr>
                 </>
               )}
-              {invoice.vat_rate > 0 && (
+              {(invoice.vat_rate > 0 || cssRate > 0) && (
                 <>
                   <tr className="text-[10.5px]">
                     <td className="px-2.5 py-0.5 text-right tracking-wide text-neutral-500 uppercase">Total HT</td>
@@ -158,6 +164,14 @@ export function InvoiceDocument({
                     </td>
                     <td className="px-2.5 py-0.5 text-right whitespace-nowrap">{amount(totals.vat)} FCFA</td>
                   </tr>
+                  {cssRate > 0 && (
+                    <tr className="text-[10.5px]">
+                      <td className="px-2.5 py-0.5 text-right tracking-wide text-neutral-500 uppercase">
+                        CSS {Math.round(cssRate * 1000) / 10} %
+                      </td>
+                      <td className="px-2.5 py-0.5 text-right whitespace-nowrap">{amount(totals.css)} FCFA</td>
+                    </tr>
+                  )}
                 </>
               )}
               <tr>

@@ -144,6 +144,11 @@ function ClientForm({
   const [score, setScore] = useState("100");
   const [estimatedValue, setEstimatedValue] = useState("");
   const [notes, setNotes] = useState("");
+  // Identification fiscale imprimée sur les factures du client.
+  const [nif, setNif] = useState("");
+  const [vatSubject, setVatSubject] = useState(true);
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
   const [contacts, setContacts] = useState<ContactRow[]>(() => [emptyContact("Directeur de projet")]);
 
   // Documents déjà sur la fiche (modification) et fichiers à envoyer après
@@ -169,6 +174,10 @@ function ClientForm({
         setCompanyName(c.company_name);
         setAssignedTo(c.assigned_to ?? "");
         setNotes(c.notes ?? "");
+        setNif(c.nif ?? "");
+        setVatSubject(c.vat_subject ?? true);
+        setAddress(c.address ?? "");
+        setCity(c.city ?? "");
         if (c.lead) {
           setSource(c.lead.source);
           setScore(String(c.lead.qualification_score));
@@ -224,6 +233,10 @@ function ClientForm({
       company_name: companyName.trim(),
       assigned_to: assignedTo || null,
       notes: notes.trim(),
+      nif: nif.trim(),
+      vat_subject: vatSubject,
+      address: address.trim(),
+      city: city.trim(),
       lead_source: source,
       qualification_score: Math.min(100, Math.max(0, Number(score) || 0)),
       estimated_value: estimatedValue ? String(estimatedValue) : null,
@@ -292,6 +305,25 @@ function ClientForm({
               required
             />
           </label>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className={labelClass}>Adresse (facturation)</span>
+              <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="BP, quartier, rue…" className={inputClass} />
+            </label>
+            <label className="block">
+              <span className={labelClass}>Ville</span>
+              <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Libreville" className={inputClass} />
+            </label>
+            <label className="block">
+              <span className={labelClass}>NIF</span>
+              <input value={nif} onChange={(e) => setNif(e.target.value)} placeholder="Numéro d'identification fiscale" className={inputClass} />
+            </label>
+            <label className="flex items-center gap-2 self-end pb-2.5 text-sm text-neutral-700">
+              <input type="checkbox" checked={vatSubject} onChange={(e) => setVatSubject(e.target.checked)} className="size-4 accent-primary" />
+              Assujetti à la TVA
+            </label>
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">

@@ -201,7 +201,7 @@ def post_invoice_journal_entry(invoice_id: str):
         return f'No open accounting period for invoice date'
 
     # Lignes: Débit Client, Crédit Sales, Crédit VAT
-    vat_amount = invoice.amount_ttc - invoice.amount_ht
+    vat_amount = invoice.vat_amount
 
     TransactionLine.objects.create(
         entry=entry,
@@ -232,6 +232,16 @@ def post_invoice_journal_entry(invoice_id: str):
         label=f'TVA {invoice.vat_rate*100:.0f}%',
         credit=vat_amount,
     )
+
+    if invoice.css_amount:
+        TransactionLine.objects.create(
+            entry=entry,
+            account_id=Account.objects.get_or_create(
+                code='4478', defaults={'name': 'CSS collectée', 'account_class': Account.AccountClass.TVA},
+            )[0].id,
+            label=f'CSS {invoice.css_rate*100:.0f}%',
+            credit=invoice.css_amount,
+        )
 
     return f'Invoice {invoice.invoice_number} posted'
 

@@ -13,6 +13,8 @@ from django.http import FileResponse
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.views import APIView
 
 from core.constants import ROLE_ADMIN, ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE, ROLE_CAISSIER
 from core.notifications import notify, notify_roles
@@ -730,7 +732,8 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         client_account, _ = Account.objects.get_or_create(code='411', defaults={'name': 'Clients', 'account_class': Account.AccountClass.ACTIF})
         sales_account, _ = Account.objects.get_or_create(code='706', defaults={'name': 'Prestations de services', 'account_class': Account.AccountClass.PRODUIT})
         vat_account, _ = Account.objects.get_or_create(code='4457', defaults={'name': 'TVA collectée', 'account_class': Account.AccountClass.TVA})
-        vat_amount = invoice.amount_ttc - invoice.amount_ht
+        vat_amount = invoice.vat_amount
+        css_amount = invoice.css_amount
 
         entry = JournalEntry.objects.create(
             period=period, journal_code=JournalEntry.JournalCode.VENTES, date=invoice.issue_date,
@@ -741,6 +744,10 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         TransactionLine.objects.create(entry=entry, account=sales_account, label=invoice.invoice_number, debit=Decimal('0'), credit=invoice.amount_ht)
         if vat_amount:
             TransactionLine.objects.create(entry=entry, account=vat_account, label=invoice.invoice_number, debit=Decimal('0'), credit=vat_amount)
+        if css_amount:
+            # Contribution Spéciale de Solidarité collectée, reversée à l'État.
+            css_account, _ = Account.objects.get_or_create(code='4478', defaults={'name': 'CSS collectée', 'account_class': Account.AccountClass.TVA})
+            TransactionLine.objects.create(entry=entry, account=css_account, label=f'CSS {invoice.invoice_number}', debit=Decimal('0'), credit=css_amount)
 
         invoice.status = Invoice.Status.VALIDEE
         invoice.validated_by = request.user
@@ -1187,3 +1194,48 @@ def encaissements(request):
         'total': str(sum((Decimal(r['amount']) for r in rows), Decimal('0'))),
         'scope': 'caisse' if (is_caissier and not is_finance) else 'complet',
     })
+
+
+class PublicInvoiceVerificationView(APIView):
+    """Vérification publique d'une facture via son QR code fiscal.
+
+    Sans authentification (le client, l'administration fiscale ou un tiers
+    scanne le QR code). La signature HMAC du lien est recalculée à partir de
+    la facture en base : les données ne sont renvoyées que si elle
+    correspond — un numéro deviné ou une facture modifiée après émission
+    ne révèle rien et est signalé comme non conforme. Débit limité.
+    """
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'invoice_verify'
+
+    @extend_schema(tags=['Public'], summary='Verify an invoice fiscal QR code')
+    def get(self, request):
+        from finance.fiscal import verify_signature
+        from marketing.models import QuoteSettings
+
+        number = (request.query_params.get('n') or '').strip()
+        signature = (request.query_params.get('s') or '').strip()
+        invoice = Invoice.objects.select_related('client').filter(invoice_number=number).first() if number else None
+        if not invoice or invoice.status == Invoice.Status.BROUILLON or not verify_signature(invoice, signature):
+            return Response({'valid': False}, status=status.HTTP_200_OK)
+        company = QuoteSettings.load()
+        return Response({
+            'valid': True,
+            'invoice_number': invoice.invoice_number,
+            'issue_date': invoice.issue_date,
+            'supplier': "Soken's Digital",
+            'supplier_nif': company.company_nif,
+            'supplier_rccm': company.company_rccm,
+            'client': invoice.client.company_name if invoice.client_id else invoice.client_name,
+            'client_nif': invoice.client.nif if invoice.client_id else '',
+            'amount_ht': invoice.amount_ht,
+            'vat_rate': invoice.vat_rate,
+            'vat_amount': invoice.vat_amount,
+            'css_rate': invoice.css_rate,
+            'css_amount': invoice.css_amount,
+            'amount_ttc': invoice.amount_ttc,
+            'status': invoice.get_status_display(),
+        })

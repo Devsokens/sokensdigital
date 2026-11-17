@@ -199,6 +199,7 @@ REST_FRAMEWORK = {
         'user': os.environ.get('THROTTLE_RATE_USER', '2000/hour'),
         'public_write': os.environ.get('THROTTLE_RATE_PUBLIC_WRITE', '10/hour'),
         'webhook': os.environ.get('THROTTLE_RATE_WEBHOOK', '60/min'),
+        'invoice_verify': os.environ.get('THROTTLE_RATE_INVOICE_VERIFY', '30/min'),
     },
 }
 

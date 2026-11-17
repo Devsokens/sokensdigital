@@ -42,6 +42,8 @@ export interface Client {
   id: string;
   company_name: string;
   siret: string | null;
+  nif?: string;
+  vat_subject?: boolean;
   sector?: string;
   address?: string;
   city?: string;
@@ -938,6 +940,10 @@ export interface Invoice {
   document_color: string;
   amount_ht: string;
   vat_rate: string;
+  vat_amount?: string;
+  /** Contribution Spéciale de Solidarité (taux décimal, 0.01 = 1 %). */
+  css_rate?: string;
+  css_amount?: string;
   amount_ttc: string;
   /** Versements reçus ou enregistrés. */
   amount_paid: string;

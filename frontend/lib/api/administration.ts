@@ -24,6 +24,9 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8
 export interface ClientInput {
   company_name: string;
   siret?: string;
+  /** NIF du client, imprimé sur ses factures (s'il est assujetti à la TVA). */
+  nif?: string;
+  vat_subject?: boolean;
   sector?: string;
   address?: string;
   city?: string;

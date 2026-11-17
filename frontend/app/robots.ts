@@ -6,7 +6,7 @@ import { SITE_URL } from "@/lib/seo/site";
 // ne doivent jamais apparaître dans un résultat de recherche public. Ne
 // remplace pas le contrôle d'accès réel (RequireAuth + vérification du
 // token côté API), c'est une couche d'hygiène en plus (voir SECURITY.md).
-const PRIVATE_PATHS = ["/admin", "/admin/", "/devis/", "/connexion", "/offline", "/ingest/"];
+const PRIVATE_PATHS = ["/admin", "/admin/", "/devis/", "/connexion", "/offline", "/ingest/", "/verification-facture"];
 
 // Robots des moteurs d'IA (ChatGPT, Claude, Perplexity, Gemini, Copilot…)
 // explicitement autorisés sur le contenu public : c'est ce qui permet à

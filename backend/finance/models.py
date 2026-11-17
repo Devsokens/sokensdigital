@@ -12,6 +12,8 @@ from projects.models import Project
 # Placeholder: 18% (OHADA/CEMAC), mais doit être confirmé pour juridiction
 # réelle de Soken's Digital. Ce constant sert de fallback si la base est vide.
 DEFAULT_VAT_RATE = Decimal('0.18')
+# Contribution Spéciale de Solidarité (Gabon) : 1 % du montant HT.
+DEFAULT_CSS_RATE = Decimal('0.01')
 
 
 class DisbursementRequest(LoggedModel):
@@ -294,6 +296,11 @@ class Invoice(LoggedModel):
     due_date = models.DateField(null=True, blank=True)
     amount_ht = models.DecimalField(max_digits=12, decimal_places=2)
     vat_rate = models.DecimalField(max_digits=4, decimal_places=2, default=DEFAULT_VAT_RATE)
+    # TTC = HT + TVA + CSS. Montants de TVA et de CSS conservés tels
+    # qu'émis (facture, écriture comptable et QR code fiscal concordent).
+    vat_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'), editable=False)
+    css_rate = models.DecimalField(max_digits=4, decimal_places=3, default=DEFAULT_CSS_RATE)
+    css_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'), editable=False)
     amount_ttc = models.DecimalField(max_digits=12, decimal_places=2, editable=False)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.BROUILLON)
     # Lignes du document : [{description, quantity, unit_price, note}] — note
@@ -344,7 +351,10 @@ class Invoice(LoggedModel):
             self.invoice_number = f'FAC-{year}-{seq:05d}'
         if self.lines:
             self.amount_ht = self.lines_total() - (self.discount_amount or Decimal('0'))
-        self.amount_ttc = (self.amount_ht * (1 + self.vat_rate)).quantize(Decimal('0.01'))
+        cents = Decimal('0.01')
+        self.vat_amount = (self.amount_ht * (self.vat_rate or 0)).quantize(cents)
+        self.css_amount = (self.amount_ht * (self.css_rate or 0)).quantize(cents)
+        self.amount_ttc = (self.amount_ht + self.vat_amount + self.css_amount).quantize(cents)
         super().save(*args, **kwargs)
 
 

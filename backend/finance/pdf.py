@@ -58,9 +58,37 @@ def render_invoice_html(invoice) -> str:
     amount_paid = invoice.amount_paid
     discount = Decimal(invoice.discount_amount or 0)
     client_label = invoice.client.company_name if invoice.client_id else (invoice.client_name or 'Client')
+    client = invoice.client if invoice.client_id else None
+    client_lines = []
+    if client:
+        if client.address:
+            client_lines += [part for part in client.address.split('\n') if part.strip()]
+        city = ' '.join(p for p in (client.postal_code, client.city) if p)
+        if city or client.country:
+            client_lines.append(', '.join(p for p in (city, client.country) if p))
+        if client.phone:
+            client_lines.append(f'Tél : {client.phone}')
+        if client.email:
+            client_lines.append(client.email)
+
+    from finance.fiscal import qr_code_svg_data_uri, sign_invoice, verification_url
+    try:
+        qr_uri = qr_code_svg_data_uri(invoice)
+    except ImportError:
+        qr_uri = ''
     context = {
         'invoice': invoice,
         'settings': settings_obj,
+        'client_lines': client_lines,
+        'client_nif': (client.nif if client else '') or '',
+        'client_vat_subject': client.vat_subject if client else True,
+        'show_css': bool(invoice.css_rate),
+        'css_percent': _quantity(Decimal(invoice.css_rate or 0) * 100),
+        'css_amount': f'{_amount(invoice.css_amount)} FCFA',
+        'qr_uri': qr_uri,
+        'fiscal_signature': sign_invoice(invoice),
+        'verification_url': verification_url(invoice),
+        'due_date': invoice.due_date.strftime('%d/%m/%Y') if invoice.due_date else '',
         'accent': invoice.document_color or '#123f91',
         'logo_uri': LOGO_PATH.as_uri() if LOGO_PATH.exists() else '',
         'display_number': invoice.invoice_number,
@@ -75,7 +103,7 @@ def render_invoice_html(invoice) -> str:
         'show_vat': bool(invoice.vat_rate),
         'vat_percent': _quantity(Decimal(invoice.vat_rate) * 100),
         'amount_ht': f'{_amount(invoice.amount_ht)} FCFA',
-        'vat_amount': f'{_amount(invoice.amount_ttc - invoice.amount_ht)} FCFA',
+        'vat_amount': f'{_amount(invoice.vat_amount)} FCFA',
         'amount_ttc': f'{_amount(invoice.amount_ttc)} FCFA',
         'amount_paid': f'{_amount(amount_paid)} FCFA',
         'amount_due': f'{_amount(max(invoice.amount_ttc - amount_paid, Decimal("0")))} FCFA',
