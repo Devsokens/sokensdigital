@@ -779,9 +779,36 @@ def upload_chat_attachment(file, room_id: str) -> str:
     `chat-attachments/{room_id}/`. Retourne le CHEMIN : le lien est signé à
     chaque ouverture, après vérification de l'accès au salon — un fichier
     partagé reste consultable sans limite de durée, jamais par un tiers."""
+    if not CHAT_ID_RE.fullmatch(room_id or ''):
+        raise ValidationError('Salon invalide.')
     extension, content_type = _resolve_upload_type(file, ADMIN_ATTACHMENT_MIME_BY_EXTENSION)
     if file.size > MAX_ATTACHMENT_SIZE:
         raise ValidationError('Le fichier dépasse la taille maximale autorisée (15 Mo).')
     return _upload_to_private_bucket(
         ATTACHMENTS_BUCKET_NAME, file.read(), content_type, extension, f'chat-attachments/{room_id}',
     )
+
+
+# Identifiants Firestore (salon, message) acceptés dans un chemin : liste
+# blanche stricte, jamais de « / », « . », « % » ni d'espace.
+CHAT_ID_RE = re.compile(r'[A-Za-z0-9_-]{1,128}')
+_UUID_FILE = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[a-z0-9]{1,8}'
+
+
+def is_room_attachment_path(path: str, room_id: str) -> bool:
+    """Chemin exact d'une pièce de messagerie rangée dans ce salon."""
+    return bool(CHAT_ID_RE.fullmatch(room_id or '')) and bool(
+        re.fullmatch(rf'chat-attachments/{re.escape(room_id)}/{_UUID_FILE}', path or '')
+    )
+
+
+def legacy_chat_attachment_path(stored_url: str) -> str | None:
+    """Chemin d'une ancienne pièce (dossier plat, avant le rangement par
+    salon) extrait d'une URL signée de notre stockage, ou None."""
+    from urllib.parse import unquote
+    match = _SIGNED_URL_RE.match(stored_url or '')
+    configured = (os.environ.get('SUPABASE_URL') or '').rstrip('/')
+    if not match or not configured or match.group(1) != configured or match.group(2) != ATTACHMENTS_BUCKET_NAME:
+        return None
+    path = unquote(match.group(3))
+    return path if re.fullmatch(rf'chat-attachments/{_UUID_FILE}', path) else None

@@ -122,8 +122,12 @@ service cloud.firestore {
         // d'appartenance ne suffisait pas seule — rien n'empêchait de
         // publier un message avec `authorUid` usurpé (un autre uid que
         // l'appelant), ce qui l'affiche comme venant de quelqu'un d'autre.
+        // createdAt imposé par le serveur Firestore : un message ne peut pas
+        // être antidaté (le serveur s'y fie pour les anciennes pièces jointes
+        // de messagerie, voir core.views.ChatAttachmentLinkView).
         allow create: if isAuth() &&
-          request.resource.data.authorUid == request.auth.uid && (
+          request.resource.data.authorUid == request.auth.uid &&
+          request.resource.data.createdAt == request.time && (
           (
             get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'COMPANY' &&
             getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_MARKETING']

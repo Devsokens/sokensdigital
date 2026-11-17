@@ -1,5 +1,6 @@
 import logging
 from datetime import date, datetime, timedelta
+from datetime import timezone as dt_timezone
 from decimal import Decimal
 
 from django.core.cache import cache
@@ -175,7 +176,8 @@ class ChatAttachmentUploadView(APIView):
 
 def _can_access_room(user, room_id: str) -> bool:
     from core import firestore_client
-    if not getattr(user, 'firebase_uid', None) or '/' in room_id:
+    from core.storage import CHAT_ID_RE
+    if not getattr(user, 'firebase_uid', None) or not CHAT_ID_RE.fullmatch(room_id or ''):
         return False
     try:
         room = firestore_client.get_chat_room(room_id)
@@ -183,6 +185,13 @@ def _can_access_room(user, room_id: str) -> bool:
     except Exception:
         logger.exception('Accès au salon %s non vérifiable', room_id)
         return False
+
+
+# Bascule vers le rangement des pièces de messagerie par salon : seuls les
+# messages antérieurs peuvent encore citer un fichier du dossier plat.
+# firestore.rules impose createdAt == request.time, un message ne peut donc
+# pas être antidaté.
+CHAT_ROOM_FOLDERS_SINCE = datetime(2026, 11, 17, tzinfo=dt_timezone.utc)
 
 
 class ChatAttachmentLinkView(APIView):
@@ -195,10 +204,10 @@ class ChatAttachmentLinkView(APIView):
 
     def get(self, request):
         from core import firestore_client
-        from core.storage import ATTACHMENTS_BUCKET_NAME, resign_stored_url, sign_private_path
+        from core.storage import CHAT_ID_RE, is_room_attachment_path, legacy_chat_attachment_path, sign_private_path
         room_id = (request.query_params.get('room') or '').strip()
         message_id = (request.query_params.get('message') or '').strip()
-        if not room_id or not message_id or '/' in message_id:
+        if not CHAT_ID_RE.fullmatch(room_id) or not CHAT_ID_RE.fullmatch(message_id):
             return Response({'detail': 'room et message sont requis.'}, status=status.HTTP_400_BAD_REQUEST)
         if not _can_access_room(request.user, room_id):
             return Response(status=status.HTTP_403_FORBIDDEN)
@@ -211,14 +220,20 @@ class ChatAttachmentLinkView(APIView):
         path = attachment.get('path') or ''
         try:
             if path:
-                if not path.startswith(f'chat-attachments/{room_id}/') or '..' in path:
+                # Chemin exact du dossier de CE salon (uuid.ext) : une pièce
+                # d'un autre salon, même citée dans ce message, est refusée.
+                if not is_room_attachment_path(path, room_id):
                     return Response(status=status.HTTP_404_NOT_FOUND)
                 url = sign_private_path(path, 3600)
             elif attachment.get('url'):
-                # Ancien message (avant le stockage du chemin) : lien re-signé
-                # dans le dossier des pièces de messagerie, accès au salon
-                # vérifié ci-dessus.
-                url = resign_stored_url(attachment['url'], ATTACHMENTS_BUCKET_NAME, 'chat-attachments/', 3600)
+                # Ancien message (dossier plat, sans salon) : accepté
+                # seulement s'il date d'avant le rangement par salon — un
+                # message récent qui citerait un ancien fichier est refusé.
+                legacy_path = legacy_chat_attachment_path(attachment['url'])
+                created_at = (message or {}).get('createdAt')
+                if not legacy_path or not created_at or created_at >= CHAT_ROOM_FOLDERS_SINCE:
+                    return Response(status=status.HTTP_404_NOT_FOUND)
+                url = sign_private_path(legacy_path, 3600)
             else:
                 return Response(status=status.HTTP_404_NOT_FOUND)
         except Exception:
