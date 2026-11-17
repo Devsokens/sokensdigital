@@ -1886,3 +1886,55 @@ class QuotePdfSendTests(APITestCase):
         self.assertEqual(res['Content-Type'], 'application/pdf')
         self.assertIn('attachment', res['Content-Disposition'])
         self.assertEqual(APIClient().get(f'/api/v1/marketing/quotes/{self.quote.id}/pdf/').status_code, 401)
+
+
+class LeadDocumentsTests(APITestCase):
+    """Documents d'un lead : consultables durablement, non falsifiables."""
+
+    def setUp(self):
+        from core.constants import ROLE_RESPONSABLE_MARKETING
+        self.user = User.objects.create(email='mkt@sokensdigital.com', first_name='Mkt')
+        self.user.roles.add(Role.objects.get_or_create(name=ROLE_RESPONSABLE_MARKETING)[0])
+        self.api = APIClient()
+        self.api.force_authenticate(user=self.user)
+        self.lead = Lead.objects.create(company_name='ACME', email='a@acme.test')
+
+    def test_upload_then_fresh_link_on_each_read(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        with patch('core.storage.upload_lead_document', return_value=f'leads/{self.lead.pk}/x.pdf'), \
+                patch('core.storage.sign_private_path', return_value='https://signed.test/fresh') as sign:
+            res = self.api.post(
+                f'/api/v1/marketing/leads/{self.lead.pk}/documents/',
+                {'file': SimpleUploadedFile('brief.pdf', b'%PDF-1.4', content_type='application/pdf')},
+                format='multipart',
+            )
+            self.assertEqual(res.status_code, 201, res.content)
+            doc = res.json()['documents'][0]
+            self.assertEqual(doc['name'], 'brief.pdf')
+            self.assertEqual(doc['url'], 'https://signed.test/fresh')
+            self.assertNotIn('path', doc)
+            sign.assert_called_with(f'leads/{self.lead.pk}/x.pdf')
+
+    def test_client_cannot_inject_paths_or_urls(self):
+        self.lead.documents = [{'id': 'doc-1', 'name': 'a.pdf', 'path': f'leads/{self.lead.pk}/a.pdf'}]
+        self.lead.save()
+        res = self.api.patch(f'/api/v1/marketing/leads/{self.lead.pk}/', {'documents': [
+            {'id': 'doc-1', 'name': 'a.pdf', 'path': 'clients/autre/secret.pdf'},
+            {'id': 'evil', 'name': 'x', 'path': 'clients/autre/secret.pdf'},
+        ]}, format='json')
+        self.assertEqual(res.status_code, 200, res.content)
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.documents, [{'id': 'doc-1', 'name': 'a.pdf', 'path': f'leads/{self.lead.pk}/a.pdf'}])
+        # Retrait : autorisé.
+        self.api.patch(f'/api/v1/marketing/leads/{self.lead.pk}/', {'documents': []}, format='json')
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.documents, [])
+
+    def test_resign_only_known_locations(self):
+        from core.storage import resign_stored_url
+        with patch('core.storage._sign_private_url', return_value='https://signed.test/new') as sign:
+            old = 'https://x.supabase.co/storage/v1/object/sign/pieces_jointes/chat-attachments/a.pdf?token=old'
+            self.assertEqual(resign_stored_url(old), 'https://signed.test/new')
+            other = 'https://x.supabase.co/storage/v1/object/sign/pieces_jointes/clients/c/secret.pdf?token=t'
+            self.assertEqual(resign_stored_url(other), other)
+            self.assertEqual(sign.call_count, 1)

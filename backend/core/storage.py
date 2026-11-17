@@ -1,6 +1,7 @@
 import io
 import logging
 import os
+import re
 import uuid
 
 import cloudinary
@@ -721,3 +722,47 @@ class SupabasePrivateStorage(Storage):
         # doit rester valable le temps que le navigateur la suive.
         cache.set(cache_key, signed, SIGNED_URL_TTL_SECONDS - 60)
         return signed
+
+
+
+def upload_lead_document(file, lead_id: str) -> str:
+    """Document joint à un lead (tunnel commercial) : bucket privé
+    `pieces_jointes`, dossier `leads/{lead_id}/`. Retourne le CHEMIN — le
+    lien de consultation est signé à chaque lecture (voir
+    marketing.serializers.LeadSerializer), jamais figé en base."""
+    extension, content_type = _resolve_upload_type(file, ADMIN_ATTACHMENT_MIME_BY_EXTENSION)
+    if file.size > MAX_ATTACHMENT_SIZE:
+        raise ValidationError('Le fichier dépasse la taille maximale autorisée (15 Mo).')
+    return _upload_to_private_bucket(
+        ATTACHMENTS_BUCKET_NAME, file.read(), content_type, extension, f'leads/{lead_id}',
+    )
+
+
+# Anciennes URLs signées figées en base (documents de lead envoyés via
+# l'upload de la messagerie, PDF du formulaire public de demande de projet) :
+# elles expirent au bout de 7 jours. On les re-signe à la lecture, mais
+# uniquement pour ces emplacements connus — jamais pour un chemin
+# arbitraire, qui ouvrirait n'importe quel fichier privé.
+_RESIGNABLE_PREFIXES = {
+    ATTACHMENTS_BUCKET_NAME: ('chat-attachments/', 'leads/'),
+    PROJECT_REQUEST_BUCKET_NAME: ('',),
+}
+_SIGNED_URL_RE = re.compile(r'/storage/v1/object/sign/([^/?]+)/([^?]+)')
+
+
+def resign_stored_url(stored_url: str, ttl_seconds: int = SIGNED_URL_TTL_SECONDS) -> str:
+    """Renvoie un lien frais pour une URL signée Supabase stockée en base,
+    ou l'URL d'origine si elle n'est pas re-signable (autre hôte, autre
+    dossier, Supabase indisponible)."""
+    from urllib.parse import unquote
+    match = _SIGNED_URL_RE.search(stored_url or '')
+    if not match:
+        return stored_url
+    bucket, path = match.group(1), unquote(match.group(2))
+    prefixes = _RESIGNABLE_PREFIXES.get(bucket)
+    if prefixes is None or '..' in path or not any(path.startswith(p) for p in prefixes):
+        return stored_url
+    try:
+        return _sign_private_url(bucket, path, ttl_seconds)
+    except Exception:
+        return stored_url

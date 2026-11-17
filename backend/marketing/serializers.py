@@ -48,8 +48,46 @@ class LeadSerializer(serializers.ModelSerializer):
             'id', 'first_name', 'last_name', 'company_name', 'email', 'phone',
             'source', 'message', 'status', 'assigned_to', 'assigned_to_id',
             'qualification_score', 'estimated_value', 'contacts', 'documents',
+            'attachment_url', 'attachment_name',
             'client', 'client_name', 'created_at',
         ]
+        read_only_fields = ['attachment_url', 'attachment_name']
+
+    def to_representation(self, instance):
+        # Liens de consultation signés à chaque lecture : un document joint
+        # doit rester consultable, pas seulement 7 jours après son envoi.
+        from core.storage import resign_stored_url, sign_private_path
+        data = super().to_representation(instance)
+        docs = []
+        for doc in data.get('documents') or []:
+            if not isinstance(doc, dict):
+                continue
+            doc = {k: v for k, v in doc.items() if k != 'path'}
+            stored = next((d for d in (instance.documents or []) if isinstance(d, dict) and d.get('id') == doc.get('id')), {})
+            try:
+                if stored.get('path'):
+                    doc['url'] = sign_private_path(stored['path'])
+                elif doc.get('url'):
+                    doc['url'] = resign_stored_url(doc['url'])
+            except Exception:
+                doc['url'] = ''
+            docs.append(doc)
+        data['documents'] = docs
+        if data.get('attachment_url'):
+            data['attachment_url'] = resign_stored_url(data['attachment_url'])
+        return data
+
+    def validate_documents(self, value):
+        # Écriture : on ne peut que RETIRER des documents existants (les
+        # ajouts passent par POST /leads/<id>/documents/). Les entrées
+        # renvoyées par le client sont remplacées par la version en base —
+        # sinon un chemin ou une URL injectés seraient signés par le serveur
+        # et ouvriraient n'importe quel fichier privé.
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Liste de documents attendue.')
+        existing = {d.get('id'): d for d in ((self.instance.documents if self.instance else None) or []) if isinstance(d, dict)}
+        kept_ids = {d.get('id') for d in value if isinstance(d, dict)}
+        return [doc for doc_id, doc in existing.items() if doc_id in kept_ids]
 
     def create(self, validated_data):
         contacts = validated_data.get('contacts') or []

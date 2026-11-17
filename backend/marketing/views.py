@@ -13,7 +13,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import generics, mixins, permissions, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.parsers import MultiPartParser
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -258,6 +258,39 @@ class LeadViewSet(viewsets.ModelViewSet):
             exclude=self.request.user,
         )
 
+
+    @extend_schema(
+        tags=['Marketing & Commercial'],
+        summary='Joindre un document à un lead',
+        description="Multipart `file` (PDF, image, document bureautique, 15 Mo max). Stocké dans "
+        "le bucket privé ; le lien de consultation est signé à chaque lecture du lead.",
+        responses={201: LeadSerializer},
+    )
+    @action(detail=True, methods=['post'], url_path='documents', parser_classes=[MultiPartParser, FormParser])
+    def upload_document(self, request, pk=None):
+        import uuid as _uuid
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from core.storage import upload_lead_document
+        lead = self.get_object()
+        uploaded = request.FILES.get('file')
+        if not uploaded:
+            return Response({'detail': 'Aucun fichier fourni.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            path = upload_lead_document(uploaded, str(lead.pk))
+        except DjangoValidationError as exc:
+            return Response({'detail': exc.messages[0] if exc.messages else 'Fichier refusé.'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception('Document du lead %s non téléversé', lead.pk)
+            return Response({'detail': 'Téléversement impossible. Réessayez.'}, status=status.HTTP_502_BAD_GATEWAY)
+        lead.documents = [*(lead.documents or []), {
+            'id': f'doc-{_uuid.uuid4().hex[:12]}',
+            'name': uploaded.name[:255],
+            'path': path,
+            'size': uploaded.size,
+            'uploaded_at': timezone.now().isoformat(),
+        }]
+        lead.save(update_fields=['documents'])
+        return Response(self.get_serializer(lead).data, status=status.HTTP_201_CREATED)
 
 class IsMarketing(permissions.BasePermission):
     def has_permission(self, request, view):

@@ -517,3 +517,30 @@ export async function downloadQuotePdf(id: string, quoteNumber: string) {
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
+
+
+/** Joint un document à un lead (multipart — pas apiFetch, qui force le
+ * JSON). Le serveur le range dans le bucket privé et renvoie le lead, dont
+ * les liens de consultation sont signés à chaque lecture. */
+export async function uploadLeadDocument(leadId: string, file: File) {
+  const { auth } = await import("@/lib/firebase/config");
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${base}/api/v1/marketing/leads/${leadId}/documents/`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!response.ok) {
+    let detail = "Téléversement du document impossible.";
+    try {
+      detail = (await response.json()).detail ?? detail;
+    } catch {
+      // pas de corps JSON
+    }
+    throw new Error(detail);
+  }
+  return (await response.json()) as Lead;
+}

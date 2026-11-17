@@ -27,8 +27,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmModal } from "@/components/admin/confirm-modal";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { formatFcfa } from "@/lib/format-currency";
-import { uploadChatFile } from "@/lib/api/upload";
-import { createLead, updateLead, type LeadInput } from "@/lib/api/marketing";
+import { createLead, updateLead, type LeadInput, uploadLeadDocument } from "@/lib/api/marketing";
 import type {
   Lead,
   LeadContactPerson,
@@ -107,6 +106,7 @@ export function LeadSlideOver({
 
   // Documents
   const [documents, setDocuments] = useState<LeadDocumentItem[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploadingDoc, setUploadingDoc] = useState(false);
 
   const [saving, setSaving] = useState(false);
@@ -211,37 +211,25 @@ export function LeadSlideOver({
     setContacts((prev) => prev.filter((_, i) => i !== index));
   }
 
-  // Upload d'un document
-  async function handleFileUpload(file: File, autoSave = false) {
-    setUploadingDoc(true);
+  // Upload d'un document : envoyé au serveur (bucket privé), qui renvoie un
+  // lien de consultation signé à chaque lecture — jamais un lien figé ni
+  // une URL locale au navigateur. Lead pas encore créé : le fichier attend
+  // et part juste après la création.
+  async function handleFileUpload(file: File) {
     setError(null);
+    if (!lead) {
+      setPendingFiles((prev) => [...prev, file]);
+      setDocuments((prev) => [
+        ...prev,
+        { id: `pending-${Date.now()}-${prev.length}`, name: file.name, url: "", size: file.size, uploaded_at: new Date().toISOString() },
+      ]);
+      return;
+    }
+    setUploadingDoc(true);
     try {
-      let fileUrl = "";
-      try {
-        fileUrl = await uploadChatFile(file);
-      } catch {
-        // Fallback local blob URL
-        fileUrl = URL.createObjectURL(file);
-      }
-
-      const newDoc: LeadDocumentItem = {
-        id: `doc-${Date.now()}`,
-        name: file.name,
-        url: fileUrl,
-        size: file.size,
-        uploaded_at: new Date().toISOString(),
-      };
-
-      const updatedDocs = [...documents, newDoc];
-      setDocuments(updatedDocs);
-
-      // Si on est en mode vue (détail) et qu'on ajoute directement un doc
-      if (autoSave && lead) {
-        const saved = await updateLead(lead.id, {
-          documents: updatedDocs,
-        });
-        onSaved(saved);
-      }
+      const saved = await uploadLeadDocument(lead.id, file);
+      setDocuments(saved.documents ?? []);
+      onSaved(saved);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur lors de l'upload du document.");
     } finally {
@@ -252,7 +240,11 @@ export function LeadSlideOver({
   }
 
   function handleRemoveDoc(docId?: string) {
+    const removed = documents.find((d) => d.id === docId);
     setDocuments((prev) => prev.filter((d) => d.id !== docId));
+    if (removed && docId?.startsWith("pending-")) {
+      setPendingFiles((prev) => prev.filter((f) => f.name !== removed.name));
+    }
   }
 
   // Validation et soumission
@@ -297,12 +289,26 @@ export function LeadSlideOver({
       assigned_to_id: assignedTo || null,
       estimated_value: estimatedValue ? String(estimatedValue) : null,
       contacts: validContacts,
-      documents,
+      // Seuls les retraits passent par ici ; les ajouts vont par l'envoi
+      // de fichier (le serveur ignore les entrées inconnues).
+      documents: documents.filter((d) => !d.id?.startsWith("pending-")),
     };
 
     setSaving(true);
     try {
-      const saved = lead ? await updateLead(lead.id, payload) : await createLead(payload);
+      let saved = lead ? await updateLead(lead.id, payload) : await createLead(payload);
+      if (!lead && pendingFiles.length > 0) {
+        const failed: string[] = [];
+        for (const file of pendingFiles) {
+          try {
+            saved = await uploadLeadDocument(saved.id, file);
+          } catch {
+            failed.push(file.name);
+          }
+        }
+        setPendingFiles([]);
+        if (failed.length) alert(`Lead créé, mais ces documents n'ont pas pu être joints : ${failed.join(", ")}.`);
+      }
       onSaved(saved);
       if (!lead) {
         onOpenChange(false);
@@ -625,7 +631,7 @@ export function LeadSlideOver({
                           ref={directDocInputRef}
                           onChange={(e) => {
                             const f = e.target.files?.[0];
-                            if (f) handleFileUpload(f, true);
+                            if (f) handleFileUpload(f);
                           }}
                           className="hidden"
                         />
@@ -669,14 +675,14 @@ export function LeadSlideOver({
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <a
+                            {doc.url ? <a
                               href={doc.url}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-1 rounded-lg border border-neutral-200 px-2.5 py-1 text-xs text-neutral-700 hover:bg-neutral-50"
                             >
                               <ExternalLink className="size-3" /> Consulter
-                            </a>
+                            </a> : <span className="text-[0.65rem] text-neutral-400">Envoyé à l&apos;enregistrement</span>}
                           </div>
                         </div>
                       ))}
@@ -934,7 +940,7 @@ export function LeadSlideOver({
                         ref={fileInputRef}
                         onChange={(e) => {
                           const f = e.target.files?.[0];
-                          if (f) handleFileUpload(f, false);
+                          if (f) handleFileUpload(f);
                         }}
                         className="hidden"
                       />
