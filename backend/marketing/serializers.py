@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import serializers
 
 from core.models import User
@@ -229,12 +230,12 @@ class QuoteSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'quote_number', 'lead', 'created_by', 'client_name', 'intro_message',
             'subject', 'description', 'project_duration', 'payment_terms', 'issue_date',
-            'expiry_date', 'status', 'discount_amount', 'total_ht', 'total_ttc',
+            'expiry_date', 'status', 'discount_amount', 'total_ht', 'vat_rate', 'css_rate', 'total_ttc',
             'tracking_token', 'sent_at', 'opened_at', 'signed_at', 'signature_url', 'parent_quote', 'version',
             'document_color', 'lines', 'created_at', 'updated_at',
         ]
         read_only_fields = [
-            'quote_number', 'status', 'total_ht', 'total_ttc', 'tracking_token',
+            'quote_number', 'status', 'total_ht', 'vat_rate', 'css_rate', 'total_ttc', 'tracking_token',
             'sent_at', 'opened_at', 'signed_at', 'signature_url', 'parent_quote', 'version', 'updated_at',
         ]
 
@@ -242,6 +243,9 @@ class QuoteSerializer(serializers.ModelSerializer):
         lines_data = validated_data.pop('lines', [])
         if not validated_data.get('payment_terms'):
             validated_data['payment_terms'] = QuoteSettings.load().default_payment_terms
+        from marketing.models import current_css_rate, current_vat_rate
+        validated_data['vat_rate'] = current_vat_rate()
+        validated_data['css_rate'] = current_css_rate()
         quote = Quote.objects.create(**validated_data)
         for line_data in lines_data:
             QuoteLine.objects.create(quote=quote, **line_data)
@@ -441,13 +445,61 @@ class QuoteTrackSerializer(serializers.ModelSerializer):
         return QuoteSettings.load().company_stamp_url
 
 
+def can_edit_tax_rates(user) -> bool:
+    """Gérant, comptabilité (Comptable, Directeur financier), Super-Admin."""
+    from core.constants import ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN
+    from core.permissions import has_role, is_gerant
+    return bool(user) and (is_gerant(user) or has_role(user, ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN))
+
+
 class QuoteSettingsSerializer(serializers.ModelSerializer):
+    # Taux de CSS en vigueur (1 % par défaut) : stocké dans les paramètres
+    # Finance pour être le même sur les devis, les factures et les contrats ;
+    # visible et modifiable ici aussi.
+    css_rate = serializers.DecimalField(max_digits=4, decimal_places=3, required=False)
+    vat_rate = serializers.DecimalField(max_digits=4, decimal_places=2, required=False)
+
     class Meta:
         model = QuoteSettings
         fields = [
             'company_address', 'company_phone', 'company_email', 'company_rccm', 'company_nif', 'company_stamp_url',
-            'payment_methods', 'default_payment_terms', 'footer_note', 'amount_basis',
+            'payment_methods', 'default_payment_terms', 'footer_note', 'amount_basis', 'css_rate', 'vat_rate',
         ]
+
+    def to_representation(self, instance):
+        from finance.models import FinanceSettings
+        data = super().to_representation(instance)
+        finance = FinanceSettings.load()
+        data['css_rate'] = str(Decimal(finance.css_rate).quantize(Decimal('0.001')))
+        data['vat_rate'] = str(Decimal(finance.vat_rate).quantize(Decimal('0.01')))
+        return data
+
+    def validate_css_rate(self, value):
+        from finance.models import MAX_CSS_RATE
+        if not (0 <= value <= MAX_CSS_RATE):
+            raise serializers.ValidationError('Le taux de CSS doit être compris entre 0 et 20 %.')
+        return value
+
+    def validate_vat_rate(self, value):
+        from finance.models import MAX_VAT_RATE
+        if not (0 <= value <= MAX_VAT_RATE):
+            raise serializers.ValidationError('Le taux de TVA doit être compris entre 0 et 100 %.')
+        return value
+
+    def update(self, instance, validated_data):
+        rates = {k: validated_data.pop(k) for k in ('css_rate', 'vat_rate') if k in validated_data}
+        if rates and not can_edit_tax_rates(self.context.get('request') and self.context['request'].user):
+            raise serializers.ValidationError({'css_rate': 'Les taux de TVA et de CSS sont modifiables par le gérant, la comptabilité et les Super-Admins.'})
+        instance = super().update(instance, validated_data)
+        if rates:
+            # Même réglage que Facturation > Taux fiscaux : nouveaux devis,
+            # factures et contrats. Les documents émis gardent leurs taux.
+            from finance.models import FinanceSettings
+            finance = FinanceSettings.load()
+            for key, value in rates.items():
+                setattr(finance, key, value)
+            finance.save(update_fields=[*rates.keys(), 'updated_at'])
+        return instance
 
 
 class ContractSettingsSerializer(serializers.ModelSerializer):

@@ -203,12 +203,15 @@ export function contractBlocks(c: ServiceContractFields, settings: ContractDocum
   }
   const methods = (c.payment_methods ?? "").trim();
   scheduleText += methods ? `, ${methods}.` : ".";
-  const taxes = ht ? "Les montants s’entendent hors taxes, la TVA au taux en vigueur s’ajoutant au prix." : "Les montants s’entendent toutes taxes comprises.";
+  const cssPct = num(Number(settings.css_rate ?? 0.01) * 100);
+  const taxes = ht
+    ? `Les montants s’entendent hors taxes, la TVA et la Contribution Spéciale de Solidarité (CSS, ${cssPct} % du montant hors taxes) au taux en vigueur s’ajoutant au prix.`
+    : `Les montants s’entendent toutes taxes comprises (TVA et CSS de ${cssPct} % incluses).`;
   b.push(
     { t: "article", text: "Article 7 – Prix et modalités de paiement" },
     { t: "p", text: `**7.1 Prix.** En contrepartie des prestations, le Client verse au Prestataire la somme de ${price} ${basis}, selon l’échéancier de l’article 7.3, détaillé en Annexe 2.` },
     { t: "p", text: `**7.2 Taxes.** ${taxes} Chaque Partie supporte les impôts et taxes qui lui incombent selon la législation fiscale gabonaise. Si le Client est tenu d’opérer une retenue à la source, il la déduit du paiement et en remet justificatif au Prestataire.` },
-    { t: "p", text: `**7.3 Facturation et paiement.** Le Prestataire émet une facture mentionnant son identité, son NIF et son numéro RCCM, la désignation des prestations, le montant hors taxes, la TVA et le montant total. ${scheduleText}` },
+    { t: "p", text: `**7.3 Facturation et paiement.** Le Prestataire émet une facture mentionnant son identité, son NIF et son numéro RCCM, la désignation des prestations, le montant hors taxes, la TVA, la CSS et le montant total. ${scheduleText}` },
     { t: "p", text: `**7.4 Retard de paiement.** Tout retard de paiement entraîne de plein droit, après mise en demeure restée sans effet pendant 8 jours, des pénalités de retard au taux de ${num(c.late_penalty_rate || 2)} % par mois, sans préjudice de tous autres droits du Prestataire.` },
   );
 

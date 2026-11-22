@@ -585,9 +585,9 @@ class QuoteViewSetTests(APITestCase):
         self.assertEqual(response.status_code, 201)
         body = response.json()
         self.assertEqual(body['status'], 'BROUILLON')
-        # 10*500 + 5*200 = 6000 HT, TTC = 6000 * 1.18 = 7080.00
+        # 10*500 + 5*200 = 6000 HT, TTC = 6000 * (1 + TVA 18 % + CSS 1 %) = 7140.00
         self.assertEqual(body['total_ht'], '6000.00')
-        self.assertEqual(body['total_ttc'], '7080.00')
+        self.assertEqual(body['total_ttc'], '7140.00')
         self.assertTrue(body['quote_number'].startswith('DEV-'))
 
     def test_outsider_forbidden(self):
@@ -1853,7 +1853,7 @@ class QuotePdfSendTests(APITestCase):
         with _patch('core.mailer.send_mail', return_value=True) as fake_send:
             self.client_c.post(f'/api/v1/marketing/quotes/{self.quote.id}/send/', {}, format='json')
         body = fake_send.call_args[0][2]
-        self.assertIn('590\u202f000 FCFA', body)  # 500 000 HT + TVA 18 %
+        self.assertIn('595\u202f000 FCFA', body)  # 500 000 HT + TVA 18 % + CSS 1 %
         self.assertNotIn(',00', body)
         self.assertNotIn('.00', body)
 
@@ -1947,3 +1947,40 @@ class LeadDocumentsTests(APITestCase):
             ):
                 self.assertEqual(resign_stored_url(bad, 'demandes-projet', 'REF-1/'), bad)
             self.assertEqual(sign.call_count, 1)
+
+
+class QuoteSettingsTaxRatesTests(APITestCase):
+    """TVA et CSS dans les paramètres des devis : gérant, comptabilité, Super-Admin."""
+
+    def _client(self, role=None, gerant=False):
+        user = User.objects.create(email=f'{role or "g"}{User.objects.count()}@x.dev', is_gerant=gerant)
+        if role:
+            user.roles.add(Role.objects.get_or_create(name=role)[0])
+        api = APIClient()
+        api.force_authenticate(user=user)
+        return api
+
+    def test_rates_editable_by_accounting_and_gerant_only(self):
+        from core.constants import ROLE_COMMERCIAL, ROLE_COMPTABLE
+        from finance.models import FinanceSettings
+        url = '/api/v1/marketing/quote-settings/'
+        self.assertEqual(self._client(ROLE_COMMERCIAL).patch(url, {'css_rate': '0.02'}, format='json').status_code, 400)
+        res = self._client(ROLE_COMPTABLE).patch(url, {'css_rate': '0.015', 'vat_rate': '0.16'}, format='json')
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertEqual(res.json()['css_rate'], '0.015')
+        self.assertEqual(FinanceSettings.load().vat_rate, Decimal('0.16'))
+        self.assertEqual(self._client(gerant=True).patch(url, {'css_rate': '0.01'}, format='json').status_code, 200)
+
+    def test_new_quote_uses_current_rates(self):
+        from core.constants import ROLE_COMMERCIAL
+        from finance.models import FinanceSettings
+        fs = FinanceSettings.load()
+        fs.css_rate = Decimal('0.02')
+        fs.save()
+        api = self._client(ROLE_COMMERCIAL)
+        res = api.post('/api/v1/marketing/quotes/', {
+            'client_name': 'X', 'lines': [{'service_title': 'A', 'quantity': '1', 'unit_price': '1000'}],
+        }, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        self.assertEqual(res.json()['css_rate'], '0.020')
+        self.assertEqual(res.json()['total_ttc'], '1200.00')

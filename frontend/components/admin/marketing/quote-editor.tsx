@@ -98,7 +98,10 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
     (sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.unit_price) || 0),
     0
   ) - (Number(discount) || 0);
-  const estimatedTtc = estimatedHt * 1.18;
+  // Taux du devis (figés à sa création), sinon ceux en vigueur dans les paramètres.
+  const vatRate = Number(quote?.vat_rate ?? settings?.vat_rate ?? 0.18);
+  const cssRate = Number(quote?.css_rate ?? settings?.css_rate ?? 0.01);
+  const estimatedTtc = estimatedHt * (1 + vatRate + cssRate);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -333,7 +336,9 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
                 ) : (
                   <>
                     <div>Total HT : <span className="font-medium text-neutral-900">{formatFcfa(estimatedHt)}</span></div>
-                    <div>Montant du devis (TTC, TVA 18 %) : <span className="font-semibold text-neutral-900">{formatFcfa(estimatedTtc)}</span></div>
+                    <div>TVA {Math.round(vatRate * 1000) / 10} % : <span className="font-medium text-neutral-900">{formatFcfa(estimatedHt * vatRate)}</span></div>
+                    <div>CSS {Math.round(cssRate * 1000) / 10} % : <span className="font-medium text-neutral-900">{formatFcfa(estimatedHt * cssRate)}</span></div>
+                    <div>Montant du devis (TTC) : <span className="font-semibold text-neutral-900">{formatFcfa(estimatedTtc)}</span></div>
                   </>
                 )}
                 <div className="mt-1 text-xs text-neutral-400">Base choisie dans les paramètres des devis : {settings?.amount_basis === "HT" ? "HT" : "TTC"}.</div>
@@ -385,7 +390,9 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
                 ) : (
                   <>
                     <div>Total HT : <span className="font-medium text-neutral-900">{formatFcfa(estimatedHt)}</span></div>
-                    <div>Montant du devis (TTC, TVA 18 %) : <span className="font-semibold text-neutral-900">{formatFcfa(estimatedTtc)}</span></div>
+                    <div>TVA {Math.round(vatRate * 1000) / 10} % : <span className="font-medium text-neutral-900">{formatFcfa(estimatedHt * vatRate)}</span></div>
+                    <div>CSS {Math.round(cssRate * 1000) / 10} % : <span className="font-medium text-neutral-900">{formatFcfa(estimatedHt * cssRate)}</span></div>
+                    <div>Montant du devis (TTC) : <span className="font-semibold text-neutral-900">{formatFcfa(estimatedTtc)}</span></div>
                   </>
                 )}
                 <div className="mt-1 text-xs text-neutral-400">Base choisie dans les paramètres des devis : {settings?.amount_basis === "HT" ? "HT" : "TTC"}.</div>

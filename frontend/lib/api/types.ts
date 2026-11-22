@@ -508,6 +508,9 @@ export interface Quote {
   status: QuoteStatus;
   discount_amount: string;
   total_ht: string;
+  /** Taux figés sur le devis à sa création. */
+  vat_rate?: string;
+  css_rate?: string;
   total_ttc: string;
   tracking_token: string;
   sent_at: string | null;
@@ -571,6 +574,9 @@ export interface QuoteSettings {
   footer_note: string;
   /** Montant mis en avant sur le devis : HT ou TTC. */
   amount_basis?: "HT" | "TTC";
+  /** Taux en vigueur (décimaux, ex. 0.18 / 0.01), partagés devis/factures/contrats. */
+  vat_rate?: string;
+  css_rate?: string;
 }
 
 export interface LeadsOverTimePoint {

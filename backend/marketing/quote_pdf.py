@@ -49,7 +49,8 @@ def quote_total_label(quote) -> str:
     total = sum((line.total_line for line in lines), Decimal('0')) - Decimal(quote.discount_amount or 0)
     if QuoteSettings.load().amount_basis == QuoteSettings.AmountBasis.HT:
         return f'Montant total HT : {_fcfa(total)}'
-    return f'Montant total TTC : {_fcfa(total * (1 + DEFAULT_VAT_RATE))}'
+    css_rate = Decimal(quote.css_rate or 0)
+    return f'Montant total TTC : {_fcfa(total * (1 + Decimal(quote.vat_rate or 0) + css_rate))}'
 
 
 def render_quote_html(quote) -> str:
@@ -91,9 +92,12 @@ def render_quote_html(quote) -> str:
         ],
         'show_ttc': settings_obj.amount_basis != QuoteSettings.AmountBasis.HT,
         'total_ht': _fcfa(total),
-        'vat_percent': f'{(DEFAULT_VAT_RATE * 100).normalize():f}',
-        'vat_amount': _fcfa(total * DEFAULT_VAT_RATE),
-        'total_ttc': _fcfa(total * (1 + DEFAULT_VAT_RATE)),
+        'vat_percent': f'{(Decimal(quote.vat_rate or 0) * 100).normalize():f}',
+        'vat_amount': _fcfa(total * Decimal(quote.vat_rate or 0)),
+        'css_percent': f'{(Decimal(quote.css_rate or 0) * 100).normalize():f}',
+        'css_amount': _fcfa(total * Decimal(quote.css_rate or 0)),
+        'show_css': bool(quote.css_rate),
+        'total_ttc': _fcfa(total * (1 + Decimal(quote.vat_rate or 0) + Decimal(quote.css_rate or 0))),
         'payment_terms': payment_terms,
         'payment_methods': [
             m.get('label', '') if isinstance(m, dict) else str(m)

@@ -1,5 +1,8 @@
 "use client";
 
+import { useIsGerant } from "@/lib/admin/use-is-gerant";
+import { profileRoles } from "@/lib/firebase/types";
+import { useAuth } from "@/lib/auth/auth-context";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Loader2, Plus, Trash2, Send, Copy, CopyPlus, Printer, Download, Settings, Receipt, Stamp, MoreHorizontal, Pencil } from "lucide-react";
@@ -359,6 +362,11 @@ function StampUploadField({ value, onChange }: { value: string; onChange: (url: 
  * cachet / signature, moyens de paiement… Aussi ouvert depuis la Facturation. */
 export function QuoteSettingsForm({ onSaved }: { onSaved: () => void }) {
   const [settings, setSettings] = useState<QuoteSettings | null>(null);
+  // Taux de TVA et de CSS : gérant, comptabilité et Super-Admin.
+  const { profile: me } = useAuth();
+  const myRoles = profileRoles(me);
+  const isGerant = useIsGerant();
+  const canEditRates = isGerant || myRoles.some((r) => ["SUPER_ADMIN", "COMPTABLE", "DIRECTEUR_FINANCIER"].includes(r));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -409,7 +417,8 @@ export function QuoteSettingsForm({ onSaved }: { onSaved: () => void }) {
     setError(null);
     setSaving(true);
     try {
-      await updateQuoteSettings(settings);
+      const { vat_rate, css_rate, ...rest } = settings;
+      await updateQuoteSettings(canEditRates ? { ...rest, vat_rate, css_rate } : rest);
       onSaved();
     } catch {
       setError("Impossible d'enregistrer les paramètres.");
@@ -532,6 +541,44 @@ export function QuoteSettingsForm({ onSaved }: { onSaved: () => void }) {
             </div>
           ))}
         </div>
+      </div>
+
+      <div>
+        <span className={labelClass}>Taxes appliquées (devis, factures, contrats)</span>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="mb-1 block text-xs text-neutral-500">TVA (%)</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              min={0}
+              max={100}
+              disabled={!canEditRates}
+              value={settings.vat_rate !== undefined ? String(Math.round(Number(settings.vat_rate) * 1000) / 10) : ""}
+              onChange={(e) => setSettings({ ...settings, vat_rate: String((Number(e.target.value) || 0) / 100) })}
+              className={inputClass}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-neutral-500">CSS (%) — Contribution Spéciale de Solidarité</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              min={0}
+              max={20}
+              disabled={!canEditRates}
+              value={settings.css_rate !== undefined ? String(Math.round(Number(settings.css_rate) * 1000) / 10) : ""}
+              onChange={(e) => setSettings({ ...settings, css_rate: String((Number(e.target.value) || 0) / 100) })}
+              className={inputClass}
+            />
+          </label>
+        </div>
+        <p className="mt-1 text-xs text-neutral-400">
+          Calculées sur le montant HT et ajoutées au TTC des nouveaux devis, factures et contrats.{" "}
+          {canEditRates ? "Les documents déjà émis gardent leurs taux." : "Modifiables par le gérant, la comptabilité et les Super-Admins."}
+        </p>
       </div>
 
       <div>

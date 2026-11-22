@@ -73,7 +73,13 @@ class TaxRatesTests(APITestCase):
 
     def test_rates_are_configurable_and_applied_to_new_invoices(self):
         url = '/api/v1/finance/settings/tax-rates/'
-        self.assertEqual(self.compta_client.patch(url, {'css_rate': '0.02'}, format='json').status_code, 403)
+        from core.constants import ROLE_DEVELOPER
+        from core.models import Role, User
+        dev = User.objects.create(email='dev@x.dev')
+        dev.roles.add(Role.objects.get_or_create(name=ROLE_DEVELOPER)[0])
+        dev_client = APIClient()
+        dev_client.force_authenticate(user=dev)
+        self.assertEqual(dev_client.patch(url, {'css_rate': '0.02'}, format='json').status_code, 403)
         res = self.df_client.patch(url, {'vat_rate': '0.16', 'css_rate': '0.02'}, format='json')
         self.assertEqual(res.status_code, 200, res.content)
         res = self.compta_client.post('/api/v1/finance/invoices/', {

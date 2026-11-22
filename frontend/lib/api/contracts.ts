@@ -82,6 +82,8 @@ export interface ContractDocumentSettings extends ContractSettings {
   company_address: string;
   company_email: string;
   company_stamp_url: string;
+  /** Taux de CSS en vigueur, cité à l'article 7. */
+  css_rate?: string;
 }
 
 export interface ContractEditorQuote {
@@ -95,6 +97,8 @@ export interface ContractEditorQuote {
   project_duration: string;
   lines: { service_title: string; description: string }[];
   total_ht: string;
+  vat_rate?: string;
+  css_rate?: string;
   payment_terms: ContractScheduleTerm[];
   document_color: string;
 }

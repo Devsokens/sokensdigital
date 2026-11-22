@@ -312,7 +312,11 @@ class CanEditDocumentSettings(permissions.BasePermission):
     par le chef de projet."""
 
     def has_permission(self, request, view):
+        from core.permissions import is_gerant
         editors = (*COMMERCIAL_ROLES, *MARKETING_ROLES, *FINANCE_CONVERT_ROLES, ROLE_SUPER_ADMIN)
+        # Le gérant y règle les taux de TVA et de CSS (QuoteSettingsSerializer).
+        if is_gerant(request.user):
+            return True
         if request.method in permissions.SAFE_METHODS:
             return has_role(request.user, *editors, *CHEF_DE_PROJET_ROLES)
         return has_role(request.user, *editors)
@@ -1166,7 +1170,7 @@ class QuoteSettingsView(APIView):
 
     def patch(self, request):
         instance = QuoteSettings.load()
-        serializer = QuoteSettingsSerializer(instance, data=request.data, partial=True)
+        serializer = QuoteSettingsSerializer(instance, data=request.data, partial=True, context={'request': request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
@@ -1502,6 +1506,9 @@ class ServiceContractViewSet(viewsets.ModelViewSet):
                 'project_duration': quote.project_duration,
                 'lines': [{'service_title': l.service_title, 'description': l.description} for l in lines],
                 'total_ht': str(total_ht.quantize(Decimal('1'))),
+                # Taux du devis : le montant TTC repris au contrat est le sien.
+                'vat_rate': str(quote.vat_rate),
+                'css_rate': str(quote.css_rate),
                 'payment_terms': quote.payment_terms or [],
                 'document_color': quote.document_color,
             })

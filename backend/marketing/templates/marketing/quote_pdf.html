@@ -172,7 +172,7 @@
         <div>{% if settings.footer_note %}<p class="nb"><strong>NB : </strong>{{ settings.footer_note }}</p>{% endif %}</div>
         <div class="total-box"><div>
           {% if show_ttc %}
-            <p class="detail">Total HT : {{ total_ht }} · TVA {{ vat_percent }} % : {{ vat_amount }}</p>
+            <p class="detail">Total HT : {{ total_ht }} · TVA {{ vat_percent }} % : {{ vat_amount }}{% if show_css %} · CSS {{ css_percent }} % : {{ css_amount }}{% endif %}</p>
             <p class="grand">Total TTC : {{ total_ttc }}</p>
           {% else %}
             <p class="grand">Total HT : {{ total_ht }}</p>

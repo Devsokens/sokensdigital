@@ -1277,8 +1277,9 @@ class TaxRatesView(APIView):
     def patch(self, request):
         from core.models import AuditLog
         from finance.serializers import TaxRatesSerializer
-        if not has_role(request.user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN):
-            return Response({'detail': 'Seuls le Directeur financier et le Super-Admin modifient les taux.'}, status=status.HTTP_403_FORBIDDEN)
+        from marketing.serializers import can_edit_tax_rates
+        if not can_edit_tax_rates(request.user):
+            return Response({'detail': 'Les taux sont modifiables par le gérant, la comptabilité et les Super-Admins.'}, status=status.HTTP_403_FORBIDDEN)
         settings_obj = FinanceSettings.load()
         before = {'vat_rate': str(settings_obj.vat_rate), 'css_rate': str(settings_obj.css_rate), 'extra_taxes': settings_obj.extra_taxes}
         serializer = TaxRatesSerializer(settings_obj, data=request.data, partial=True)

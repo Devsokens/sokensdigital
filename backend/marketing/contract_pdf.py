@@ -49,7 +49,14 @@ def contract_settings_dict() -> dict:
         'company_address': q.company_address,
         'company_email': q.company_email,
         'company_stamp_url': q.company_stamp_url,
+        # Taux de CSS en vigueur, cité à l'article 7 (prix).
+        'css_rate': str(_css_rate()),
     }
+
+
+def _css_rate():
+    from marketing.models import current_css_rate
+    return current_css_rate()
 
 
 def render_contract_html(contract) -> str:

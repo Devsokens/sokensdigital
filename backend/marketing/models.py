@@ -15,6 +15,21 @@ from marketing import contract_document as contract_defaults
 # baseline; replace with a real configured rate (or a per-Quote override)
 # once Finance/Comptabilité confirms it.
 DEFAULT_VAT_RATE = Decimal('0.18')
+# Contribution Spéciale de Solidarité : taux par défaut ; le taux en vigueur
+# se règle dans les paramètres (finance.FinanceSettings.css_rate).
+DEFAULT_CSS_RATE = Decimal('0.01')
+
+
+def current_css_rate() -> Decimal:
+    """Taux de CSS en vigueur (paramètres Finance, partagés devis/factures/contrats)."""
+    from finance.models import FinanceSettings
+    return FinanceSettings.load().css_rate
+
+
+def current_vat_rate() -> Decimal:
+    """Taux de TVA en vigueur (mêmes paramètres)."""
+    from finance.models import FinanceSettings
+    return FinanceSettings.load().vat_rate
 
 
 class LeadReferenceSequence(models.Model):
@@ -396,6 +411,10 @@ class Quote(LoggedModel):
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.BROUILLON)
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
     total_ht = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'), editable=False)
+    # CSS figée à la création du devis (taux des paramètres) : un devis
+    # envoyé garde le montant annoncé au client. TTC = HT + TVA + CSS.
+    vat_rate = models.DecimalField(max_digits=4, decimal_places=2, default=DEFAULT_VAT_RATE)
+    css_rate = models.DecimalField(max_digits=4, decimal_places=3, default=DEFAULT_CSS_RATE)
     total_ttc = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'), editable=False)
     # Crypto-random, not a sequential/guessable ID — this token IS the
     # public tracking link's authentication (docs/backend-specifications.md
@@ -458,7 +477,7 @@ class Quote(LoggedModel):
     def recalculate_totals(self):
         subtotal = sum((line.total_line for line in self.lines.all()), Decimal('0'))
         self.total_ht = subtotal - self.discount_amount
-        self.total_ttc = (self.total_ht * (1 + DEFAULT_VAT_RATE)).quantize(Decimal('0.01'))
+        self.total_ttc = (self.total_ht * (1 + (self.vat_rate or 0) + (self.css_rate or 0))).quantize(Decimal('0.01'))
         self.save(update_fields=['total_ht', 'total_ttc'])
 
     def save(self, *args, **kwargs):

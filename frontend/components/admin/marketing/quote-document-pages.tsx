@@ -7,6 +7,8 @@ import type { QuotePaymentTerm } from "@/lib/api/types";
  * looser than the full `Quote` type so the live editor's in-memory draft
  * (no id/tracking_token/etc. yet) can feed this directly, same as a
  * fetched, saved quote. */
+const pct = (rate: number) => String(Math.round(rate * 1000) / 10).replace(".", ",");
+
 export interface QuoteDocumentData {
   quote_number: string;
   client_name: string;
@@ -33,6 +35,8 @@ export interface QuoteDocumentSettings {
   payment_methods: { label: string }[];
   default_payment_terms: QuotePaymentTerm[];
   amount_basis?: "HT" | "TTC";
+  vat_rate?: string;
+  css_rate?: string;
 }
 
 /** The three-page devis document shell — pure presentation, no fetching.
@@ -61,6 +65,9 @@ export function QuoteDocumentPages({
 }) {
   const totalLines = quote.lines.reduce((sum, l) => sum + Number(l.total_line || 0), 0);
   const total = totalLines - Number(quote.discount_amount || 0);
+  // Taux du devis (figés à sa création), sinon ceux des paramètres.
+  const vatRate = Number((quote as { vat_rate?: string }).vat_rate ?? settings.vat_rate ?? 0.18);
+  const cssRate = Number((quote as { css_rate?: string }).css_rate ?? settings.css_rate ?? 0.01);
   const terms = quote.payment_terms.length > 0 ? quote.payment_terms : settings.default_payment_terms;
   const clientLabel = quote.client_name || "Client";
 
@@ -174,8 +181,11 @@ export function QuoteDocumentPages({
                 <p className="text-lg font-bold text-white">Total HT : {formatFCFA(total)}</p>
               ) : (
                 <>
-                  <p className="text-xs text-white/80">Total HT : {formatFCFA(total)} · TVA 18 % : {formatFCFA(total * 0.18)}</p>
-                  <p className="text-lg font-bold text-white">Total TTC : {formatFCFA(total * 1.18)}</p>
+                  <p className="text-xs text-white/80">
+                    Total HT : {formatFCFA(total)} · TVA {pct(vatRate)} % : {formatFCFA(total * vatRate)}
+                    {cssRate > 0 && <> · CSS {pct(cssRate)} % : {formatFCFA(total * cssRate)}</>}
+                  </p>
+                  <p className="text-lg font-bold text-white">Total TTC : {formatFCFA(total * (1 + vatRate + cssRate))}</p>
                 </>
               )}
             </div>

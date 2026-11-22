@@ -183,7 +183,7 @@ export function ContractEditor({ contract, initialType = "PRESTATION" }: { contr
       client_email: quote.client_email || form.client_email,
       services_description: titles.length ? titles.map((t) => `- ${t}`).join("\n") : quote.subject,
       annex_specifications: annex.join("\n\n"),
-      amount: String(Math.round(ttc ? total * 1.18 : total)),
+      amount: String(Math.round(ttc ? total * (1 + Number(quote.vat_rate ?? 0.18) + Number(quote.css_rate ?? 0.01)) : total)),
       amount_basis: ttc ? "TTC" : "HT",
       payment_schedule: quote.payment_terms.length ? quote.payment_terms : form.payment_schedule,
       duration: quote.project_duration || form.duration,
