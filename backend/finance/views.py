@@ -1052,6 +1052,33 @@ FINANCE_DASHBOARD_CACHE_KEY = 'finance:dashboard:v1'
 FINANCE_DASHBOARD_CACHE_TTL = 300
 
 
+def invoice_tax_totals(year: int | None = None) -> dict:
+    """Taxes collectées sur les factures émises (hors brouillons) : TVA, CSS
+    et autres taxes, pour l'année en cours et depuis le début."""
+    year = year or timezone.localdate().year
+    issued = Invoice.objects.exclude(status=Invoice.Status.BROUILLON)
+
+    def totals(qs):
+        agg = qs.aggregate(ht=Sum('amount_ht'), vat=Sum('vat_amount'), css=Sum('css_amount'), ttc=Sum('amount_ttc'))
+        extras: dict[str, Decimal] = {}
+        for taxes in qs.exclude(extra_taxes=[]).values_list('extra_taxes', flat=True):
+            for tax in taxes or []:
+                name = (tax.get('name') or 'Autre taxe').strip() or 'Autre taxe'
+                extras[name] = extras.get(name, Decimal('0')) + Decimal(str(tax.get('amount') or 0))
+        vat, css = agg['vat'] or Decimal('0'), agg['css'] or Decimal('0')
+        return {
+            'invoices': qs.count(),
+            'amount_ht': str(agg['ht'] or Decimal('0')),
+            'vat': str(vat),
+            'css': str(css),
+            'extra': {name: str(amount) for name, amount in extras.items()},
+            'total_taxes': str(vat + css + sum(extras.values(), Decimal('0'))),
+            'amount_ttc': str(agg['ttc'] or Decimal('0')),
+        }
+
+    return {'year': year, 'this_year': totals(issued.filter(issue_date__year=year)), 'all_time': totals(issued)}
+
+
 @extend_schema(
     tags=['Finance & Comptabilité'],
     summary='Finance dashboard (§4.1 Analytique & Reporting)',
@@ -1098,6 +1125,7 @@ def finance_dashboard(request):
         'gross_result': str(total_produits - total_charges),
         'dso_days': dso_days,
         'executed_disbursements_by_project': disbursements_by_project,
+        'taxes': invoice_tax_totals(),
     }
     cache.set(FINANCE_DASHBOARD_CACHE_KEY, payload, FINANCE_DASHBOARD_CACHE_TTL)
     return Response(payload)

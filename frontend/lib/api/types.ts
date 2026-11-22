@@ -1011,6 +1011,18 @@ export interface FinanceDashboard {
   gross_result: string;
   dso_days: number | null;
   executed_disbursements_by_project: Record<string, string>;
+  /** Taxes collectées sur les factures émises (hors brouillons). */
+  taxes?: { year: number; this_year: InvoiceTaxTotals; all_time: InvoiceTaxTotals };
+}
+
+export interface InvoiceTaxTotals {
+  invoices: number;
+  amount_ht: string;
+  vat: string;
+  css: string;
+  extra: Record<string, string>;
+  total_taxes: string;
+  amount_ttc: string;
 }
 
 // --- Opérations d'achats (procurement) ---------------------------------

@@ -8,6 +8,7 @@ import { getTaxRates, updateTaxRates, type ExtraTaxSetting } from "@/lib/api/fin
 import { ApiError } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/auth-context";
 import { profileRoles } from "@/lib/firebase/types";
+import { useIsGerant } from "@/lib/admin/use-is-gerant";
 
 const pct = (rate: string) => String(Math.round(Number(rate) * 1000) / 10);
 
@@ -17,7 +18,9 @@ const pct = (rate: string) => String(Math.round(Number(rate) * 1000) / 10);
 export function TaxRatesForm() {
   const { profile } = useAuth();
   const roles = profileRoles(profile);
-  const canEdit = roles.includes("SUPER_ADMIN") || roles.includes("DIRECTEUR_FINANCIER");
+  const isGerant = useIsGerant();
+  // Gérant, comptabilité (Comptable, Directeur financier) et Super-Admin.
+  const canEdit = isGerant || roles.some((r) => ["SUPER_ADMIN", "DIRECTEUR_FINANCIER", "COMPTABLE"].includes(r));
   const [vat, setVat] = useState<string | null>(null);
   const [css, setCss] = useState("");
   // Autres taxes, en plus de la TVA et de la CSS (ajout / retrait libres).
@@ -135,7 +138,7 @@ export function TaxRatesForm() {
           {saving ? "Enregistrement…" : "Enregistrer les taux"}
         </Button>
       ) : (
-        <p className="text-xs text-neutral-400">Modifiables par le Directeur financier ou le Super-Admin.</p>
+        <p className="text-xs text-neutral-400">Modifiables par le gérant, la comptabilité et les Super-Admins.</p>
       )}
     </div>
   );

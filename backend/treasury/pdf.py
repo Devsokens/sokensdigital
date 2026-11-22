@@ -87,8 +87,13 @@ def generate_cash_register_statement_pdf(period_start, period_end, cash_entries,
 def generate_disbursement_request_pdf(disbursement):
     """Générer PDF demande de décaissement."""
     _require_weasyprint()
+    from core.models import User
+    # Gérant actuel (désigné dans Administration > Utilisateurs) : toujours
+    # nommé sur la fiche, même avant sa décision.
+    current_gerant = User.objects.filter(is_gerant=True, is_active=True).first()
     context = {
         'disbursement': disbursement,
+        'current_gerant': current_gerant,
         'company_address': 'Adresse Sokens Digital',
         'now': timezone.now(),
     }

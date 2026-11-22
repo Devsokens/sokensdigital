@@ -103,3 +103,30 @@ class TaxRatesTests(APITestCase):
         base = {'client_name': 'X', 'issue_date': '2026-11-01', 'amount_ht': '1000', 'vat_rate': '0.18'}
         self.assertFalse(InvoiceSerializer(data={**base, 'css_rate': '0.5'}).is_valid())
         self.assertTrue(InvoiceSerializer(data={**base, 'css_rate': '0.015'}).is_valid())
+
+
+class DashboardTaxTotalsTests(APITestCase):
+    def test_tax_totals_from_issued_invoices(self):
+        from finance.views import invoice_tax_totals
+        Invoice.objects.create(client_name='A', amount_ht=Decimal('100000'), issue_date='2026-03-01', status=Invoice.Status.VALIDEE)
+        Invoice.objects.create(client_name='B', amount_ht=Decimal('50000'), issue_date='2026-03-02')  # brouillon : exclu
+        t = invoice_tax_totals(2026)['this_year']
+        self.assertEqual(t['invoices'], 1)
+        self.assertEqual(Decimal(t['vat']), Decimal('18000'))
+        self.assertEqual(Decimal(t['css']), Decimal('1000'))
+        self.assertEqual(Decimal(t['total_taxes']), Decimal('19000'))
+
+
+class BesoinSheetGerantTests(APITestCase):
+    def test_sheet_names_current_gerant(self):
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+        from core.models import User
+        from finance.models import DisbursementRequest
+        gerant = User.objects.create(email='g@x.dev', first_name='Jackie', last_name='Moubeyi', is_gerant=True)
+        besoin = DisbursementRequest.objects.create(amount=5000, beneficiary='X', reason='Y')
+        html = render_to_string('treasury/disbursement_request_pdf.html', {
+            'disbursement': besoin, 'current_gerant': gerant, 'company_address': '', 'now': timezone.now(),
+        })
+        self.assertIn('Jackie Moubeyi', html)
+        self.assertIn('Signature à la validation', html)

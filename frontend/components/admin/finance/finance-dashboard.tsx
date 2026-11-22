@@ -55,6 +55,35 @@ export function FinanceDashboard() {
         </div>
       </div>
 
+      {data.taxes && (
+        <div className={`${cardClass} mb-6`}>
+          <p className="mb-1 text-sm font-medium text-neutral-900">Taxes collectées sur les factures</p>
+          <p className="mb-4 text-xs text-neutral-400">Factures émises (hors brouillons) — montants dus à l&apos;État.</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {([
+              [`Année ${data.taxes.year}`, data.taxes.this_year],
+              ["Depuis le début", data.taxes.all_time],
+            ] as const).map(([label, t]) => (
+              <div key={label} className="rounded-lg border border-neutral-100 p-4">
+                <p className="mb-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase">
+                  {label} · {t.invoices} facture{t.invoices > 1 ? "s" : ""}
+                </p>
+                <dl className="space-y-1 text-sm">
+                  <div className="flex justify-between"><dt className="text-neutral-500">Montant HT</dt><dd className="text-neutral-900">{formatFcfa(t.amount_ht)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-neutral-500">TVA</dt><dd className="text-neutral-900">{formatFcfa(t.vat)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-neutral-500">CSS</dt><dd className="text-neutral-900">{formatFcfa(t.css)}</dd></div>
+                  {Object.entries(t.extra).map(([name, amount]) => (
+                    <div key={name} className="flex justify-between"><dt className="text-neutral-500">{name}</dt><dd className="text-neutral-900">{formatFcfa(amount)}</dd></div>
+                  ))}
+                  <div className="flex justify-between border-t border-neutral-100 pt-1.5 font-semibold"><dt className="text-neutral-900">Total des taxes</dt><dd className="text-neutral-900">{formatFcfa(t.total_taxes)}</dd></div>
+                  <div className="flex justify-between text-xs"><dt className="text-neutral-400">Montant TTC facturé</dt><dd className="text-neutral-500">{formatFcfa(t.amount_ttc)}</dd></div>
+                </dl>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className={cardClass}>
         <p className="mb-3 text-sm font-medium text-neutral-900">Décaissements exécutés par projet</p>
         {disbursementRows.length === 0 ? (
