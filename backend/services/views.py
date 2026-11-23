@@ -203,6 +203,19 @@ class ServicePeriodViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
             period.closed_at = timezone.now()
             period.closed_by = request.user
             period.save()
+            if carried:
+                # Mois suivant déjà payé et ouvert (facturé avant la clôture) :
+                # ses quotas sont figés, on y ajoute le report maintenant.
+                # Sinon opening_quotas l'ajoutera à son ouverture.
+                nxt = (ServicePeriod.objects.select_for_update()
+                       .filter(subscription=period.subscription, period_start__gt=period.period_start)
+                       .order_by('period_start').first())
+                if nxt and nxt.status == ServicePeriod.Status.OUVERT:
+                    quotas = dict(nxt.quotas_alloues or {})
+                    for key, extra in carried.items():
+                        quotas[key] = float(Decimal(str(quotas.get(key, 0))) + Decimal(str(extra)))
+                    nxt.quotas_alloues = quotas
+                    nxt.save(update_fields=['quotas_alloues'])
         if carried:
             AuditLog.objects.log_action(request.user, 'QUOTA_REPORTE', 'ServicePeriod', period.pk,
                                         details=period.carry_over)

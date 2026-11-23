@@ -272,3 +272,25 @@ class EssentielQuotaTests(APITestCase):
         api.post(f'{BASE}/deliverables/{pk}/transition/', {'status': 'VALIDE_CLIENT'}, format='json')
         self.assertEqual(api.post(f'{BASE}/deliverables/{pk}/transition/', {'status': 'LIVRE'}, format='json').status_code, 400)
         self.assertEqual(api.post(f'{BASE}/deliverables/{pk}/transition/', {'status': 'PUBLIE'}, format='json').status_code, 200)
+
+    def test_carry_over_applies_when_next_month_already_open(self):
+        api = _client(_user('mkt4@x.dev', ROLE_RESPONSABLE_MARKETING_COM))
+        sub = Subscription.objects.create(client=Client.objects.create(company_name='E'),
+                                          offer=ServiceOffer.objects.get(code='com-pro'), start_date=date(2026, 11, 1))
+
+        def gen_and_pay():
+            p = ServicePeriod.objects.get(pk=api.post(f'{BASE}/subscriptions/{sub.pk}/generate-invoice/', {}, format='json').json()['id'])
+            Invoice.objects.filter(pk=p.invoice_id).update(status=Invoice.Status.VALIDEE)
+            Payment.objects.create(invoice=Invoice.objects.get(pk=p.invoice_id), amount=p.invoice.amount_ttc,
+                                   payment_date=timezone.now().date(), payment_method='VIREMENT', status=Payment.Status.RECU)
+            p.refresh_from_db()
+            return p
+
+        nov = gen_and_pay()
+        dec = gen_and_pay()
+        self.assertEqual(dec.status, ServicePeriod.Status.OUVERT)
+        res = api.post(f'{BASE}/periods/{nov.pk}/close/', {'report_url': 'https://r.example/1', 'carry_over': {'publications': 1},
+                                                           'carry_reason': 'Tournage reporté'}, format='json')
+        self.assertEqual(res.status_code, 200, res.content)
+        dec.refresh_from_db()
+        self.assertEqual(dec.quotas_alloues['publications'], 13)
