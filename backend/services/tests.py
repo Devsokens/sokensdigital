@@ -239,3 +239,21 @@ class CronEndpointTests(APITestCase):
             res = self.client.post(url, HTTP_X_CRON_SECRET='s3cret')
             self.assertEqual(res.status_code, 200)
             self.assertIn('send_quote_and_invoice_reminders', res.json())
+
+
+class EssentielQuotaTests(APITestCase):
+    def test_video_outside_formula_is_refused(self):
+        mkt = _user('mkt2@x.dev', ROLE_RESPONSABLE_MARKETING_COM)
+        api = _client(mkt)
+        sub = Subscription.objects.create(client=Client.objects.create(company_name='C'),
+                                          offer=ServiceOffer.objects.get(code='com-essentiel'), start_date=date(2026, 11, 1))
+        period = ServicePeriod.objects.get(pk=api.post(f'{BASE}/subscriptions/{sub.pk}/generate-invoice/', {}, format='json').json()['id'])
+        Invoice.objects.filter(pk=period.invoice_id).update(status=Invoice.Status.VALIDEE)
+        Payment.objects.create(invoice=Invoice.objects.get(pk=period.invoice_id), amount=period.invoice.amount_ttc,
+                               payment_date=timezone.now().date(), payment_method='VIREMENT', status=Payment.Status.RECU)
+        pk = api.post(f'{BASE}/deliverables/', {'period': str(period.pk), 'kind': 'VIDEO', 'title': 'v'}, format='json').json()['id']
+        for step in ('CONTROLE_INTERNE', 'VALIDE_CLIENT'):
+            api.post(f'{BASE}/deliverables/{pk}/transition/', {'status': step}, format='json')
+        res = api.post(f'{BASE}/deliverables/{pk}/transition/', {'status': 'PUBLIE'}, format='json')
+        self.assertEqual(res.status_code, 400, res.content)
+        self.assertEqual(res.json()['code'], 'quota_exceeded')

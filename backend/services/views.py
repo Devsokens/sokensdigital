@@ -281,7 +281,11 @@ class DeliverableViewSet(viewsets.ModelViewSet):
                 if period.status != ServicePeriod.Status.OUVERT:
                     return Response({'detail': 'La période n’est pas ouverte.'}, status=status.HTTP_400_BAD_REQUEST)
                 key = KIND_QUOTA_KEY.get(deliverable.kind)
-                if key and key in (period.quotas_alloues or {}):
+                # Communication : un type absent de la formule (vidéo sur
+                # Essentiel…) vaut quota 0 — hors formule = devis complémentaire.
+                enforce = key and (key in (period.quotas_alloues or {})
+                                   or deliverable.period.subscription.offer.pole == 'COMMUNICATION')
+                if enforce:
                     left = period.remaining().get(key, Decimal('0'))
                     if deliverable.quantity > left:
                         return Response({
