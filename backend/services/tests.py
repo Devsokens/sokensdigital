@@ -107,6 +107,7 @@ class SubscriptionFlowTests(APITestCase):
         self._pay(period)
         url = f'{BASE}/periods/{period.pk}/close/'
         self.assertEqual(self.api.post(url, {}, format='json').status_code, 400)
+        self.assertEqual(self.api.post(url, {'report_url': 'javascript:alert(1)'}, format='json').status_code, 400)
         self.assertEqual(self.api.post(url, {'report_url': 'https://r.example/1', 'carry_over': {'videos': 1}}, format='json').status_code, 400)
         self.assertEqual(self.api.post(url, {'report_url': 'https://r.example/1', 'carry_over': {'videos': 5}, 'carry_reason': 'x'}, format='json').status_code, 400)
         res = self.api.post(url, {'report_url': 'https://r.example/1', 'carry_over': {'videos': 1}, 'carry_reason': 'Tournage reporté par le client'}, format='json')

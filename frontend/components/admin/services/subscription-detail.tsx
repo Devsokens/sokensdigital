@@ -201,7 +201,7 @@ function PeriodCard({
         )}
         {p.status === "CLOTURE" && (
           <p className="mb-3 text-xs text-neutral-500">
-            Rapport : {p.report_url ? <a href={p.report_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{p.report_url}</a> : p.report_notes}
+            Rapport : {/^https?:\/\//i.test(p.report_url) ? <a href={p.report_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">{p.report_url}</a> : p.report_notes}
             {p.meeting_held && " · réunion tenue"}
           </p>
         )}

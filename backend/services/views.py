@@ -19,6 +19,20 @@ from services.serializers import (
 )
 
 
+def _clean_http_url(value):
+    """Lien http(s) uniquement (jamais javascript:/data:) — None si invalide."""
+    from django.core.exceptions import ValidationError
+    from django.core.validators import URLValidator
+    value = (value or '').strip()
+    if not value:
+        return ''
+    try:
+        URLValidator(schemes=['http', 'https'])(value)
+    except ValidationError:
+        return None
+    return value[:500]
+
+
 def _forbidden(detail='Action réservée au responsable du pôle.'):
     return Response({'detail': detail}, status=status.HTTP_403_FORBIDDEN)
 
@@ -140,7 +154,9 @@ class ServicePeriodViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
                 return _forbidden()
             if period.status != ServicePeriod.Status.OUVERT:
                 return Response({'detail': 'Seule une période ouverte peut être clôturée.'}, status=status.HTTP_400_BAD_REQUEST)
-            report_url = (request.data.get('report_url') or '').strip()
+            report_url = _clean_http_url(request.data.get('report_url'))
+            if report_url is None:
+                return Response({'detail': 'Lien du rapport invalide (http ou https).'}, status=status.HTTP_400_BAD_REQUEST)
             report_notes = (request.data.get('report_notes') or '').strip()
             if not report_url and not report_notes:
                 return Response({'detail': 'Le rapport mensuel est obligatoire (lien ou compte rendu).'},
@@ -266,7 +282,9 @@ class DeliverableViewSet(viewsets.ModelViewSet):
             deliverable.status = target
             if target in Deliverable.CONSUMING_STATUSES:
                 deliverable.published_at = timezone.now()
-                proof = (request.data.get('proof_url') or '').strip()
+                proof = _clean_http_url(request.data.get('proof_url'))
+                if proof is None:
+                    return Response({'detail': 'Lien de preuve invalide (http ou https).'}, status=status.HTTP_400_BAD_REQUEST)
                 if proof:
                     deliverable.proof_url = proof
             deliverable.save()
