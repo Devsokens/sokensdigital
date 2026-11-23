@@ -731,15 +731,30 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         # Suppression propre (versements, reçus, écritures, période
         # d'abonnement) ou refus en bloc si la comptabilité ne peut pas être
         # défaite sans la fausser — voir finance.invoice_deletion.
+        # Droits : le Comptable ne supprime qu'un brouillon hors abonnement ;
+        # une facture validée/payée ou celle d'un mois d'abonnement exige le
+        # Super-Admin (même niveau que la suppression d'un abonnement).
+        from django.db import transaction
         from finance.invoice_deletion import invoice_blocking_reasons
-        invoice = self.get_object()
-        reasons = invoice_blocking_reasons(invoice)
-        if reasons:
-            return Response({
-                'detail': 'Suppression impossible sans fausser la comptabilité : ' + ' '.join(reasons),
-                'reasons': reasons,
-            }, status=status.HTTP_409_CONFLICT)
-        self.perform_destroy(invoice)
+        with transaction.atomic():
+            invoice = Invoice.objects.select_for_update().get(pk=self.get_object().pk)
+            sensitive = (
+                invoice.status != Invoice.Status.BROUILLON
+                or invoice.payments.exists()
+                or hasattr(invoice, 'service_period')
+            )
+            if sensitive and not has_role(request.user, ROLE_SUPER_ADMIN):
+                return Response(
+                    {'detail': "Seul un Super-Administrateur peut supprimer une facture validée, payée ou liée à un abonnement."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            reasons = invoice_blocking_reasons(invoice)
+            if reasons:
+                return Response({
+                    'detail': 'Suppression impossible sans fausser la comptabilité : ' + ' '.join(reasons),
+                    'reasons': reasons,
+                }, status=status.HTTP_409_CONFLICT)
+            self.perform_destroy(invoice)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def perform_destroy(self, instance):

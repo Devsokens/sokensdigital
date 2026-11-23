@@ -359,6 +359,14 @@ class EssentielQuotaTests(APITestCase):
         self.assertEqual(dec.quotas_alloues['publications'], 13)
 
 
+class DraftInvoiceDeletionTests(APITestCase):
+    def test_comptable_deletes_plain_draft(self):
+        cpt = _client(_user('cpt-draft-del@x.dev', ROLE_COMPTABLE))
+        inv = Invoice.objects.create(client_name='D', amount_ht=Decimal('1000'))
+        self.assertEqual(cpt.delete(f'/api/v1/finance/invoices/{inv.pk}/').status_code, 204)
+        self.assertFalse(Invoice.objects.filter(pk=inv.pk).exists())
+
+
 class FinanceInvoiceDeletionTests(APITestCase):
     def setUp(self):
         from finance.models import AccountingPeriod
@@ -375,7 +383,10 @@ class FinanceInvoiceDeletionTests(APITestCase):
     def test_dashboard_reflects_deletion(self):
         before = self.cpt.get('/api/v1/finance/dashboard/').json()
         self.assertGreater(Decimal(before['gross_result']), 0)
-        res = self.cpt.delete(f'/api/v1/finance/invoices/{self.invoice.pk}/')
+        # Facture validée, payée, liée à un abonnement : refusée au Comptable.
+        self.assertEqual(self.cpt.delete(f'/api/v1/finance/invoices/{self.invoice.pk}/').status_code, 403)
+        sa = _client(_user('sa-findel@x.dev', ROLE_SUPER_ADMIN))
+        res = sa.delete(f'/api/v1/finance/invoices/{self.invoice.pk}/')
         self.assertEqual(res.status_code, 204, res.content)
         after = self.cpt.get('/api/v1/finance/dashboard/').json()
         self.assertEqual(Decimal(after['gross_result']), Decimal(before['gross_result']) - self.invoice.amount_ht)
@@ -391,5 +402,6 @@ class FinanceInvoiceDeletionTests(APITestCase):
         payment = self.invoice.payments.first()
         CashEntry.objects.create(type=CashEntry.Type.ENTREE, source=CashEntry.Source.CLIENT_ESPECES,
                                  amount=payment.amount, payment=payment)
-        self.assertEqual(self.cpt.delete(f'/api/v1/finance/invoices/{self.invoice.pk}/').status_code, 409)
+        sa = _client(_user('sa-findel2@x.dev', ROLE_SUPER_ADMIN))
+        self.assertEqual(sa.delete(f'/api/v1/finance/invoices/{self.invoice.pk}/').status_code, 409)
         self.assertTrue(Invoice.objects.filter(pk=self.invoice.pk).exists())

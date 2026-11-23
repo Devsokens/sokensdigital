@@ -222,7 +222,7 @@ export function Invoices() {
                         open
                         onOpenChange={(o) => !o && setToDelete(null)}
                         title={`Supprimer la facture ${invoice.invoice_number}`}
-                        description="La facture sera supprimée avec ses versements, reçus, pièces jointes et écritures comptables (et le mois d'abonnement rattaché, s'il y en a un). L'analytique est mise à jour. Refusé si la facture est dans une période comptable clôturée, rapprochée en banque ou encaissée en caisse/banque."
+                        description="Brouillon hors abonnement : Comptable ou Super-Admin ; facture validée, payée ou d'abonnement : Super-Admin uniquement. La facture sera supprimée avec ses versements, reçus, pièces jointes et écritures comptables (et le mois d'abonnement rattaché, s'il y en a un). L'analytique est mise à jour. Refusé si la facture est dans une période comptable clôturée, rapprochée en banque ou encaissée en caisse/banque."
                         confirmLabel="Supprimer"
                         requireTyping={invoice.status === "BROUILLON" ? undefined : "SUPPRIMER"}
                         onConfirm={async () => {

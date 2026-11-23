@@ -54,7 +54,7 @@ L'entrée de menu dépend du module de droits **Abonnements communication**
 | **Paramètres des devis / Finance** | Les taux de TVA et de CSS en vigueur (modifiables par le gérant, la comptabilité, le Super-Admin) servent au calcul de chaque facture mensuelle. |
 | **Facturation** | La facture du mois est une facture ordinaire : numéro `FAC-AAAA-NNNNN`, mentions obligatoires, QR code fiscal, PDF, envoi par e-mail, rattachée au client et au devis. |
 | **Comptabilité** | La validation de la facture passe l'écriture des ventes (411 / 706 / TVA / CSS). Aucun encaissement n'est accepté avant. |
-| **Suppression de facture** | Depuis Finance (Comptable, Super-Admin), la suppression d'une facture de mois supprime aussi ce mois et ses livrables ; l'abonnement reste et le mois peut être refacturé. Refus si période comptable clôturée, rapprochement bancaire ou encaissement en trésorerie. L'analytique Finance s'ajuste immédiatement. |
+| **Suppression de facture** | Depuis Finance (Super-Admin uniquement pour une facture de mois), la suppression d'une facture de mois supprime aussi ce mois et ses livrables ; l'abonnement reste et le mois peut être refacturé. Refus si période comptable clôturée, rapprochement bancaire ou encaissement en trésorerie. L'analytique Finance s'ajuste immédiatement. |
 | **Encaissements** | Versements partiels ou « Marquer comme payée », avec reçu. Le paiement complet ouvre le mois de production. |
 | **Relances** | Une facture validée et échue déclenche les relances quotidiennes habituelles (si le planificateur est configuré). |
 | **Notifications** | Ouverture d'un mois : notification au responsable de compte et à l'équipe Marketing & Communication. |
