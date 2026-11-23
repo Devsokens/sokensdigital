@@ -108,9 +108,6 @@ export function UserEditModal({
   }, [roles, savedOverrides]);
 
   const currentDepartment = departments.find((d) => d.id === departmentId) ?? null;
-  const rolesForDepartment: AppRole[] = currentDepartment
-    ? ROLES_BY_DEPARTMENT[currentDepartment.name] ?? (Object.keys(ROLE_LABELS) as AppRole[])
-    : [];
 
   // Plafond : 2 rôles fonctionnels, le privilège Super-Admin en plus.
   function toggleRole(role: AppRole) {
@@ -281,7 +278,7 @@ export function UserEditModal({
                       <button
                         key={d.id}
                         type="button"
-                        onClick={() => { setDepartmentId(d.id); setSelectedRoles([]); }}
+                        onClick={() => setDepartmentId(d.id)}
                         className={cn(
                           "rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors",
                           departmentId === d.id
@@ -298,11 +295,17 @@ export function UserEditModal({
 
               {step === 1 && (
                 <div>
-                  <p className="mb-3 text-sm font-semibold text-neutral-900">
-                    Rôles de {currentDepartment?.name} — plusieurs possibles
+                  <p className="mb-1 text-sm font-semibold text-neutral-900">Rôles</p>
+                  <p className="mb-3 text-xs text-neutral-500">
+                    {MAX_FUNCTIONAL_ROLES} rôles fonctionnels maximum, Super-Administrateur en plus.
+                    {currentDepartment ? ` Département : ${currentDepartment.name}.` : ""}
                   </p>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {rolesForDepartment.map((r) => (
+                  <div className="max-h-80 space-y-3 overflow-y-auto">
+                  {Object.entries(ROLES_BY_DEPARTMENT).map(([group, groupRoles]) => (
+                  <div key={group}>
+                  <p className="mb-1.5 text-[10px] font-semibold tracking-wide text-neutral-400 uppercase">{group}</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {groupRoles.map((r) => (
                       <button
                         key={r}
                         type="button"
@@ -317,9 +320,9 @@ export function UserEditModal({
                         {ROLE_LABELS[r]}
                       </button>
                     ))}
-                    {rolesForDepartment.length === 0 && (
-                      <p className="col-span-2 text-xs text-neutral-400">Aucun rôle prédéfini pour ce département.</p>
-                    )}
+                  </div>
+                  </div>
+                  ))}
                   </div>
                 </div>
               )}

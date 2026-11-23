@@ -167,7 +167,7 @@ export function UserRoleList() {
         <ContextMenuLabel>{row.name || row.email}</ContextMenuLabel>
         {isSuperAdmin && (
           <ContextMenuItem icon={Pencil} onClick={() => setEditing(row)}>
-            Modifier l&apos;utilisateur
+            Modifier les rôles
           </ContextMenuItem>
         )}
         {showGerant(row) && row.roles.length > 0 && (
@@ -314,18 +314,15 @@ export function UserRoleList() {
                           }
                         />
                         <PopoverContent className="w-44 p-1" align="end">
-                          <UserEditModal
-                            user={row}
-                            onSaved={load}
-                            trigger={
-                              <button
-                                type="button"
-                                className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50"
-                              >
-                                Modifier l&apos;utilisateur
-                              </button>
-                            }
-                          />
+                          {isSuperAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => setEditing(row)}
+                              className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs font-medium text-neutral-700 hover:bg-neutral-50"
+                            >
+                              Modifier les rôles
+                            </button>
+                          )}
                           {showGerant(row) && (
                             <button
                               type="button"
