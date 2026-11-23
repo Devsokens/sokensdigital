@@ -70,8 +70,14 @@ class SubcontractorIsolationTests(APITestCase):
         st = _user('stc@x.dev', ROLE_SOUS_TRAITANT_COMMERCIAL)
         quote = Quote.objects.create(created_by=st, client_name='X')
         QuoteLine.objects.create(quote=quote, service_title='A', quantity=Decimal('1'), unit_price=Decimal('1000'))
-        res = _client(st).post(f'/api/v1/marketing/quotes/{quote.pk}/send/', {}, format='json')
-        self.assertEqual(res.status_code, 403)
+        client = _client(st)
+        self.assertEqual(client.post(f'/api/v1/marketing/quotes/{quote.pk}/send/', {}, format='json').status_code, 403)
+        # Ni conversion en facture, ni paramètres des documents.
+        self.assertEqual(client.post(f'/api/v1/marketing/quotes/{quote.pk}/convert-to-invoice/', {}, format='json').status_code, 403)
+        self.assertEqual(client.patch('/api/v1/marketing/quote-settings/', {'footer_note': 'x'}, format='json').status_code, 403)
+        # Mais son propre devis et ses leads restent accessibles.
+        self.assertEqual(client.get(f'/api/v1/marketing/quotes/{quote.pk}/').status_code, 200)
+        self.assertEqual(client.get('/api/v1/marketing/leads/').status_code, 200)
 
     def test_internal_staff_keeps_access(self):
         self.assertEqual(_client(_user('dev@x.dev', ROLE_DEVELOPER)).get('/api/v1/finance/disbursement-requests/').status_code, 200)

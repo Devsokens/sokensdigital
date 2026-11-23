@@ -76,7 +76,11 @@ MARKETING_ROLES = (ROLE_RESPONSABLE_MARKETING_COM,)
 # Le sous-traitant commercial gère son propre portefeuille (leads assignés,
 # devis qu'il a créés), comme un commercial, mais ses devis restent des
 # brouillons soumis à validation interne : il ne les envoie pas (send).
-COMMERCIAL_ROLES = (ROLE_COMMERCIAL, ROLE_SOUS_TRAITANT_COMMERCIAL)
+COMMERCIAL_ROLES = (ROLE_COMMERCIAL,)
+# Portefeuille propre (leads assignés, devis créés) : commercial interne et
+# sous-traitant commercial. N'ouvre QUE ces deux accès — jamais les
+# paramètres des documents, la conversion en facture, les publications.
+OWN_PORTFOLIO_ROLES = (ROLE_COMMERCIAL, ROLE_SOUS_TRAITANT_COMMERCIAL)
 FINANCE_CONVERT_ROLES = (ROLE_COMPTABLE,)
 CHEF_DE_PROJET_ROLES = (ROLE_PROJECT_MANAGER,)
 # Contrats de prestation : rédigés par les RH / l'administration (module
@@ -205,7 +209,7 @@ class IsMarketingOrOwnCommercial(permissions.BasePermission):
     to them (list filtered in get_queryset; object actions checked here)."""
 
     def has_permission(self, request, view):
-        return has_role(request.user, *MARKETING_ROLES, *COMMERCIAL_ROLES, ROLE_SUPER_ADMIN)
+        return has_role(request.user, *MARKETING_ROLES, *OWN_PORTFOLIO_ROLES, ROLE_SUPER_ADMIN)
 
     def has_object_permission(self, request, view, obj):
         if has_role(request.user, *MARKETING_ROLES, ROLE_SUPER_ADMIN):
@@ -867,13 +871,13 @@ class IsCommercialOwnerOrReadCollaborator(permissions.BasePermission):
 
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
-            return has_role(request.user, *COMMERCIAL_ROLES, *MARKETING_ROLES, *CHEF_DE_PROJET_ROLES, ROLE_SUPER_ADMIN)
-        return has_role(request.user, *COMMERCIAL_ROLES, *MARKETING_ROLES, ROLE_SUPER_ADMIN)
+            return has_role(request.user, *OWN_PORTFOLIO_ROLES, *MARKETING_ROLES, *CHEF_DE_PROJET_ROLES, ROLE_SUPER_ADMIN)
+        return has_role(request.user, *OWN_PORTFOLIO_ROLES, *MARKETING_ROLES, ROLE_SUPER_ADMIN)
 
     def has_object_permission(self, request, view, obj):
         if has_role(request.user, ROLE_SUPER_ADMIN, *MARKETING_ROLES):
             return True
-        if has_role(request.user, *CHEF_DE_PROJET_ROLES) and not has_role(request.user, *COMMERCIAL_ROLES):
+        if has_role(request.user, *CHEF_DE_PROJET_ROLES) and not has_role(request.user, *OWN_PORTFOLIO_ROLES):
             return request.method in permissions.SAFE_METHODS
         return obj.created_by_id == request.user.id
 
@@ -895,7 +899,7 @@ class QuoteViewSet(viewsets.ModelViewSet):
             return Quote.objects.none()
         qs = Quote.objects.select_related('created_by', 'lead').prefetch_related('lines')
         if (
-            has_role(self.request.user, *COMMERCIAL_ROLES)
+            has_role(self.request.user, *OWN_PORTFOLIO_ROLES)
             and not has_role(self.request.user, ROLE_SUPER_ADMIN, *MARKETING_ROLES)
         ):
             return qs.filter(created_by=self.request.user)
@@ -1052,7 +1056,7 @@ class QuoteViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def clone(self, request, pk=None):
         original = self.get_object()
-        if not has_role(request.user, *COMMERCIAL_ROLES) or original.created_by_id != request.user.id:
+        if not has_role(request.user, *OWN_PORTFOLIO_ROLES) or original.created_by_id != request.user.id:
             if not has_role(request.user, ROLE_SUPER_ADMIN):
                 return Response(status=status.HTTP_403_FORBIDDEN)
         new_quote = Quote.objects.create(
