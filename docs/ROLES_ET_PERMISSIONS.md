@@ -76,8 +76,9 @@ pas même par un Super-Administrateur.
   rôles, y compris à la création d'un compte (`POST /api/v1/users/provision/`
   et `POST /api/v1/users/<id>/role/` réservés au Super-Admin).
 - Les rôles restent modifiables à tout moment après la création du compte,
-  y compris ceux d'un autre Super-Administrateur (Firestore : seul un
-  Super-Admin peut modifier `role`/`roles` d'un profil).
+  **sauf ceux d'un autre Super-Administrateur** : règle stricte, refus 403
+  côté serveur (rôles et permissions), option masquée dans l'interface,
+  bloquée aussi dans les règles Firestore.
 - **Plafond standard** : 2 rôles fonctionnels au maximum par utilisateur
   (ex. Responsable des Opérations + Chef de Projet).
 - **Plafond Super-Admin** : le privilège Super-Admin + 2 rôles fonctionnels

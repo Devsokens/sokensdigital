@@ -139,6 +139,9 @@ export function UserRoleList() {
   }
 
   const myEmail = me?.email?.toLowerCase() ?? "";
+  // Règle stricte : pas de modification des rôles d'un AUTRE Super-Admin.
+  const canEditRoles = (row: MergedUser) =>
+    isSuperAdmin && (!row.roles.includes("SUPER_ADMIN") || row.email.toLowerCase() === myEmail);
   // Postes uniques : une fois pourvus, l'option de nomination disparaît
   // (seul le titulaire garde « Retirer le titre »).
   const gerantTaken = rows?.some((r) => r.isGerant) ?? false;
@@ -165,7 +168,7 @@ export function UserRoleList() {
     return (
       <>
         <ContextMenuLabel>{row.name || row.email}</ContextMenuLabel>
-        {isSuperAdmin && (
+        {canEditRoles(row) && (
           <ContextMenuItem icon={Pencil} onClick={() => setEditing(row)}>
             Modifier les rôles
           </ContextMenuItem>
@@ -314,7 +317,7 @@ export function UserRoleList() {
                           }
                         />
                         <PopoverContent className="w-44 p-1" align="end">
-                          {isSuperAdmin && (
+                          {canEditRoles(row) && (
                             <button
                               type="button"
                               onClick={() => setEditing(row)}

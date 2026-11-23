@@ -25,8 +25,8 @@ service cloud.firestore {
       );
     }
 
-    // Seul le Super-Admin attribue ou retire des rôles (y compris à un
-    // autre Super-Admin).
+    // Seul le Super-Admin attribue ou retire des rôles — jamais ceux d'un
+    // AUTRE Super-Admin (règle stricte).
     function isSuperAdmin() {
       return getUserData() != null && (
         getUserData().role == 'SUPER_ADMIN' ||
@@ -53,8 +53,10 @@ service cloud.firestore {
       // this profile doc) are created by a Super-Admin/RH, either via the
       // Firebase Console directly or a future admin UI. See
       // docs/backend-specifications.md §3.1.
-      allow create: if isAuth() && isAdmin();
-      allow delete: if isAuth() && isAdmin();
+      // Un profil porte ses rôles : création/suppression réservées au
+      // Super-Admin (personne d'autre n'attribue de rôle).
+      allow create: if isAuth() && isSuperAdmin();
+      allow delete: if isAuth() && isSuperAdmin();
       // Update: Super-Admin/RH can change anything (role, department...).
       // Anyone else may only touch their own doc, and only its
       // self-editable fields (firstName, lastName, avatarUrl, updatedAt).
@@ -62,7 +64,14 @@ service cloud.firestore {
       // — only those four keys may appear in the diff, so a regular user
       // can never self-promote or change their department/email.
       allow update: if isAuth() && (
-        isSuperAdmin() ||
+        (
+          isSuperAdmin() &&
+          (
+            request.auth.uid == userUid ||
+            !(resource.data.role == 'SUPER_ADMIN' || (resource.data.roles is list && 'SUPER_ADMIN' in resource.data.roles)) ||
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'roles'])
+          )
+        ) ||
         (
           isAdmin() &&
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'roles'])

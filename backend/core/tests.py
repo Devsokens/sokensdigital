@@ -450,13 +450,18 @@ class SetUserRoleViewTests(APITestCase):
 
     @patch('core.views.notify_roles')
     @patch('core.views.update_profile_fields')
-    def test_super_admin_can_change_another_super_admin_roles(self, mock_update, mock_notify_roles):
+    def test_super_admin_cannot_change_another_super_admin_roles(self, mock_update, mock_notify_roles):
         _give_role(self.employee, ROLE_SUPER_ADMIN)
         response = self.client_super_admin.patch(
             f'/api/v1/users/{self.employee.id}/role/', {'roles': ['COMPTABLE']}, format='json',
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(has_role(self.employee, ROLE_SUPER_ADMIN))
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(has_role(self.employee, ROLE_SUPER_ADMIN))
+        mock_update.assert_not_called()
+        res = self.client_super_admin.patch(
+            f'/api/v1/users/{self.employee.id}/permissions/', {'permissions': {}}, format='json',
+        )
+        self.assertEqual(res.status_code, 403)
 
 
 class DeactivateUserViewTests(APITestCase):

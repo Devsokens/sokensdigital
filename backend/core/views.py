@@ -498,6 +498,15 @@ class ProvisionUserView(APIView):
         return Response(UserSerializer(django_user).data, status=status.HTTP_201_CREATED)
 
 
+def _is_other_super_admin(request, target):
+    """Règle stricte : un Super-Admin ne modifie jamais les rôles ni les
+    permissions d'un AUTRE Super-Admin (seulement les siens)."""
+    return target.pk != request.user.pk and has_role(target, ROLE_SUPER_ADMIN)
+
+
+OTHER_SUPER_ADMIN_DETAIL = "Les rôles d'un autre Super-Administrateur ne peuvent pas être modifiés."
+
+
 class SetUserPermissionsView(APIView):
     """Surcharge les permissions d'UN utilisateur précis
     (User.permission_overrides) — indépendamment des autres personnes
@@ -533,6 +542,8 @@ class SetUserPermissionsView(APIView):
         django_user = User.objects.filter(pk=pk).first()
         if not django_user:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        if _is_other_super_admin(request, django_user):
+            return Response({'detail': OTHER_SUPER_ADMIN_DETAIL}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = SetUserPermissionsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -615,6 +626,8 @@ class SetUserRoleView(APIView):
         django_user = User.objects.filter(pk=pk).first()
         if not django_user:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        if _is_other_super_admin(request, django_user):
+            return Response({'detail': OTHER_SUPER_ADMIN_DETAIL}, status=status.HTTP_403_FORBIDDEN)
         if not django_user.firebase_uid:
             return Response(
                 {'detail': "Cet utilisateur n'a pas encore de compte Firebase associé."},
