@@ -14,6 +14,8 @@ import { TaxRatesForm } from "@/components/admin/finance/tax-rates-form";
 import { deleteInvoice, downloadInvoicePdf, getInvoiceEditorContext, listInvoices, validateInvoice, type InvoiceEditorContext } from "@/lib/api/finance";
 import { formatFcfa } from "@/lib/format-currency";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth/auth-context";
+import { profileRoles } from "@/lib/firebase/types";
 import type { Invoice } from "@/lib/api/types";
 
 type StatusFilter = "TOUS" | "BROUILLON" | "VALIDEE";
@@ -23,6 +25,11 @@ const due = (invoice: Invoice) => Math.max(Number(invoice.amount_ttc) - Number(i
 const clientOf = (invoice: Invoice) => invoice.client_name || "Sans client";
 
 export function Invoices() {
+  // Comptable : brouillon hors abonnement sans versement ; le reste, Super-Admin (règle serveur).
+  const { profile } = useAuth();
+  const isSuperAdmin = profileRoles(profile).includes("SUPER_ADMIN");
+  const canDelete = (inv: Invoice) =>
+    isSuperAdmin || (inv.status === "BROUILLON" && !inv.is_subscription && Number(inv.amount_paid) === 0);
   const [invoices, setInvoices] = useState<Invoice[] | null>(null);
   const [context, setContext] = useState<InvoiceEditorContext | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -216,7 +223,7 @@ export function Invoices() {
                     <StatusBadge invoice={invoice} />
                   </td>
                   <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                    <ActionsMenu invoice={invoice} acting={actingId === invoice.id} onView={() => setViewingId(invoice.id)} onPdf={() => downloadPdf(invoice)} onValidate={() => handleValidate(invoice.id)} onDelete={() => setToDelete(invoice)} />
+                    <ActionsMenu invoice={invoice} acting={actingId === invoice.id} onView={() => setViewingId(invoice.id)} onPdf={() => downloadPdf(invoice)} onValidate={() => handleValidate(invoice.id)} onDelete={canDelete(invoice) ? () => setToDelete(invoice) : undefined} />
                     {toDelete?.id === invoice.id && (
                       <ConfirmModal
                         open
@@ -327,7 +334,7 @@ function DueBadge({ invoice, small }: { invoice: Invoice; small?: boolean }) {
 }
 
 /** Actions d'une facture, dans un menu « ⋯ » comme pour les devis. */
-function ActionsMenu({ invoice, acting, onView, onPdf, onValidate, onDelete }: { invoice: Invoice; acting: boolean; onView: () => void; onPdf: () => void; onValidate: () => void; onDelete: () => void }) {
+function ActionsMenu({ invoice, acting, onView, onPdf, onValidate, onDelete }: { invoice: Invoice; acting: boolean; onView: () => void; onPdf: () => void; onValidate: () => void; onDelete?: () => void }) {
   const item = "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50";
   return (
     <Popover>
@@ -359,9 +366,11 @@ function ActionsMenu({ invoice, acting, onView, onPdf, onValidate, onDelete }: {
             <CheckCircle2 className="size-3.5" /> Valider
           </button>
         )}
-        <button type="button" onClick={onDelete} className={cn(item, "text-destructive")}>
-          <Trash2 className="size-3.5" /> Supprimer
-        </button>
+        {onDelete && (
+          <button type="button" onClick={onDelete} className={cn(item, "text-destructive")}>
+            <Trash2 className="size-3.5" /> Supprimer
+          </button>
+        )}
       </PopoverContent>
     </Popover>
   );

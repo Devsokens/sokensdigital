@@ -1049,3 +1049,39 @@ class PaymentAmountRulesTests(APITestCase):
     def test_negative_amount_is_refused(self):
         response = self._create(Decimal('-50'))
         self.assertEqual(response.status_code, 400)
+
+
+class InvoiceListPerfAndFlagsTests(__import__('rest_framework.test', fromlist=['APITestCase']).APITestCase):
+    def test_list_is_constant_queries_and_paid_is_correct(self):
+        from decimal import Decimal
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        from django.utils import timezone
+        from rest_framework.test import APIClient
+        from administration.models import Client
+        from core.constants import ROLE_COMPTABLE
+        from core.models import Role, User
+        from finance.models import Invoice, Payment
+
+        user = User.objects.create(email='perf@x.dev')
+        user.roles.add(Role.objects.get_or_create(name=ROLE_COMPTABLE)[0])
+        api = APIClient(); api.force_authenticate(user=user)
+
+        def make(n):
+            for i in range(n):
+                inv = Invoice.objects.create(client=Client.objects.create(company_name=f'C{i}'), client_name='C',
+                                             amount_ht=Decimal('1000'), created_by=user)
+                Invoice.objects.filter(pk=inv.pk).update(status=Invoice.Status.VALIDEE)
+                Payment.objects.create(invoice=inv, amount=Decimal('100'), payment_date=timezone.now().date(),
+                                       payment_method='VIREMENT', status=Payment.Status.RECU)
+
+        make(2)
+        with CaptureQueriesContext(connection) as small:
+            api.get('/api/v1/finance/invoices/')
+        make(6)
+        with CaptureQueriesContext(connection) as big:
+            res = api.get('/api/v1/finance/invoices/')
+        self.assertEqual(len(big), len(small), ' || '.join(q['sql'][:160] for q in big.captured_queries))  # pas de requête par facture
+        rows = res.json().get('results', res.json())
+        self.assertTrue(all(Decimal(r['amount_paid']) == Decimal('100') for r in rows))
+        self.assertTrue(all(r['is_subscription'] is False for r in rows))

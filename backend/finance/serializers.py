@@ -217,6 +217,8 @@ class InvoiceSerializer(serializers.ModelSerializer):
     client_company_name = serializers.CharField(source='client.company_name', read_only=True, allow_null=True)
     quote_number = serializers.CharField(source='quote.quote_number', read_only=True, allow_null=True)
     amount_paid = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    # Facture d'un mois d'abonnement : suppression réservée au Super-Admin.
+    is_subscription = serializers.SerializerMethodField()
     # Adresses proposées à l'envoi : client, puis demande (lead) du devis lié.
     contact_emails = serializers.SerializerMethodField()
     # Calculé à partir des lignes quand il y en a : facultatif à la saisie.
@@ -228,7 +230,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
             'id', 'invoice_number', 'client', 'client_name', 'client_company_name', 'quote', 'quote_number',
             'issue_date', 'due_date', 'lines', 'discount_amount', 'discount_reason', 'document_color',
             'amount_ht', 'vat_rate', 'vat_amount', 'css_rate', 'css_amount', 'extra_taxes', 'amount_ttc', 'amount_paid',
-            'contact_emails', 'status', 'created_by', 'validated_by', 'validated_at', 'created_at',
+            'is_subscription', 'contact_emails', 'status', 'created_by', 'validated_by', 'validated_at', 'created_at',
         ]
         read_only_fields = [
             'invoice_number', 'vat_amount', 'css_amount', 'amount_ttc', 'status', 'created_by', 'validated_by', 'validated_at',
@@ -255,6 +257,9 @@ class InvoiceSerializer(serializers.ModelSerializer):
         elif data.get('amount_ht', getattr(instance, 'amount_ht', None)) is None:
             raise serializers.ValidationError({'lines': 'Ajoutez au moins une ligne.'})
         return data
+
+    def get_is_subscription(self, obj):
+        return getattr(obj, 'service_period', None) is not None
 
     def get_contact_emails(self, obj):
         emails = []

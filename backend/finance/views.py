@@ -522,9 +522,21 @@ class JournalEntryViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixi
     destroy=extend_schema(tags=['Finance & Comptabilité'], summary='Delete a draft invoice'),
 )
 class InvoiceViewSet(viewsets.ModelViewSet):
-    queryset = Invoice.objects.select_related('created_by', 'validated_by')
     serializer_class = InvoiceSerializer
     permission_classes = [IsFinanceRole]
+
+    def get_queryset(self):
+        # Une requête pour toute la liste : client, devis + lead (adresses
+        # d'envoi), période d'abonnement, et le payé agrégé en SQL au lieu
+        # d'un SUM par facture.
+        qs = Invoice.objects.select_related('created_by', 'validated_by', 'client', 'quote__lead', 'service_period')
+        if self.action != 'list':
+            # Détail / actions : le payé est relu en base (un versement créé
+            # pendant la requête doit compter).
+            return qs
+        return qs.annotate(paid_total=Sum('payments__amount', filter=Q(payments__status__in=[
+            Payment.Status.RECU, Payment.Status.ENREGISTRE,
+        ])))
 
     def perform_create(self, serializer):
         invoice = serializer.save(created_by=self.request.user)

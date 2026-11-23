@@ -349,6 +349,9 @@ class Invoice(LoggedModel):
     @property
     def amount_paid(self) -> Decimal:
         """Versements reçus ou enregistrés en comptabilité (pas ceux en attente)."""
+        # Liste : agrégat SQL déjà calculé par InvoiceViewSet.get_queryset.
+        if 'paid_total' in self.__dict__:
+            return self.__dict__['paid_total'] or Decimal('0')
         paid = self.payments.filter(
             status__in=[Payment.Status.RECU, Payment.Status.ENREGISTRE],
         ).aggregate(total=models.Sum('amount'))['total']

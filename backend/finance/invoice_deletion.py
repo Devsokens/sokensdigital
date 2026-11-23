@@ -69,4 +69,7 @@ def invalidate_dashboards(*args, **kwargs):
     """Analytique Finance et tableau de bord global : données réelles après
     toute écriture, facture ou versement (création, modification, suppression)."""
     from django.core.cache import cache
+    # Tout de suite, puis de nouveau après commit : entre les deux, une
+    # requête concurrente a pu remettre en cache les anciens chiffres.
     cache.delete_many(DASHBOARD_CACHE_KEYS)
+    transaction.on_commit(lambda: cache.delete_many(DASHBOARD_CACHE_KEYS))

@@ -405,3 +405,19 @@ class FinanceInvoiceDeletionTests(APITestCase):
         sa = _client(_user('sa-findel2@x.dev', ROLE_SUPER_ADMIN))
         self.assertEqual(sa.delete(f'/api/v1/finance/invoices/{self.invoice.pk}/').status_code, 409)
         self.assertTrue(Invoice.objects.filter(pk=self.invoice.pk).exists())
+
+
+class DashboardCacheTests(APITestCase):
+    def test_subscription_change_clears_global_dashboard_after_commit(self):
+        from django.core.cache import cache
+        from core.views import GLOBAL_DASHBOARD_CACHE_KEY
+        sub = Subscription.objects.create(client=Client.objects.create(company_name='F'),
+                                          offer=ServiceOffer.objects.get(code='com-pro'), start_date=date(2026, 11, 1))
+        cache.set(GLOBAL_DASHBOARD_CACHE_KEY, {'stale': True}, 300)
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            sub.status = Subscription.Status.RESILIE
+            sub.save()
+            self.assertIsNone(cache.get(GLOBAL_DASHBOARD_CACHE_KEY))
+            cache.set(GLOBAL_DASHBOARD_CACHE_KEY, {'stale': True}, 300)  # course concurrente
+        self.assertTrue(callbacks)
+        self.assertIsNone(cache.get(GLOBAL_DASHBOARD_CACHE_KEY))  # revidé après commit

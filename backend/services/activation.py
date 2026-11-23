@@ -48,9 +48,8 @@ def on_invoice_paid(invoice) -> bool:
 
 
 def _invalidate_dashboard():
-    from django.core.cache import cache
-    from core.views import GLOBAL_DASHBOARD_CACHE_KEY
-    cache.delete(GLOBAL_DASHBOARD_CACHE_KEY)
+    from finance.invoice_deletion import invalidate_dashboards
+    invalidate_dashboards()
 
 
 def _notify_opening(period):

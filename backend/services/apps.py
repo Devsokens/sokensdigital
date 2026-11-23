@@ -18,4 +18,15 @@ class ServicesConfig(AppConfig):
                 from services.activation import on_invoice_paid
                 on_invoice_paid(instance.invoice)
 
+        # Tableau de bord global (clé `subscriptions`) : abonnements actifs,
+        # revenu récurrent, mois impayés — à jour dès qu'un abonnement ou une
+        # période change (création, suspension, résiliation, suppression).
+        from django.db.models.signals import post_delete
+
+        from finance.invoice_deletion import invalidate_dashboards
+        from services.models import ServicePeriod, Subscription
+        for model in (Subscription, ServicePeriod):
+            post_save.connect(invalidate_dashboards, sender=model, dispatch_uid=f'svc-dash-save-{model.__name__}')
+            post_delete.connect(invalidate_dashboards, sender=model, dispatch_uid=f'svc-dash-del-{model.__name__}')
+
         post_save.connect(payment_saved, sender=Payment, dispatch_uid='services_open_period_on_payment')

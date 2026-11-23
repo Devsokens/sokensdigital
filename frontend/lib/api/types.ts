@@ -966,6 +966,8 @@ export interface Invoice {
   amount_ttc: string;
   /** Versements reçus ou enregistrés. */
   amount_paid: string;
+  /** Facture d'un mois d'abonnement (suppression : Super-Admin uniquement). */
+  is_subscription?: boolean;
   /** Adresses proposées à l'envoi : client, puis demande du devis lié. */
   contact_emails: string[];
   status: InvoiceStatus;

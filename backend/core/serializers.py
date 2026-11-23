@@ -74,7 +74,11 @@ class UserBriefSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         from core.constants import ROLE_SUPER_ADMIN
         from core.permissions import has_role
-        if not (request and has_role(request.user, ROLE_SUPER_ADMIN)):
+        # Calculé une fois par réponse (contexte partagé par toute la liste),
+        # pas une requête SQL par utilisateur affiché.
+        if '_viewer_is_super_admin' not in self.context:
+            self.context['_viewer_is_super_admin'] = bool(request and has_role(request.user, ROLE_SUPER_ADMIN))
+        if not self.context['_viewer_is_super_admin']:
             data.pop('is_gerant', None)
             data.pop('is_rcf', None)
         return data
