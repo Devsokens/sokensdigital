@@ -116,27 +116,40 @@ class SubscriptionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixi
                                         details={'from': before, 'to': sub.status})
 
     def destroy(self, request, *args, **kwargs):
-        """Suppression définitive : Super-Admin uniquement, quel que soit le
-        pôle. Supprime les périodes et livrables ; les factures émises sont
-        conservées (pièces comptables), seul leur lien à la période disparaît."""
+        """Suppression complète : Super-Admin uniquement, quel que soit le
+        pôle. Supprime l'abonnement, ses périodes et livrables, et les
+        factures de ses périodes (versements, reçus, pièces jointes,
+        écritures de vente). Refusée en bloc (409) si la comptabilité ne
+        peut pas être défaite proprement — voir services.deletion."""
         from core.constants import ROLE_SUPER_ADMIN
         from core.permissions import has_role
+        from services.activation import _invalidate_dashboard
+        from services.deletion import blocking_reasons, delete_subscription
+
         sub = self.get_object()
         if not has_role(request.user, ROLE_SUPER_ADMIN):
             return _forbidden("Seul un Super-Administrateur peut supprimer un abonnement.")
-        invoices = [p.invoice.invoice_number for p in sub.periods.select_related('invoice') if p.invoice_id]
-        AuditLog.objects.log_action(
-            request.user, 'ABONNEMENT_SUPPRIME', 'Subscription', sub.pk,
-            details={'client': sub.client.company_name, 'offer': sub.offer.code, 'pole': sub.offer.pole,
-                     'periods': sub.periods.count(), 'invoices_kept': invoices},
-            ip_address=request.META.get('REMOTE_ADDR'),
-        )
-        with transaction.atomic():
-            for period in sub.periods.all():
-                period.deliverables.all().delete()
-            sub.periods.all().delete()
-            sub.delete(user=request.user, ip_address=request.META.get('REMOTE_ADDR'))
-        from services.activation import _invalidate_dashboard
+        reasons = blocking_reasons(sub)
+        if reasons:
+            return Response({
+                'detail': 'Suppression impossible sans fausser la comptabilité : ' + ' '.join(reasons),
+                'reasons': reasons,
+            }, status=status.HTTP_409_CONFLICT)
+        snapshot = {'client': sub.client.company_name, 'offer': sub.offer.code, 'pole': sub.offer.pole}
+        sub_pk = sub.pk  # remis à None par delete()
+        ip = request.META.get('REMOTE_ADDR')
+        removed = delete_subscription(sub, request.user, ip)
+        AuditLog.objects.log_action(request.user, 'ABONNEMENT_SUPPRIME', 'Subscription', sub_pk,
+                                    details={**snapshot, **removed}, ip_address=ip)
+        if removed['invoices']:
+            from core.notifications import notify_roles
+            from core.constants import ROLE_COMPTABLE
+            notify_roles(
+                (ROLE_COMPTABLE, ROLE_SUPER_ADMIN),
+                title='Abonnement supprimé avec ses factures',
+                message=f"{snapshot['client']} : factures {', '.join(removed['invoices'])} supprimées (versements et écritures compris).",
+                notification_type='GENERAL', link='/admin/finance/facturation', email=True, exclude=request.user,
+            )
         _invalidate_dashboard()
         return Response(status=status.HTTP_204_NO_CONTENT)
 

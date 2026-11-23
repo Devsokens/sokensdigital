@@ -113,7 +113,7 @@ export function SubscriptionDetail({ id, backHref }: { id: string; backHref: str
         {isSuperAdmin && (
           <ConfirmModal
             title="Supprimer l'abonnement"
-            description={`L'abonnement « ${sub.offer_name} » de ${sub.client_name} sera supprimé définitivement, avec ses ${periods.length} période(s) et leurs livrables. Les factures déjà émises sont conservées en Finance.`}
+            description={`L'abonnement « ${sub.offer_name} » de ${sub.client_name} sera supprimé définitivement, avec ses ${periods.length} période(s), leurs livrables et leurs factures (versements, reçus, écritures comptables compris). Refusé si une facture est dans une période comptable clôturée, rapprochée en banque ou encaissée en trésorerie.`}
             confirmLabel="Supprimer"
             requireTyping="SUPPRIMER"
             onConfirm={async () => {

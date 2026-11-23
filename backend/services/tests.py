@@ -228,10 +228,11 @@ class CoherenceTests(APITestCase):
 
 
 class DeletionTests(APITestCase):
-    def test_only_super_admin_deletes_and_invoices_are_kept(self):
+    def test_only_super_admin_deletes_and_invoices_go_too(self):
         client_co = Client.objects.create(company_name='Del')
         for code in ('com-pro', 'maintenance-pro'):
             sub = Subscription.objects.create(client=client_co, offer=ServiceOffer.objects.get(code=code), start_date=date(2026, 11, 1))
+            sub_pk = sub.pk
             sa = _client(_user(f'sa-del-{code}@x.dev', ROLE_SUPER_ADMIN))
             period = ServicePeriod.objects.get(pk=sa.post(f'{BASE}/subscriptions/{sub.pk}/generate-invoice/', {}, format='json').json()['id'])
             invoice_id = period.invoice_id
@@ -242,8 +243,51 @@ class DeletionTests(APITestCase):
             self.assertEqual(sa.delete(f'{BASE}/subscriptions/{sub.pk}/').status_code, 204)
             self.assertFalse(Subscription.objects.filter(pk=sub.pk).exists())
             self.assertFalse(ServicePeriod.objects.filter(pk=period.pk).exists())
-            self.assertTrue(Invoice.objects.filter(pk=invoice_id).exists())
-            self.assertTrue(AuditLog.objects.filter(action='ABONNEMENT_SUPPRIME', entity_id=str(sub.pk)).exists())
+            self.assertFalse(Invoice.objects.filter(pk=invoice_id).exists())
+            self.assertTrue(AuditLog.objects.filter(action='ABONNEMENT_SUPPRIME', entity_id=str(sub_pk)).exists())
+
+
+class CleanDeletionTests(APITestCase):
+    def setUp(self):
+        from finance.models import AccountingPeriod
+        self.sa = _client(_user('sa-clean@x.dev', ROLE_SUPER_ADMIN))
+        self.acc_period = AccountingPeriod.objects.create(
+            label='2026-T', start_date=date(2026, 1, 1), end_date=date(2026, 12, 31),
+        )
+        self.sub = Subscription.objects.create(client=Client.objects.create(company_name='Clean'),
+                                               offer=ServiceOffer.objects.get(code='com-pro'), start_date=date(2026, 11, 1))
+        period = ServicePeriod.objects.get(pk=self.sa.post(f'{BASE}/subscriptions/{self.sub.pk}/generate-invoice/', {}, format='json').json()['id'])
+        self.invoice = period.invoice
+        res = self.sa.post(f'/api/v1/finance/invoices/{self.invoice.pk}/validate/', {}, format='json')
+        self.assertEqual(res.status_code, 200, res.content)
+        res = self.sa.post(f'/api/v1/finance/invoices/{self.invoice.pk}/mark-paid/', {}, format='json')
+        self.assertEqual(res.status_code, 200, res.content)
+
+    def test_paid_and_posted_invoice_is_removed_with_its_entries(self):
+        from finance.models import JournalEntry, Payment as P, TransactionLine
+        self.assertTrue(JournalEntry.objects.filter(source_invoice=self.invoice).exists())
+        res = self.sa.delete(f'{BASE}/subscriptions/{self.sub.pk}/')
+        self.assertEqual(res.status_code, 204, res.content)
+        self.assertFalse(Invoice.objects.filter(pk=self.invoice.pk).exists())
+        self.assertFalse(P.objects.filter(invoice_id=self.invoice.pk).exists())
+        self.assertFalse(JournalEntry.objects.filter(label__contains=self.invoice.invoice_number).exists())
+        self.assertFalse(TransactionLine.objects.filter(label__contains=self.invoice.invoice_number).exists())
+
+    def test_closed_accounting_period_blocks_everything(self):
+        from finance.models import AccountingPeriod
+        AccountingPeriod.objects.filter(pk=self.acc_period.pk).update(status=AccountingPeriod.Status.CLOTUREE)
+        res = self.sa.delete(f'{BASE}/subscriptions/{self.sub.pk}/')
+        self.assertEqual(res.status_code, 409)
+        self.assertTrue(Subscription.objects.filter(pk=self.sub.pk).exists())
+        self.assertTrue(Invoice.objects.filter(pk=self.invoice.pk).exists())
+
+    def test_treasury_entry_blocks(self):
+        from treasury.models import CashEntry
+        payment = self.invoice.payments.first()
+        CashEntry.objects.create(type=CashEntry.Type.ENTREE, source=CashEntry.Source.CLIENT_ESPECES,
+                                 amount=payment.amount, payment=payment)
+        self.assertEqual(self.sa.delete(f'{BASE}/subscriptions/{self.sub.pk}/').status_code, 409)
+        self.assertTrue(Invoice.objects.filter(pk=self.invoice.pk).exists())
 
 
 class CronEndpointTests(APITestCase):
