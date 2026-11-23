@@ -250,7 +250,7 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
           {current && (
             <PaymentStatus
               totals={totals}
-              canPay={!!current && totals.due > 0}
+              canPay={!!current && current.status !== "BROUILLON" && totals.due > 0}
               payMethod={payMethod}
               onPayMethod={setPayMethod}
               paying={paying}

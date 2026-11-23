@@ -30,7 +30,9 @@ def on_invoice_paid(invoice) -> bool:
     period = ServicePeriod.objects.filter(invoice=invoice).select_related('subscription__offer').first()
     if not period or period.status != ServicePeriod.Status.EN_ATTENTE_PAIEMENT:
         return False
-    if invoice.amount_paid < invoice.amount_ttc:
+    # Défense en profondeur : seule une facture validée (écriture passée)
+    # et entièrement payée ouvre la période.
+    if invoice.status != invoice.Status.VALIDEE or invoice.amount_paid < invoice.amount_ttc:
         return False
     with transaction.atomic():
         locked = ServicePeriod.objects.select_for_update().get(pk=period.pk)
@@ -40,8 +42,15 @@ def on_invoice_paid(invoice) -> bool:
         locked.status = ServicePeriod.Status.OUVERT
         locked.opened_at = timezone.now()
         locked.save(update_fields=['quotas_alloues', 'status', 'opened_at'])
+    _invalidate_dashboard()
     _notify_opening(locked)
     return True
+
+
+def _invalidate_dashboard():
+    from django.core.cache import cache
+    from core.views import GLOBAL_DASHBOARD_CACHE_KEY
+    cache.delete(GLOBAL_DASHBOARD_CACHE_KEY)
 
 
 def _notify_opening(period):

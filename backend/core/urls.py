@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from core.analytics_views import MarketingAnalyticsView, TechniqueAnalyticsView
 from core.attachment_views import DocumentAttachmentViewSet
+from core.cron_views import run_daily_jobs
 from core.email_template_views import EmailTemplateDetailView, EmailTemplateListView
 from core.views import (
     AuditLogViewSet,
@@ -40,6 +41,7 @@ router.register('attachments', DocumentAttachmentViewSet, basename='attachment')
 # Feature endpoints get added here as they're built, one at a time.
 urlpatterns = [
     path('health/', health_check, name='health-check'),
+    path('cron/daily/', run_daily_jobs, name='cron-daily'),
     path('search/', global_search, name='global-search'),
     path('dashboard/', global_dashboard, name='global-dashboard'),
     path('auth/me/', MeView.as_view(), name='me'),

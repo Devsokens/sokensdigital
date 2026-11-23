@@ -104,7 +104,10 @@ export function InvoicePayments({ invoice, onChanged }: { invoice: Invoice; onCh
           </span>
         </div>
 
-        {!settled && (
+        {!settled && invoice.status === "BROUILLON" && (
+          <span className="text-xs text-neutral-500">Validez la facture avant d&apos;enregistrer un versement.</span>
+        )}
+        {!settled && invoice.status !== "BROUILLON" && (
           <Button
             type="button"
             onClick={() => setShowForm((v) => !v)}

@@ -707,6 +707,10 @@ class InvoiceViewSetTests(APITestCase):
 
     def test_mark_paid_records_remaining_amount(self):
         invoice = Invoice.objects.create(client_name='Work Class', issue_date=datetime.date(2026, 7, 15), amount_ht=Decimal('360000'), vat_rate=Decimal('0'), css_rate=Decimal('0'))
+        # Brouillon : encaissement refusé tant que la facture n'est pas validée.
+        refused = self.client_comptable.post(f'/api/v1/finance/invoices/{invoice.id}/mark-paid/', {}, format='json')
+        self.assertEqual(refused.status_code, 400)
+        Invoice.objects.filter(pk=invoice.pk).update(status=Invoice.Status.VALIDEE)
         Payment.objects.create(invoice=invoice, amount=Decimal('180000'), payment_date=datetime.date(2026, 7, 16), payment_method='ESPECES', status=Payment.Status.RECU)
 
         response = self.client_comptable.post(f'/api/v1/finance/invoices/{invoice.id}/mark-paid/', {'payment_method': 'VIREMENT'}, format='json')
@@ -962,6 +966,19 @@ class FecExportAndDashboardTests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
 
+class PaymentBeforeValidationTests(APITestCase):
+    def test_payment_on_draft_invoice_is_refused(self):
+        user = User.objects.create(email='cpt-draft@sokens.test')
+        user.roles.add(Role.objects.get_or_create(name=ROLE_COMPTABLE)[0])
+        self.client.force_authenticate(user=user)
+        invoice = Invoice.objects.create(client_name='X', issue_date=datetime.date(2026, 7, 15), amount_ht=Decimal('1000'))
+        res = self.client.post(f'/api/v1/finance/invoices/{invoice.id}/payments/', {
+            'amount': '100', 'payment_date': '2026-07-20', 'payment_method': 'VIREMENT',
+        }, format='json')
+        self.assertEqual(res.status_code, 400)
+        self.assertFalse(invoice.payments.exists())
+
+
 class PaymentAmountRulesTests(APITestCase):
     """Regles de montant sur les versements partiels.
 
@@ -979,6 +996,7 @@ class PaymentAmountRulesTests(APITestCase):
             client_name='Acme SARL',
             issue_date=datetime.date(2026, 7, 15),
             amount_ht=Decimal('1000'),
+            status=Invoice.Status.VALIDEE,
         )
         self.invoice.refresh_from_db()
         self.list_url = f'/api/v1/finance/invoices/{self.invoice.id}/payments/'

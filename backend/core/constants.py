@@ -97,9 +97,11 @@ MODULES = [
     ('projets-soumis', 'Projets soumis', 'Marketing & Commercial'),
     ('devis', 'Devis', 'Marketing & Commercial'),
     ('analytique-marketing', 'Analytique web', 'Marketing & Commercial'),
+    ('abonnements-communication', 'Abonnements communication', 'Marketing & Commercial'),
     ('projets', 'Gestion de projet', 'Technique'),
     ('timesheets', 'Timesheets', 'Technique'),
     ('maintenance', 'Maintenance', 'Technique'),
+    ('abonnements-maintenance', 'Abonnements maintenance', 'Technique'),
     ('decaissements', 'Décaissements', 'Technique'),
     ('cahier-des-charges', 'Cahier des charges', 'Technique'),
     ('analytique-technique', 'Analytique web', 'Technique'),
@@ -143,6 +145,7 @@ def _merge(*dicts):
 DEFAULT_ROLE_PERMISSIONS = {
     ROLE_SUPER_ADMIN: _full(*_ALL_MODULE_KEYS),
     ROLE_RESPONSABLE_OPERATIONS: _merge(
+        _full('abonnements-maintenance'),
         _read_only('dashboard', 'audit-log', 'analytique-technique', 'clients'),
         {'messagerie': ['voir', 'creer']},
         {'agenda': ['voir', 'creer', 'modifier']},
@@ -151,6 +154,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         {'tickets': ['voir', 'modifier']},
     ),
     ROLE_RESPONSABLE_TECHNIQUE: _merge(
+        _full('abonnements-maintenance'),
         _read_only('dashboard', 'analytique-technique', 'clients'),
         {'messagerie': ['voir', 'creer']},
         {'agenda': ['voir', 'creer', 'modifier']},
@@ -160,6 +164,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         {'decaissements': ['voir', 'creer']},
     ),
     ROLE_RESPONSABLE_MARKETING_COM: _merge(
+        _full('abonnements-communication'),
         _read_only('dashboard', 'marketing-dashboard', 'analytique-marketing'),
         {'messagerie': ['voir', 'creer']},
         {'agenda': ['voir', 'creer', 'modifier']},
@@ -193,6 +198,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         _full('cahier-des-charges'),
     ),
     ROLE_COMMERCIAL: _merge(
+        _read_only('abonnements-communication'),
         _read_only('dashboard', 'analytique-marketing'),
         {'messagerie': ['voir', 'creer']},
         {'agenda': ['voir', 'creer', 'modifier']},
@@ -202,6 +208,7 @@ DEFAULT_ROLE_PERMISSIONS = {
         {'projets-soumis': ['voir', 'creer', 'modifier']},
     ),
     ROLE_COMPTABLE: _merge(
+        _read_only('abonnements-communication', 'abonnements-maintenance'),
         _read_only('dashboard'),
         {'messagerie': ['voir', 'creer']},
         {'agenda': ['voir', 'creer', 'modifier']},

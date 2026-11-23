@@ -1,0 +1,26 @@
+name: Tâches quotidiennes (relances)
+
+# Aucun worker planifié en production : ce workflow appelle chaque jour le
+# point d'entrée protégé du backend (relances devis/factures).
+# Secrets requis : BACKEND_URL (ex. https://api.exemple.com) et CRON_SECRET
+# (même valeur que la variable CRON_SECRET du service backend).
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Appel du backend
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$BACKEND_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Secrets BACKEND_URL / CRON_SECRET absents : rien à faire."; exit 0
+          fi
+          curl --fail --silent --show-error -X POST \
+            -H "X-Cron-Secret: $CRON_SECRET" \
+            "$BACKEND_URL/api/v1/cron/daily/"

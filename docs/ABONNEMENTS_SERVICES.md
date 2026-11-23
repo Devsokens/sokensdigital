@@ -19,8 +19,10 @@ converti en HT).
 2. « Générer la facture du mois » (manuel) : crée la période et sa facture
    BROUILLON (TTC exact de l'offre, taux TVA/CSS en vigueur). Impossible
    tant qu'une période précédente attend son paiement.
-3. Paiement complet de la facture (Finance) → la période s'ouvre
-   automatiquement, quotas figés (+ report éventuel), notification.
+3. Le Comptable **valide** la facture (écriture des ventes), puis encaisse
+   (aucun paiement n'est accepté sur un brouillon). Facture validée et
+   entièrement payée → la période s'ouvre automatiquement, quotas figés
+   (+ report éventuel), notification.
 4. Livrables : Brouillon → Contrôle interne → Validé client → Publié
    (Livré pour la maintenance). Le quota n'est consommé qu'à la
    publication / livraison ; au-delà, refus → devis complémentaire.

@@ -124,6 +124,32 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'consumed': {k: float(v) for k, v in period.consumed().items()},
         }
 
+    def validate(self, attrs):
+        client = attrs.get('client', getattr(self.instance, 'client', None))
+        offer = attrs.get('offer', getattr(self.instance, 'offer', None))
+        app = attrs.get('maintained_app', getattr(self.instance, 'maintained_app', None))
+        quote = attrs.get('quote', getattr(self.instance, 'quote', None))
+        if 'quote' in attrs and quote is not None:
+            if quote.status != quote.Status.ACCEPTE:
+                raise serializers.ValidationError({'quote': 'Seul un devis accepté peut ouvrir un abonnement.'})
+            quote_client = getattr(quote.lead, 'client_id', None) if quote.lead_id else None
+            if quote_client and client and quote_client != client.pk:
+                raise serializers.ValidationError({'quote': "Ce devis appartient à un autre client."})
+        status = attrs.get('status', getattr(self.instance, 'status', Subscription.Status.ACTIVE))
+        if client and offer and status != Subscription.Status.RESILIE:
+            dup = Subscription.objects.filter(client=client, offer=offer, maintained_app=app).exclude(
+                status=Subscription.Status.RESILIE,
+            )
+            if self.instance:
+                dup = dup.exclude(pk=self.instance.pk)
+            if dup.exists():
+                raise serializers.ValidationError(
+                    'Ce client a déjà un abonnement en cours à cette formule'
+                    + (' pour cette application.' if app else '.')
+                    + ' Modifiez-le ou résiliez-le plutôt que d’en créer un second.'
+                )
+        return attrs
+
     def validate_offer(self, offer):
         if offer.kind == offer.Kind.PONCTUEL:
             raise serializers.ValidationError('Une prestation ponctuelle se facture directement, sans abonnement.')

@@ -62,6 +62,9 @@ class SubscriptionFlowTests(APITestCase):
 
     def _pay(self, period, amount=None):
         invoice = Invoice.objects.get(pk=period.invoice_id)
+        if invoice.status == Invoice.Status.BROUILLON:
+            Invoice.objects.filter(pk=invoice.pk).update(status=Invoice.Status.VALIDEE)
+            invoice.refresh_from_db()
         Payment.objects.create(invoice=invoice, amount=amount or invoice.amount_ttc, payment_date=timezone.now().date(),
                                payment_method='VIREMENT', status=Payment.Status.RECU)
         period.refresh_from_db()
@@ -186,3 +189,53 @@ class PermissionTests(APITestCase):
         self.assertEqual(len(data['unpaid_started']), 1)
         self.assertEqual([t['title'] for t in data['sla_overdue']], ['Site en panne'])
         self.assertIn('COMMUNICATION', data['mrr'])
+
+
+class CoherenceTests(APITestCase):
+    def setUp(self):
+        self.sa = _client(_user('sa-coh@x.dev', ROLE_SUPER_ADMIN))
+        self.client_co = Client.objects.create(company_name='Coh')
+        self.offer = ServiceOffer.objects.get(code='com-pro')
+
+    def _create(self, **extra):
+        data = {'client': self.client_co.pk, 'offer': self.offer.pk, 'start_date': '2026-12-01', **extra}
+        return self.sa.post(f'{BASE}/subscriptions/', data, format='json')
+
+    def test_duplicate_active_subscription_refused(self):
+        self.assertEqual(self._create().status_code, 201)
+        self.assertEqual(self._create().status_code, 400)
+
+    def test_quote_must_be_accepted(self):
+        from marketing.models import Quote
+        quote = Quote.objects.create(client_name='Coh')
+        self.assertEqual(self._create(quote=str(quote.pk)).status_code, 400)
+        Quote.objects.filter(pk=quote.pk).update(status=Quote.Status.ACCEPTE)
+        self.assertEqual(self._create(quote=str(quote.pk)).status_code, 201)
+
+    def test_paid_draft_does_not_open_period_until_validated(self):
+        from services.activation import on_invoice_paid
+        sub = Subscription.objects.create(client=self.client_co, offer=self.offer, start_date=date(2026, 11, 1))
+        period = ServicePeriod.objects.get(pk=self.sa.post(f'{BASE}/subscriptions/{sub.pk}/generate-invoice/', {}, format='json').json()['id'])
+        invoice = period.invoice
+        # Paiement direct en base sur un brouillon (ancien comportement) : pas d'ouverture.
+        Payment.objects.create(invoice=invoice, amount=invoice.amount_ttc, payment_date=timezone.now().date(),
+                               payment_method='VIREMENT', status=Payment.Status.RECU)
+        period.refresh_from_db()
+        self.assertEqual(period.status, ServicePeriod.Status.EN_ATTENTE_PAIEMENT)
+        Invoice.objects.filter(pk=invoice.pk).update(status=Invoice.Status.VALIDEE)
+        invoice.refresh_from_db()
+        self.assertTrue(on_invoice_paid(invoice))
+
+
+class CronEndpointTests(APITestCase):
+    def test_cron_requires_secret(self):
+        import os
+        from unittest.mock import patch
+        url = '/api/v1/cron/daily/'
+        with patch.dict(os.environ, {'CRON_SECRET': ''}):
+            self.assertEqual(self.client.post(url).status_code, 404)
+        with patch.dict(os.environ, {'CRON_SECRET': 's3cret'}):
+            self.assertEqual(self.client.post(url, HTTP_X_CRON_SECRET='bad').status_code, 403)
+            res = self.client.post(url, HTTP_X_CRON_SECRET='s3cret')
+            self.assertEqual(res.status_code, 200)
+            self.assertIn('send_quote_and_invoice_reminders', res.json())

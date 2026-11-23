@@ -139,6 +139,12 @@ def _notify_besoin_requester(disbursement):
     )
 
 
+# Un encaissement suppose une facture validée : la validation passe
+# l'écriture des ventes (411/706/TVA/CSS) ; encaisser un brouillon laissait
+# une facture payée sans écriture.
+VALIDATE_BEFORE_PAYMENT = "Validez d'abord la facture (écriture comptable) avant d'enregistrer un paiement."
+
+
 class CanInitiateDisbursement(permissions.BasePermission):
     """Initiation d'un besoin : tout employé (rattachement à un projet
     contrôlé dans perform_create). N2/N3 final approval and execution are separate actions
@@ -610,6 +616,8 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         if not has_role(request.user, *COMPTABLE_ROLES, ROLE_SUPER_ADMIN):
             return Response(status=status.HTTP_403_FORBIDDEN)
         invoice = self.get_object()
+        if invoice.status == Invoice.Status.BROUILLON:
+            return Response({'detail': VALIDATE_BEFORE_PAYMENT}, status=status.HTTP_400_BAD_REQUEST)
         due = invoice.amount_ttc - invoice.amount_paid
         if due <= 0:
             return Response({'detail': 'Cette facture est déjà entièrement payée.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -793,6 +801,8 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         invoice.validated_by = request.user
         invoice.validated_at = timezone.now()
         invoice.save(update_fields=['status', 'validated_by', 'validated_at'])
+        from services.activation import on_invoice_paid
+        on_invoice_paid(invoice)
         return Response(InvoiceSerializer(invoice).data)
 
 
@@ -885,6 +895,8 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.Retr
         invoice = self.get_serializer_context().get('invoice')
         if invoice is None:
             raise serializers.ValidationError('Invoice not found')
+        if invoice.status == Invoice.Status.BROUILLON:
+            raise serializers.ValidationError({'detail': VALIDATE_BEFORE_PAYMENT})
         serializer.save(invoice=invoice)
 
     @extend_schema(
@@ -940,12 +952,6 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.Retr
         ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
 
         if total_paid >= payment.invoice.amount_ttc:
-            payment.invoice.status = Invoice.Status.VALIDEE
-            payment.invoice.validated_by = request.user
-            payment.invoice.validated_at = timezone.now()
-            payment.invoice.save()
-
-            # Enregistrement comptable (via signal ou task)
             from core.notifications import notify
             notify(
                 user=request.user,

@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { listAllClients } from "@/lib/api/administration";
 import { listMaintainedApps } from "@/lib/api/maintenance";
+import { listQuotes } from "@/lib/api/marketing";
 import {
   POLE_LABELS, QUOTA_LABELS, KIND_LABELS, PERIOD_STATUS_LABELS,
   apiErrorMessage, createOffer, createSubscription, formatFcfa, getServicesDashboard, listOffers,
@@ -203,12 +204,17 @@ function NewSubscriptionSheet({
 }: { pole: ServicePole; offers: ServiceOffer[]; onClose: () => void; onCreated: () => void }) {
   const [clients, setClients] = useState<{ id: string; company_name: string }[]>([]);
   const [apps, setApps] = useState<{ id: string; name: string }[]>([]);
-  const [form, setForm] = useState({ client: "", offer: offers[0]?.id ?? "", start_date: new Date().toISOString().slice(0, 10), maintained_app: "", networks: "", notes: "" });
+  const [quotes, setQuotes] = useState<{ id: string; quote_number: string; client_name: string }[]>([]);
+  const [form, setForm] = useState({ quote: "", client: "", offer: offers[0]?.id ?? "", start_date: new Date().toISOString().slice(0, 10), maintained_app: "", networks: "", notes: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     listAllClients().then((r) => setClients(r.results)).catch(() => setClients([]));
+    // Devis acceptés : l'abonnement naît d'un devis signé par le client.
+    listQuotes()
+      .then((r) => setQuotes(r.results.filter((q) => q.status === "ACCEPTE")))
+      .catch(() => setQuotes([]));
     if (pole === "MAINTENANCE") listMaintainedApps().then((r) => setApps(r.results)).catch(() => setApps([]));
   }, [pole]);
 
@@ -219,6 +225,7 @@ function NewSubscriptionSheet({
       await createSubscription({
         client: form.client,
         offer: form.offer,
+        quote: form.quote || null,
         start_date: form.start_date,
         maintained_app: form.maintained_app || null,
         networks: form.networks.split(",").map((n) => n.trim()).filter(Boolean),
@@ -237,6 +244,13 @@ function NewSubscriptionSheet({
     <Sheet open onOpenChange={(o) => !o && onClose()}>
       <SheetContent title="Nouvel abonnement">
         <div className="space-y-4">
+          <label className="block">
+            <span className={labelClass}>Devis accepté d&apos;origine</span>
+            <select className={inputClass} value={form.quote} onChange={(e) => setForm({ ...form, quote: e.target.value })}>
+              <option value="">— Sans devis (reprise d&apos;un client existant) —</option>
+              {quotes.map((q) => <option key={q.id} value={q.id}>{q.quote_number} — {q.client_name}</option>)}
+            </select>
+          </label>
           <label className="block">
             <span className={labelClass}>Client</span>
             <select className={inputClass} value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })}>
