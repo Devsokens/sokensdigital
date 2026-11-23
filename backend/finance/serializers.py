@@ -60,6 +60,8 @@ class DisbursementRequestSerializer(serializers.ModelSerializer):
     decided_by = UserBriefSerializer(read_only=True)
     rcf_decided_by = UserBriefSerializer(read_only=True)
     executed_by = UserBriefSerializer(read_only=True)
+    assigned_rcf = UserBriefSerializer(read_only=True)
+    assigned_gerant = UserBriefSerializer(read_only=True)
     project_id = serializers.PrimaryKeyRelatedField(
         source='project', queryset=Project.objects.all(), write_only=True, required=False, allow_null=True,
     )
@@ -83,11 +85,12 @@ class DisbursementRequestSerializer(serializers.ModelSerializer):
             'status', 'rejection_reason', 'rcf_decided_by', 'rcf_decided_at', 'decided_by', 'decided_at',
             'executed_by', 'executed_at', 'created_at',
             'department', 'department_name', 'rcf_signature_url', 'gerant_signature_url',
+            'assigned_rcf', 'assigned_gerant',
         ]
         read_only_fields = [
             'reference', 'project', 'requested_by', 'status', 'rejection_reason', 'rcf_decided_by',
             'rcf_decided_at', 'decided_by', 'decided_at', 'executed_by', 'executed_at',
-            'department', 'rcf_signature_url', 'gerant_signature_url',
+            'department', 'rcf_signature_url', 'gerant_signature_url', 'assigned_rcf', 'assigned_gerant',
         ]
 
     def validate_amount(self, value):

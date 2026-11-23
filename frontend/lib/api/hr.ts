@@ -107,6 +107,14 @@ export function setUserGerant(userId: string, isGerant: boolean) {
   });
 }
 
+/** Désigne ou retire le Responsable Comptabilité & Finance — Super-Admin uniquement. */
+export function setUserRcf(userId: string, isRcf: boolean) {
+  return apiFetch<UserBrief>(`/api/v1/users/${userId}/rcf/`, {
+    method: "POST",
+    body: JSON.stringify({ is_rcf: isRcf }),
+  });
+}
+
 export function listUsers() {
   return apiFetch<Paginated<UserBrief>>("/api/v1/users/");
 }

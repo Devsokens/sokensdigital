@@ -334,7 +334,7 @@
         <table>
             <tr>
                 <th style="width: 33%;">Demandeur</th>
-                <th style="width: 33%;">Directeur financier</th>
+                <th style="width: 33%;">Responsable Comptabilité &amp; Finance{% if current_rcf %} — {{ current_rcf.first_name }} {{ current_rcf.last_name }}{% endif %}</th>
                 <th style="width: 34%;">Gérant{% if current_gerant %} — {{ current_gerant.first_name }} {{ current_gerant.last_name }}{% endif %}</th>
             </tr>
             <tr>
@@ -346,7 +346,10 @@
                     {% if disbursement.rcf_decided_by %}
                         {{ disbursement.rcf_decided_by.first_name }} {{ disbursement.rcf_decided_by.last_name }}<br>
                         Le {{ disbursement.rcf_decided_at|date:"d/m/Y" }}
-                        {% if disbursement.rcf_signature_url %}<br><img src="{{ disbursement.rcf_signature_url }}" alt="Signature du Directeur financier" style="max-height: 60px; max-width: 160px; margin-top: 6px;">{% endif %}
+                        {% if disbursement.rcf_signature_url %}<br><img src="{{ disbursement.rcf_signature_url }}" alt="Signature du Responsable Comptabilité &amp; Finance" style="max-height: 60px; max-width: 160px; margin-top: 6px;">{% endif %}
+                    {% elif current_rcf %}
+                        {{ current_rcf.first_name }} {{ current_rcf.last_name }}<br>
+                        <span style="color: #888;">Signature à la validation</span>
                     {% endif %}
                 </td>
                 <td style="vertical-align: top;">

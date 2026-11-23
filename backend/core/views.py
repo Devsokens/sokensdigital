@@ -745,7 +745,8 @@ class DeactivateUserView(APIView):
         # Un compte désactivé ne garde pas le titre de gérant : le palier
         # retombe sur les Super-Admins (voir core.permissions.is_gerant).
         django_user.is_gerant = False
-        django_user.save(update_fields=['is_active', 'is_gerant'])
+        django_user.is_rcf = False
+        django_user.save(update_fields=['is_active', 'is_gerant', 'is_rcf'])
 
         # Suppression d'un utilisateur = action très critique (décision du
         # 10/09/2026) — e-mail aux Super-Admins en plus du push.
@@ -1319,3 +1320,45 @@ class NotificationsClearReadView(APIView):
             logger.exception('Notifications lues non effacées pour %s', request.user.pk)
             return Response(status=status.HTTP_502_BAD_GATEWAY)
         return Response({'deleted': count})
+
+
+
+class SetRcfView(APIView):
+    """Désigne (ou retire) le Responsable Comptabilité & Finance — Super-Admin
+    uniquement, un seul titulaire (contrainte single_rcf), tracé et notifié.
+    Il signe le premier palier des besoins créés pendant sa désignation."""
+
+    permission_classes = [permissions.IsAuthenticated, IsSuperAdmin]
+
+    def post(self, request, pk):
+        from django.db import transaction
+
+        if not request.user.is_active:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        value = request.data.get('is_rcf')
+        if not isinstance(value, bool):
+            return Response({'detail': 'is_rcf (booléen) est requis.'}, status=status.HTTP_400_BAD_REQUEST)
+        target = User.objects.filter(pk=pk).first()
+        if not target:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if value and not target.is_active:
+            return Response({'detail': 'Un compte désactivé ne peut pas être désigné.'}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            previous = list(User.objects.select_for_update().filter(is_rcf=True).exclude(pk=target.pk))
+            if value:
+                User.objects.filter(pk__in=[u.pk for u in previous]).update(is_rcf=False)
+            target.is_rcf = value
+            target.save(update_fields=['is_rcf'])
+        AuditLog.objects.log_action(
+            request.user, 'RCF_DESIGNE' if value else 'RCF_RETIRE', 'User', target.pk,
+            details={'previous': [str(u.pk) for u in previous] if value else []},
+            ip_address=request.META.get('REMOTE_ADDR'),
+        )
+        name = f'{target.first_name} {target.last_name}'.strip() or target.email
+        notify_roles(
+            (ROLE_SUPER_ADMIN,),
+            title='Responsable Comptabilité & Finance ' + ('désigné' if value else 'retiré'),
+            message=f'{name} ' + ('est désormais le Responsable Comptabilité & Finance.' if value else "n'est plus le Responsable Comptabilité & Finance."),
+            notification_type='GENERAL', link='/admin/rh/utilisateurs', email=True, exclude=request.user,
+        )
+        return Response(UserSerializer(target).data)

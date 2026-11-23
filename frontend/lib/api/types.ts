@@ -14,6 +14,7 @@ export interface UserBrief {
   department_name: string | null;
   /** Présent seulement pour un Super-Admin (masqué aux autres par l'API). */
   is_gerant?: boolean;
+  is_rcf?: boolean;
 }
 
 export interface Department {
@@ -852,6 +853,9 @@ export interface DisbursementQuote {
  * `quotes_count` ; le détail renvoie `quotes` avec leurs URLs. */
 export interface DisbursementRequest {
   id: string;
+  /** Signataires en poste à la création : seuls eux signent leur palier. */
+  assigned_rcf?: UserBrief | null;
+  assigned_gerant?: UserBrief | null;
   department_name?: string | null;
   rcf_signature_url?: string;
   gerant_signature_url?: string;

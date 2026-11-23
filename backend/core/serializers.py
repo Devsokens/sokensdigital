@@ -52,8 +52,8 @@ class UserBriefSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'first_name', 'last_name', 'email', 'avatar_url', 'department_name', 'is_gerant']
-        read_only_fields = ['is_gerant']
+        fields = ['id', 'first_name', 'last_name', 'email', 'avatar_url', 'department_name', 'is_gerant', 'is_rcf']
+        read_only_fields = ['is_gerant', 'is_rcf']
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -63,6 +63,7 @@ class UserBriefSerializer(serializers.ModelSerializer):
         from core.permissions import has_role
         if not (request and has_role(request.user, ROLE_SUPER_ADMIN)):
             data.pop('is_gerant', None)
+            data.pop('is_rcf', None)
         return data
 
 
@@ -89,6 +90,7 @@ class UserSerializer(serializers.ModelSerializer):
             'is_staff',
             'mfa_enabled',
             'is_gerant',
+            'is_rcf',
             'department',
             'permission_overrides',
             'created_at',

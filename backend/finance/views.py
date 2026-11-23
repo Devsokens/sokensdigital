@@ -59,16 +59,21 @@ FINANCE_READ_ROLES = (ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE)
 logger = logging.getLogger(__name__)
 
 
-def _can_decide_stage(user, pending_status):
+def _can_decide_stage(user, pending_status, disbursement=None):
     """Circuit fixe RCF puis Gérant (process comptable et financier,
     "Demande de décaissement") — aucun seuil de montant. Comptable et
     Directeur Financier tiennent lieu de RCF (même convention que
     procurement.views.IsManagerOrAdmin) ; Super-Admin tient lieu de
     Gérant."""
+    # Signataire figé sur la demande (en poste à sa création) : lui seul.
     if pending_status == DisbursementRequest.Status.EN_ATTENTE_RCF:
-        # Première validation : le Directeur financier (Super-Admin en secours).
+        if disbursement is not None and disbursement.assigned_rcf_id:
+            return disbursement.assigned_rcf_id == user.id
+        # Demande antérieure ou aucun responsable désigné à sa création.
         return has_role(user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN)
-    return is_gerant(user)  # EN_ATTENTE_GERANT — gérant désigné, sinon Super-Admin
+    if disbursement is not None and disbursement.assigned_gerant_id:
+        return disbursement.assigned_gerant_id == user.id
+    return is_gerant(user)
 
 
 BESOINS_LINK = '/admin/technique/decaissements'  # suivi côté demandeur
@@ -82,6 +87,20 @@ def _besoin_label(disbursement):
 def _notify_besoin_stage(disbursement, exclude=None):
     """Prévient ceux qui doivent statuer à l'étape en cours : la RCF
     (Comptable, Directeur Financier) puis le Gérant (Super-Admin)."""
+    if disbursement.status == DisbursementRequest.Status.EN_ATTENTE_RCF and disbursement.assigned_rcf_id:
+        if disbursement.assigned_rcf_id != getattr(exclude, 'pk', None):
+            notify(
+                user=disbursement.assigned_rcf, title='Nouveau besoin à examiner', message=_besoin_label(disbursement),
+                notification_type='GENERAL', link=DECAISSEMENTS_LINK,
+            )
+        return
+    if disbursement.status == DisbursementRequest.Status.EN_ATTENTE_GERANT and disbursement.assigned_gerant_id:
+        if disbursement.assigned_gerant_id != getattr(exclude, 'pk', None):
+            notify(
+                user=disbursement.assigned_gerant, title='Besoin à valider (Gérant)', message=_besoin_label(disbursement),
+                notification_type='GENERAL', link=DECAISSEMENTS_LINK,
+            )
+        return
     if disbursement.status == DisbursementRequest.Status.EN_ATTENTE_RCF:
         notify_roles(
             (ROLE_DIRECTEUR_FINANCIER,), title='Nouveau besoin à examiner',
@@ -200,9 +219,12 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
             )
             if not allowed:
                 raise PermissionDenied("Seuls le chef de projet et les membres de l'équipe du projet peuvent lui rattacher un besoin.")
+        from core.models import User as _User
         disbursement = serializer.save(
             requested_by=self.request.user,
             department=self.request.user.department,
+            assigned_rcf=_User.objects.filter(is_rcf=True, is_active=True).first(),
+            assigned_gerant=_User.objects.filter(is_gerant=True, is_active=True).first(),
             status=DisbursementRequest.Status.EN_ATTENTE_RCF,
         )
         _notify_besoin_stage(disbursement, exclude=self.request.user)
@@ -225,7 +247,7 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
         disbursement = self.get_object()
         if disbursement.status not in DisbursementRequest.PENDING_STATUSES:
             return Response({'detail': 'Cette demande a déjà été traitée.'}, status=status.HTTP_400_BAD_REQUEST)
-        if not _can_decide_stage(request.user, disbursement.status):
+        if not _can_decide_stage(request.user, disbursement.status, disbursement):
             return Response(status=status.HTTP_403_FORBIDDEN)
         # Séparation des tâches (pentest du 24/09/2026, F1) : quelqu'un qui
         # cumule le rôle demandeur et un rôle d'approbation (ex: Chef de

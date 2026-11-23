@@ -92,10 +92,11 @@ def generate_disbursement_request_pdf(disbursement):
     from core.models import User
     # Gérant actuel (désigné dans Administration > Utilisateurs) : toujours
     # nommé sur la fiche, même avant sa décision.
-    current_gerant = User.objects.filter(is_gerant=True, is_active=True).first()
+    current_gerant = disbursement.assigned_gerant or User.objects.filter(is_gerant=True, is_active=True).first()
     context = {
         'disbursement': disbursement,
         'current_gerant': current_gerant,
+        'current_rcf': disbursement.assigned_rcf or User.objects.filter(is_rcf=True, is_active=True).first(),
         **_brand_and_qr('besoin', disbursement),
         'company_address': 'Adresse Sokens Digital',
         'now': timezone.now(),

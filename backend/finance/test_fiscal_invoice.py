@@ -1,6 +1,8 @@
 """Mentions fiscales des factures : CSS, montants, QR code signé, vérification publique."""
 from decimal import Decimal
 
+from unittest.mock import patch
+
 from rest_framework.test import APIClient, APITestCase
 
 from administration.models import Client
@@ -152,3 +154,48 @@ class TreasuryDocumentQrTests(APITestCase):
         self.assertEqual(APIClient().get(url, {'t': 'caisse', 'id': str(entry.pk), 's': 'FAUX'}).json(), {'valid': False})
         CashEntry.objects.filter(pk=entry.pk).update(amount=Decimal('1'))
         self.assertFalse(APIClient().get(url, {'t': 'caisse', 'id': str(entry.pk), 's': ctx['control_code']}).json()['valid'])
+
+
+class AssignedSignatoriesTests(APITestCase):
+    """Seuls les signataires en poste à la création de la demande signent."""
+
+    def setUp(self):
+        from core.constants import ROLE_DEVELOPER, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN
+        from core.models import Role, User
+
+        def mk(email, role=None, **kw):
+            u = User.objects.create(email=email, **kw)
+            if role:
+                u.roles.add(Role.objects.get_or_create(name=role)[0])
+            c = APIClient()
+            c.force_authenticate(user=u)
+            return u, c
+
+        self.rcf, self.rcf_c = mk('rcf@x.dev', ROLE_DIRECTEUR_FINANCIER, is_rcf=True)
+        self.other_df, self.other_df_c = mk('df2@x.dev', ROLE_DIRECTEUR_FINANCIER)
+        self.gerant, self.gerant_c = mk('g@x.dev', is_gerant=True)
+        self.admin, self.admin_c = mk('sa@x.dev', ROLE_SUPER_ADMIN)
+        self.dev, self.dev_c = mk('dev@x.dev', ROLE_DEVELOPER)
+        self.sig_patch = patch('core.storage.upload_image', return_value='https://cdn.test/s.png')
+        self.sig_patch.start()
+        self.addCleanup(self.sig_patch.stop)
+
+    def test_only_assigned_signatories(self):
+        sig = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+        res = self.dev_c.post('/api/v1/finance/disbursement-requests/', {
+            'beneficiary_user_id': str(self.dev.id), 'lines': [{'label': 'X', 'quantity': '1', 'unit_price': '1000'}],
+        }, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        url = f"/api/v1/finance/disbursement-requests/{res.json()['id']}/approve/"
+        ok = {'decision': 'APPROUVE', 'signature': sig}
+        # Le gérant change APRÈS la demande : le nouveau ne peut pas signer.
+        from core.models import User
+        User.objects.filter(pk=self.gerant.pk).update(is_gerant=False)
+        new_gerant, new_gerant_c = User.objects.create(email='g2@x.dev', is_gerant=True), APIClient()
+        new_gerant_c.force_authenticate(user=new_gerant)
+        self.assertEqual(self.other_df_c.post(url, ok, format='json').status_code, 403)
+        self.assertEqual(self.admin_c.post(url, ok, format='json').status_code, 403)
+        self.assertEqual(self.rcf_c.post(url, ok, format='json').status_code, 200)
+        self.assertEqual(self.admin_c.post(url, ok, format='json').status_code, 403)
+        self.assertEqual(new_gerant_c.post(url, ok, format='json').status_code, 403)
+        self.assertEqual(self.gerant_c.post(url, ok, format='json').status_code, 200)

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Ban, Crown, Loader2, MoreHorizontal, Pencil, ShieldCheck, Search, Trash2 } from "lucide-react";
-import { listUsers, listDepartments, deactivateUser, deleteUserAccount, setUserGerant } from "@/lib/api/hr";
+import { listUsers, listDepartments, deactivateUser, deleteUserAccount, setUserGerant, setUserRcf } from "@/lib/api/hr";
 import { useAuth } from "@/lib/auth/auth-context";
 import { listProfiles } from "@/lib/firebase/profile";
 import type { Department, UserBrief } from "@/lib/api/types";
@@ -29,6 +29,7 @@ interface MergedUser {
   roles: AppRole[];
   departmentId: string | null;
   isGerant: boolean;
+  isRcf: boolean;
 }
 
 function initials(name: string) {
@@ -69,6 +70,7 @@ export function UserRoleList() {
           roles: profileRoles(profile),
           departmentId: profile?.departmentId ?? null,
           isGerant: Boolean(u.is_gerant),
+          isRcf: Boolean(u.is_rcf),
         };
       });
       setRows(merged);
@@ -138,6 +140,20 @@ export function UserRoleList() {
 
   const myEmail = me?.email?.toLowerCase() ?? "";
 
+  async function handleToggleRcf(row: MergedUser) {
+    const next = !row.isRcf;
+    const message = next
+      ? `Désigner ${row.name || row.email} comme Responsable Comptabilité & Finance ? Il ou elle signera le premier palier des besoins créés à partir de maintenant, et remplacera le titulaire actuel s'il y en a un.`
+      : `Retirer à ${row.name || row.email} le titre de Responsable Comptabilité & Finance ?`;
+    if (!confirm(message)) return;
+    try {
+      await setUserRcf(row.djangoId, next);
+      load();
+    } catch {
+      alert("Impossible de modifier le Responsable Comptabilité & Finance.");
+    }
+  }
+
   function renderContextMenu(row: MergedUser) {
     const isMe = row.email.toLowerCase() === myEmail;
     return (
@@ -151,6 +167,11 @@ export function UserRoleList() {
         {isSuperAdmin && row.roles.length > 0 && (
           <ContextMenuItem icon={Crown} onClick={() => handleToggleGerant(row)}>
             {row.isGerant ? "Retirer le titre de gérant" : "Désigner comme gérant"}
+          </ContextMenuItem>
+        )}
+        {isSuperAdmin && row.roles.length > 0 && (
+          <ContextMenuItem icon={Crown} onClick={() => handleToggleRcf(row)}>
+            {row.isRcf ? "Retirer le titre de Resp. Compta & Finance" : "Désigner Resp. Compta & Finance"}
           </ContextMenuItem>
         )}
         {row.roles.length > 0 && !isMe && (
@@ -249,6 +270,9 @@ export function UserRoleList() {
                           {isSuperAdmin && row.isGerant && (
                             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Gérant</span>
                           )}
+                          {isSuperAdmin && row.isRcf && (
+                            <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">Resp. Compta & Finance</span>
+                          )}
                         </span>
                         <span className="block text-xs text-neutral-400">{row.email}</span>
                       </span>
@@ -303,6 +327,15 @@ export function UserRoleList() {
                               className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50"
                             >
                               {row.isGerant ? "Retirer le titre de gérant" : "Désigner comme gérant"}
+                            </button>
+                          )}
+                          {isSuperAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleRcf(row)}
+                              className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50"
+                            >
+                              {row.isRcf ? "Retirer le titre de Resp. Compta & Finance" : "Désigner Resp. Compta & Finance"}
                             </button>
                           )}
                           <button

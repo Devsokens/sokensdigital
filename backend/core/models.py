@@ -159,6 +159,9 @@ class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
     # titulaire à la fois (contrainte ci-dessous) ; désigné par un
     # Super-Admin depuis Administration > Utilisateurs.
     is_gerant = models.BooleanField(default=False)
+    # Responsable Comptabilité & Finance : premier palier des besoins
+    # (avant le gérant). Un seul titulaire, désigné par un Super-Admin.
+    is_rcf = models.BooleanField(default=False)
     # Compte plateforme supprimé (core.accounts.delete_platform_account) :
     # compte Firebase et profil Firestore effacés, rôles retirés. La ligne
     # reste — c'est l'identité de la fiche employé et de l'historique
@@ -197,6 +200,10 @@ class User(AbstractBaseUser, PermissionsMixin, LoggedModel):
             models.UniqueConstraint(
                 fields=['is_gerant'], condition=models.Q(is_gerant=True),
                 name='single_gerant',
+            ),
+            models.UniqueConstraint(
+                fields=['is_rcf'], condition=models.Q(is_rcf=True),
+                name='single_rcf',
             ),
         ]
 

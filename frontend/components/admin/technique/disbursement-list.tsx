@@ -47,14 +47,20 @@ const STATUS_COLORS: Record<DisbursementStatus, string> = {
 // Process comptable et financier, "Demande de décaissement" : circuit fixe,
 // aucun seuil de montant — la RCF examine d'abord, puis le Gérant statue.
 const STAGE_APPROVER_LABEL: Partial<Record<DisbursementStatus, string>> = {
-  EN_ATTENTE_RCF: "Directeur financier",
+  EN_ATTENTE_RCF: "Responsable Comptabilité & Finance",
   EN_ATTENTE_GERANT: "Gérant",
 };
 
-function canApproveStage(roles: string[], stage: DisbursementStatus, isGerant: boolean): boolean {
-  if (roles.includes("SUPER_ADMIN")) return true;
-  if (stage === "EN_ATTENTE_RCF") return roles.includes("DIRECTEUR_FINANCIER");
-  return isGerant; // Gérant désigné (Administration > Utilisateurs)
+/** Seul le signataire en poste à la création de la demande signe son
+ * palier (aucune substitution) ; à défaut de signataire figé (ancienne
+ * demande), règle par rôle. Le serveur applique la même règle. */
+function canApproveStage(req: DisbursementRequest, roles: string[], isGerant: boolean, myId: string | null): boolean {
+  if (req.status === "EN_ATTENTE_RCF") {
+    if (req.assigned_rcf) return req.assigned_rcf.id === myId;
+    return roles.includes("DIRECTEUR_FINANCIER") || roles.includes("SUPER_ADMIN");
+  }
+  if (req.assigned_gerant) return req.assigned_gerant.id === myId;
+  return isGerant;
 }
 
 function formatDate(value: string) {
@@ -81,6 +87,10 @@ export function DisbursementList({ mode = "department", departmentLabel }: { mod
 
   const myRoles = profileRoles(profile);
   const isGerant = useIsGerant();
+  const [myId, setMyId] = useState<string | null>(null);
+  useEffect(() => {
+    getMe().then((me) => setMyId(me.id)).catch(() => {});
+  }, []);
   const canExecute = myRoles.includes("COMPTABLE") || myRoles.includes("SUPER_ADMIN");
 
   async function handleApprove(id: string, decision: "APPROUVE" | "REJETE", rejectionReason?: string, signature?: string) {
@@ -181,7 +191,7 @@ export function DisbursementList({ mode = "department", departmentLabel }: { mod
           <tbody className="divide-y divide-neutral-100">
             {requests.map((req) => {
               const isPending = req.status === "EN_ATTENTE_RCF" || req.status === "EN_ATTENTE_GERANT";
-              const canApproveThis = isFinanceView && isPending && canApproveStage(myRoles, req.status, isGerant);
+              const canApproveThis = isFinanceView && isPending && canApproveStage(req, myRoles, isGerant, myId);
               const firstLine = req.lines[0]?.label ?? req.reason;
               const otherLines = Math.max(req.lines.length - 1, 0);
               return (
@@ -214,7 +224,11 @@ export function DisbursementList({ mode = "department", departmentLabel }: { mod
                       {STATUS_LABELS[req.status]}
                     </span>
                     {isPending && (
-                      <p className="mt-1 text-xs text-neutral-400">Validation : {STAGE_APPROVER_LABEL[req.status]}</p>
+                      <p className="mt-1 text-xs text-neutral-400">
+                        Validation : {STAGE_APPROVER_LABEL[req.status]}
+                        {req.status === "EN_ATTENTE_RCF" && req.assigned_rcf ? ` — ${personName(req.assigned_rcf)}` : ""}
+                        {req.status === "EN_ATTENTE_GERANT" && req.assigned_gerant ? ` — ${personName(req.assigned_gerant)}` : ""}
+                      </p>
                     )}
                     {req.status === "REJETE" && req.rejection_reason && (
                       <p className="mt-1 max-w-xs truncate text-xs text-destructive" title={req.rejection_reason}>

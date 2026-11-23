@@ -82,6 +82,10 @@ class DisbursementRequest(LoggedModel):
     # Signatures manuscrites (PNG) apposées à l'approbation, reprises sur le
     # bon de demande PDF : Directeur financier puis Gérant.
     rcf_signature_url = models.URLField(max_length=1000, blank=True)
+    # Signataires en poste au moment de la demande : seuls eux peuvent
+    # signer leur palier (aucune substitution, pas même un Super-Admin).
+    assigned_rcf = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_rcf_disbursements')
+    assigned_gerant = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_gerant_disbursements')
     gerant_signature_url = models.URLField(max_length=1000, blank=True)
 
     # Gérant : décision finale, seulement atteinte si la RCF a transmis.
