@@ -3,7 +3,7 @@ from unittest.mock import patch
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
-from core.constants import ROLE_ADMIN
+from core.constants import ROLE_RESPONSABLE_ADMINISTRATIF
 from core.models import Role
 
 from .factories import (
@@ -18,7 +18,7 @@ class ChannelViewSetTests(APITestCase):
     def setUp(self):
         # get_or_create, not create — core.migrations.0003_seed_role_permissions
         # pre-seeds every role name on a fresh test DB.
-        self.admin_role, _ = Role.objects.get_or_create(name=ROLE_ADMIN)
+        self.admin_role, _ = Role.objects.get_or_create(name=ROLE_RESPONSABLE_ADMINISTRATIF)
         self.admin = UserFactory()
         self.admin.roles.add(self.admin_role)
         self.user = UserFactory()

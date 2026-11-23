@@ -33,7 +33,7 @@ def role_super_admin(db):
 
 @pytest.fixture
 def role_admin(db):
-    role, _ = Role.objects.get_or_create(name='Administrateur', defaults={'description': 'Admin'})
+    role, _ = Role.objects.get_or_create(name='Responsable Administratif', defaults={'description': 'Admin'})
     return role
 
 
@@ -51,7 +51,7 @@ def role_developer(db):
 
 @pytest.fixture
 def role_directeur_financier(db):
-    role, _ = Role.objects.get_or_create(name='Directeur Financier', defaults={'description': 'DF'})
+    role, _ = Role.objects.get_or_create(name='Comptable', defaults={'description': 'DF'})
     return role
 
 
@@ -63,7 +63,7 @@ def role_commercial(db):
 
 @pytest.fixture
 def role_rh_manager(db):
-    role, _ = Role.objects.get_or_create(name='Responsable RH', defaults={'description': 'RH'})
+    role, _ = Role.objects.get_or_create(name='Responsable Administratif', defaults={'description': 'RH'})
     return role
 
 

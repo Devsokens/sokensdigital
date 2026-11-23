@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from rest_framework.test import APIClient, APITestCase
 
-from core.constants import ROLE_CAISSIER, ROLE_DEVELOPER, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN
+from core.constants import ROLE_CAISSIER, ROLE_DEVELOPER, ROLE_COMPTABLE, ROLE_SUPER_ADMIN
 from core.models import Role, User
 from finance.models import Account, AccountingPeriod, DisbursementRequest, JournalEntry
 from treasury.models import BankEntry, CapitalContribution, CashEntry
@@ -28,7 +28,7 @@ class TreasuryTestBase(APITestCase):
         _give_role(self.caissier, ROLE_CAISSIER)
 
         self.cfo = User.objects.create(email='cfo@sokensdigital.com', first_name='CFO')
-        _give_role(self.cfo, ROLE_DIRECTEUR_FINANCIER)
+        _give_role(self.cfo, ROLE_COMPTABLE)
 
         self.super_admin = User.objects.create(email='admin@sokensdigital.com', first_name='Admin')
         _give_role(self.super_admin, ROLE_SUPER_ADMIN)
@@ -114,7 +114,7 @@ class CashEntryViewSetTests(TreasuryTestBase):
 
     def test_caissier_cannot_forge_reconciliation_on_create(self):
         # Pentest du 24/09/2026 (T3) : un Caissier pouvait se faire passer
-        # pour rapproché par le Directeur Financier, à la date de son choix,
+        # pour rapproché par le Comptable, à la date de son choix,
         # rendant la pièce immuable sans qu'aucune écriture ne parte au
         # Grand Livre.
         response = self.client_caissier.post('/api/v1/treasury/cash-entries/', {

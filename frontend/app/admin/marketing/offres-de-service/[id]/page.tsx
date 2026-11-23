@@ -8,7 +8,7 @@ export default async function ServiceProposalDetailsPage({
 }) {
   const { id } = await params;
   return (
-    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_MARKETING", "COMMERCIAL", "CHEF_DE_PROJET"]}>
+    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_MARKETING_COM", "COMMERCIAL", "CHEF_DE_PROJET"]}>
       <ServiceProposalEditPage id={id} />
     </RequireRole>
   );

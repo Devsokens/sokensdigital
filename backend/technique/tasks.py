@@ -102,7 +102,7 @@ def check_maintenance_due():
 
     from django.db.models import Max
 
-    from core.constants import ROLE_ADMIN, ROLE_PROJECT_MANAGER, ROLE_SUPER_ADMIN
+    from core.constants import ROLE_RESPONSABLE_ADMINISTRATIF, ROLE_PROJECT_MANAGER, ROLE_SUPER_ADMIN
     from core.models import User
     from .models import MaintainedApp
 
@@ -143,7 +143,7 @@ def check_maintenance_due():
                 fallback_recipient_ids = list(
                     User.objects.filter(
                         is_active=True,
-                        roles__name__in=(ROLE_PROJECT_MANAGER, ROLE_ADMIN, ROLE_SUPER_ADMIN),
+                        roles__name__in=(ROLE_PROJECT_MANAGER, ROLE_RESPONSABLE_ADMINISTRATIF, ROLE_SUPER_ADMIN),
                     )
                     .values_list('id', flat=True)
                     .distinct()

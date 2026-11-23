@@ -3,7 +3,7 @@ import { Tresorerie } from "@/components/admin/finance/tresorerie";
 
 export default function TresoreriePage() {
   return (
-    <RequireRole roles={["SUPER_ADMIN", "DIRECTEUR_FINANCIER", "CAISSIER"]}>
+    <RequireRole roles={["SUPER_ADMIN", "COMPTABLE", "CAISSIER"]}>
       <Tresorerie />
     </RequireRole>
   );

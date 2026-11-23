@@ -9,7 +9,7 @@ from core.constants import (
     ROLE_COMPTABLE,
     ROLE_DEVELOPER,
     ROLE_PROJECT_MANAGER,
-    ROLE_RESPONSABLE_MARKETING,
+    ROLE_RESPONSABLE_MARKETING_COM,
     ROLE_SUPER_ADMIN,
 )
 from core.models import Role, User
@@ -24,7 +24,7 @@ def _user(email, role):
 
 class WorkflowTests(APITestCase):
     def setUp(self):
-        self.marketing = _user('marketing@sokens.test', ROLE_RESPONSABLE_MARKETING)
+        self.marketing = _user('marketing@sokens.test', ROLE_RESPONSABLE_MARKETING_COM)
         self.technique = _user('cdp@sokens.test', ROLE_PROJECT_MANAGER)
         self.dev = _user('dev@sokens.test', ROLE_DEVELOPER)
         self.superadmin = _user('boss@sokens.test', ROLE_SUPER_ADMIN)
@@ -156,7 +156,7 @@ class WorkflowTests(APITestCase):
 
 class SubmittedProjectListTests(APITestCase):
     def setUp(self):
-        self.marketing = _user('m@sokens.test', ROLE_RESPONSABLE_MARKETING)
+        self.marketing = _user('m@sokens.test', ROLE_RESPONSABLE_MARKETING_COM)
         self.outsider = User.objects.create(email='rien@sokens.test')
         Lead.objects.create(
             first_name='A', last_name='B', email='a@c.test',
@@ -185,7 +185,7 @@ class SubmittedProjectListTests(APITestCase):
 
 class RejectLeadViewTests(APITestCase):
     def setUp(self):
-        self.marketing = _user('marketing2@sokens.test', ROLE_RESPONSABLE_MARKETING)
+        self.marketing = _user('marketing2@sokens.test', ROLE_RESPONSABLE_MARKETING_COM)
         self.technique = _user('cdp2@sokens.test', ROLE_PROJECT_MANAGER)
         self.outsider = _user('outsider2@sokens.test', ROLE_COMPTABLE)
         self.lead = Lead.objects.create(

@@ -4,7 +4,7 @@ import { ProjectsHub } from "@/components/admin/technique/projects-hub";
 
 export default function ProjetsPage() {
   return (
-    <RequireRole roles={["SUPER_ADMIN", "CHEF_DE_PROJET", "DEVELOPPEUR", "DIRECTEUR_FINANCIER"]}>
+    <RequireRole roles={["SUPER_ADMIN", "CHEF_DE_PROJET", "DEVELOPPEUR", "COMPTABLE"]}>
       {/* Suspense : ProjectsHub lit l'onglet dans l'URL (useSearchParams). */}
       <Suspense>
         <ProjectsHub />

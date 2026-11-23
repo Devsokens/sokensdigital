@@ -61,7 +61,7 @@ function todayAt9() {
 export function SocialPostList() {
   const { profile } = useAuth();
   const myRoles = profileRoles(profile);
-  const isMarketing = myRoles.includes("RESPONSABLE_MARKETING") || myRoles.includes("SUPER_ADMIN");
+  const isMarketing = myRoles.includes("RESPONSABLE_MARKETING_COM") || myRoles.includes("SUPER_ADMIN");
   const [posts, setPosts] = useState<SocialPost[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);

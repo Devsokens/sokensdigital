@@ -12,7 +12,7 @@ export default async function NouveauContratTravailPage({
   const { type } = await searchParams;
   if (type === "client") redirect("/admin/rh/contrats-travail/prestation/nouveau");
   return (
-    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_RH"]}>
+    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_ADMINISTRATIF"]}>
       <EmploymentContractEditor initialPartyType="SALARIE" />
     </RequireRole>
   );

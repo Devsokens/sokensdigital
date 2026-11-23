@@ -338,7 +338,7 @@ SupplierInvoice (ProcurementRequest → invoices)
 | Super Admin | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Manager RCF | ❌ | ✅ | ✅ | ❌ | ❌ |
 | Manager Général | ❌ | ✅ | ✅ | ❌ | ❌ |
-| Directeur Financier | ✅ | ❌ | ❌ | ✅ | ✅ |
+| Comptable | ✅ | ❌ | ❌ | ✅ | ✅ |
 | Utilisateur Standard | ✅ | ❌ | ❌ | ✅ | ❌ |
 
 ---

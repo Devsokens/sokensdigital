@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from rest_framework.test import APIClient, APITestCase
 
-from core.constants import ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER
+from core.constants import ROLE_COMPTABLE
 from core.models import Role, User
 from finance.models import AccountingPeriod, FinanceSettings, Invoice, JournalEntry
 from finance.pdf import render_invoice_html
@@ -19,7 +19,7 @@ def _client(email, role):
 
 class ExtraTaxesTests(APITestCase):
     def setUp(self):
-        self.df = _client('df@sokensdigital.com', ROLE_DIRECTEUR_FINANCIER)
+        self.df = _client('df@sokensdigital.com', ROLE_COMPTABLE)
         self.comptable = _client('compta@sokensdigital.com', ROLE_COMPTABLE)
 
     def test_settings_add_and_remove_taxes(self):

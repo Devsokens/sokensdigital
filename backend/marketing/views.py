@@ -18,8 +18,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.constants import (
-    ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_MARKETING, ROLE_COMMERCIAL, ROLE_PROJECT_MANAGER,
-    ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER, ROLE_DEVELOPER, ROLE_RH_MANAGER, ROLE_ADMIN,
+    ROLE_SUPER_ADMIN,
+    ROLE_RESPONSABLE_MARKETING_COM,
+    ROLE_COMMERCIAL,
+    ROLE_PROJECT_MANAGER,
+    ROLE_COMPTABLE,
+    ROLE_DEVELOPER,
+    ROLE_RESPONSABLE_ADMINISTRATIF,
+    ROLE_SOUS_TRAITANT_COMMERCIAL,
 )
 from core.firestore_client import (
     adjust_blog_like_count,
@@ -66,17 +72,20 @@ from marketing.serializers import (
     TestimonialSubmissionPublicCreateSerializer,
 )
 
-MARKETING_ROLES = (ROLE_RESPONSABLE_MARKETING,)
-COMMERCIAL_ROLES = (ROLE_COMMERCIAL,)
-FINANCE_CONVERT_ROLES = (ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER)
+MARKETING_ROLES = (ROLE_RESPONSABLE_MARKETING_COM,)
+# Le sous-traitant commercial gère son propre portefeuille (leads assignés,
+# devis qu'il a créés), comme un commercial, mais ses devis restent des
+# brouillons soumis à validation interne : il ne les envoie pas (send).
+COMMERCIAL_ROLES = (ROLE_COMMERCIAL, ROLE_SOUS_TRAITANT_COMMERCIAL)
+FINANCE_CONVERT_ROLES = (ROLE_COMPTABLE,)
 CHEF_DE_PROJET_ROLES = (ROLE_PROJECT_MANAGER,)
 # Contrats de prestation : rédigés par les RH / l'administration (module
 # Contrats), le commercial et la finance.
-CONTRACT_ROLES = (ROLE_RH_MANAGER, ROLE_ADMIN, ROLE_COMMERCIAL, ROLE_RESPONSABLE_MARKETING, ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER)
+CONTRACT_ROLES = (ROLE_RESPONSABLE_ADMINISTRATIF, ROLE_COMMERCIAL, ROLE_RESPONSABLE_MARKETING_COM, ROLE_COMPTABLE)
 # Cahier des charges is a shared Technique + Marketing document — every
 # role from both departments (plus Super-Admin) can read/write any of
 # them, no per-owner restriction (collaborative internal doc, unlike Quote).
-SPECIFICATION_ROLES = (ROLE_RESPONSABLE_MARKETING, ROLE_PROJECT_MANAGER, ROLE_DEVELOPER, ROLE_SUPER_ADMIN)
+SPECIFICATION_ROLES = (ROLE_RESPONSABLE_MARKETING_COM, ROLE_PROJECT_MANAGER, ROLE_DEVELOPER, ROLE_SUPER_ADMIN)
 
 PUBLIC_LEAD_RATE_LIMIT = 3  # per IP
 PUBLIC_LEAD_RATE_WINDOW = 60  # seconds
@@ -452,7 +461,7 @@ class SocialMediaCredentialsView(APIView):
 @extend_schema(
     tags=['Marketing & Commercial'],
     summary='Upload an image (partner logo, team photo) for the site CMS',
-    description='Responsable Marketing/Super-Admin only. Uploads to Supabase Storage '
+    description='Responsable Marketing & Communication/Super-Admin only. Uploads to Supabase Storage '
     '(core.storage) and returns its public URL — meant to be pasted into a '
     'PageSection.items entry (e.g. logo_url, photo_url), not a standalone model.',
     request={'multipart/form-data': {'type': 'object', 'properties': {'file': {'type': 'string', 'format': 'binary'}}}},
@@ -478,7 +487,7 @@ class ImageUploadView(APIView):
 @extend_schema(
     tags=['Marketing & Commercial'],
     summary='Upload a video (showcase project demo clip) for the site CMS',
-    description='Responsable Marketing/Super-Admin only. Uploads to Supabase Storage '
+    description='Responsable Marketing & Communication/Super-Admin only. Uploads to Supabase Storage '
     '(core.storage) and returns its public URL — meant to be pasted into a '
     "ShowcaseProject's video_src, not a standalone model. 25 Mo max.",
     request={'multipart/form-data': {'type': 'object', 'properties': {'file': {'type': 'string', 'format': 'binary'}}}},
@@ -511,7 +520,7 @@ class VideoUploadView(APIView):
 )
 class ShowcaseProjectViewSet(viewsets.ModelViewSet):
     """Internal CMS management (the /projects public grid + detail pages) —
-    Responsable Marketing/Super-Admin only. Public read access is served
+    Responsable Marketing & Communication/Super-Admin only. Public read access is served
     separately by PublicShowcaseProject{List,Detail}View, filtered to
     is_active=True."""
 
@@ -564,7 +573,7 @@ class PublicShowcaseProjectDetailView(generics.RetrieveAPIView):
     destroy=extend_schema(tags=['Marketing & Commercial'], summary='Delete a blog post'),
 )
 class BlogPostViewSet(viewsets.ModelViewSet):
-    """Internal CMS management — Responsable Marketing/Super-Admin only.
+    """Internal CMS management — Responsable Marketing & Communication/Super-Admin only.
     Public read access is served separately by PublicBlogList/DetailView,
     filtered to status=PUBLIE."""
 
@@ -873,7 +882,7 @@ class IsCommercialOwnerOrReadCollaborator(permissions.BasePermission):
     list=extend_schema(tags=['Marketing & Commercial'], summary='List quotes', description='Commercial sees their own; Chef de Projet sees everything read-only; Super-Admin sees everything.'),
     create=extend_schema(tags=['Marketing & Commercial'], summary='Create a draft quote'),
     retrieve=extend_schema(tags=['Marketing & Commercial'], summary='Get a quote'),
-    update=extend_schema(tags=['Marketing & Commercial'], summary='Update a quote', description="No status lock — the owning department (Commercial owner/Responsable Marketing/Super-Admin) can always edit and update a quote, whatever its status."),
+    update=extend_schema(tags=['Marketing & Commercial'], summary='Update a quote', description="No status lock — the owning department (Commercial owner/Responsable Marketing & Communication/Super-Admin) can always edit and update a quote, whatever its status."),
     partial_update=extend_schema(tags=['Marketing & Commercial'], summary='Partially update a quote'),
     destroy=extend_schema(tags=['Marketing & Commercial'], summary='Delete a quote'),
 )
@@ -930,8 +939,14 @@ class QuoteViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def send(self, request, pk=None):
         quote = self.get_object()
-        if not has_role(request.user, *COMMERCIAL_ROLES) or quote.created_by_id != request.user.id:
-            if not has_role(request.user, ROLE_SUPER_ADMIN):
+        if not has_role(request.user, ROLE_COMMERCIAL, *MARKETING_ROLES, ROLE_SUPER_ADMIN):
+            # Sous-traitant commercial : devis soumis à validation interne.
+            return Response(
+                {'detail': "Ce devis doit être validé et envoyé par l'équipe commerciale interne."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not has_role(request.user, ROLE_COMMERCIAL, *MARKETING_ROLES) or quote.created_by_id != request.user.id:
+            if not has_role(request.user, ROLE_SUPER_ADMIN, *MARKETING_ROLES):
                 return Response(status=status.HTTP_403_FORBIDDEN)
         # Un devis déjà envoyé peut être renvoyé (nouvelle adresse, mail perdu) :
         # même PDF, statut inchangé. Accepté ou refusé, il est figé.
@@ -1065,7 +1080,7 @@ class QuoteViewSet(viewsets.ModelViewSet):
     @extend_schema(
         tags=['Marketing & Commercial'],
         summary='Convert an accepted quote into an invoice (§4.7)',
-        description='Commercial (owner)/Responsable Marketing/Comptable/Directeur Financier/Super-Admin. '
+        description='Commercial (owner)/Responsable Marketing & Communication/Comptable/Super-Admin. '
         'Quote must be ACCEPTE. Lines are collapsed into a single amount_ht (finance.Invoice has no '
         'line-item model of its own) — the quote itself remains the itemized record.',
     )
@@ -1306,7 +1321,7 @@ def _create_project_for_accepted_quote(quote: 'Quote') -> None:
     tags=['Marketing & Commercial'],
     summary='Marketing dashboard',
     description='Weighted commercial pipeline + lead/social-post aggregates. '
-    'Responsable Marketing/Super-Admin see everything; Commercial/Chef de Projet '
+    'Responsable Marketing & Communication/Super-Admin see everything; Commercial/Chef de Projet '
     'get the same shape scoped to their own leads.',
     responses={200: {
         'type': 'object',
@@ -1325,11 +1340,11 @@ def _create_project_for_accepted_quote(quote: 'Quote') -> None:
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def marketing_dashboard(request):
-    if not has_role(request.user, ROLE_RESPONSABLE_MARKETING, ROLE_COMMERCIAL, ROLE_PROJECT_MANAGER, ROLE_SUPER_ADMIN):
+    if not has_role(request.user, ROLE_RESPONSABLE_MARKETING_COM, ROLE_COMMERCIAL, ROLE_PROJECT_MANAGER, ROLE_SUPER_ADMIN):
         return Response(status=status.HTTP_403_FORBIDDEN)
 
     leads = Lead.objects.all()
-    if not has_role(request.user, ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN):
+    if not has_role(request.user, ROLE_RESPONSABLE_MARKETING_COM, ROLE_SUPER_ADMIN):
         leads = leads.filter(assigned_to=request.user)
 
     # "Pipeline pondéré" = Sum(estimated_value * qualification_score / 100)
@@ -1375,7 +1390,7 @@ def marketing_dashboard(request):
     ]
 
     social_posts = SocialPost.objects.all()
-    if not has_role(request.user, ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN):
+    if not has_role(request.user, ROLE_RESPONSABLE_MARKETING_COM, ROLE_SUPER_ADMIN):
         social_posts = social_posts.filter(author=request.user)
     social_by_status = {
         row['status']: row['count'] for row in social_posts.values('status').annotate(count=Count('id')).order_by()

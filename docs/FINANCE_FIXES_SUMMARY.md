@@ -61,7 +61,7 @@ Correction complète du département Finance suite à analyse profonde (cahier �
   - Comptes par défaut (411 Client, 706 Sales, 4457 VAT collectée)
 - `backend/finance/migrations/0006_finance_settings.py`: Migration (nouvelle)
 
-**À faire:** Admin Django `FinanceSettingsAdmin` dans finance/admin.py (réservé Directeur Financier)
+**À faire:** Admin Django `FinanceSettingsAdmin` dans finance/admin.py (réservé Comptable)
 
 **État:** Modèle prêt. Invoice peut utiliser `FinanceSettings.load().vat_rate` au lieu du constant DEFAULT_VAT_RATE.
 

@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.constants import ROLE_ADMIN, ROLE_SUPER_ADMIN, ROLE_SUPPORT_CLIENT
+from core.constants import ROLE_RESPONSABLE_ADMINISTRATIF, ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_TECHNIQUE
 from core.permissions import has_role
 from marketing.ratelimit import get_client_ip, is_rate_limited
 from support.models import FAQEntry, SupportTicket, TicketMessage
@@ -20,7 +20,7 @@ from support.serializers import (
     TicketMessageSerializer,
 )
 
-SUPPORT_ROLES = (ROLE_SUPPORT_CLIENT, ROLE_ADMIN, ROLE_SUPER_ADMIN)
+SUPPORT_ROLES = (ROLE_RESPONSABLE_TECHNIQUE, ROLE_RESPONSABLE_ADMINISTRATIF, ROLE_SUPER_ADMIN)
 
 PUBLIC_TICKET_RATE_LIMIT = 5  # per IP
 PUBLIC_TICKET_RATE_WINDOW = 60  # seconds

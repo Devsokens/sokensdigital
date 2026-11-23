@@ -7,7 +7,7 @@ import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/s
 import { inputClass } from "@/components/admin/form-styles";
 import { listDepartments, listRoles, setUserRole, setUserPermissions, getUserPermissions, setUserPassword } from "@/lib/api/hr";
 import type { Department, Role } from "@/lib/api/types";
-import { ROLE_LABELS, ROLES_BY_DEPARTMENT, DJANGO_ROLE_TO_APP_ROLE, type AppRole } from "@/lib/firebase/types";
+import { ROLE_LABELS, ROLES_BY_DEPARTMENT, DJANGO_ROLE_TO_APP_ROLE, MAX_FUNCTIONAL_ROLES, type AppRole } from "@/lib/firebase/types";
 import { PERMISSION_MODULES, MODULE_ACTIONS, ACTION_LABELS } from "@/lib/admin/permission-modules";
 import { cn } from "@/lib/utils";
 
@@ -112,8 +112,17 @@ export function UserEditModal({
     ? ROLES_BY_DEPARTMENT[currentDepartment.name] ?? (Object.keys(ROLE_LABELS) as AppRole[])
     : [];
 
+  // Plafond : 2 rôles fonctionnels, le privilège Super-Admin en plus.
   function toggleRole(role: AppRole) {
-    setSelectedRoles((prev) => (prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]));
+    setSelectedRoles((prev) => {
+      if (prev.includes(role)) return prev.filter((r) => r !== role);
+      const functional = prev.filter((r) => r !== "SUPER_ADMIN");
+      if (role !== "SUPER_ADMIN" && functional.length >= MAX_FUNCTIONAL_ROLES) {
+        alert(`Au plus ${MAX_FUNCTIONAL_ROLES} rôles fonctionnels par utilisateur (le Super-Administrateur ne compte pas).`);
+        return prev;
+      }
+      return [...prev, role];
+    });
   }
 
   function toggleModule(key: string) {

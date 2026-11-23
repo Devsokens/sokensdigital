@@ -20,13 +20,20 @@ from core.notifications import notify
 from core.pagination import SelectorPagination
 from core.storage import upload_client_document
 from core.constants import (
-    ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PROJECT_MANAGER,
-    ROLE_DEVELOPER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMMERCIAL,
-    ROLE_RH_MANAGER, ROLE_SUPPORT_CLIENT, ADMIN_ROLES, HR_ROLES, FINANCE_ROLES,
+    ROLE_SUPER_ADMIN,
+    ROLE_RESPONSABLE_ADMINISTRATIF,
+    ROLE_PROJECT_MANAGER,
+    ROLE_DEVELOPER,
+    ROLE_COMPTABLE,
+    ROLE_COMMERCIAL,
+    ROLE_RESPONSABLE_TECHNIQUE,
+    ADMIN_ROLES,
+    HR_ROLES,
+    FINANCE_ROLES,
 )
 from core.permissions import (
     IsSuperAdmin, IsAdmin, IsProjectManager,
-    IsDirecteurFinancier, IsCommercial, IsRHManager,
+    IsComptable, IsCommercial, IsResponsableAdministratif,
     IsOwner, IsAdminOrReadOnly, ReadOnly, HasModulePermission,
 )
 from marketing.conversion import create_converted_lead_for_client
@@ -52,7 +59,7 @@ def _accessible_clients_qs(user):
     Admin/Super-Admin et Support Client (cahier des charges §4.8, "accès
     aux tickets, base de connaissances, et fiches clients", non scopé) :
     tous les clients. Commercial : ses clients assignés. Chef de Projet :
-    clients liés à ses projets. Tout le reste (Directeur Financier,
+    clients liés à ses projets. Tout le reste (Comptable,
     Comptable, RH, Développeur, Consultant, Marketing, ou pas de rôle du
     tout) : aucun — le module "clients" ne figure pas dans leur périmètre
     déclaré (core.constants.DEFAULT_ROLE_PERMISSIONS).
@@ -62,7 +69,7 @@ def _accessible_clients_qs(user):
     deux cas scopés — un Consultant ou un utilisateur sans rôle lisait donc
     l'intégralité du fichier clients (SIRET, email, notes, assigné).
     """
-    if user.roles.filter(name__in=[*ADMIN_ROLES, ROLE_SUPPORT_CLIENT]).exists():
+    if user.roles.filter(name__in=[*ADMIN_ROLES, ROLE_RESPONSABLE_TECHNIQUE]).exists():
         return Client.objects.all()
 
     accessible = Client.objects.none()
@@ -79,11 +86,11 @@ def _accessible_clients_qs(user):
 
 
 # Rôles ayant une raison d'accéder au module clients, ne serait-ce que de
-# façon scopée — le reste (Directeur Financier, Comptable, RH, Développeur,
+# façon scopée — le reste (Comptable, RH, Développeur,
 # Consultant, Marketing, pas de rôle) n'y figure dans aucune entrée de
 # core.constants.DEFAULT_ROLE_PERMISSIONS et ne doit donc jamais recevoir
 # qu'un refus explicite plutôt qu'une liste vide silencieuse.
-CLIENT_ACCESS_ROLES = [*ADMIN_ROLES, ROLE_SUPPORT_CLIENT, ROLE_COMMERCIAL, ROLE_PROJECT_MANAGER]
+CLIENT_ACCESS_ROLES = [*ADMIN_ROLES, ROLE_RESPONSABLE_TECHNIQUE, ROLE_COMMERCIAL, ROLE_PROJECT_MANAGER]
 
 
 class IsHasClientAccess(permissions.BasePermission):
@@ -232,7 +239,7 @@ class ContactDirectoryViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        sees_all = user.roles.filter(name__in=[*ADMIN_ROLES, ROLE_SUPPORT_CLIENT]).exists()
+        sees_all = user.roles.filter(name__in=[*ADMIN_ROLES, ROLE_RESPONSABLE_TECHNIQUE]).exists()
         unattached = Q(client__isnull=True) if sees_all else Q(client__isnull=True, created_by=user)
         return (
             Contact.objects.select_related('client')
@@ -331,7 +338,7 @@ class ClientDocumentViewSet(viewsets.ModelViewSet):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [
                 permissions.IsAuthenticated(),
-                (IsAdmin | IsDirecteurFinancier | IsCommercial)(),
+                (IsAdmin | IsComptable | IsCommercial)(),
                 HasModulePermission('clients'),
             ]
         return [permissions.IsAuthenticated()]
@@ -345,7 +352,7 @@ class ClientDocumentViewSet(viewsets.ModelViewSet):
 
         # Masquer les CONTRAT aux rôles non autorisés
         if not user.roles.filter(
-            name__in=[*ADMIN_ROLES, ROLE_DIRECTEUR_FINANCIER]
+            name__in=[*ADMIN_ROLES, ROLE_COMPTABLE]
         ).exists():
             qs = qs.exclude(file_type=ClientDocument.FileType.CONTRAT)
         return qs
@@ -353,7 +360,7 @@ class ClientDocumentViewSet(viewsets.ModelViewSet):
     def _check_write_scope(self, file_type):
         user = self.request.user
         is_admin_or_finance = user.roles.filter(
-            name__in=[*ADMIN_ROLES, ROLE_DIRECTEUR_FINANCIER]
+            name__in=[*ADMIN_ROLES, ROLE_COMPTABLE]
         ).exists()
         if is_admin_or_finance:
             return
@@ -405,14 +412,14 @@ class EmployeeDocumentViewSet(viewsets.ModelViewSet):
     """
     Documents employés — accès strictement limité.
 
-    - Super-Admin / Admin / Responsable RH : accès complet
+    - Super-Admin / Admin / Responsable Administratif : accès complet
     - Autres : uniquement leurs propres documents (lecture seule)
     """
     serializer_class = EmployeeDocumentSerializer
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), (IsAdmin | IsRHManager)()]
+            return [permissions.IsAuthenticated(), (IsAdmin | IsResponsableAdministratif)()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
@@ -442,7 +449,7 @@ class PayrollValidationView(APIView):
     dans ``EmployeeDocument`` est chiffré (AES, cf. modèle), cohérent avec
     le reste du dossier RH.
     """
-    permission_classes = [permissions.IsAuthenticated, (IsAdmin | IsRHManager)]
+    permission_classes = [permissions.IsAuthenticated, (IsAdmin | IsResponsableAdministratif)]
 
     def post(self, request):
         from hr.models import Payslip
@@ -809,7 +816,7 @@ class ContractGeneratorViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         # Admin/Finance voient tout
-        if user.roles.filter(name__in=[*ADMIN_ROLES, ROLE_DIRECTEUR_FINANCIER]).exists():
+        if user.roles.filter(name__in=[*ADMIN_ROLES, ROLE_COMPTABLE]).exists():
             return qs
 
         # Commerciaux : contrats de leurs clients

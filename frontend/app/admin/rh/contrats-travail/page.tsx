@@ -3,7 +3,7 @@ import { EmploymentContractList } from "@/components/admin/rh/employment-contrac
 
 export default function ContratsTravailPage() {
   return (
-    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_RH"]}>
+    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_ADMINISTRATIF"]}>
       <EmploymentContractList />
     </RequireRole>
   );

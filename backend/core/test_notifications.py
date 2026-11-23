@@ -14,7 +14,11 @@ from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
 from core.constants import (
-    ROLE_COMPTABLE, ROLE_DEVELOPER, ROLE_PROJECT_MANAGER, ROLE_RH_MANAGER, ROLE_SUPER_ADMIN,
+    ROLE_COMPTABLE,
+    ROLE_DEVELOPER,
+    ROLE_PROJECT_MANAGER,
+    ROLE_RESPONSABLE_ADMINISTRATIF,
+    ROLE_SUPER_ADMIN,
 )
 from core.models import PushDevice, Role, User
 from projects.models import Project, ProjectMember, ProjectTask
@@ -224,7 +228,7 @@ class AccountInvitationTests(APITestCase):
     @patch('firebase_admin.auth.create_user')
     def test_created_account_receives_invitation_with_password_and_login_button(self, create_user, _profile, _roles):
         create_user.return_value = MagicMock(uid='uid-new')
-        rh = _user('rh@sokensdigital.com', ROLE_RH_MANAGER)
+        rh = _user('rh@sokensdigital.com', ROLE_SUPER_ADMIN)
         response = _client(rh).post('/api/v1/users/provision/', {
             'email': 'nouveau@sokensdigital.com', 'password': 'MotDePasse!2026',
             'first_name': 'Nouveau', 'last_name': 'Collègue', 'roles': ['DEVELOPPEUR'],
@@ -278,7 +282,7 @@ class BesoinNotificationTests(APITestCase):
         _sig_patcher.start()
         self.addCleanup(_sig_patcher.stop)
         self.chef = _user('chef@sokensdigital.com', ROLE_PROJECT_MANAGER)
-        self.comptable = _user('compta@sokensdigital.com', 'Directeur Financier')
+        self.comptable = _user('compta@sokensdigital.com', 'Comptable')
         self.gerant = _user('gerant@sokensdigital.com', ROLE_SUPER_ADMIN)
 
     def create(self):
@@ -289,7 +293,7 @@ class BesoinNotificationTests(APITestCase):
 
     def test_new_besoin_notifies_the_rcf(self, mock_roles, _notify):
         self.create()
-        self.assertEqual(mock_roles.call_args.args[0], ('Directeur Financier',))
+        self.assertEqual(mock_roles.call_args.args[0], ('Comptable',))
         self.assertEqual(mock_roles.call_args.kwargs['title'], 'Nouveau besoin à examiner')
 
     def test_rcf_approval_notifies_the_gerant_then_decision_reaches_requester(self, mock_roles, mock_notify):

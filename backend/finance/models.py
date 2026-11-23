@@ -27,13 +27,13 @@ class DisbursementRequest(LoggedModel):
     gérant."
 
     Remplace un système à trois paliers indexés sur le montant
-    (Comptable seul <10k, Directeur Financier 10-50k, Super-Admin >50k)
+    (Comptable seul <10k, Comptable 10-50k, Super-Admin >50k)
     qui contredisait ce document : celui-ci ne prévoit aucun seuil, RCF
     puis Gérant systématiquement.
 
     Pas de rôle "RCF"/"Gérant" dédié dans core.constants — même
     convention que procurement.views.IsManagerOrAdmin (déjà en place
-    avant ce changement) : Comptable ou Directeur Financier tiennent
+    avant ce changement) : Comptable tiennent
     lieu de RCF, Super-Admin tient lieu de Gérant.
 
     Le Chef de Projet initie ; le Comptable marque EXECUTE une fois les
@@ -80,7 +80,7 @@ class DisbursementRequest(LoggedModel):
     rcf_decided_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='rcf_decided_disbursements')
     rcf_decided_at = models.DateTimeField(null=True, blank=True)
     # Signatures manuscrites (PNG) apposées à l'approbation, reprises sur le
-    # bon de demande PDF : Directeur financier puis Gérant.
+    # bon de demande PDF : Comptable puis Gérant.
     rcf_signature_url = models.URLField(max_length=1000, blank=True)
     # Signataires en poste au moment de la demande : seuls eux peuvent
     # signer leur palier (aucune substitution, pas même un Super-Admin).
@@ -165,7 +165,7 @@ class DisbursementQuote(LoggedModel):
 
 
 class AccountingPeriod(LoggedModel):
-    """§4.1 "Clôture comptable": Directeur Financier + Super-Admin only.
+    """§4.1 "Clôture comptable": Comptable + Super-Admin only.
     Gates Grand Livre writes (§4.2 "à condition que la période financière
     soit ouverte") — a locked period's JournalEntry rows become read-only."""
 
@@ -411,7 +411,7 @@ class BankTransaction(LoggedModel):
 
 
 class TaxDeclaration(LoggedModel):
-    """§4.1 "Gouvernance fiscale" (Directeur Financier signs/validates) +
+    """§4.1 "Gouvernance fiscale" (Comptable signs/validates) +
     §4.2 "Fiscalité" (Comptable generates the BROUILLON and exports the
     FEC). `collected_vat`/`deductible_vat` are computed from TransactionLine
     rows posted to the TVA-class accounts within the period, not typed by
@@ -543,7 +543,7 @@ class FinanceSettings(models.Model):
     """Configuration Finance éditable (singleton pattern — une seule instance).
 
     TVA, seuils d'approbation, comptes par défaut, etc. édités via Django admin
-    par le Directeur Financier."""
+    par le Comptable."""
 
     vat_rate = models.DecimalField(
         max_digits=4, decimal_places=2, default=DEFAULT_VAT_RATE,

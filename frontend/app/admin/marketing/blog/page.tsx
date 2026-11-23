@@ -3,7 +3,7 @@ import { ContentManagement } from "@/components/admin/marketing/content-manageme
 
 export default function ContentManagementPage() {
   return (
-    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_MARKETING"]}>
+    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_MARKETING_COM"]}>
       <ContentManagement />
     </RequireRole>
   );

@@ -1,56 +1,76 @@
+/** Référentiel des rôles 2026 (13) : privilège Super-Admin + 12 rôles
+ * fonctionnels. Miroir de backend/core/constants.py. */
 export type AppRole =
   | "SUPER_ADMIN"
-  | "RESPONSABLE_MARKETING"
-  | "RESPONSABLE_RH"
-  | "COMMERCIAL"
+  | "RESPONSABLE_OPERATIONS"
+  | "RESPONSABLE_TECHNIQUE"
+  | "RESPONSABLE_MARKETING_COM"
+  | "RESPONSABLE_ADMINISTRATIF"
   | "CHEF_DE_PROJET"
   | "DEVELOPPEUR"
+  | "COMMERCIAL"
   | "COMPTABLE"
-  | "DIRECTEUR_FINANCIER"
   | "CAISSIER"
-  | "AUTRE";
+  | "SOUS_TRAITANT_DEV"
+  | "SOUS_TRAITANT_COMMERCIAL"
+  | "SOUS_TRAITANT_DESIGNER";
 
 export const ROLE_LABELS: Record<AppRole, string> = {
   SUPER_ADMIN: "Super-Administrateur",
-  RESPONSABLE_MARKETING: "Responsable Marketing",
-  RESPONSABLE_RH: "Responsable RH",
-  COMMERCIAL: "Commercial",
+  RESPONSABLE_OPERATIONS: "Responsable des Opérations",
+  RESPONSABLE_TECHNIQUE: "Responsable Technique",
+  RESPONSABLE_MARKETING_COM: "Responsable Marketing & Communication",
+  RESPONSABLE_ADMINISTRATIF: "Responsable Administratif",
   CHEF_DE_PROJET: "Chef de Projet",
   DEVELOPPEUR: "Développeur",
+  COMMERCIAL: "Commercial",
   COMPTABLE: "Comptable",
-  DIRECTEUR_FINANCIER: "Directeur Financier",
   CAISSIER: "Caissier",
-  AUTRE: "Autre",
+  SOUS_TRAITANT_DEV: "Sous-traitant Développeur",
+  SOUS_TRAITANT_COMMERCIAL: "Sous-traitant Commercial",
+  SOUS_TRAITANT_DESIGNER: "Sous-traitant Designer",
 };
 
-/** The Firestore profile's `role` (SNAKE_CASE, above) and the Django
- * Role.name a colleague is actually granted (French — see
- * backend/core/serializers.py's APP_ROLE_TO_DJANGO_ROLE) are two labels
- * for the same role. This is the frontend mirror, needed wherever a UI
- * flow starts from the Django Role list (module permission editor) and
- * ends by calling setUserRole(), which expects the SNAKE_CASE form. */
+/** Plafond de cumul : 2 rôles fonctionnels (le Super-Admin n'est pas compté). */
+export const MAX_FUNCTIONAL_ROLES = 2;
+export const SUBCONTRACTOR_ROLES: AppRole[] = ["SOUS_TRAITANT_DEV", "SOUS_TRAITANT_COMMERCIAL", "SOUS_TRAITANT_DESIGNER"];
+
+/** Nom Django (français) -> nom applicatif. */
 export const DJANGO_ROLE_TO_APP_ROLE: Record<string, AppRole> = {
   "Super-Administrateur": "SUPER_ADMIN",
-  "Responsable Marketing": "RESPONSABLE_MARKETING",
-  "Responsable RH": "RESPONSABLE_RH",
-  "Commercial": "COMMERCIAL",
+  "Responsable des Opérations": "RESPONSABLE_OPERATIONS",
+  "Responsable Technique": "RESPONSABLE_TECHNIQUE",
+  "Responsable Marketing & Communication": "RESPONSABLE_MARKETING_COM",
+  "Responsable Administratif": "RESPONSABLE_ADMINISTRATIF",
   "Chef de Projet": "CHEF_DE_PROJET",
   "Développeur": "DEVELOPPEUR",
+  "Commercial": "COMMERCIAL",
   "Comptable": "COMPTABLE",
-  "Directeur Financier": "DIRECTEUR_FINANCIER",
   "Caissier": "CAISSIER",
+  "Sous-traitant Développeur": "SOUS_TRAITANT_DEV",
+  "Sous-traitant Commercial": "SOUS_TRAITANT_COMMERCIAL",
+  "Sous-traitant Designer": "SOUS_TRAITANT_DESIGNER",
 };
 
-/** Cahier des charges §4.11 — which roles belong to which of the four
- * seeded departments (see backend/core/migrations/0002_seed_default_departments.py),
- * for the Utilisateurs & Rôles "département → rôle" cascading picker.
- * "Administrateur" and "Support Client" aren't in APP_ROLE_CHOICES (no
- * Firestore-side equivalent yet), so they're left out of this UI flow. */
+/** Anciens noms de rôle (profils d'avant le référentiel 2026) -> nouveau. */
+const LEGACY_APP_ROLES: Record<string, AppRole | null> = {
+  RESPONSABLE_MARKETING: "RESPONSABLE_MARKETING_COM",
+  RESPONSABLE_RH: "RESPONSABLE_ADMINISTRATIF",
+  ADMINISTRATEUR: "RESPONSABLE_ADMINISTRATIF",
+  DIRECTEUR_FINANCIER: "COMPTABLE",
+  SUPPORT_CLIENT: "RESPONSABLE_TECHNIQUE",
+  CONSULTANT: "RESPONSABLE_TECHNIQUE",
+  AUTRE: null,
+};
+
+/** Rôles proposés par pôle dans le sélecteur « département → rôle ». */
 export const ROLES_BY_DEPARTMENT: Record<string, AppRole[]> = {
-  "Administration": ["SUPER_ADMIN", "RESPONSABLE_RH"],
-  "Comptabilité / Fiscalité": ["DIRECTEUR_FINANCIER", "COMPTABLE", "CAISSIER"],
-  "Techniques": ["CHEF_DE_PROJET", "DEVELOPPEUR"],
-  "Marketing / Communication": ["RESPONSABLE_MARKETING", "COMMERCIAL"],
+  "Direction": ["SUPER_ADMIN", "RESPONSABLE_OPERATIONS"],
+  "Administration": ["RESPONSABLE_ADMINISTRATIF"],
+  "Comptabilité / Fiscalité": ["COMPTABLE", "CAISSIER"],
+  "Techniques": ["RESPONSABLE_TECHNIQUE", "CHEF_DE_PROJET", "DEVELOPPEUR"],
+  "Marketing / Communication": ["RESPONSABLE_MARKETING_COM", "COMMERCIAL"],
+  "Sous-traitants": ["SOUS_TRAITANT_DEV", "SOUS_TRAITANT_COMMERCIAL", "SOUS_TRAITANT_DESIGNER"],
 };
 
 export type ProjectStatus = "ACTIF" | "TERMINE" | "ARCHIVE";
@@ -119,8 +139,14 @@ export interface Profile {
  * `.role`/`.roles` directly. */
 export function profileRoles(profile: Pick<Profile, "roles" | "role"> | null | undefined): AppRole[] {
   if (!profile) return [];
-  if (profile.roles && profile.roles.length > 0) return profile.roles;
-  return profile.role ? [profile.role] : [];
+  const raw: string[] = profile.roles && profile.roles.length > 0 ? profile.roles : profile.role ? [profile.role] : [];
+  // Profil pas encore aligné sur le référentiel 2026 : anciens noms reclassés.
+  const out: AppRole[] = [];
+  for (const r of raw) {
+    const mapped = r in LEGACY_APP_ROLES ? LEGACY_APP_ROLES[r] : (r as AppRole);
+    if (mapped && mapped in ROLE_LABELS && !out.includes(mapped)) out.push(mapped);
+  }
+  return out;
 }
 
 /** Firestore doc at /chatRooms/{roomId}. COMPANY/DEPARTMENT/PROJECT rooms

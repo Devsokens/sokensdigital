@@ -62,7 +62,7 @@ except Exception:
 
 **Fichiers:** `backend/marketing/models.py:83` (`BlogPost.content = TextField`, aucune validation), `frontend/components/blog/article-content.tsx:5` (`dangerouslySetInnerHTML={{ __html: html }}`)
 
-**Le problème:** `BlogPost.content` stocke le HTML brut produit par l'éditeur Tiptap admin, sans **aucune sanitization côté serveur** (`grep bleach|nh3|sanitize` → zéro résultat dans tout le repo). Le champ est ensuite injecté tel quel dans le DOM public via `dangerouslySetInnerHTML`. Écriture gated à `IsMarketing` (Responsable Marketing/Super-Admin) — donc pas exploitable par un inconnu — mais :
+**Le problème:** `BlogPost.content` stocke le HTML brut produit par l'éditeur Tiptap admin, sans **aucune sanitization côté serveur** (`grep bleach|nh3|sanitize` → zéro résultat dans tout le repo). Le champ est ensuite injecté tel quel dans le DOM public via `dangerouslySetInnerHTML`. Écriture gated à `IsMarketing` (Responsable Marketing & Communication/Super-Admin) — donc pas exploitable par un inconnu — mais :
 - un compte marketing compromis (phishing, session volée) devient un vecteur d'XSS stockée touchant **chaque visiteur du site public** (clients, prospects) ;
 - rien n'empêche un appel API direct (Postman/curl, hors UI Tiptap) de poster `<script>...</script>` ou `<img src=x onerror=...>` — la restriction Tiptap est côté client, pas une frontière de sécurité ;
 - confiance aveugle dans "l'éditeur produit du HTML propre" — un bug Tiptap ou une extension mal configurée suffit.

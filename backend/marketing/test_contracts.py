@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from rest_framework.test import APIClient, APITestCase
 
-from core.constants import ROLE_DEVELOPER, ROLE_RH_MANAGER
+from core.constants import ROLE_DEVELOPER, ROLE_RESPONSABLE_ADMINISTRATIF
 from core.models import Role, User
 from marketing.contract_document import amount_in_words, contract_blocks, long_date
 from marketing.contract_pdf import render_contract_html
@@ -35,7 +35,7 @@ class AmountInWordsTests(APITestCase):
 
 class ServiceContractTests(APITestCase):
     def setUp(self):
-        self.rh = _user('rh@sokensdigital.com', ROLE_RH_MANAGER)
+        self.rh = _user('rh@sokensdigital.com', ROLE_RESPONSABLE_ADMINISTRATIF)
         self.dev = _user('dev@sokensdigital.com', ROLE_DEVELOPER)
 
     def _create(self, **data):
@@ -118,7 +118,7 @@ class ServiceContractTests(APITestCase):
 
 class PartnershipContractTests(APITestCase):
     def setUp(self):
-        self.rh = _user('rh2@sokensdigital.com', ROLE_RH_MANAGER)
+        self.rh = _user('rh2@sokensdigital.com', ROLE_RESPONSABLE_ADMINISTRATIF)
 
     def test_partnership_has_its_own_model(self):
         response = self.rh.post(BASE, {

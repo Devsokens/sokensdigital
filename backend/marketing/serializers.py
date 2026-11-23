@@ -135,7 +135,7 @@ class LeadSerializer(serializers.ModelSerializer):
 
 
 class BlogPostSerializer(serializers.ModelSerializer):
-    """Full read/write shape — Responsable Marketing/Super-Admin only."""
+    """Full read/write shape — Responsable Marketing & Communication/Super-Admin only."""
 
     author = UserBriefSerializer(read_only=True)
 
@@ -218,7 +218,7 @@ class QuoteLineSerializer(serializers.ModelSerializer):
 class QuoteSerializer(serializers.ModelSerializer):
     """Lines are nested and fully replaced on update (delete-then-recreate)
     — quotes are small documents, not worth a diffing PATCH. No status
-    lock: the owning department (Commercial owner/Responsable Marketing/
+    lock: the owning department (Commercial owner/Responsable Marketing & Communication/
     Super-Admin, see IsCommercialOwnerOrReadCollaborator) can edit and
     update a quote whatever its status (docs/backend-specifications.md §7.2)."""
 
@@ -317,7 +317,7 @@ class SpecificationSerializer(serializers.ModelSerializer):
 
 
 class PageSectionSerializer(serializers.ModelSerializer):
-    """Admin shape — Responsable Marketing/Super-Admin. `page`/`section_key`
+    """Admin shape — Responsable Marketing & Communication/Super-Admin. `page`/`section_key`
     are read-only: the set of sections is fixed by the real page template,
     only their content is editable (see PageSection docstring)."""
 
@@ -396,7 +396,7 @@ class BlogCommentCreateSerializer(serializers.Serializer):
 
 
 class ShowcaseProjectSerializer(serializers.ModelSerializer):
-    """Admin shape — Responsable Marketing/Super-Admin. `slug` is
+    """Admin shape — Responsable Marketing & Communication/Super-Admin. `slug` is
     read-only-on-write-but-editable-if-blank: auto-derived from `title` the
     first time it's saved (see model.save()), then stays stable."""
 
@@ -446,10 +446,10 @@ class QuoteTrackSerializer(serializers.ModelSerializer):
 
 
 def can_edit_tax_rates(user) -> bool:
-    """Gérant, comptabilité (Comptable, Directeur financier), Super-Admin."""
-    from core.constants import ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN
+    """Gérant, comptabilité (Comptable), Super-Admin."""
+    from core.constants import ROLE_COMPTABLE, ROLE_SUPER_ADMIN
     from core.permissions import has_role, is_gerant
-    return bool(user) and (is_gerant(user) or has_role(user, ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN))
+    return bool(user) and (is_gerant(user) or has_role(user, ROLE_COMPTABLE, ROLE_SUPER_ADMIN))
 
 
 class QuoteSettingsSerializer(serializers.ModelSerializer):

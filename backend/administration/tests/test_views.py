@@ -9,8 +9,13 @@ from rest_framework import status
 from django.urls import reverse
 from core.models import User, Role
 from core.constants import (
-    ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_COMMERCIAL, ROLE_RH_MANAGER,
-    ROLE_DIRECTEUR_FINANCIER, ROLE_CONSULTANT, ROLE_DEVELOPER,
+    ROLE_SUPER_ADMIN,
+    ROLE_RESPONSABLE_ADMINISTRATIF,
+    ROLE_COMMERCIAL,
+    ROLE_COMPTABLE,
+    ROLE_RESPONSABLE_TECHNIQUE,
+    ROLE_DEVELOPER,
+    ROLE_SOUS_TRAITANT_DEV,
 )
 from administration.models import Client, ContractGenerator
 from .factories import (
@@ -31,7 +36,7 @@ def _role(name):
 class ClientViewSetTest(APITestCase):
     def setUp(self):
         self.super_admin_role = _role(ROLE_SUPER_ADMIN)
-        self.admin_role = _role(ROLE_ADMIN)
+        self.admin_role = _role(ROLE_RESPONSABLE_ADMINISTRATIF)
         self.super_admin = UserFactory()
         self.super_admin.roles.add(self.super_admin_role)
         self.admin_user = UserFactory()
@@ -67,7 +72,7 @@ class ClientDocumentViewSetTest(APITestCase):
         # clients depuis le pentest du 24/09/2026 (voir _accessible_clients_qs)
         # — ce test vérifie le masquage des CONTRAT pour quelqu'un qui VOIT
         # légitimement ce client (Commercial assigné) mais n'est ni Admin ni
-        # Directeur Financier, pas l'absence totale d'accès (couverte par
+        # Comptable, pas l'absence totale d'accès (couverte par
         # test_plain_user_has_no_access_at_all ci-dessous).
         self.commercial_role = _role(ROLE_COMMERCIAL)
         self.normal_user = UserFactory()
@@ -101,8 +106,8 @@ class ClientDocumentViewSetTest(APITestCase):
 
 class AdditionalViewTests(APITestCase):
     def setUp(self):
-        self.admin_role = _role(ROLE_ADMIN)
-        self.rh_role = _role(ROLE_RH_MANAGER)
+        self.admin_role = _role(ROLE_RESPONSABLE_ADMINISTRATIF)
+        self.rh_role = _role(ROLE_RESPONSABLE_ADMINISTRATIF)
         self.admin = UserFactory()
         self.admin.roles.add(self.admin_role)
         self.rh = UserFactory()
@@ -191,7 +196,7 @@ class AdditionalViewTests(APITestCase):
 
 class ClientRBACTests(APITestCase):
     def setUp(self):
-        self.admin_role = _role(ROLE_ADMIN)
+        self.admin_role = _role(ROLE_RESPONSABLE_ADMINISTRATIF)
         self.commercial_role = _role(ROLE_COMMERCIAL)
         self.admin = UserFactory()
         self.admin.roles.add(self.admin_role)
@@ -303,7 +308,7 @@ class ContactRBACTests(APITestCase):
 
 class PayrollValidationViewTests(APITestCase):
     def setUp(self):
-        self.admin_role = _role(ROLE_ADMIN)
+        self.admin_role = _role(ROLE_RESPONSABLE_ADMINISTRATIF)
         self.admin = UserFactory()
         self.admin.roles.add(self.admin_role)
         self.plain = UserFactory()
@@ -344,9 +349,9 @@ class CRMAccessPentestTests(APITestCase):
         self.client_a = ClientFactory(assigned_to=self.com_a)
         self.client_b = ClientFactory(assigned_to=self.com_b)
 
-    def test_consultant_cannot_list_clients(self):
+    def test_subcontractor_cannot_list_clients(self):
         consultant = UserFactory()
-        consultant.roles.add(_role(ROLE_CONSULTANT))
+        consultant.roles.add(_role(ROLE_SOUS_TRAITANT_DEV))
         self.client.force_authenticate(user=consultant)
         response = self.client.get(reverse('client-list'))
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
@@ -369,7 +374,7 @@ class CRMAccessPentestTests(APITestCase):
 
     def test_consultant_cannot_create_interaction_on_any_client(self):
         consultant = UserFactory()
-        consultant.roles.add(_role(ROLE_CONSULTANT))
+        consultant.roles.add(_role(ROLE_RESPONSABLE_TECHNIQUE))
         self.client.force_authenticate(user=consultant)
         response = self.client.post(
             reverse('client-interactions-list', kwargs={'client_pk': self.client_b.pk}),

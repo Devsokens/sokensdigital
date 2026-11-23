@@ -366,7 +366,7 @@ export function QuoteSettingsForm({ onSaved }: { onSaved: () => void }) {
   const { profile: me } = useAuth();
   const myRoles = profileRoles(me);
   const isGerant = useIsGerant();
-  const canEditRates = isGerant || myRoles.some((r) => ["SUPER_ADMIN", "COMPTABLE", "DIRECTEUR_FINANCIER"].includes(r));
+  const canEditRates = isGerant || myRoles.some((r) => ["SUPER_ADMIN", "COMPTABLE"].includes(r));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 

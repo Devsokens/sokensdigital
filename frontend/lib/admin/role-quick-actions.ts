@@ -17,6 +17,8 @@ import {
   Users,
   Wallet,
   type LucideIcon,
+  Wrench,
+  Headset,
 } from "lucide-react";
 import type { AppRole } from "@/lib/firebase/types";
 
@@ -40,12 +42,22 @@ export const ROLE_QUICK_ACTIONS: Record<AppRole, QuickAction[]> = {
     { label: "Devis", href: "/admin/marketing/devis", icon: FileText },
     { label: "Projet", href: "/admin/technique/projets", icon: FolderKanban },
   ],
-  RESPONSABLE_MARKETING: [
+  RESPONSABLE_OPERATIONS: [
+    { label: "Projets", href: "/admin/technique/projets", icon: FolderKanban },
+    { label: "Heures", href: "/admin/technique/timesheets", icon: Clock },
+    { label: "Département", href: "/admin/rh/departements", icon: Building2 },
+  ],
+  RESPONSABLE_TECHNIQUE: [
+    { label: "Projets", href: "/admin/technique/projets", icon: FolderKanban },
+    { label: "Maintenance", href: "/admin/technique/maintenance", icon: Wrench },
+    { label: "Tickets", href: "/admin/support/tickets", icon: Headset },
+  ],
+  RESPONSABLE_MARKETING_COM: [
     { label: "Article", href: "/admin/marketing/blog", icon: Newspaper },
     { label: "Publication", href: "/admin/marketing/plan-editorial", icon: CalendarClock },
     { label: "Devis", href: "/admin/marketing/devis", icon: FileText },
   ],
-  RESPONSABLE_RH: [
+  RESPONSABLE_ADMINISTRATIF: [
     { label: "Employé", href: "/admin/rh", icon: Users },
     { label: "Département", href: "/admin/rh/departements", icon: Building2 },
   ],
@@ -63,10 +75,7 @@ export const ROLE_QUICK_ACTIONS: Record<AppRole, QuickAction[]> = {
     { label: "Projets", href: "/admin/technique/projets", icon: FolderKanban },
   ],
   COMPTABLE: [
-    { label: "Écriture", href: "/admin/finance/grand-livre", icon: BookOpen },
     { label: "Facture", href: "/admin/finance/facturation", icon: Receipt },
-  ],
-  DIRECTEUR_FINANCIER: [
     { label: "Rapprochement", href: "/admin/finance/rapprochement", icon: Landmark },
     { label: "Clôture", href: "/admin/finance/cloture", icon: Lock },
     { label: "TVA", href: "/admin/finance/tva", icon: Percent },
@@ -74,9 +83,17 @@ export const ROLE_QUICK_ACTIONS: Record<AppRole, QuickAction[]> = {
   CAISSIER: [
     { label: "Caisse", href: "/admin/finance/tresorerie", icon: Wallet },
   ],
-  AUTRE: [
-    { label: "Messagerie", href: "/admin/messagerie", icon: MessageSquare },
-    { label: "Profil", action: "open-profile", icon: UserRound },
+  SOUS_TRAITANT_DEV: [
+    { label: "Projets", href: "/admin/technique/projets", icon: FolderKanban },
+    { label: "Heures", href: "/admin/technique/timesheets", icon: Clock },
+  ],
+  SOUS_TRAITANT_COMMERCIAL: [
+    { label: "Leads", href: "/admin/marketing/leads", icon: Target },
+    { label: "Devis", href: "/admin/marketing/devis", icon: FileText },
+  ],
+  SOUS_TRAITANT_DESIGNER: [
+    { label: "Projets", href: "/admin/technique/projets", icon: FolderKanban },
+    { label: "Heures", href: "/admin/technique/timesheets", icon: Clock },
   ],
 };
 
@@ -86,10 +103,17 @@ export const ROLE_QUICK_ACTIONS: Record<AppRole, QuickAction[]> = {
  * the FAB stays a shortcut, not a second nav menu. */
 const MAX_QUICK_ACTIONS = 4;
 
+/** Aucun rôle : messagerie et profil. */
+const DEFAULT_QUICK_ACTIONS: QuickAction[] = [
+  { label: "Messagerie", href: "/admin/messagerie", icon: MessageSquare },
+  { label: "Profil", action: "open-profile", icon: UserRound },
+];
+
 export function quickActionsForRoles(roles: AppRole[]): QuickAction[] {
   const merged: QuickAction[] = [];
   const seen = new Set<string>();
-  for (const role of roles.length > 0 ? roles : (["AUTRE"] as AppRole[])) {
+  if (roles.length === 0) return [...DEFAULT_QUICK_ACTIONS];
+  for (const role of roles) {
     for (const action of ROLE_QUICK_ACTIONS[role] ?? []) {
       if (seen.has(action.label)) continue;
       seen.add(action.label);

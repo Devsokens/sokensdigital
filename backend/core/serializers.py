@@ -1,8 +1,21 @@
 from rest_framework import serializers
 
 from core.constants import (
-    ROLE_CAISSIER, ROLE_COMMERCIAL, ROLE_COMPTABLE, ROLE_DEVELOPER, ROLE_DIRECTEUR_FINANCIER,
-    ROLE_PROJECT_MANAGER, ROLE_RESPONSABLE_MARKETING, ROLE_RH_MANAGER, ROLE_SUPER_ADMIN,
+    ROLE_CAISSIER,
+    ROLE_COMMERCIAL,
+    ROLE_COMPTABLE,
+    ROLE_DEVELOPER,
+    ROLE_PROJECT_MANAGER,
+    ROLE_RESPONSABLE_MARKETING_COM,
+    ROLE_RESPONSABLE_ADMINISTRATIF,
+    ROLE_SUPER_ADMIN,
+    ROLE_RESPONSABLE_OPERATIONS,
+    ROLE_RESPONSABLE_TECHNIQUE,
+    ROLE_SOUS_TRAITANT_DEV,
+    ROLE_SOUS_TRAITANT_COMMERCIAL,
+    ROLE_SOUS_TRAITANT_DESIGNER,
+    FUNCTIONAL_ROLES,
+    MAX_FUNCTIONAL_ROLES,
 )
 from core.models import AuditLog, Department, Role, User
 
@@ -108,27 +121,68 @@ class MeUpdateSerializer(serializers.ModelSerializer):
         fields = ['first_name', 'last_name', 'avatar_url']
 
 
-APP_ROLE_CHOICES = [
-    'SUPER_ADMIN', 'RESPONSABLE_MARKETING', 'RESPONSABLE_RH', 'COMMERCIAL',
-    'CHEF_DE_PROJET', 'DEVELOPPEUR', 'COMPTABLE', 'DIRECTEUR_FINANCIER', 'CAISSIER', 'AUTRE',
-]
-
-# Maps the SNAKE_CASE role stored in the Firestore profile (APP_ROLE_CHOICES
-# above — legacy naming from before the RBAC migration) to the French Role
-# name actually checked by core.permissions.has_role() on the Django side.
-# 'AUTRE' has no Django-side equivalent — an employee with that value gets
-# no elevated permissions, same as before this mapping existed.
+# Nom applicatif (SNAKE_CASE, stocké dans le profil Firestore et utilisé
+# par le front) -> nom du rôle Django vérifié par core.permissions.has_role().
 APP_ROLE_TO_DJANGO_ROLE = {
     'SUPER_ADMIN': ROLE_SUPER_ADMIN,
-    'RESPONSABLE_MARKETING': ROLE_RESPONSABLE_MARKETING,
-    'RESPONSABLE_RH': ROLE_RH_MANAGER,
-    'COMMERCIAL': ROLE_COMMERCIAL,
+    'RESPONSABLE_OPERATIONS': ROLE_RESPONSABLE_OPERATIONS,
+    'RESPONSABLE_TECHNIQUE': ROLE_RESPONSABLE_TECHNIQUE,
+    'RESPONSABLE_MARKETING_COM': ROLE_RESPONSABLE_MARKETING_COM,
+    'RESPONSABLE_ADMINISTRATIF': ROLE_RESPONSABLE_ADMINISTRATIF,
     'CHEF_DE_PROJET': ROLE_PROJECT_MANAGER,
     'DEVELOPPEUR': ROLE_DEVELOPER,
+    'COMMERCIAL': ROLE_COMMERCIAL,
     'COMPTABLE': ROLE_COMPTABLE,
-    'DIRECTEUR_FINANCIER': ROLE_DIRECTEUR_FINANCIER,
     'CAISSIER': ROLE_CAISSIER,
+    'SOUS_TRAITANT_DEV': ROLE_SOUS_TRAITANT_DEV,
+    'SOUS_TRAITANT_COMMERCIAL': ROLE_SOUS_TRAITANT_COMMERCIAL,
+    'SOUS_TRAITANT_DESIGNER': ROLE_SOUS_TRAITANT_DESIGNER,
 }
+APP_ROLE_CHOICES = list(APP_ROLE_TO_DJANGO_ROLE)
+
+# Anciens noms applicatifs (profils Firestore d'avant le référentiel) ->
+# nouveau nom ; 'AUTRE' n'a pas d'équivalent et est simplement retiré.
+LEGACY_APP_ROLE_MAPPING = {
+    'RESPONSABLE_MARKETING': 'RESPONSABLE_MARKETING_COM',
+    'RESPONSABLE_RH': 'RESPONSABLE_ADMINISTRATIF',
+    'ADMINISTRATEUR': 'RESPONSABLE_ADMINISTRATIF',
+    'DIRECTEUR_FINANCIER': 'COMPTABLE',
+    'SUPPORT_CLIENT': 'RESPONSABLE_TECHNIQUE',
+    'CONSULTANT': 'RESPONSABLE_TECHNIQUE',
+}
+
+
+def normalize_app_roles(roles) -> list[str]:
+    """Reclasse d'anciens noms, retire les inconnus et les doublons, puis
+    applique le plafond : Super-Admin + 2 rôles fonctionnels au plus (les
+    plus élevés, selon l'ordre de FUNCTIONAL_ROLES)."""
+    priority = {app: i for i, app in enumerate(
+        app for django_name in FUNCTIONAL_ROLES
+        for app, mapped in APP_ROLE_TO_DJANGO_ROLE.items() if mapped == django_name
+    )}
+    seen = []
+    for role in roles or []:
+        role = LEGACY_APP_ROLE_MAPPING.get(role, role)
+        if role in APP_ROLE_TO_DJANGO_ROLE and role not in seen:
+            seen.append(role)
+    functional = sorted((r for r in seen if r != 'SUPER_ADMIN'), key=lambda r: priority.get(r, 99))
+    return (['SUPER_ADMIN'] if 'SUPER_ADMIN' in seen else []) + functional[:MAX_FUNCTIONAL_ROLES]
+
+
+def validate_role_set(roles):
+    """Plafond de cumul : 2 rôles fonctionnels au plus, le privilège
+    Super-Admin en plus ; pas de doublon."""
+    if len(set(roles)) != len(roles):
+        raise serializers.ValidationError('Un même rôle est sélectionné plusieurs fois.')
+    functional = [r for r in roles if r != 'SUPER_ADMIN']
+    if len(functional) > MAX_FUNCTIONAL_ROLES:
+        raise serializers.ValidationError(
+            f'Au plus {MAX_FUNCTIONAL_ROLES} rôles fonctionnels par utilisateur '
+            '(le privilège Super-Administrateur ne compte pas dans ce plafond).'
+        )
+    if not functional and 'SUPER_ADMIN' not in roles:
+        raise serializers.ValidationError('Au moins un rôle est requis.')
+    return roles
 
 
 class ProvisionUserSerializer(serializers.Serializer):
@@ -151,6 +205,9 @@ class ProvisionUserSerializer(serializers.Serializer):
     department_id = serializers.PrimaryKeyRelatedField(
         source='department', queryset=Department.objects.all(), required=False, allow_null=True,
     )
+
+    def validate_roles(self, value):
+        return validate_role_set(value)
 
 
 class SetUserPermissionsSerializer(serializers.Serializer):
@@ -183,6 +240,9 @@ class SetUserRoleSerializer(serializers.Serializer):
     department_id = serializers.PrimaryKeyRelatedField(
         source='department', queryset=Department.objects.all(), required=False, allow_null=True,
     )
+
+    def validate_roles(self, value):
+        return validate_role_set(value)
 
 
 class AuditLogSerializer(serializers.ModelSerializer):

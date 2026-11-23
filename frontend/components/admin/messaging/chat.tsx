@@ -147,7 +147,7 @@ export function Chat() {
   const canPostInActiveRoom =
     !activeRoom ||
     activeRoom.roomType !== "COMPANY" ||
-    profileRoles(profile).some((r) => r === "SUPER_ADMIN" || r === "RESPONSABLE_MARKETING");
+    profileRoles(profile).some((r) => r === "SUPER_ADMIN" || r === "RESPONSABLE_MARKETING_COM");
 
   function roomDisplayName(room: ChatRoom) {
     if (room.roomType === "DIRECT" && user) {

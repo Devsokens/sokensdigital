@@ -3,7 +3,7 @@ from decimal import Decimal
 from rest_framework.test import APIClient, APITestCase
 
 from core.models import Role, User
-from core.constants import ROLE_RH_MANAGER, ROLE_DEVELOPER
+from core.constants import ROLE_RESPONSABLE_ADMINISTRATIF, ROLE_DEVELOPER
 from hr.models import EmployeeProfile
 
 
@@ -16,7 +16,7 @@ def _give_role(user, name):
 class EmployeeProfileViewSetTests(APITestCase):
     def setUp(self):
         self.hr_user = User.objects.create(email='rh@sokensdigital.com', first_name='RH')
-        _give_role(self.hr_user, ROLE_RH_MANAGER)
+        _give_role(self.hr_user, ROLE_RESPONSABLE_ADMINISTRATIF)
 
         self.dev_user = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
         _give_role(self.dev_user, ROLE_DEVELOPER)

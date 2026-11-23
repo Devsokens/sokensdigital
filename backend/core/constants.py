@@ -8,25 +8,61 @@ par les filtres de queryset dans les vues.
 Centraliser ces noms ici évite les erreurs de typo et facilite le renommage.
 """
 
-# Rôles principaux
+# Référentiel des rôles (13) — Soken's Digital SARL.
+#
+# Privilège système, hors plafond de cumul :
 ROLE_SUPER_ADMIN = 'Super-Administrateur'
-ROLE_ADMIN = 'Administrateur'
+# Direction et pôles opérationnels :
+ROLE_RESPONSABLE_OPERATIONS = 'Responsable des Opérations'
+ROLE_RESPONSABLE_TECHNIQUE = 'Responsable Technique'
+ROLE_RESPONSABLE_MARKETING_COM = 'Responsable Marketing & Communication'
+ROLE_RESPONSABLE_ADMINISTRATIF = 'Responsable Administratif'
+# Exécution interne :
 ROLE_PROJECT_MANAGER = 'Chef de Projet'
 ROLE_DEVELOPER = 'Développeur'
-ROLE_DIRECTEUR_FINANCIER = 'Directeur Financier'
 ROLE_COMMERCIAL = 'Commercial'
-ROLE_RH_MANAGER = 'Responsable RH'
-ROLE_CONSULTANT = 'Consultant'
-ROLE_SUPPORT_CLIENT = 'Support Client'
 ROLE_COMPTABLE = 'Comptable'
-ROLE_RESPONSABLE_MARKETING = 'Responsable Marketing'
 ROLE_CAISSIER = 'Caissier'
+# Sous-traitants (accès externes cloisonnés) :
+ROLE_SOUS_TRAITANT_DEV = 'Sous-traitant Développeur'
+ROLE_SOUS_TRAITANT_COMMERCIAL = 'Sous-traitant Commercial'
+ROLE_SOUS_TRAITANT_DESIGNER = 'Sous-traitant Designer'
+
+# Ordre = priorité (du plus élevé au plus bas), utilisée pour appliquer le
+# plafond de cumul lors du reclassement des anciens rôles.
+FUNCTIONAL_ROLES = [
+    ROLE_RESPONSABLE_OPERATIONS, ROLE_RESPONSABLE_TECHNIQUE, ROLE_RESPONSABLE_MARKETING_COM,
+    ROLE_RESPONSABLE_ADMINISTRATIF, ROLE_PROJECT_MANAGER, ROLE_COMPTABLE, ROLE_COMMERCIAL,
+    ROLE_DEVELOPER, ROLE_CAISSIER, ROLE_SOUS_TRAITANT_DEV, ROLE_SOUS_TRAITANT_COMMERCIAL,
+    ROLE_SOUS_TRAITANT_DESIGNER,
+]
+ALL_ROLES = [ROLE_SUPER_ADMIN, *FUNCTIONAL_ROLES]
+# Plafond de cumul : 2 rôles fonctionnels par utilisateur (le privilège
+# Super-Admin n'est pas compté).
+MAX_FUNCTIONAL_ROLES = 2
+SUBCONTRACTOR_ROLES = [ROLE_SOUS_TRAITANT_DEV, ROLE_SOUS_TRAITANT_COMMERCIAL, ROLE_SOUS_TRAITANT_DESIGNER]
+# Rôles internes (salariés) : tout sauf les sous-traitants.
+INTERNAL_ROLES = [r for r in ALL_ROLES if r not in SUBCONTRACTOR_ROLES]
+
+# Anciens rôles retirés -> rôle de reclassement (migration core).
+LEGACY_ROLE_MAPPING = {
+    'Administrateur': ROLE_RESPONSABLE_ADMINISTRATIF,
+    'Responsable RH': ROLE_RESPONSABLE_ADMINISTRATIF,
+    'Directeur Financier': ROLE_COMPTABLE,
+    'Support Client': ROLE_RESPONSABLE_TECHNIQUE,
+    'Consultant': ROLE_RESPONSABLE_TECHNIQUE,
+    'Responsable Marketing': ROLE_RESPONSABLE_MARKETING_COM,
+}
 
 # Groupes pratiques pour les filtres de queryset
-ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN]
-MANAGEMENT_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PROJECT_MANAGER]
-FINANCE_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_DIRECTEUR_FINANCIER]
-HR_ROLES = [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_RH_MANAGER]
+# Exécution technique, cloisonnée aux projets dont on est membre.
+DEV_LIKE_ROLES = [ROLE_DEVELOPER, ROLE_SOUS_TRAITANT_DEV, ROLE_SOUS_TRAITANT_DESIGNER]
+# Pilotage : voient tous les projets.
+PROJECT_OVERSIGHT_ROLES = [ROLE_RESPONSABLE_OPERATIONS, ROLE_RESPONSABLE_TECHNIQUE]
+ADMIN_ROLES = [ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_ADMINISTRATIF]
+MANAGEMENT_ROLES = [ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_OPERATIONS, ROLE_PROJECT_MANAGER]
+FINANCE_ROLES = [ROLE_SUPER_ADMIN, ROLE_COMPTABLE]
+HR_ROLES = [ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_ADMINISTRATIF]
 
 
 # ---------------------------------------------------------------------------
@@ -106,35 +142,45 @@ def _merge(*dicts):
 # mirror of every call site.
 DEFAULT_ROLE_PERMISSIONS = {
     ROLE_SUPER_ADMIN: _full(*_ALL_MODULE_KEYS),
-    ROLE_ADMIN: _merge(
-        _full(*[k for k in _ALL_MODULE_KEYS if k not in ('utilisateurs', 'audit-log')]),
-        _read_only('utilisateurs', 'audit-log'),
-    ),
-    ROLE_RH_MANAGER: _merge(
-        _read_only('dashboard', 'rh-dashboard'),
+    ROLE_RESPONSABLE_OPERATIONS: _merge(
+        _read_only('dashboard', 'audit-log', 'analytique-technique', 'clients'),
         {'messagerie': ['voir', 'creer']},
         {'agenda': ['voir', 'creer', 'modifier']},
-        _full('employes'),
-        # NOT departements — DepartmentViewSet is Super-Admin-only on the
-        # backend (core.views.IsSuperAdmin), so declaring read access here
-        # would show a nav item that 403s the moment it's opened.
-        {'utilisateurs': ['voir', 'creer']},
+        _full('projets', 'timesheets', 'maintenance', 'departements', 'cahier-des-charges'),
+        {'projets-soumis': ['voir', 'modifier']},
+        {'tickets': ['voir', 'modifier']},
+    ),
+    ROLE_RESPONSABLE_TECHNIQUE: _merge(
+        _read_only('dashboard', 'analytique-technique', 'clients'),
+        {'messagerie': ['voir', 'creer']},
+        {'agenda': ['voir', 'creer', 'modifier']},
+        _full('projets', 'maintenance', 'cahier-des-charges', 'tickets', 'base-connaissances'),
+        {'timesheets': ['voir', 'creer', 'modifier']},
+        {'projets-soumis': ['voir', 'modifier']},
+        {'decaissements': ['voir', 'creer']},
+    ),
+    ROLE_RESPONSABLE_MARKETING_COM: _merge(
+        _read_only('dashboard', 'marketing-dashboard', 'analytique-marketing'),
+        {'messagerie': ['voir', 'creer']},
+        {'agenda': ['voir', 'creer', 'modifier']},
+        _full('contenu', 'plan-editorial', 'leads', 'devis', 'cahier-des-charges', 'projets-soumis'),
+        {'clients': ['voir', 'creer', 'modifier']},
+    ),
+    ROLE_RESPONSABLE_ADMINISTRATIF: _merge(
+        _read_only('dashboard', 'audit-log'),
+        {'messagerie': ['voir', 'creer']},
+        {'agenda': ['voir', 'creer', 'modifier']},
+        _full('rh-dashboard', 'employes', 'departements', 'clients'),
+        {'utilisateurs': ['voir']},
     ),
     ROLE_PROJECT_MANAGER: _merge(
-        _read_only('dashboard', 'devis', 'analytique-technique'),
+        _read_only('dashboard', 'devis', 'analytique-technique', 'clients'),
         {'messagerie': ['voir', 'creer']},
         {'agenda': ['voir', 'creer', 'modifier']},
-        _full('projets'),
+        _full('projets', 'maintenance', 'cahier-des-charges'),
         {'timesheets': ['voir', 'creer', 'modifier']},
         {'decaissements': ['voir', 'creer']},
-        _full('maintenance'),
-        # Analyse les demandes transmises par le marketing et les fait
-        # passer en développement une fois le client validant.
         {'projets-soumis': ['voir', 'modifier']},
-        # _accessible_clients_qs scope un Chef de Projet non-Admin aux
-        # clients liés à ses propres projets — lecture seule.
-        _read_only('clients'),
-        _full('cahier-des-charges'),
     ),
     ROLE_DEVELOPER: _merge(
         _read_only('dashboard', 'analytique-technique'),
@@ -142,47 +188,9 @@ DEFAULT_ROLE_PERMISSIONS = {
         {'agenda': ['voir', 'creer', 'modifier']},
         {'projets': ['voir', 'modifier']},
         {'timesheets': ['voir', 'creer']},
-        # Voit les fiches et rédige des rapports ; l'attribution et les
-        # accès de production restent au responsable technique.
         {'maintenance': ['voir', 'creer']},
         {'projets-soumis': ['voir', 'modifier']},
         _full('cahier-des-charges'),
-    ),
-    ROLE_DIRECTEUR_FINANCIER: _merge(
-        _read_only('dashboard'),
-        {'messagerie': ['voir', 'creer']},
-        {'agenda': ['voir', 'creer', 'modifier']},
-        _read_only('finance-dashboard'),
-        _full('cloture', 'grand-livre', 'facturation', 'rapprochement', 'tva'),
-        {'decaissements': ['voir', 'modifier']},
-        _full('achats', 'tresorerie', 'encaissements'),
-    ),
-    ROLE_COMPTABLE: _merge(
-        _read_only('dashboard'),
-        {'messagerie': ['voir', 'creer']},
-        {'agenda': ['voir', 'creer', 'modifier']},
-        _full('grand-livre', 'facturation', 'rapprochement', 'tva'),
-        {'decaissements': ['voir', 'modifier']},
-        _read_only('achats', 'tresorerie', 'encaissements'),
-    ),
-    ROLE_CAISSIER: _merge(
-        _read_only('dashboard'),
-        {'messagerie': ['voir', 'creer']},
-        {'agenda': ['voir', 'creer', 'modifier']},
-        # Caissier tient la caisse physique uniquement — pas d'accès banque/
-        # capital (réservé Directeur Financier/Comptable, cf. cahier des
-        # charges §3 "opérations de trésorerie").
-        {'tresorerie': ['voir', 'creer']},
-        _read_only('encaissements'),
-    ),
-    ROLE_RESPONSABLE_MARKETING: _merge(
-        _read_only('dashboard', 'marketing-dashboard', 'analytique-marketing'),
-        {'messagerie': ['voir', 'creer']},
-        {'agenda': ['voir', 'creer', 'modifier']},
-        _full('contenu', 'plan-editorial', 'leads', 'devis', 'cahier-des-charges'),
-        # Le marketing reçoit les demandes du portail public et les fait
-        # circuler : il lui faut le module, pas seulement la lecture.
-        _full('projets-soumis'),
     ),
     ROLE_COMMERCIAL: _merge(
         _read_only('dashboard', 'analytique-marketing'),
@@ -190,26 +198,39 @@ DEFAULT_ROLE_PERMISSIONS = {
         {'agenda': ['voir', 'creer', 'modifier']},
         {'leads': ['voir', 'creer', 'modifier']},
         {'devis': ['voir', 'creer', 'modifier']},
-        # ClientViewSet allows Commercial to create/update (core.
-        # administration.views.ClientViewSet.get_permissions) — scoped to
-        # their own assigned clients server-side (_accessible_clients_qs).
         {'clients': ['voir', 'creer', 'modifier']},
         {'projets-soumis': ['voir', 'creer', 'modifier']},
     ),
-    ROLE_CONSULTANT: _merge(
-        _read_only('dashboard', 'projets'),
-        {'messagerie': ['voir']},
-        {'agenda': ['voir', 'creer', 'modifier']},
-    ),
-    ROLE_SUPPORT_CLIENT: _merge(
+    ROLE_COMPTABLE: _merge(
         _read_only('dashboard'),
         {'messagerie': ['voir', 'creer']},
         {'agenda': ['voir', 'creer', 'modifier']},
-        # CDC §4.8 — "accès aux tickets, base de connaissances, et fiches
-        # clients" — tickets et base de connaissances gérés en propre par
-        # le Support Client ; fiches clients en lecture seule (création/
-        # édition réservées à Commercial/Admin côté API).
-        _full('tickets', 'base-connaissances'),
-        _read_only('clients'),
+        _read_only('finance-dashboard'),
+        _full('cloture', 'grand-livre', 'facturation', 'rapprochement', 'tva', 'achats', 'tresorerie', 'encaissements'),
+        {'decaissements': ['voir', 'modifier']},
+    ),
+    ROLE_CAISSIER: _merge(
+        _read_only('dashboard'),
+        {'messagerie': ['voir', 'creer']},
+        {'agenda': ['voir', 'creer', 'modifier']},
+        {'tresorerie': ['voir', 'creer']},
+        _read_only('encaissements'),
+    ),
+    # Sous-traitants : cloisonnés aux projets / leads qui leur sont
+    # assignés ; aucune finance, RH, ni autre projet.
+    ROLE_SOUS_TRAITANT_DEV: _merge(
+        {'messagerie': ['voir', 'creer']},
+        {'projets': ['voir', 'modifier']},
+        {'timesheets': ['voir', 'creer']},
+    ),
+    ROLE_SOUS_TRAITANT_COMMERCIAL: _merge(
+        {'messagerie': ['voir', 'creer']},
+        {'leads': ['voir', 'creer', 'modifier']},
+        {'devis': ['voir', 'creer', 'modifier']},
+    ),
+    ROLE_SOUS_TRAITANT_DESIGNER: _merge(
+        {'messagerie': ['voir', 'creer']},
+        {'projets': ['voir', 'modifier']},
+        {'timesheets': ['voir', 'creer']},
     ),
 }

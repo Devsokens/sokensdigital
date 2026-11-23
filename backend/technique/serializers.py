@@ -6,7 +6,7 @@ from .models import (
     MaintainedApp, MaintenanceServiceAccount, MaintenanceReport,
 )
 from core.models import User
-from core.constants import ROLE_DEVELOPER, MANAGEMENT_ROLES
+from core.constants import DEV_LIKE_ROLES, MANAGEMENT_ROLES
 from administration.models import Client
 from django.db.models import Sum
 from django.utils import timezone
@@ -25,7 +25,7 @@ def _is_dev_only(context):
     if not user or not getattr(user, 'is_authenticated', False):
         return False
     return (
-        user.roles.filter(name=ROLE_DEVELOPER).exists()
+        user.roles.filter(name__in=DEV_LIKE_ROLES).exists()
         and not user.roles.filter(name__in=MANAGEMENT_ROLES).exists()
     )
 

@@ -78,7 +78,7 @@ Plus explicite, plus facile à tester, et ça marche réellement (vérifié par 
 
 ## Rôle Caissier
 
-Ajouté (`core/constants.py ROLE_CAISSIER`, `AppRole` côté frontend, mapping Django↔Firestore dans `core/serializers.py`). Permission dédiée `IsCaissierFinanceOrAdmin` sur `treasury.CashEntryViewSet` — la caisse physique est accessible au Caissier, la banque/le capital restent réservés Directeur Financier/Super-Admin (cahier des charges §3).
+Ajouté (`core/constants.py ROLE_CAISSIER`, `AppRole` côté frontend, mapping Django↔Firestore dans `core/serializers.py`). Permission dédiée `IsCaissierFinanceOrAdmin` sur `treasury.CashEntryViewSet` — la caisse physique est accessible au Caissier, la banque/le capital restent réservés Comptable/Super-Admin (cahier des charges §3).
 
 ## Ce qui reste vrai depuis la construction initiale (non régressé)
 

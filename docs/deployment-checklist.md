@@ -67,9 +67,9 @@ Super-Administrateur avant que quiconque puisse utiliser l'admin :
 # python manage.py shell
 from core.models import Role
 for name in ['Super-Administrateur', 'Administrateur', 'Chef de Projet',
-             'Développeur', 'Directeur Financier', 'Commercial',
-             'Responsable RH', 'Consultant', 'Support Client',
-             'Comptable', 'Responsable Marketing']:
+             'Développeur', 'Comptable', 'Commercial',
+             'Responsable Administratif', 'Consultant', 'Support Client',
+             'Comptable', 'Responsable Marketing & Communication']:
     Role.objects.get_or_create(name=name)
 ```
 (Envisager une commande `manage.py` dédiée / une migration de données si

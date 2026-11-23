@@ -8,7 +8,7 @@ import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { provisionUser, createEmployee, listDepartments } from "@/lib/api/hr";
 import { uploadAvatar } from "@/lib/api/upload";
 import type { Department } from "@/lib/api/types";
-import { ROLE_LABELS, type AppRole } from "@/lib/firebase/types";
+import { ROLE_LABELS, type AppRole, MAX_FUNCTIONAL_ROLES } from "@/lib/firebase/types";
 import { ApiError } from "@/lib/api/client";
 
 /** Message lisible d'une erreur d'API : `detail`, sinon la première erreur de champ. */
@@ -93,11 +93,17 @@ export function AddEmployeeSheet({
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  // Plafond : 2 rôles fonctionnels, le privilège Super-Admin en plus.
   function toggleRole(role: AppRole, checked: boolean) {
-    setForm((f) => ({
-      ...f,
-      roles: checked ? [...f.roles, role] : f.roles.filter((r) => r !== role),
-    }));
+    setForm((f) => {
+      if (!checked) return { ...f, roles: f.roles.filter((r) => r !== role) };
+      const functional = f.roles.filter((r) => r !== "SUPER_ADMIN");
+      if (role !== "SUPER_ADMIN" && functional.length >= MAX_FUNCTIONAL_ROLES) {
+        alert(`Au plus ${MAX_FUNCTIONAL_ROLES} rôles fonctionnels par utilisateur (le Super-Administrateur ne compte pas).`);
+        return f;
+      }
+      return { ...f, roles: [...f.roles, role] };
+    });
   }
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -294,7 +300,7 @@ export function AddEmployeeSheet({
               </label>
               <fieldset className="block">
                 <legend className={labelClass}>
-                  Rôle(s) — au moins un, plusieurs possibles
+                  Rôle(s) — au moins un, 2 rôles fonctionnels maximum (+ Super-Administrateur)
                 </legend>
                 <div className="grid grid-cols-2 gap-2 rounded-lg border border-neutral-200 p-3">
                   {Object.entries(ROLE_LABELS).map(([value, label]) => (

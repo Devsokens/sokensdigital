@@ -3,7 +3,7 @@ import { ServiceProposalEditor } from "@/components/admin/marketing/service-prop
 
 export default function NouveauServiceProposalPage() {
   return (
-    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_MARKETING", "COMMERCIAL", "CHEF_DE_PROJET"]}>
+    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_MARKETING_COM", "COMMERCIAL", "CHEF_DE_PROJET"]}>
       <ServiceProposalEditor />
     </RequireRole>
   );

@@ -7,7 +7,7 @@ import { SubmittedProjects } from "@/components/admin/submitted-projects";
  * techniques ne l'encombrent pas. */
 export default function ProjetsSoumisMarketingPage() {
   return (
-    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_MARKETING", "COMMERCIAL"]}>
+    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_MARKETING_COM", "COMMERCIAL"]}>
       <SubmittedProjects
         stages={["SOUMIS", "CDC_PRET", "SOUMIS_CLIENT", "VALIDE_CLIENT"]}
         title="Projets soumis"

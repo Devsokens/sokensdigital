@@ -21,8 +21,8 @@ import type {
   CashEntry, CashEntrySource,
 } from "@/lib/api/types";
 
-const CAN_MANAGE_CAISSE = ["SUPER_ADMIN", "DIRECTEUR_FINANCIER", "CAISSIER"];
-const CAN_MANAGE_BANQUE_CAPITAL = ["SUPER_ADMIN", "DIRECTEUR_FINANCIER"];
+const CAN_MANAGE_CAISSE = ["SUPER_ADMIN", "COMPTABLE", "CAISSIER"];
+const CAN_MANAGE_BANQUE_CAPITAL = ["SUPER_ADMIN", "COMPTABLE"];
 
 export function Tresorerie() {
   return (
@@ -297,7 +297,7 @@ function BanquePanel() {
   }
 
   if (!canManage) {
-    return <p className="text-sm text-neutral-400">Réservé au Directeur Financier / Super-Admin.</p>;
+    return <p className="text-sm text-neutral-400">Réservé au Comptable / Super-Admin.</p>;
   }
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!entries) {

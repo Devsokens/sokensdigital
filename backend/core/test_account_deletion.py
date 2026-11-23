@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from rest_framework.test import APIClient, APITestCase
 
-from core.constants import ROLE_DEVELOPER, ROLE_RH_MANAGER, ROLE_SUPER_ADMIN
+from core.constants import ROLE_DEVELOPER, ROLE_RESPONSABLE_ADMINISTRATIF, ROLE_SUPER_ADMIN
 from core.models import Role, User
 from hr.models import Contract, EmployeeProfile
 
@@ -56,7 +56,7 @@ class DeleteUserAccountTests(APITestCase):
         self.assertFalse(data['has_account'])
 
     def test_only_super_admin_can_delete_a_user(self, firebase_delete, profile_delete):
-        rh = _user('rh@sokensdigital.com', ROLE_RH_MANAGER)
+        rh = _user('rh@sokensdigital.com', ROLE_RESPONSABLE_ADMINISTRATIF)
         response = _client(rh).delete(self._url(self.dev))
         self.assertEqual(response.status_code, 403)
         firebase_delete.assert_not_called()
@@ -79,7 +79,7 @@ class DeleteUserAccountTests(APITestCase):
 @patch('firebase_admin.auth.delete_user')
 class DeleteEmployeeTests(APITestCase):
     def setUp(self):
-        self.rh = _user('rh@sokensdigital.com', ROLE_RH_MANAGER)
+        self.rh = _user('rh@sokensdigital.com', ROLE_RESPONSABLE_ADMINISTRATIF)
         self.dev = _user('dev@sokensdigital.com', ROLE_DEVELOPER, firebase_uid='uid-dev')
         self.profile = EmployeeProfile.objects.create(user=self.dev, position='Développeur')
         Contract.objects.create(employee=self.profile, contract_type='CDI', start_date='2026-01-01')

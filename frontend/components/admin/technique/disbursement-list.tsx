@@ -57,7 +57,7 @@ const STAGE_APPROVER_LABEL: Partial<Record<DisbursementStatus, string>> = {
 function canApproveStage(req: DisbursementRequest, roles: string[], isGerant: boolean, myId: string | null): boolean {
   if (req.status === "EN_ATTENTE_RCF") {
     if (req.assigned_rcf) return req.assigned_rcf.id === myId;
-    return roles.includes("DIRECTEUR_FINANCIER") || roles.includes("SUPER_ADMIN");
+    return roles.includes("COMPTABLE") || roles.includes("SUPER_ADMIN");
   }
   if (req.assigned_gerant) return req.assigned_gerant.id === myId;
   return isGerant;
@@ -148,8 +148,8 @@ export function DisbursementList({ mode = "department", departmentLabel }: { mod
           </h1>
           <p className="text-sm text-neutral-500">
             {isFinanceView
-              ? "Toutes les demandes de besoins des départements. Le Directeur financier puis le Gérant valident en signant, ou rejettent avec un motif si le justificatif ne convient pas."
-              : "Exprimez les besoins de votre département. Chaque demande est validée par le Directeur financier puis par le Gérant (signatures sur le bon de demande), ou rejetée avec un motif."}
+              ? "Toutes les demandes de besoins des départements. Le Comptable puis le Gérant valident en signant, ou rejettent avec un motif si le justificatif ne convient pas."
+              : "Exprimez les besoins de votre département. Chaque demande est validée par le Comptable puis par le Gérant (signatures sur le bon de demande), ou rejetée avec un motif."}
           </p>
         </div>
         <Sheet open={open} onOpenChange={setOpen}>
@@ -305,7 +305,7 @@ export function DisbursementList({ mode = "department", departmentLabel }: { mod
 }
 
 /** Approuver = signer : la signature manuscrite est apposée sur le bon de
- * demande PDF (Directeur financier puis Gérant). */
+ * demande PDF (Comptable puis Gérant). */
 function SignApproveModal({ onSign, disabled, stageLabel, reference }: {
   onSign: (signature: string) => void;
   disabled?: boolean;

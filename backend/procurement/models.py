@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.core.exceptions import ValidationError
 
 from core.models import LoggedModel, User, DocumentAttachment
-from core.constants import ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN
+from core.constants import ROLE_COMPTABLE, ROLE_SUPER_ADMIN
 
 
 class Supplier(LoggedModel):

@@ -12,7 +12,11 @@ from django.core.cache import cache
 from rest_framework.test import APIClient, APITestCase
 
 from core.constants import (
-    ROLE_COMMERCIAL, ROLE_COMPTABLE, ROLE_DEVELOPER, ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN,
+    ROLE_COMMERCIAL,
+    ROLE_COMPTABLE,
+    ROLE_DEVELOPER,
+    ROLE_RESPONSABLE_MARKETING_COM,
+    ROLE_SUPER_ADMIN,
 )
 from core.models import Role, User
 
@@ -39,7 +43,7 @@ def _posthog_ok(rows=None):
 class AnalyticsAccessTests(APITestCase):
     def setUp(self):
         cache.clear()
-        self.marketing = _user('mkt-analytics@sokensdigital.com', ROLE_RESPONSABLE_MARKETING)
+        self.marketing = _user('mkt-analytics@sokensdigital.com', ROLE_RESPONSABLE_MARKETING_COM)
         self.commercial = _user('com-analytics@sokensdigital.com', ROLE_COMMERCIAL)
         self.developer = _user('dev-analytics@sokensdigital.com', ROLE_DEVELOPER)
         self.accountant = _user('compta-analytics@sokensdigital.com', ROLE_COMPTABLE)
@@ -77,7 +81,7 @@ class AnalyticsAccessTests(APITestCase):
 class AnalyticsBehaviourTests(APITestCase):
     def setUp(self):
         cache.clear()
-        self.client_mkt = _user('mkt-behaviour@sokensdigital.com', ROLE_RESPONSABLE_MARKETING)
+        self.client_mkt = _user('mkt-behaviour@sokensdigital.com', ROLE_RESPONSABLE_MARKETING_COM)
 
     @patch.dict('os.environ', {'POSTHOG_PERSONAL_API_KEY': '', 'POSTHOG_PROJECT_ID': ''})
     def test_not_configured_is_explicit_not_an_error(self):

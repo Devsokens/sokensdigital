@@ -3,7 +3,7 @@ import { InvoiceEditor } from "@/components/admin/finance/invoice-editor";
 
 export default function NewInvoicePage() {
   return (
-    <RequireRole roles={["SUPER_ADMIN", "DIRECTEUR_FINANCIER", "COMPTABLE"]}>
+    <RequireRole roles={["SUPER_ADMIN", "COMPTABLE"]}>
       <InvoiceEditor />
     </RequireRole>
   );

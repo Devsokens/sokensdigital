@@ -15,7 +15,7 @@ from core.firestore_client import set_chat_room_members, upsert_chat_room
 from core.notifications import notify_roles
 from core.permissions import has_role
 from core.storage import upload_project_document, upload_task_comment_attachment
-from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER
+from core.constants import ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_COMPTABLE, ROLE_RESPONSABLE_OPERATIONS, ROLE_RESPONSABLE_TECHNIQUE
 from projects.notifications import (
     notify_project_lead_assigned, notify_project_member_added, notify_task_assigned, notify_task_comment,
 )
@@ -29,7 +29,7 @@ from projects.serializers import (
 )
 
 MANAGER_ROLES = (ROLE_PROJECT_MANAGER,)
-WIDE_READ_ROLES = (ROLE_DIRECTEUR_FINANCIER,)
+WIDE_READ_ROLES = (ROLE_COMPTABLE, ROLE_RESPONSABLE_OPERATIONS, ROLE_RESPONSABLE_TECHNIQUE)
 
 
 class IsProjectManagerOrReadOnly(permissions.BasePermission):

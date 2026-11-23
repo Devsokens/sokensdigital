@@ -134,7 +134,7 @@ export const ADMIN_SECTIONS: NavSection[] = [
       { label: "Rapprochement bancaire", shortLabel: "Rappro.", href: "/admin/finance/rapprochement", icon: Landmark, moduleKey: "rapprochement", comingSoon: true },
       { label: "Fiscalité (TVA)", shortLabel: "TVA", href: "/admin/finance/tva", icon: Percent, moduleKey: "tva" },
       { label: "Opérations d'achats", shortLabel: "Achats", href: "/admin/finance/achats", icon: ShoppingCart, moduleKey: "achats" },
-      // Tous les besoins des départements : validation signée Directeur financier puis Gérant.
+      // Tous les besoins des départements : validation signée Comptable puis Gérant.
       { label: "Décaissements", href: "/admin/finance/decaissements", icon: Banknote, moduleKey: "decaissements" },
       { label: "Besoins", href: "/admin/finance/besoins", icon: Banknote, moduleKey: "besoins" },
       { label: "Trésorerie", href: "/admin/finance/tresorerie", icon: Wallet, moduleKey: "tresorerie" },

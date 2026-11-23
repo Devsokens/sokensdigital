@@ -27,9 +27,9 @@ import type {
   Department, DisbursementRequest, ProcurementRequest, Supplier, SupplierInvoice, SupplierQuote,
 } from "@/lib/api/types";
 
-const CAN_APPROVE = ["SUPER_ADMIN", "DIRECTEUR_FINANCIER", "COMPTABLE"];
-const CAN_MANAGE_SUPPLIERS = ["SUPER_ADMIN", "DIRECTEUR_FINANCIER"];
-const CAN_VALIDATE_INVOICE = ["SUPER_ADMIN", "DIRECTEUR_FINANCIER"];
+const CAN_APPROVE = ["SUPER_ADMIN", "COMPTABLE"];
+const CAN_MANAGE_SUPPLIERS = ["SUPER_ADMIN", "COMPTABLE"];
+const CAN_VALIDATE_INVOICE = ["SUPER_ADMIN", "COMPTABLE"];
 
 export function Achats() {
   return (

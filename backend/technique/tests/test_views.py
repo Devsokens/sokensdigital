@@ -8,12 +8,15 @@ from .factories import (
 )
 
 from core.constants import (
-    ROLE_ADMIN, ROLE_DEVELOPER, ROLE_PROJECT_MANAGER, ROLE_CONSULTANT,
+    ROLE_RESPONSABLE_ADMINISTRATIF,
+    ROLE_DEVELOPER,
+    ROLE_PROJECT_MANAGER,
+    ROLE_RESPONSABLE_TECHNIQUE,
 )
 
 class ViewTests(APITestCase):
     def setUp(self):
-        self.admin_role = RoleFactory(name=ROLE_ADMIN)
+        self.admin_role = RoleFactory(name=ROLE_RESPONSABLE_ADMINISTRATIF)
         self.dev_role = RoleFactory(name=ROLE_DEVELOPER)
         self.pm_role = RoleFactory(name=ROLE_PROJECT_MANAGER)
         self.admin = UserFactory()
@@ -278,8 +281,8 @@ class ViewTests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_knowledge_base_write_consultant_allowed(self):
-        """Un Consultant peut écrire en KB."""
-        consultant_role = RoleFactory(name=ROLE_CONSULTANT)
+        """Le Responsable Technique peut écrire en KB."""
+        consultant_role = RoleFactory(name=ROLE_RESPONSABLE_TECHNIQUE)
         consultant = UserFactory()
         consultant.roles.add(consultant_role)
         self.client.force_authenticate(user=consultant)

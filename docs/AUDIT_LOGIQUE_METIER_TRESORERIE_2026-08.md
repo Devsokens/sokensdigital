@@ -225,7 +225,7 @@ Supprimer le signal correspondant (source de confusion — deux mécanismes qui 
 
 Déjà signalé en C4 mais c'est un problème de **logique métier**, pas juste de syntaxe : le cahier des charges (§4.3, déjà implémenté et respecté ailleurs dans `finance/models.py`/`finance/views.py`) impose que tout décaissement passe par un palier d'approbation dépendant du montant — sauf que `create_disbursement_request_task` (déclenché automatiquement dès qu'un Manager valide un devis fournisseur) ne fait **aucun appel** à `initial_status_for_amount()`. Même corrigé pour ne plus crasher, si on lui donne un statut fixe au lieu de calculer le palier, un devis de 200 000 FCFA génère un décaissement qui saute la validation N3 (Direction Générale).
 
-**Ce n'est pas juste un bug — c'est une brèche de contrôle financier** si elle passe inaperçue en prod: n'importe quel Manager RCF (rôle qui peut valider un devis, cf `procurement/views.py IsManagerOrAdmin`) pourrait indirectement faire approuver un paiement fournisseur de n'importe quel montant sans que le Directeur Financier ou le Super-Admin ne soit jamais sollicité.
+**Ce n'est pas juste un bug — c'est une brèche de contrôle financier** si elle passe inaperçue en prod: n'importe quel Manager RCF (rôle qui peut valider un devis, cf `procurement/views.py IsManagerOrAdmin`) pourrait indirectement faire approuver un paiement fournisseur de n'importe quel montant sans que le Comptable ou le Super-Admin ne soit jamais sollicité.
 
 **Fix:** voir C4 — utiliser `initial_status_for_amount(quote.amount_ttc)`, et documenter dans le docstring de `SupplierQuote.validate_manager` (procurement/views.py) que la validation du devis ne vaut *pas* autorisation de paiement, seulement ouverture d'une demande qui repart dans le circuit normal.
 
@@ -287,9 +287,9 @@ period = AccountingPeriod.objects.get(status=AccountingPeriod.Status.OUVERTE)
 
 ### H6. Rôle "Caissier" documenté mais jamais implémenté — CashEntryViewSet inaccessible à qui devrait l'utiliser
 
-`TREASURY_WORKFLOW_IMPLEMENTATION.md` (que j'ai écrit moi-même dans le pass précédent) décrit : *"Caissier: peut créer CashEntry"*. Or `core/constants.py` n'a pas de rôle Caissier, et suite au fix sécurité du tour précédent, `CashEntryViewSet.permission_classes = [IsAuthenticated, IsFinanceOrAdmin]` — **seuls Directeur Financier / Super-Admin peuvent créer une pièce de caisse**, personne d'autre. La doc décrit un rôle qui n'existe pas et un accès qui contredit le code réellement en place.
+`TREASURY_WORKFLOW_IMPLEMENTATION.md` (que j'ai écrit moi-même dans le pass précédent) décrit : *"Caissier: peut créer CashEntry"*. Or `core/constants.py` n'a pas de rôle Caissier, et suite au fix sécurité du tour précédent, `CashEntryViewSet.permission_classes = [IsAuthenticated, IsFinanceOrAdmin]` — **seuls Comptable / Super-Admin peuvent créer une pièce de caisse**, personne d'autre. La doc décrit un rôle qui n'existe pas et un accès qui contredit le code réellement en place.
 
-**Ce n'est pas un problème de sécurité (le fix RBAC était correct — mieux vaut trop restrictif que trop permissif)**, c'est un problème de **cohérence produit** : soit on crée le rôle Caissier et on l'ajoute aux permissions, soit on assume que c'est le Directeur Financier qui tient la caisse et on corrige la doc + les 3 lignes de signature des PDF ("Bénéficiaire | Responsable Financier | Gérant" — pas de ligne "Caissier" cohérente avec ce choix).
+**Ce n'est pas un problème de sécurité (le fix RBAC était correct — mieux vaut trop restrictif que trop permissif)**, c'est un problème de **cohérence produit** : soit on crée le rôle Caissier et on l'ajoute aux permissions, soit on assume que c'est le Comptable qui tient la caisse et on corrige la doc + les 3 lignes de signature des PDF ("Bénéficiaire | Responsable Financier | Gérant" — pas de ligne "Caissier" cohérente avec ce choix).
 
 **Fix:** décision produit à trancher avec l'utilisateur — soit ajouter `ROLE_CAISSIER` à `core/constants.py` + migration RBAC + accès `CashEntryViewSet`, soit documenter que c'est un sous-rôle de Comptable/Finance sans compte dédié.
 

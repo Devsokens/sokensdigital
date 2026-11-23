@@ -62,10 +62,10 @@ class TaxRatesTests(APITestCase):
     """Taux dynamiques : paramétrables, appliqués aux nouvelles factures, bornés."""
 
     def setUp(self):
-        from core.constants import ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER
+        from core.constants import ROLE_COMPTABLE
         from core.models import Role, User
         self.df = User.objects.create(email='df@x.dev')
-        self.df.roles.add(Role.objects.get_or_create(name=ROLE_DIRECTEUR_FINANCIER)[0])
+        self.df.roles.add(Role.objects.get_or_create(name=ROLE_COMPTABLE)[0])
         self.compta = User.objects.create(email='compta@x.dev')
         self.compta.roles.add(Role.objects.get_or_create(name=ROLE_COMPTABLE)[0])
         self.df_client = APIClient()
@@ -160,7 +160,7 @@ class AssignedSignatoriesTests(APITestCase):
     """Seuls les signataires en poste à la création de la demande signent."""
 
     def setUp(self):
-        from core.constants import ROLE_DEVELOPER, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN
+        from core.constants import ROLE_DEVELOPER, ROLE_COMPTABLE, ROLE_SUPER_ADMIN
         from core.models import Role, User
 
         def mk(email, role=None, **kw):
@@ -171,8 +171,8 @@ class AssignedSignatoriesTests(APITestCase):
             c.force_authenticate(user=u)
             return u, c
 
-        self.rcf, self.rcf_c = mk('rcf@x.dev', ROLE_DIRECTEUR_FINANCIER, is_rcf=True)
-        self.other_df, self.other_df_c = mk('df2@x.dev', ROLE_DIRECTEUR_FINANCIER)
+        self.rcf, self.rcf_c = mk('rcf@x.dev', ROLE_COMPTABLE, is_rcf=True)
+        self.other_df, self.other_df_c = mk('df2@x.dev', ROLE_COMPTABLE)
         self.gerant, self.gerant_c = mk('g@x.dev', is_gerant=True)
         self.admin, self.admin_c = mk('sa@x.dev', ROLE_SUPER_ADMIN)
         self.dev, self.dev_c = mk('dev@x.dev', ROLE_DEVELOPER)

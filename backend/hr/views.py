@@ -7,7 +7,7 @@ from rest_framework.response import Response
 
 from core.accounts import AccountDeletionError, delete_platform_account
 from core.permissions import has_role
-from core.constants import ROLE_RH_MANAGER, ROLE_SUPER_ADMIN
+from core.constants import ROLE_RESPONSABLE_ADMINISTRATIF, ROLE_SUPER_ADMIN
 from hr.models import EmployeeProfile
 from hr.serializers import (
     ContractSerializer,
@@ -20,7 +20,7 @@ from hr.serializers import (
 # reused for "not X" business-logic branching), so ROLE_SUPER_ADMIN can live
 # here once instead of being repeated at each call site — cahier des
 # charges §4.8: "Super-Administrateur : accès complet à l'ensemble du système".
-HR_MANAGER_ROLES = (ROLE_SUPER_ADMIN, ROLE_RH_MANAGER)
+HR_MANAGER_ROLES = (ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_ADMINISTRATIF)
 
 
 class IsHRManagerOrOwnReadOnly(permissions.BasePermission):
@@ -41,7 +41,7 @@ class IsHRManagerOrOwnReadOnly(permissions.BasePermission):
 
 @extend_schema_view(
     list=extend_schema(tags=['Administration & RH'], summary='List employee profiles', description='HR sees everyone; other roles see only their own record.'),
-    create=extend_schema(tags=['Administration & RH'], summary='Create an employee profile', description='Restricted to Super-Admin/Responsable RH.'),
+    create=extend_schema(tags=['Administration & RH'], summary='Create an employee profile', description='Restricted to Super-Admin/Responsable Administratif.'),
     retrieve=extend_schema(tags=['Administration & RH'], summary='Get an employee profile'),
     update=extend_schema(tags=['Administration & RH'], summary='Update an employee profile'),
     partial_update=extend_schema(tags=['Administration & RH'], summary='Partially update an employee profile'),

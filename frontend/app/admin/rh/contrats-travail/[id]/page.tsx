@@ -8,7 +8,7 @@ export default async function ContratTravailDetailsPage({
 }) {
   const { id } = await params;
   return (
-    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_RH"]}>
+    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_ADMINISTRATIF"]}>
       <EmploymentContractEditPage id={id} />
     </RequireRole>
   );

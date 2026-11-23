@@ -101,7 +101,7 @@ GET /api/v1/treasury/bank-entries/export_monthly_statement/?year=2026&month=8&ca
   - Motif rejet (si applicable)
 - **Section 4: Approbations (3 niveaux)**
   - Responsable Comptable & Financière (N1)
-  - Directeur Financier (N2)
+  - Comptable (N2)
   - Gérant / Direction Générale (N3)
   - Chaque bloc: ligne signature + date
 

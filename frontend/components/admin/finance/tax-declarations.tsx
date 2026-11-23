@@ -25,7 +25,7 @@ export function TaxDeclarations() {
   const [actingId, setActingId] = useState<string | null>(null);
 
   const myRoles = profileRoles(profile);
-  const canValidate = myRoles.includes("DIRECTEUR_FINANCIER") || myRoles.includes("SUPER_ADMIN");
+  const canValidate = myRoles.includes("COMPTABLE") || myRoles.includes("SUPER_ADMIN");
 
   async function load() {
     try {

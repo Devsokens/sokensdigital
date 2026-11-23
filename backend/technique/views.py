@@ -8,15 +8,23 @@ from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 
 from core.constants import (
-    ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_PROJECT_MANAGER,
-    ROLE_DEVELOPER, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPPORT_CLIENT,
-    ADMIN_ROLES, MANAGEMENT_ROLES, FINANCE_ROLES,
+    ROLE_SUPER_ADMIN,
+    ROLE_RESPONSABLE_ADMINISTRATIF,
+    ROLE_PROJECT_MANAGER,
+    ROLE_DEVELOPER,
+    ROLE_COMPTABLE,
+    ROLE_RESPONSABLE_TECHNIQUE,
+    ADMIN_ROLES,
+    MANAGEMENT_ROLES,
+    FINANCE_ROLES,
+    DEV_LIKE_ROLES,
+    PROJECT_OVERSIGHT_ROLES,
 )
 from core.permissions import (
     IsSuperAdmin, IsAdmin, IsProjectManager, IsDeveloper,
-    IsDirecteurFinancier, IsOwner, IsProjectMember,
+    IsComptable, IsOwner, IsProjectMember,
     IsAssignedDeveloper, IsAdminOrReadOnly, ReadOnly,
-    IsConsultant, IsSupportClient,
+    IsResponsableTechnique, IsResponsableTechnique,
 )
 from core.models import User, AuditLog, Notification
 from core.notifications import notify_roles
@@ -35,7 +43,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     """
     CRUD projets avec filtrage RBAC.
 
-    - Admin / Directeur Financier : tous les projets
+    - Admin / Comptable : tous les projets
     - Chef de Projet : projets gérés + projets membres
     - Développeur : projets dont il est membre uniquement
     """
@@ -50,13 +58,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
             'client', 'project_manager'
         ).prefetch_related('members')
 
-        if user.roles.filter(name__in=[*ADMIN_ROLES, ROLE_DIRECTEUR_FINANCIER]).exists():
+        if user.roles.filter(name__in=[*ADMIN_ROLES, ROLE_COMPTABLE, *PROJECT_OVERSIGHT_ROLES]).exists():
             return qs
         if user.roles.filter(name=ROLE_PROJECT_MANAGER).exists():
             return qs.filter(
                 models.Q(project_manager=user) | models.Q(members=user)
             ).distinct()
-        if user.roles.filter(name=ROLE_DEVELOPER).exists():
+        if user.roles.filter(name__in=DEV_LIKE_ROLES).exists():
             return qs.filter(members=user)
         return qs.none()
 
@@ -108,7 +116,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied("Vous ne gérez pas ce projet.")
         # Développeurs ne peuvent pas modifier budget ou cost_rate
         is_dev_only = (
-            user.roles.filter(name=ROLE_DEVELOPER).exists()
+            user.roles.filter(name__in=DEV_LIKE_ROLES).exists()
             and not user.roles.filter(name__in=MANAGEMENT_ROLES).exists()
         )
         if is_dev_only:
@@ -251,12 +259,12 @@ class ProjectPhaseViewSet(viewsets.ModelViewSet):
 
 def _can_access_project(user, project_id):
     """Même périmètre que ProjectViewSet.get_queryset, pour un seul projet —
-    Admin/Directeur Financier : tout ; Chef de Projet/Développeur : gérant,
+    Admin/Comptable : tout ; Chef de Projet/Développeur : gérant,
     membre, ou (pour le PM) rien d'autre. Réutilisé par les vues nested
     (documents, tâches) qui filtraient jusqu'ici par project_pk seul, sans
     jamais vérifier que CET utilisateur a un rapport avec CE projet
     (pentest du 24/09/2026)."""
-    if user.roles.filter(name__in=[*ADMIN_ROLES, ROLE_DIRECTEUR_FINANCIER]).exists():
+    if user.roles.filter(name__in=[*ADMIN_ROLES, ROLE_COMPTABLE]).exists():
         return True
     return Project.objects.filter(
         models.Q(pk=project_id) & (models.Q(project_manager=user) | models.Q(members=user))
@@ -399,7 +407,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         instance = serializer.instance
         is_management = user.roles.filter(name__in=MANAGEMENT_ROLES).exists()
         is_dev_only = (
-            user.roles.filter(name=ROLE_DEVELOPER).exists() and not is_management
+            user.roles.filter(name__in=DEV_LIKE_ROLES).exists() and not is_management
         )
         if is_dev_only:
             # Développeur non-manager : uniquement s'il est assigné à CETTE
@@ -430,8 +438,8 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
         qs = TimeEntry.objects.filter(task_id=self.kwargs['task_pk'])
         user = self.request.user
 
-        # Admin et Directeur Financier : visibilité totale.
-        if user.roles.filter(name__in=[*ADMIN_ROLES, ROLE_DIRECTEUR_FINANCIER]).exists():
+        # Admin et Comptable : visibilité totale.
+        if user.roles.filter(name__in=[*ADMIN_ROLES, ROLE_COMPTABLE]).exists():
             return qs
         # Chef de Projet : uniquement les entrées de SES projets.
         if user.roles.filter(name=ROLE_PROJECT_MANAGER).exists():
@@ -560,7 +568,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         user = self.request.user
         # Admin, ChefProjet, Support Client : accès complet.
         if user.roles.filter(
-            name__in=[*ADMIN_ROLES, ROLE_PROJECT_MANAGER, ROLE_SUPPORT_CLIENT]
+            name__in=[*ADMIN_ROLES, ROLE_PROJECT_MANAGER, ROLE_RESPONSABLE_TECHNIQUE]
         ).exists():
             return qs
         # Autres : uniquement tickets liés à un projet dont ils sont membres,
@@ -573,7 +581,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return [
                 permissions.IsAuthenticated(),
-                (IsAdmin | IsProjectManager | IsSupportClient)(),
+                (IsAdmin | IsProjectManager | IsResponsableTechnique)(),
             ]
         if self.action == 'destroy':
             return [permissions.IsAuthenticated(), IsAdmin()]
@@ -586,7 +594,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         instance = serializer.instance
         user = self.request.user
         is_management = user.roles.filter(
-            name__in=[*ADMIN_ROLES, ROLE_PROJECT_MANAGER, ROLE_SUPPORT_CLIENT]
+            name__in=[*ADMIN_ROLES, ROLE_PROJECT_MANAGER, ROLE_RESPONSABLE_TECHNIQUE]
         ).exists()
         if not is_management and instance.assigned_developer_id != user.pk:
             raise PermissionDenied("Vous n'êtes pas assigné à ce ticket.")
@@ -604,7 +612,7 @@ class KnowledgeBaseViewSet(viewsets.ModelViewSet):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [
                 permissions.IsAuthenticated(),
-                (IsAdmin | IsProjectManager | IsConsultant)(),
+                (IsAdmin | IsProjectManager | IsResponsableTechnique)(),
             ]
         return [permissions.IsAuthenticated()]
 

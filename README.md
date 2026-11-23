@@ -10,7 +10,7 @@ Le projet repose sur **deux backends complémentaires**, chacun responsable d'un
 | Domaine | Techno | Pourquoi |
 |---|---|---|
 | Authentification | **Firebase Auth** | Gère les comptes utilisateurs (email/mot de passe). Pas d'auto-inscription publique — les comptes sont créés à la main dans la Console Firebase par un Super-Admin/RH. |
-| Identité & rôle (`profiles/{uid}`) | **Firestore** | Source de vérité unique du rôle applicatif (`SUPER_ADMIN`, `RESPONSABLE_RH`, `CHEF_DE_PROJET`, ...). Django lit ce rôle à chaque requête via le SDK Admin (`backend/core/firestore_client.py`) — il n'y a plus de table de rôles côté Django. |
+| Identité & rôle (`profiles/{uid}`) | **Firestore** | Source de vérité unique du rôle applicatif (`SUPER_ADMIN`, `RESPONSABLE_ADMINISTRATIF`, `CHEF_DE_PROJET`, ... — voir [docs/ROLES_ET_PERMISSIONS.md](docs/ROLES_ET_PERMISSIONS.md)). Django lit ce rôle à chaque requête via le SDK Admin (`backend/core/firestore_client.py`) — il n'y a plus de table de rôles côté Django. |
 | Chat, notifications, documents internes | **Firestore** | Données temps réel / peu structurées, sécurisées par `firestore.rules` (à la racine du repo). |
 | RH, Finance, Projets | **Django REST + PostgreSQL (Supabase)** | Données relationnelles avec logique métier stricte (partie double comptable, workflow de décaissement N1/N2/N3, calcul automatique du coût horaire...). Voir `docs/backend-specifications.md` pour le détail complet, département par département. |
 | Cache & broker Celery | **Upstash (Redis)** | Pas le Redis de Render (aucune persistance disque sur le plan gratuit). |
@@ -69,7 +69,7 @@ Il n'y a pas d'auto-inscription. Pour créer un nouveau compte :
 1. Firebase Console → Authentication → Add user (email + mot de passe)
 2. Firestore → collection `profiles` → document dont l'ID = l'UID Firebase généré → champs `email`, `firstName`, `lastName`, `role`, `departmentId`, `createdAt`, `updatedAt`
 
-Le rôle (`role`) détermine ce que la personne peut faire, aussi bien côté Firestore (règles) que côté Django (`core.permissions.has_role()`, qui lit ce même champ). Valeurs possibles : `SUPER_ADMIN`, `RESPONSABLE_MARKETING`, `RESPONSABLE_RH`, `COMMERCIAL`, `CHEF_DE_PROJET`, `DEVELOPPEUR`, `COMPTABLE`, `DIRECTEUR_FINANCIER`, `CAISSIER`, `AUTRE`.
+Le rôle (`role`) détermine ce que la personne peut faire, aussi bien côté Firestore (règles) que côté Django (`core.permissions.has_role()`, qui lit ce même champ). Valeurs possibles (référentiel 2026, 13 rôles — détail dans [docs/ROLES_ET_PERMISSIONS.md](docs/ROLES_ET_PERMISSIONS.md)) : `SUPER_ADMIN`, `RESPONSABLE_OPERATIONS`, `RESPONSABLE_TECHNIQUE`, `RESPONSABLE_MARKETING_COM`, `RESPONSABLE_ADMINISTRATIF`, `CHEF_DE_PROJET`, `DEVELOPPEUR`, `COMMERCIAL`, `COMPTABLE`, `CAISSIER`, `SOUS_TRAITANT_DEV`, `SOUS_TRAITANT_COMMERCIAL`, `SOUS_TRAITANT_DESIGNER`. Au plus 2 rôles fonctionnels par personne (le Super-Admin en plus), attribués par le seul Super-Admin.
 
 Actuellement le frontend (`/admin`) affiche tous les modules à n'importe quel compte connecté — la restriction par rôle se fait uniquement côté API pour l'instant (un compte non-RH qui appelle `/api/v1/hr/employees/` ne voit que sa propre fiche, par exemple). Le filtrage de la sidebar par rôle reste à faire une fois plusieurs rôles réels en usage.
 

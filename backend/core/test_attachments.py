@@ -14,7 +14,11 @@ from django.urls import reverse
 from rest_framework.test import APITestCase
 
 from core.constants import (
-    ROLE_ADMIN, ROLE_CAISSIER, ROLE_COMPTABLE, ROLE_DEVELOPER,
+    ROLE_RESPONSABLE_ADMINISTRATIF,
+    ROLE_CAISSIER,
+    ROLE_COMPTABLE,
+    ROLE_DEVELOPER,
+    ROLE_SUPER_ADMIN,
 )
 from core.models import (
     DOCUMENT_ATTACHMENT_ALLOWED_EXTENSIONS,
@@ -43,7 +47,7 @@ class AttachmentFixturesMixin:
         self.comptable.roles.add(Role.objects.get_or_create(name=ROLE_COMPTABLE)[0])
 
         self.admin = User.objects.create(email='admin@sokens.test')
-        self.admin.roles.add(Role.objects.get_or_create(name=ROLE_ADMIN)[0])
+        self.admin.roles.add(Role.objects.get_or_create(name=ROLE_RESPONSABLE_ADMINISTRATIF)[0])
 
         self.dev = User.objects.create(email='dev@sokens.test')
         self.dev.roles.add(Role.objects.get_or_create(name=ROLE_DEVELOPER)[0])
@@ -152,7 +156,9 @@ class DocumentAttachmentTests(AttachmentFixturesMixin, APITestCase):
         self.assertEqual(refused.status_code, 403)
         self.assertEqual(DocumentAttachment.objects.count(), 1)
 
-        self.client.force_authenticate(user=self.admin)
+        super_admin = User.objects.create(email='sa@sokens.test')
+        super_admin.roles.add(Role.objects.get_or_create(name=ROLE_SUPER_ADMIN)[0])
+        self.client.force_authenticate(user=super_admin)
         accepted = self.client.delete(detail, query)
         self.assertEqual(accepted.status_code, 204)
         self.assertEqual(DocumentAttachment.objects.count(), 0)

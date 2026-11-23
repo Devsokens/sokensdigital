@@ -12,7 +12,9 @@ from decimal import Decimal
 from rest_framework.test import APIClient, APITestCase
 
 from core.constants import (
-    ROLE_COMPTABLE, ROLE_DEVELOPER, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN,
+    ROLE_COMPTABLE,
+    ROLE_DEVELOPER,
+    ROLE_SUPER_ADMIN,
 )
 from core.models import Department, Role, User
 from finance.models import Account, AccountingPeriod, DisbursementRequest, JournalEntry
@@ -34,7 +36,7 @@ class ProcurementTestBase(APITestCase):
         _give_role(self.comptable, ROLE_COMPTABLE)
 
         self.cfo = User.objects.create(email='cfo@sokensdigital.com', first_name='CFO')
-        _give_role(self.cfo, ROLE_DIRECTEUR_FINANCIER)
+        _give_role(self.cfo, ROLE_COMPTABLE)
 
         self.super_admin = User.objects.create(email='admin@sokensdigital.com', first_name='Admin')
         _give_role(self.super_admin, ROLE_SUPER_ADMIN)
@@ -167,7 +169,7 @@ class ProcurementRequestViewSetTests(ProcurementTestBase):
 
     def test_comptable_can_approve_rcf_then_admin_approves_as_gerant(self):
         # Le palier Gérant est réservé au Super-Admin (pentest du 24/09/2026,
-        # P3) : la RCF (Comptable/Directeur Financier) ne peut plus statuer
+        # P3) : la RCF (Comptable) ne peut plus statuer
         # aussi sur ce second palier, même sur une fiche qu'elle a déjà
         # transmise — sinon une seule personne validerait tout le circuit.
         pr = ProcurementRequest.objects.create(
@@ -452,7 +454,7 @@ class ProcurementFullWorkflowIntegrationTest(ProcurementTestBase):
         pr.refresh_from_db()
         self.assertEqual(pr.status, ProcurementRequest.Status.APPROUVEE)
 
-        # 2. Devis — création réservée IsFinanceOrAdmin (Directeur Financier/
+        # 2. Devis — création réservée IsFinanceOrAdmin (Comptable/
         # Super-Admin ; Comptable n'y est PAS inclus, contrairement à
         # IsManagerOrAdmin utilisé pour les actions d'approbation).
         quote_response = self.client_cfo.post('/api/v1/procurement/quotes/', {

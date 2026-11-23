@@ -3,7 +3,7 @@ import { FinanceDashboard } from "@/components/admin/finance/finance-dashboard";
 
 export default function FinanceDashboardPage() {
   return (
-    <RequireRole roles={["SUPER_ADMIN", "DIRECTEUR_FINANCIER"]}>
+    <RequireRole roles={["SUPER_ADMIN", "COMPTABLE"]}>
       <FinanceDashboard />
     </RequireRole>
   );

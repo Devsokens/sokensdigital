@@ -6,7 +6,16 @@ des rôles du cahier des charges.
 """
 from rest_framework import permissions
 
-from core.constants import ROLE_SUPER_ADMIN
+from core.constants import (
+    ROLE_SUPER_ADMIN,
+    ROLE_RESPONSABLE_ADMINISTRATIF,
+    ROLE_PROJECT_MANAGER,
+    ROLE_DEVELOPER,
+    ROLE_COMPTABLE,
+    ROLE_COMMERCIAL,
+    ROLE_RESPONSABLE_TECHNIQUE,
+    ROLE_RESPONSABLE_OPERATIONS,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -79,61 +88,59 @@ class IsSuperAdmin(permissions.BasePermission):
 
 
 class IsAdmin(permissions.BasePermission):
-    """Accès pour Administrateur ou Super-Administrateur."""
+    """Administration : Super-Administrateur ou Responsable Administratif."""
 
     def has_permission(self, request, view):
-        return _user_has_any_role(
-            request.user, 'Super-Administrateur', 'Administrateur'
-        )
+        return _user_has_any_role(request.user, ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_ADMINISTRATIF)
 
 
 class IsProjectManager(permissions.BasePermission):
     """Accès pour Chef de Projet."""
 
     def has_permission(self, request, view):
-        return _user_has_role(request.user, 'Chef de Projet')
+        return _user_has_role(request.user, ROLE_PROJECT_MANAGER)
 
 
 class IsDeveloper(permissions.BasePermission):
     """Accès pour Développeur."""
 
     def has_permission(self, request, view):
-        return _user_has_role(request.user, 'Développeur')
+        return _user_has_role(request.user, ROLE_DEVELOPER)
 
 
-class IsDirecteurFinancier(permissions.BasePermission):
-    """Accès pour Directeur Financier."""
+class IsComptable(permissions.BasePermission):
+    """Accès pour Comptable."""
 
     def has_permission(self, request, view):
-        return _user_has_role(request.user, 'Directeur Financier')
+        return _user_has_role(request.user, ROLE_COMPTABLE)
 
 
 class IsCommercial(permissions.BasePermission):
     """Accès pour Commercial."""
 
     def has_permission(self, request, view):
-        return _user_has_role(request.user, 'Commercial')
+        return _user_has_role(request.user, ROLE_COMMERCIAL)
 
 
-class IsRHManager(permissions.BasePermission):
-    """Accès pour Responsable RH."""
-
-    def has_permission(self, request, view):
-        return _user_has_role(request.user, 'Responsable RH')
-
-
-class IsConsultant(permissions.BasePermission):
-    """Accès pour Consultant."""
+class IsResponsableAdministratif(permissions.BasePermission):
+    """Accès pour Responsable Administratif."""
 
     def has_permission(self, request, view):
-        return _user_has_role(request.user, 'Consultant')
+        return _user_has_role(request.user, ROLE_RESPONSABLE_ADMINISTRATIF)
 
 
-class IsSupportClient(permissions.BasePermission):
-    """Accès pour Support Client."""
+class IsResponsableTechnique(permissions.BasePermission):
+    """Accès pour Responsable Technique."""
 
     def has_permission(self, request, view):
-        return _user_has_role(request.user, 'Support Client')
+        return _user_has_role(request.user, ROLE_RESPONSABLE_TECHNIQUE)
+
+
+class IsResponsableOperations(permissions.BasePermission):
+    """Accès pour Responsable des Opérations."""
+
+    def has_permission(self, request, view):
+        return _user_has_role(request.user, ROLE_RESPONSABLE_OPERATIONS)
 
 
 class IsAdminOrReadOnly(permissions.BasePermission):
@@ -143,7 +150,7 @@ class IsAdminOrReadOnly(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
         return _user_has_any_role(
-            request.user, 'Super-Administrateur', 'Administrateur'
+            request.user, 'Super-Administrateur', 'Responsable Administratif'
         )
 
 
@@ -334,3 +341,14 @@ class IsGerant(permissions.BasePermission):
 
     def has_permission(self, request, view):
         return is_gerant(request.user)
+
+
+
+def is_subcontractor_only(user) -> bool:
+    """Utilisateur n'ayant que des rôles de sous-traitant (accès externe
+    cloisonné : ni finances, ni RH, ni autres projets)."""
+    from core.constants import SUBCONTRACTOR_ROLES
+    if not user or getattr(user, 'is_anonymous', True):
+        return False
+    names = set(user.roles.values_list('name', flat=True))
+    return bool(names) and names <= set(SUBCONTRACTOR_ROLES)

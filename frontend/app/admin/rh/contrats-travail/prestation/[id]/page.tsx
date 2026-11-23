@@ -4,7 +4,7 @@ import { ContractEditPage } from "@/components/admin/contracts/contract-edit-pag
 export default async function ContratPrestationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return (
-    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_RH"]}>
+    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_ADMINISTRATIF"]}>
       <ContractEditPage id={id} />
     </RequireRole>
   );

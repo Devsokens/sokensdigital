@@ -15,7 +15,7 @@ class RoleFactory(DjangoModelFactory):
         model = Role
         # core.migrations.0003_seed_role_permissions pre-seeds every real
         # role name on a fresh test DB — get_or_create on `name` so
-        # RoleFactory(name=ROLE_ADMIN) reuses that row instead of colliding
+        # RoleFactory(name=ROLE_RESPONSABLE_ADMINISTRATIF) reuses that row instead of colliding
         # with it on the unique constraint.
         django_get_or_create = ('name',)
     name = factory.Sequence(lambda n: f"Role {n}")

@@ -113,7 +113,7 @@ Référence : cahier des charges point 3, matrice des rôles section 3.
 | Champs clés | `id`, `client_id` (FK obligatoire), `name`, `description`, `budget`, `cost_rate`, `start_date`, `end_date`, `actual_end_date`, `project_manager_id`, `status` |
 | Statuts | PROSPECTION → DEVIS_ENVOYE → NEGOCIATION → EN_COURS → EN_RECETTE → LIVRE → CLOS |
 | Logique métier | 1) Chaque changement de `status` crée une entrée `AuditLog`. 2) À l'affichage, calculer `Σ(actual_hours des tâches) × cost_rate` et lever une alerte UI si le résultat dépasse `budget`. 3) Passage à CLOS/LIVRE → injecte automatiquement `actual_end_date`. |
-| Accès | Lecture : Admin, Directeur Financier, Chef de Projet, Développeurs assignés. Écriture : Super-Admin, Admin, `project_manager_id` du projet. Un développeur **ne peut jamais** modifier `budget` ou `cost_rate`. |
+| Accès | Lecture : Admin, Comptable, Chef de Projet, Développeurs assignés. Écriture : Super-Admin, Admin, `project_manager_id` du projet. Un développeur **ne peut jamais** modifier `budget` ou `cost_rate`. |
 
 ### 4.2 Phases et Jalons — modèles `ProjectPhase`, `ProjectDocument`
 | Élément | Détail |
@@ -134,7 +134,7 @@ Référence : cahier des charges point 3, matrice des rôles section 3.
 |---|---|
 | Champs clés | `task_id`, `user_id`, `hours`, `date`, `description` (obligatoire), `created_at` |
 | Logique métier | 1) Interdiction d'une date future. 2) Somme des `hours` d'un même `user_id` sur une même `date` ≤ 24h, sinon HTTP 400. 3) Chaque POST/DELETE réussi recalcule `Task.actual_hours = Σ TimeEntry.hours`. |
-| Accès | Création/édition : uniquement le propriétaire (`user_id == request.user`) — jamais les entrées d'un pair. Lecture complète (reporting) : Chef de Projet (ses projets), Directeur Financier, Admin (toute l'entreprise). |
+| Accès | Création/édition : uniquement le propriétaire (`user_id == request.user`) — jamais les entrées d'un pair. Lecture complète (reporting) : Chef de Projet (ses projets), Comptable, Admin (toute l'entreprise). |
 
 ### 4.5 Support technique — modèles `Ticket`, `KnowledgeBase`
 | Élément | Détail |
@@ -158,7 +158,7 @@ Référence : cahier des charges point 2 (version révisée), matrice des rôles
 |---|---|
 | Champs clés | `id`, `company_name`, `siret` (unique), `sector`, `address/city/postal_code/country`, `email`, `phone`, `website`, `status` (PROSPECT/CLIENT_ACTIF/CLIENT_INACTIF/ARCHIVE), `rating`, `notes`, `assigned_to` |
 | Logique métier | Création automatique en statut PROSPECT lors d'une demande de devis publique. Validation stricte email + unicité SIRET (serializer). Log d'audit sur les changements de statut critiques. |
-| Accès | Lecture : Admin, Commerciaux/Marketing, Directeur Financier, Chef de Projet (clients liés à ses projets). Écriture : Admin + Commercial `assigned_to`. Suppression interdite (ARCHIVE réservé au Super-Admin). |
+| Accès | Lecture : Admin, Commerciaux/Marketing, Comptable, Chef de Projet (clients liés à ses projets). Écriture : Admin + Commercial `assigned_to`. Suppression interdite (ARCHIVE réservé au Super-Admin). |
 
 ### 5.2 Historique des interactions — modèle `ClientInteraction`
 | Élément | Détail |
@@ -172,14 +172,14 @@ Référence : cahier des charges point 2 (version révisée), matrice des rôles
 |---|---|
 | Champs clés | `client_id`, `name`, `file_path` (Google Drive), `file_type` (CONTRAT/DEVIS/FACTURE/AUTRE_JURIDIQUE), `uploaded_by` |
 | Logique métier | Jamais de fichier binaire en base. Liaison automatique lors de la conversion Devis → Facture. Chiffrement AES-256 au repos pour les documents sensibles. |
-| Accès | Lecture : Admin, Directeur Financier, Commerciaux (contrats juridiques masqués aux autres rôles). Écriture : Admin + Directeur Financier ; Commerciaux limités aux DEVIS. |
+| Accès | Lecture : Admin, Comptable, Commerciaux (contrats juridiques masqués aux autres rôles). Écriture : Admin + Comptable ; Commerciaux limités aux DEVIS. |
 
 ### 5.4 Générateur de contrats & signature électronique — modèle `ContractGenerator`
 | Élément | Détail |
 |---|---|
 | Champs clés | `client_id`/`employee_id` (optionnels), `contract_type` (PRESTATION_SERVICES/NDA/CDI/CDD), `generated_file_path`, `signing_status` (BROUILLON/EN_ATTENTE_DE_SIGNATURE/SIGNE/EXPIRE), `envelope_id`, `signed_at` |
 | Logique métier | Publipostage : template HTML → variables → PDF → upload Drive. Webhook sécurisé `/api/v1/public/webhooks/signature/` pour mise à jour du statut. **Verrouillage** après passage à EN_ATTENTE_DE_SIGNATURE (toute modif = nouveau contrat). |
-| Accès | Création : Admin (tous types) + Commerciaux (NDA et PRESTATION_SERVICES uniquement). Lecture : Admin, Directeur Financier, Commerciaux (leurs clients). Modification/suppression bloquées après EN_ATTENTE_DE_SIGNATURE. |
+| Accès | Création : Admin (tous types) + Commerciaux (NDA et PRESTATION_SERVICES uniquement). Lecture : Admin, Comptable, Commerciaux (leurs clients). Modification/suppression bloquées après EN_ATTENTE_DE_SIGNATURE. |
 
 ### 5.5 Ressources Humaines — extension `User` + `EmployeeDocument`
 | Élément | Détail |
@@ -211,7 +211,7 @@ Ce module **n'appartient pas** structurellement à Administration, mais expose d
 | Rôle | Peut faire |
 |---|---|
 | **Super-Administrateur** | CRUD complet sur toutes les tables. Seul rôle habilité à créer des utilisateurs, modifier `department_id`, attribuer/révoquer des rôles. Accès exclusif config chiffrement + `AuditLog` global. |
-| **Responsable RH** | CRUD complet `EmployeeProfile`/`Contract`. Saisie/modif des salaires bruts (déclenche calcul `base_hourly_cost`). Upload fiches de paie/contrats. **Ne peut pas** modifier les rôles/habilitations. |
+| **Responsable Administratif** | CRUD complet `EmployeeProfile`/`Contract`. Saisie/modif des salaires bruts (déclenche calcul `base_hourly_cost`). Upload fiches de paie/contrats. **Ne peut pas** modifier les rôles/habilitations. |
 | **Collaborateur standard** | Lecture seule de son propre profil et documents. Aucun accès aux dossiers/salaires des autres. |
 
 ---

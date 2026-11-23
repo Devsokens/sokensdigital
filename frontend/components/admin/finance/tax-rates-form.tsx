@@ -13,14 +13,14 @@ import { useIsGerant } from "@/lib/admin/use-is-gerant";
 const pct = (rate: string) => String(Math.round(Number(rate) * 1000) / 10);
 
 /** Taux de TVA et de CSS appliqués par défaut aux nouvelles factures.
- * Modifiables par le Directeur financier et le Super-Admin ; les factures
+ * Modifiables par le Comptable et le Super-Admin ; les factures
  * déjà émises gardent les taux en vigueur à leur émission. */
 export function TaxRatesForm() {
   const { profile } = useAuth();
   const roles = profileRoles(profile);
   const isGerant = useIsGerant();
-  // Gérant, comptabilité (Comptable, Directeur financier) et Super-Admin.
-  const canEdit = isGerant || roles.some((r) => ["SUPER_ADMIN", "DIRECTEUR_FINANCIER", "COMPTABLE"].includes(r));
+  // Gérant, comptabilité (Comptable) et Super-Admin.
+  const canEdit = isGerant || roles.some((r) => ["SUPER_ADMIN", "COMPTABLE"].includes(r));
   const [vat, setVat] = useState<string | null>(null);
   const [css, setCss] = useState("");
   // Autres taxes, en plus de la TVA et de la CSS (ajout / retrait libres).

@@ -183,7 +183,7 @@ Reçu de versement (un par Payment reçu)
 ## 8. Permissions RBAC
 
 **ViewSets gated to:**
-- `IsFinanceRole` (Comptable, Directeur Financier, Super-Admin)
+- `IsFinanceRole` (Comptable, Super-Admin)
 - Action `receive`: Comptable+ ou DirecteurFinancier+
 
 **Scoping:**

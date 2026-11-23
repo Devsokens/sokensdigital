@@ -3,7 +3,7 @@ import { LeadList } from "@/components/admin/marketing/lead-list";
 
 export default function LeadsPage() {
   return (
-    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_MARKETING", "COMMERCIAL"]}>
+    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_MARKETING_COM", "COMMERCIAL"]}>
       <LeadList />
     </RequireRole>
   );

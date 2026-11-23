@@ -160,7 +160,7 @@ Invoices: CRUD + validate
 - Payment model pour tracking versements (PENDING/RECEIVED/RECORDED)
 - PaymentReceipt model avec auto-generation REC-{year}-{seq}
 - DocumentAttachment GenericForeignKey pour chèques/virements/bordereau
-- FinanceSettings singleton (taux TVA configurable par Directeur Financier)
+- FinanceSettings singleton (taux TVA configurable par Comptable)
 
 ### Procurement App — Nouveau
 

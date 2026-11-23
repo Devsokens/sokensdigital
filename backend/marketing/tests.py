@@ -11,8 +11,11 @@ from rest_framework.test import APIClient, APITestCase
 from decimal import Decimal
 
 from core.constants import (
-    ROLE_COMMERCIAL, ROLE_DEVELOPER, ROLE_PROJECT_MANAGER,
-    ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN,
+    ROLE_COMMERCIAL,
+    ROLE_DEVELOPER,
+    ROLE_PROJECT_MANAGER,
+    ROLE_RESPONSABLE_MARKETING_COM,
+    ROLE_SUPER_ADMIN,
 )
 from core.models import Role, User
 from marketing.models import BlogPost, Lead, PageSection, Quote, QuoteLine, ShowcaseProject, SocialPost, Specification
@@ -152,7 +155,7 @@ class LeadViewSetTests(APITestCase):
     def setUp(self):
         cache.clear()
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING_COM)
 
         self.commercial_a = User.objects.create(email='commercial-a@sokensdigital.com', first_name='CommercialA')
         _give_role(self.commercial_a, ROLE_COMMERCIAL)
@@ -222,7 +225,7 @@ class LeadViewSetTests(APITestCase):
 class BlogPostViewSetTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING_COM)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
         _give_role(self.outsider, ROLE_DEVELOPER)
@@ -289,7 +292,7 @@ class BlogPostViewSetTests(APITestCase):
 class ShowcaseProjectViewSetTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING_COM)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
         _give_role(self.outsider, ROLE_DEVELOPER)
@@ -370,7 +373,7 @@ class ShowcaseProjectViewSetTests(APITestCase):
 class SocialPostViewSetTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING_COM)
 
         self.commercial = User.objects.create(email='commercial@sokensdigital.com', first_name='Commercial')
         _give_role(self.commercial, ROLE_COMMERCIAL)
@@ -465,7 +468,7 @@ class SocialPostViewSetTests(APITestCase):
 class MarketingDashboardTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING_COM)
 
         self.commercial = User.objects.create(email='commercial@sokensdigital.com', first_name='Commercial')
         _give_role(self.commercial, ROLE_COMMERCIAL)
@@ -510,7 +513,7 @@ class MarketingDashboardTests(APITestCase):
     def test_super_admin_sees_all_leads(self):
         """Regression: marketing_dashboard() used to omit ROLE_SUPER_ADMIN
         from its own gate and scoping, despite its docstring promising
-        Super-Admin the same unscoped view as Responsable Marketing."""
+        Super-Admin the same unscoped view as Responsable Marketing & Communication."""
         super_admin = User.objects.create(email='super-dash@sokensdigital.com', first_name='Super')
         _give_role(super_admin, ROLE_SUPER_ADMIN)
         client = APIClient()
@@ -642,7 +645,7 @@ class QuoteViewSetTests(APITestCase):
 
     def test_marketing_can_edit_any_quote_including_other_commercials(self):
         marketing_user = User.objects.create(email='marketing-devis@sokensdigital.com', first_name='Marketing')
-        _give_role(marketing_user, ROLE_RESPONSABLE_MARKETING)
+        _give_role(marketing_user, ROLE_RESPONSABLE_MARKETING_COM)
         client_marketing = APIClient()
         client_marketing.force_authenticate(user=marketing_user)
 
@@ -941,7 +944,7 @@ class QuoteSettingsViewTests(APITestCase):
 class PageSectionViewSetTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='marketing2@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING_COM)
 
         self.outsider = User.objects.create(email='dev4@sokensdigital.com', first_name='Dev')
         _give_role(self.outsider, ROLE_DEVELOPER)
@@ -1060,7 +1063,7 @@ class PageSectionViewSetTests(APITestCase):
 class ImageUploadViewTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='uploadmkt@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING_COM)
         self.outsider = User.objects.create(email='uploaddev@sokensdigital.com', first_name='Dev')
         _give_role(self.outsider, ROLE_DEVELOPER)
 
@@ -1137,7 +1140,7 @@ class ImageUploadViewTests(APITestCase):
 class VideoUploadViewTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='uploadvidmkt@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING_COM)
         self.outsider = User.objects.create(email='uploadviddev@sokensdigital.com', first_name='Dev')
         _give_role(self.outsider, ROLE_DEVELOPER)
 
@@ -1189,7 +1192,7 @@ class VideoUploadViewTests(APITestCase):
 class SiteSettingsViewTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='chrome-mkt@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING_COM)
         self.outsider = User.objects.create(email='chrome-dev@sokensdigital.com', first_name='Dev')
         _give_role(self.outsider, ROLE_DEVELOPER)
 
@@ -1499,7 +1502,7 @@ class SocialMediaCredentialsViewTests(APITestCase):
         _give_role(self.super_admin, ROLE_SUPER_ADMIN)
 
         self.marketing_user = User.objects.create(email='marketing2@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING_COM)
 
         self.client_admin = APIClient()
         self.client_admin.force_authenticate(user=self.super_admin)
@@ -1529,7 +1532,7 @@ class SocialMediaCredentialsViewTests(APITestCase):
 class SpecificationViewSetTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='marketing-spec@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING_COM)
 
         self.chef_projet = User.objects.create(email='chef-spec@sokensdigital.com', first_name='Chef')
         _give_role(self.chef_projet, ROLE_PROJECT_MANAGER)
@@ -1748,7 +1751,7 @@ class PublicBlogLikeTests(APITestCase):
 class BlogCommentModerationViewSetTests(APITestCase):
     def setUp(self):
         self.marketing_user = User.objects.create(email='modo-mkt@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING_COM)
         self.outsider = User.objects.create(email='modo-dev@sokensdigital.com', first_name='Dev')
         _give_role(self.outsider, ROLE_DEVELOPER)
         self.client_marketing = APIClient()
@@ -1892,9 +1895,9 @@ class LeadDocumentsTests(APITestCase):
     """Documents d'un lead : consultables durablement, non falsifiables."""
 
     def setUp(self):
-        from core.constants import ROLE_RESPONSABLE_MARKETING
+        from core.constants import ROLE_RESPONSABLE_MARKETING_COM
         self.user = User.objects.create(email='mkt@sokensdigital.com', first_name='Mkt')
-        self.user.roles.add(Role.objects.get_or_create(name=ROLE_RESPONSABLE_MARKETING)[0])
+        self.user.roles.add(Role.objects.get_or_create(name=ROLE_RESPONSABLE_MARKETING_COM)[0])
         self.api = APIClient()
         self.api.force_authenticate(user=self.user)
         self.lead = Lead.objects.create(company_name='ACME', email='a@acme.test')

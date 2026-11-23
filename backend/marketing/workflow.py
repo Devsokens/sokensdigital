@@ -17,18 +17,18 @@ bloc. Chacune nomme l'étape de départ, l'étape d'arrivée et les rôles admis
 from dataclasses import dataclass
 
 from core.constants import (
-    ROLE_ADMIN,
+    ROLE_RESPONSABLE_ADMINISTRATIF,
     ROLE_COMMERCIAL,
     ROLE_DEVELOPER,
     ROLE_PROJECT_MANAGER,
-    ROLE_RESPONSABLE_MARKETING,
+    ROLE_RESPONSABLE_MARKETING_COM,
 )
 from marketing.models import Lead
 
 # Le Super-Administrateur n'est listé nulle part : `core.permissions.has_role`
 # le fait passer toute vérification.
-MARKETING_SIDE = (ROLE_RESPONSABLE_MARKETING, ROLE_COMMERCIAL, ROLE_ADMIN)
-TECHNIQUE_SIDE = (ROLE_PROJECT_MANAGER, ROLE_DEVELOPER, ROLE_ADMIN)
+MARKETING_SIDE = (ROLE_RESPONSABLE_MARKETING_COM, ROLE_COMMERCIAL, ROLE_RESPONSABLE_ADMINISTRATIF)
+TECHNIQUE_SIDE = (ROLE_PROJECT_MANAGER, ROLE_DEVELOPER, ROLE_RESPONSABLE_ADMINISTRATIF)
 
 
 @dataclass(frozen=True)

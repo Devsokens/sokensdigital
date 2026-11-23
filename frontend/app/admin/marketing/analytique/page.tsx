@@ -3,7 +3,7 @@ import { AnalyticsDashboard } from "@/components/admin/analytics/analytics-dashb
 
 export default function MarketingAnalyticsPage() {
   return (
-    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_MARKETING", "COMMERCIAL"]}>
+    <RequireRole roles={["SUPER_ADMIN", "RESPONSABLE_MARKETING_COM", "COMMERCIAL"]}>
       <AnalyticsDashboard department="marketing" />
     </RequireRole>
   );

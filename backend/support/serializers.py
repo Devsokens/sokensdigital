@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from core.constants import ROLE_ADMIN, ROLE_SUPER_ADMIN, ROLE_SUPPORT_CLIENT
+from core.constants import ROLE_RESPONSABLE_ADMINISTRATIF, ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_TECHNIQUE
 from core.models import User
 from core.serializers import UserBriefSerializer
 from support.models import FAQEntry, SupportTicket, TicketMessage
@@ -82,7 +82,7 @@ class SupportTicketSerializer(serializers.ModelSerializer):
         # (pentest du 24/09/2026, D3), et le champ permettait au passage
         # d'énumérer des identifiants utilisateurs valides par essai-erreur.
         source='assigned_to',
-        queryset=User.objects.filter(roles__name__in=(ROLE_SUPPORT_CLIENT, ROLE_ADMIN, ROLE_SUPER_ADMIN)).distinct(),
+        queryset=User.objects.filter(roles__name__in=(ROLE_RESPONSABLE_TECHNIQUE, ROLE_RESPONSABLE_ADMINISTRATIF, ROLE_SUPER_ADMIN)).distinct(),
         write_only=True, required=False, allow_null=True,
     )
 

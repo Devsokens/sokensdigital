@@ -8,7 +8,7 @@ export default async function ProjetDetailPage({
 }) {
   const { id } = await params;
   return (
-    <RequireRole roles={["SUPER_ADMIN", "CHEF_DE_PROJET", "DEVELOPPEUR", "DIRECTEUR_FINANCIER"]}>
+    <RequireRole roles={["SUPER_ADMIN", "CHEF_DE_PROJET", "DEVELOPPEUR", "COMPTABLE"]}>
       <ProjectDetail id={id} />
     </RequireRole>
   );

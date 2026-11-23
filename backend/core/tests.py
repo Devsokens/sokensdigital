@@ -7,8 +7,14 @@ from rest_framework.test import APIClient, APITestCase
 
 from core.models import AuditLog, Department, Role, User
 from core.constants import (
-    ROLE_SUPER_ADMIN, ROLE_RH_MANAGER, ROLE_DEVELOPER, ROLE_COMMERCIAL,
-    ROLE_PROJECT_MANAGER, ROLE_RESPONSABLE_MARKETING, ROLE_COMPTABLE, ROLE_CAISSIER,
+    ROLE_SUPER_ADMIN,
+    ROLE_RESPONSABLE_ADMINISTRATIF,
+    ROLE_DEVELOPER,
+    ROLE_COMMERCIAL,
+    ROLE_PROJECT_MANAGER,
+    ROLE_RESPONSABLE_MARKETING_COM,
+    ROLE_COMPTABLE,
+    ROLE_CAISSIER,
 )
 
 
@@ -136,8 +142,11 @@ class ProvisionUserViewTests(APITestCase):
 
     def setUp(self):
         self.department = Department.objects.create(name='Technique', color='#22d3ee')
+        # Créer un compte = attribuer des rôles : Super-Admin uniquement.
         self.rh_user = User.objects.create(email='rh@sokensdigital.com', first_name='RH')
-        _give_role(self.rh_user, ROLE_RH_MANAGER)
+        _give_role(self.rh_user, ROLE_SUPER_ADMIN)
+        self.admin_staff = User.objects.create(email='admin-staff@sokensdigital.com', first_name='Adm')
+        _give_role(self.admin_staff, ROLE_RESPONSABLE_ADMINISTRATIF)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
         _give_role(self.outsider, ROLE_DEVELOPER)
@@ -254,7 +263,7 @@ class ProvisionUserViewTests(APITestCase):
 
     @patch('firebase_admin.auth.create_user')
     def test_rh_cannot_provision_super_admin(self, mock_create_user):
-        response = self.client_rh.post('/api/v1/users/provision/', self.payload(roles=['SUPER_ADMIN']), format='json')
+        response = self._admin_staff_client().post('/api/v1/users/provision/', self.payload(roles=['SUPER_ADMIN']), format='json')
         self.assertEqual(response.status_code, 403)
         mock_create_user.assert_not_called()
 
@@ -263,7 +272,7 @@ class ProvisionUserViewTests(APITestCase):
         # Le garde-fou porte sur la liste entiere, pas seulement un role
         # isole en premiere position : cumuler SUPER_ADMIN avec autre chose
         # reste l'attribution de SUPER_ADMIN.
-        response = self.client_rh.post(
+        response = self._admin_staff_client().post(
             '/api/v1/users/provision/', self.payload(roles=['COMPTABLE', 'SUPER_ADMIN']), format='json',
         )
         self.assertEqual(response.status_code, 403)
@@ -317,14 +326,31 @@ class ProvisionUserViewTests(APITestCase):
 
     @patch('core.views.create_profile')
     @patch('firebase_admin.auth.create_user')
-    def test_provisioning_with_autre_grants_no_django_role(self, mock_create_user, mock_create_profile):
-        mock_create_user.return_value = MagicMock(uid='firebase-uid-autre')
-
+    def test_provisioning_with_unknown_role_is_refused(self, mock_create_user, mock_create_profile):
+        # Référentiel 2026 : un rôle hors référentiel (ex. ancien « AUTRE ») est refusé.
         response = self.client_rh.post('/api/v1/users/provision/', self.payload(roles=['AUTRE']), format='json')
+        self.assertEqual(response.status_code, 400)
+        mock_create_user.assert_not_called()
 
-        self.assertEqual(response.status_code, 201)
-        user = User.objects.get(firebase_uid='firebase-uid-autre')
-        self.assertEqual(list(user.roles.values_list('name', flat=True)), [])
+    @patch('core.views.create_profile')
+    @patch('firebase_admin.auth.create_user')
+    def test_functional_role_cap(self, mock_create_user, mock_create_profile):
+        mock_create_user.return_value = MagicMock(uid='firebase-uid-cap')
+        three = self.payload(roles=['COMPTABLE', 'CAISSIER', 'COMMERCIAL'])
+        self.assertEqual(self.client_rh.post('/api/v1/users/provision/', three, format='json').status_code, 400)
+        # Super-Admin + 2 rôles fonctionnels : accepté.
+        ok = self.payload(roles=['SUPER_ADMIN', 'RESPONSABLE_OPERATIONS', 'CHEF_DE_PROJET'])
+        self.assertEqual(self.client_rh.post('/api/v1/users/provision/', ok, format='json').status_code, 201)
+
+    def _admin_staff_client(self):
+        client = APIClient()
+        client.force_authenticate(user=self.admin_staff)
+        return client
+
+    def test_responsable_administratif_cannot_provision(self):
+        client = APIClient()
+        client.force_authenticate(user=self.admin_staff)
+        self.assertEqual(client.post('/api/v1/users/provision/', self.payload(), format='json').status_code, 403)
 
 
 class SetUserRoleViewTests(APITestCase):
@@ -334,7 +360,7 @@ class SetUserRoleViewTests(APITestCase):
         _give_role(self.super_admin, ROLE_SUPER_ADMIN)
 
         self.rh_user = User.objects.create(email='rh@sokensdigital.com', first_name='RH')
-        _give_role(self.rh_user, ROLE_RH_MANAGER)
+        _give_role(self.rh_user, ROLE_RESPONSABLE_ADMINISTRATIF)
 
         self.employee = User.objects.create(
             email='employee@sokensdigital.com', first_name='Employee', firebase_uid='firebase-uid-existing',
@@ -432,7 +458,7 @@ class DeactivateUserViewTests(APITestCase):
             email='employee@sokensdigital.com', first_name='Employee', firebase_uid='firebase-uid-existing',
         )
         self.rh_user = User.objects.create(email='rh@sokensdigital.com', first_name='RH')
-        _give_role(self.rh_user, ROLE_RH_MANAGER)
+        _give_role(self.rh_user, ROLE_RESPONSABLE_ADMINISTRATIF)
 
         self.client_super_admin = APIClient()
         self.client_super_admin.force_authenticate(user=self.super_admin)
@@ -556,7 +582,7 @@ class UserListViewTests(APITestCase):
         User.objects.create(email='someone@sokensdigital.com', first_name='Someone')
 
         self.marketing_user = User.objects.create(email='marketing@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING_COM)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
         _give_role(self.outsider, ROLE_DEVELOPER)
@@ -588,7 +614,7 @@ class GlobalSearchTests(APITestCase):
         from projects.models import Project
 
         self.marketing_user = User.objects.create(email='searchmkt@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING_COM)
 
         self.commercial_a = User.objects.create(email='searchcom-a@sokensdigital.com', first_name='CommercialA')
         _give_role(self.commercial_a, ROLE_COMMERCIAL)
@@ -654,7 +680,7 @@ class GlobalDashboardTests(APITestCase):
         from django.core.cache import cache
         cache.clear()
         self.marketing_user = User.objects.create(email='dashmkt@sokensdigital.com', first_name='Marketing')
-        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING)
+        _give_role(self.marketing_user, ROLE_RESPONSABLE_MARKETING_COM)
         self.outsider = User.objects.create(email='dashdev@sokensdigital.com', first_name='Dev')
         _give_role(self.outsider, ROLE_DEVELOPER)
 

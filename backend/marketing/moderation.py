@@ -1,5 +1,5 @@
 """Filtre automatique des commentaires publics du blog — première ligne de
-défense avant relecture humaine (Responsable Marketing/Super-Admin, voir
+défense avant relecture humaine (Responsable Marketing & Communication/Super-Admin, voir
 BlogCommentModerationViewSet dans marketing/views.py).
 
 Volontairement permissif dans les deux sens : ce n'est PAS un modérateur

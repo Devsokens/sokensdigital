@@ -20,8 +20,8 @@ service cloud.firestore {
 
     function isAdmin() {
       return getUserData() != null && (
-        getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_RH'] ||
-        (getUserData().roles is list && ('SUPER_ADMIN' in getUserData().roles || 'RESPONSABLE_RH' in getUserData().roles))
+        getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_ADMINISTRATIF'] ||
+        (getUserData().roles is list && ('SUPER_ADMIN' in getUserData().roles || 'RESPONSABLE_ADMINISTRATIF' in getUserData().roles))
       );
     }
 
@@ -130,7 +130,7 @@ service cloud.firestore {
           request.resource.data.createdAt == request.time && (
           (
             get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'COMPANY' &&
-            getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_MARKETING']
+            (getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_MARKETING_COM'] || (getUserData().roles is list && ('SUPER_ADMIN' in getUserData().roles || 'RESPONSABLE_MARKETING_COM' in getUserData().roles)))
           ) ||
           (
             get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'DEPARTMENT' &&
@@ -158,7 +158,7 @@ service cloud.firestore {
           (!('pinnedBy' in request.resource.data) || request.resource.data.pinnedBy == null || request.resource.data.pinnedBy == request.auth.uid) && (
             (
               get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'COMPANY' &&
-              getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_MARKETING']
+              (getUserData().role in ['SUPER_ADMIN', 'RESPONSABLE_MARKETING_COM'] || (getUserData().roles is list && ('SUPER_ADMIN' in getUserData().roles || 'RESPONSABLE_MARKETING_COM' in getUserData().roles)))
             ) ||
             (
               get(/databases/$(database)/documents/chatRooms/$(roomId)).data.roomType == 'DEPARTMENT' &&

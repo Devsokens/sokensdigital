@@ -3,7 +3,7 @@ import { Achats } from "@/components/admin/finance/achats";
 
 export default function AchatsPage() {
   return (
-    <RequireRole roles={["SUPER_ADMIN", "DIRECTEUR_FINANCIER", "COMPTABLE"]}>
+    <RequireRole roles={["SUPER_ADMIN", "COMPTABLE"]}>
       <Achats />
     </RequireRole>
   );

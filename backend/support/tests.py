@@ -1,7 +1,7 @@
 from django.core.cache import cache
 from rest_framework.test import APIClient, APITestCase
 
-from core.constants import ROLE_COMMERCIAL, ROLE_SUPER_ADMIN, ROLE_SUPPORT_CLIENT
+from core.constants import ROLE_COMMERCIAL, ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_TECHNIQUE
 from core.models import Role, User
 from support.models import FAQEntry, SupportTicket, TicketMessage
 
@@ -125,7 +125,7 @@ class StaffSupportTicketTests(APITestCase):
 
     def test_support_client_can_list_tickets(self):
         user = User.objects.create_user(email='support@sokens.test', password='pass1234')
-        _give_role(user, ROLE_SUPPORT_CLIENT)
+        _give_role(user, ROLE_RESPONSABLE_TECHNIQUE)
         self.client.force_authenticate(user)
         response = self.client.get('/api/v1/support/tickets/')
         self.assertEqual(response.status_code, 200)
@@ -133,7 +133,7 @@ class StaffSupportTicketTests(APITestCase):
 
     def test_support_client_can_reply(self):
         user = User.objects.create_user(email='support2@sokens.test', password='pass1234')
-        _give_role(user, ROLE_SUPPORT_CLIENT)
+        _give_role(user, ROLE_RESPONSABLE_TECHNIQUE)
         self.client.force_authenticate(user)
         response = self.client.post(f'/api/v1/support/tickets/{self.ticket.id}/reply/', {'message': 'On regarde ça.'}, format='json')
         self.assertEqual(response.status_code, 201)
@@ -168,7 +168,7 @@ class StaffSupportTicketTests(APITestCase):
         # seulement un agent support) l'exposait hors de son périmètre
         # prévu, et permettait au passage d'énumérer des ids utilisateurs.
         agent = User.objects.create_user(email='agent-d3@sokens.test', password='pass1234')
-        _give_role(agent, ROLE_SUPPORT_CLIENT)
+        _give_role(agent, ROLE_RESPONSABLE_TECHNIQUE)
         outsider = User.objects.create_user(email='outsider-d3@sokens.test', password='pass1234')
         _give_role(outsider, ROLE_COMMERCIAL)
         self.client.force_authenticate(agent)
@@ -181,7 +181,7 @@ class StaffSupportTicketTests(APITestCase):
         # Pentest du 24/09/2026 (D4) : un agent pouvait réécrire l'e-mail du
         # visiteur, redirigeant ainsi les réponses vers une autre adresse.
         agent = User.objects.create_user(email='agent-d4@sokens.test', password='pass1234')
-        _give_role(agent, ROLE_SUPPORT_CLIENT)
+        _give_role(agent, ROLE_RESPONSABLE_TECHNIQUE)
         self.client.force_authenticate(agent)
         self.client.patch(
             f'/api/v1/support/tickets/{self.ticket.id}/', {'visitor_email': 'evil@x.com'}, format='json',
@@ -194,7 +194,7 @@ class StaffSupportTicketTests(APITestCase):
         # ticket via la route interne, jamais prévue pour ça (un ticket ne
         # naît que du widget public).
         agent = User.objects.create_user(email='agent-d4b@sokens.test', password='pass1234')
-        _give_role(agent, ROLE_SUPPORT_CLIENT)
+        _give_role(agent, ROLE_RESPONSABLE_TECHNIQUE)
         self.client.force_authenticate(agent)
         response = self.client.post(
             '/api/v1/support/tickets/', {'visitor_name': 'x', 'visitor_email': 'x@x.com'}, format='json',

@@ -23,9 +23,12 @@ from core.notifications import notify, notify_roles
 from core.permissions import has_role
 from core.storage import upload_avatar, upload_file
 from core.constants import (
-    ROLE_SUPER_ADMIN, ROLE_RH_MANAGER, ROLE_COMMERCIAL,
-    ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER,
-    ROLE_COMPTABLE, ROLE_RESPONSABLE_MARKETING,
+    ROLE_SUPER_ADMIN,
+    ROLE_RESPONSABLE_ADMINISTRATIF,
+    ROLE_COMMERCIAL,
+    ROLE_PROJECT_MANAGER,
+    ROLE_COMPTABLE,
+    ROLE_RESPONSABLE_MARKETING_COM,
 )
 from core.serializers import (
     APP_ROLE_TO_DJANGO_ROLE,
@@ -294,18 +297,18 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
 class IsSuperAdminOrRH(permissions.BasePermission):
     def has_permission(self, request, view):
-        return has_role(request.user, ROLE_SUPER_ADMIN, ROLE_RH_MANAGER)
+        return has_role(request.user, ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_ADMINISTRATIF)
 
 
 class CanListUsers(permissions.BasePermission):
     """Broader than IsSuperAdminOrRH: read-only (name/email only, no salary
-    or other sensitive data), so it's also safe for Responsable Marketing —
+    or other sensitive data), so it's also safe for Responsable Marketing & Communication —
     who needs it to reassign leads to a Commercial (docs/backend-specifications.md §2.1).
     Super-Admin included too — "accès complet à l'ensemble du système"
     (cahier des charges §4.8) means never narrower than every other role."""
 
     def has_permission(self, request, view):
-        return has_role(request.user, ROLE_SUPER_ADMIN, ROLE_RH_MANAGER, ROLE_RESPONSABLE_MARKETING)
+        return has_role(request.user, ROLE_SUPER_ADMIN, ROLE_RESPONSABLE_ADMINISTRATIF, ROLE_RESPONSABLE_MARKETING_COM)
 
 
 @extend_schema_view(
@@ -368,14 +371,16 @@ class ProvisionUserView(APIView):
     already initialized in core/apps.py) has no such side effect.
     """
 
-    permission_classes = [IsSuperAdminOrRH]
+    # Créer un compte = attribuer des rôles : réservé au Super-Admin
+    # (autorité unique sur les rôles, référentiel 2026).
+    permission_classes = [IsSuperAdmin]
 
     @extend_schema(
         tags=['Administration & RH'],
         summary="Provision a new employee's platform access",
         description='Creates the Firebase Auth account, the Firestore profile '
         '(role/department), and the Django-side User row together. Restricted '
-        'to Super-Admin/Responsable RH (docs/backend-specifications.md §1.1).',
+        'to Super-Admin/Responsable Administratif (docs/backend-specifications.md §1.1).',
         request=ProvisionUserSerializer,
         responses={201: UserSerializer},
     )
@@ -453,7 +458,7 @@ class ProvisionUserView(APIView):
         # e-mail, quand le rôle accordé est lui-même SUPER_ADMIN (action
         # très critique, voir docs/ROADMAP_TECHNIQUE.md).
         notify_roles(
-            (ROLE_RH_MANAGER,),
+            (ROLE_RESPONSABLE_ADMINISTRATIF,),
             title='Nouveau compte créé',
             message=f"{data['first_name']} {data['last_name']} ({data['email']}) vient d'être provisionné(e).",
             notification_type='GENERAL',
@@ -479,7 +484,7 @@ class ProvisionUserView(APIView):
         # donc on prévient RH si ça arrive.
         if not send_user_invitation_email(django_user, data['password']):
             notify_roles(
-                (ROLE_RH_MANAGER,),
+                (ROLE_RESPONSABLE_ADMINISTRATIF,),
                 title="E-mail d'invitation non envoyé",
                 message=(
                     f"Le compte de {data['first_name']} {data['last_name']} est bien créé, "
@@ -869,7 +874,7 @@ def global_search(request):
     results = []
 
     # Employees — Administration & RH / RH read access.
-    if has_role(user, ROLE_RH_MANAGER, ROLE_SUPER_ADMIN):
+    if has_role(user, ROLE_RESPONSABLE_ADMINISTRATIF, ROLE_SUPER_ADMIN):
         matches = User.objects.filter(
             Q(first_name__icontains=query) | Q(last_name__icontains=query)
         )[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
@@ -880,11 +885,11 @@ def global_search(request):
             })
 
     # Leads — Marketing/Commercial.
-    if has_role(user, ROLE_RESPONSABLE_MARKETING, ROLE_COMMERCIAL, ROLE_SUPER_ADMIN):
+    if has_role(user, ROLE_RESPONSABLE_MARKETING_COM, ROLE_COMMERCIAL, ROLE_SUPER_ADMIN):
         from marketing.models import BlogPost, Lead, Quote
 
         leads = Lead.objects.all()
-        if not has_role(user, ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN):
+        if not has_role(user, ROLE_RESPONSABLE_MARKETING_COM, ROLE_SUPER_ADMIN):
             leads = leads.filter(assigned_to=user)
         matches = leads.filter(
             Q(first_name__icontains=query) | Q(last_name__icontains=query) | Q(company_name__icontains=query)
@@ -899,7 +904,7 @@ def global_search(request):
             })
 
         quotes = Quote.objects.select_related('lead')
-        if has_role(user, ROLE_COMMERCIAL) and not has_role(user, ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN):
+        if has_role(user, ROLE_COMMERCIAL) and not has_role(user, ROLE_RESPONSABLE_MARKETING_COM, ROLE_SUPER_ADMIN):
             quotes = quotes.filter(created_by=user)
         matches = quotes.filter(quote_number__icontains=query)[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
         for quote in matches:
@@ -908,7 +913,7 @@ def global_search(request):
                 'sublabel': quote.lead.company_name if quote.lead else '', 'href': '/admin/marketing/devis',
             })
 
-        if has_role(user, ROLE_RESPONSABLE_MARKETING, ROLE_SUPER_ADMIN):
+        if has_role(user, ROLE_RESPONSABLE_MARKETING_COM, ROLE_SUPER_ADMIN):
             matches = BlogPost.objects.filter(title__icontains=query)[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
             for post in matches:
                 results.append({
@@ -920,7 +925,7 @@ def global_search(request):
     from projects.models import Project
 
     projects = Project.objects.select_related('lead_project_manager')
-    if not has_role(user, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN):
+    if not has_role(user, ROLE_COMPTABLE, ROLE_SUPER_ADMIN):
         projects = projects.filter(Q(lead_project_manager=user) | Q(memberships__user=user)).distinct()
     matches = projects.filter(name__icontains=query)[:SEARCH_RESULT_LIMIT_PER_CATEGORY]
     for project in matches:
@@ -930,11 +935,11 @@ def global_search(request):
         })
 
     # Décaissements — Chef de Projet (their own), Finance roles (all).
-    if has_role(user, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE, ROLE_SUPER_ADMIN):
+    if has_role(user, ROLE_PROJECT_MANAGER, ROLE_COMPTABLE, ROLE_SUPER_ADMIN):
         from finance.models import DisbursementRequest
 
         disbursements = DisbursementRequest.objects.select_related('project')
-        if not has_role(user, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE, ROLE_SUPER_ADMIN):
+        if not has_role(user, ROLE_COMPTABLE, ROLE_SUPER_ADMIN):
             disbursements = disbursements.filter(
                 Q(project__lead_project_manager=user) | Q(requested_by=user)
             ).distinct()
@@ -1002,6 +1007,9 @@ def _rate(part, whole):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def global_dashboard(request):
+    from core.permissions import is_subcontractor_only
+    if is_subcontractor_only(request.user):
+        return Response(status=status.HTTP_403_FORBIDDEN)
     cached = cache.get(GLOBAL_DASHBOARD_CACHE_KEY)
     if cached is not None:
         return Response(cached)

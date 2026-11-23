@@ -6,7 +6,7 @@ from unittest.mock import patch
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient, APITestCase
 
-from core.constants import ROLE_COMPTABLE, ROLE_DEVELOPER, ROLE_DIRECTEUR_FINANCIER, ROLE_PROJECT_MANAGER, ROLE_SUPER_ADMIN
+from core.constants import ROLE_COMPTABLE, ROLE_DEVELOPER, ROLE_PROJECT_MANAGER, ROLE_SUPER_ADMIN
 from core.models import Role, User
 from finance.models import (
     Account,
@@ -43,7 +43,7 @@ class DisbursementRequestViewSetTests(APITestCase):
         _give_role(self.chef_b, ROLE_PROJECT_MANAGER)
 
         self.cfo = User.objects.create(email='cfo@sokensdigital.com', first_name='CFO')
-        _give_role(self.cfo, ROLE_DIRECTEUR_FINANCIER)
+        _give_role(self.cfo, ROLE_COMPTABLE)
 
         self.outsider = User.objects.create(email='dev@sokensdigital.com', first_name='Dev')
         _give_role(self.outsider, ROLE_DEVELOPER)
@@ -166,7 +166,7 @@ class DisbursementRequestViewSetTests(APITestCase):
             project=self.project_a, requested_by=self.chef_a, amount=1000, beneficiary='X', reason='Y',
         )
 
-        # La RCF (Directeur Financier) examine d'abord : approuver transmet
+        # La RCF (Comptable) examine d'abord : approuver transmet
         # au Gérant, ce n'est pas encore une approbation définitive.
         response = self.client_cfo.post(
             f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
@@ -263,8 +263,8 @@ class DisbursementRequestViewSetTests(APITestCase):
         # Un autre département ne le voit pas.
         self.assertEqual(self.client_b.get('/api/v1/finance/disbursement-requests/?scope=department').json()['results'], [])
 
-    def test_comptable_cannot_act_as_rcf(self):
-        """1re validation réservée au Directeur financier (et Super-Admin)."""
+    def test_comptable_acts_as_rcf_without_designated_rcf(self):
+        """Sans Responsable C&F désigné, le Comptable (ex-Comptable) valide le 1er palier."""
         comptable = User.objects.create(email='comptable-rcf@sokensdigital.com', first_name='Comptable')
         _give_role(comptable, ROLE_COMPTABLE)
         client_comptable = APIClient()
@@ -278,10 +278,10 @@ class DisbursementRequestViewSetTests(APITestCase):
             f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/',
             {'decision': 'APPROUVE', 'signature': SIG}, format='json',
         )
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
         # La RCF ne décide pas seule : elle transmet au Gérant.
         disbursement.refresh_from_db()
-        self.assertIsNone(disbursement.rcf_decided_by_id)
+        self.assertEqual(disbursement.rcf_decided_by_id, comptable.id)
 
     def test_comptable_cannot_act_as_gerant(self):
         comptable = User.objects.create(email='comptable-gerant@sokensdigital.com', first_name='Comptable')
@@ -300,7 +300,7 @@ class DisbursementRequestViewSetTests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_cfo_cannot_act_as_gerant(self):
-        # Le Directeur Financier tient lieu de RCF, pas de Gérant : une
+        # Le Comptable tient lieu de RCF, pas de Gérant : une
         # demande déjà transmise au Gérant ne lui revient pas.
         disbursement = DisbursementRequest.objects.create(
             project=self.project_a, requested_by=self.chef_a, amount=600000, beneficiary='X', reason='Y',
@@ -397,7 +397,7 @@ class BesoinLinesQuotesPdfTests(APITestCase):
         self.other_chef = User.objects.create(email='autre@sokensdigital.com', first_name='Autre')
         _give_role(self.other_chef, ROLE_PROJECT_MANAGER)
         self.cfo = User.objects.create(email='cfo@sokensdigital.com', first_name='CFO')
-        _give_role(self.cfo, ROLE_DIRECTEUR_FINANCIER)
+        _give_role(self.cfo, ROLE_COMPTABLE)
         self.project = Project.objects.create(name='Projet A', lead_project_manager=self.chef)
 
         self.client_chef = APIClient()
@@ -543,7 +543,7 @@ class BesoinLinesQuotesPdfTests(APITestCase):
 class AccountingPeriodViewSetTests(APITestCase):
     def setUp(self):
         self.cfo = User.objects.create(email='cfo2@sokensdigital.com', first_name='CFO')
-        _give_role(self.cfo, ROLE_DIRECTEUR_FINANCIER)
+        _give_role(self.cfo, ROLE_COMPTABLE)
         self.comptable = User.objects.create(email='comptable3@sokensdigital.com', first_name='Comptable')
         _give_role(self.comptable, ROLE_COMPTABLE)
 
@@ -563,11 +563,11 @@ class AccountingPeriodViewSetTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'CLOTUREE')
 
-    def test_comptable_cannot_create_period(self):
+    def test_comptable_can_create_period(self):
         response = self.client_comptable.post('/api/v1/finance/accounting-periods/', {
             'label': '2026-08', 'start_date': '2026-08-01', 'end_date': '2026-08-31',
         }, format='json')
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 201)
 
     def test_comptable_can_read_periods(self):
         AccountingPeriod.objects.create(label='2026-06', start_date='2026-06-01', end_date='2026-06-30')
@@ -882,7 +882,7 @@ class BankReconciliationTests(APITestCase):
 class TaxDeclarationViewSetTests(APITestCase):
     def setUp(self):
         self.cfo = User.objects.create(email='cfo3@sokensdigital.com', first_name='CFO')
-        _give_role(self.cfo, ROLE_DIRECTEUR_FINANCIER)
+        _give_role(self.cfo, ROLE_COMPTABLE)
         self.comptable = User.objects.create(email='comptable7@sokensdigital.com', first_name='Comptable')
         _give_role(self.comptable, ROLE_COMPTABLE)
 
@@ -907,21 +907,22 @@ class TaxDeclarationViewSetTests(APITestCase):
         self.assertEqual(Decimal(body['net_vat']), Decimal('130'))
         self.assertEqual(body['status'], 'BROUILLON')
 
-    def test_only_cfo_can_validate_declaration(self):
+    def test_comptable_can_validate_declaration(self):
         declaration = TaxDeclaration.objects.create(period=self.period, collected_vat=180, deductible_vat=50, net_vat=130)
 
+        # Le Comptable reprend les droits de l'ancien Comptable.
         response = self.client_comptable.post(f'/api/v1/finance/tax-declarations/{declaration.id}/validate/')
-        self.assertEqual(response.status_code, 403)
-
-        response = self.client_cfo.post(f'/api/v1/finance/tax-declarations/{declaration.id}/validate/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'VALIDEE')
+        # Une déclaration validée ne se revalide pas.
+        response = self.client_cfo.post(f'/api/v1/finance/tax-declarations/{declaration.id}/validate/')
+        self.assertEqual(response.status_code, 400)
 
 
 class FecExportAndDashboardTests(APITestCase):
     def setUp(self):
         self.cfo = User.objects.create(email='cfo4@sokensdigital.com', first_name='CFO')
-        _give_role(self.cfo, ROLE_DIRECTEUR_FINANCIER)
+        _give_role(self.cfo, ROLE_COMPTABLE)
         self.comptable = User.objects.create(email='comptable8@sokensdigital.com', first_name='Comptable')
         _give_role(self.comptable, ROLE_COMPTABLE)
         self.outsider = User.objects.create(email='dev3@sokensdigital.com', first_name='Dev')
@@ -952,9 +953,9 @@ class FecExportAndDashboardTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Decimal(response.json()['cash_balance']), Decimal('1000'))
 
-    def test_dashboard_forbidden_for_comptable(self):
+    def test_dashboard_open_to_comptable(self):
         response = self.client_comptable.get('/api/v1/finance/dashboard/')
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
 
     def test_dashboard_forbidden_for_outsider(self):
         response = self.client_outsider.get('/api/v1/finance/dashboard/')
@@ -970,7 +971,7 @@ class PaymentAmountRulesTests(APITestCase):
 
     def setUp(self):
         self.cfo = User.objects.create(email='df-versements@sokens.test')
-        self.cfo.roles.add(Role.objects.get_or_create(name=ROLE_DIRECTEUR_FINANCIER)[0])
+        self.cfo.roles.add(Role.objects.get_or_create(name=ROLE_COMPTABLE)[0])
         self.client.force_authenticate(user=self.cfo)
 
         # 1000 HT + TVA => amount_ttc calcule par le modele.

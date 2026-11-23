@@ -135,7 +135,7 @@ Fondation de tout le reste — **première brique à coder**.
   Firebase Admin, résout/crée le `User` interne via `firebase_uid` (corrigé —
   voir §9), retourne `(user, decoded_token)`.
 - **Pas d'auto-inscription publique** : les comptes sont créés par un
-  Super-Administrateur ou un Responsable RH (cohérent avec la matrice RBAC —
+  Super-Administrateur ou un Responsable Administratif (cohérent avec la matrice RBAC —
   aucun rôle "public" ne peut créer un `User`). Le endpoint public de contact
   ne crée que des `Lead`, jamais de `User`.
 
@@ -152,8 +152,8 @@ Fondation de tout le reste — **première brique à coder**.
 
 | Méthode | Route | Description | Permission | Statut |
 |---|---|---|---|---|
-| GET | `/api/v1/users/` | Liste des comptes Django (mirror row — pas la source de vérité, juste pour lier des enregistrements RH/Finance/Projets) | Super-Admin, Responsable RH | ✅ |
-| POST | `/api/v1/users/provision/` | Crée un compte (Firebase Auth + profil Firestore + `User` Django) en un seul appel | Super-Admin, Responsable RH — mais **RH ne peut jamais assigner `SUPER_ADMIN`** (403 sinon) | ✅ |
+| GET | `/api/v1/users/` | Liste des comptes Django (mirror row — pas la source de vérité, juste pour lier des enregistrements RH/Finance/Projets) | Super-Admin, Responsable Administratif | ✅ |
+| POST | `/api/v1/users/provision/` | Crée un compte (Firebase Auth + profil Firestore + `User` Django) en un seul appel | Super-Admin, Responsable Administratif — mais **RH ne peut jamais assigner `SUPER_ADMIN`** (403 sinon) | ✅ |
 | PATCH | `/api/v1/users/{id}/role/` | Change le rôle/département d'un utilisateur **existant** | Super-Admin uniquement | ✅ |
 | GET/POST | `/api/v1/departments/` | Gestion des départements | Super-Admin uniquement | ✅ |
 | GET | `/api/v1/audit-logs/` | Consultation de la table immuable `AuditLog` (alimentée automatiquement à la suppression de tout `LoggedModel`, aucun endpoint d'écriture) | Super-Admin uniquement | ✅ |
@@ -188,10 +188,10 @@ l'admin de sa propre session. Le SDK Admin (serveur, déjà initialisé dans
 
 | Méthode | Route | Description | Permission |
 |---|---|---|---|
-| GET/POST | `/api/v1/hr/employees/` | Liste / création de profils employés | Super-Admin, Responsable RH |
-| GET/PATCH | `/api/v1/hr/employees/{id}/` | Détail / modification (dont salaire → coût horaire) | Super-Admin, Responsable RH |
+| GET/POST | `/api/v1/hr/employees/` | Liste / création de profils employés | Super-Admin, Responsable Administratif |
+| GET/PATCH | `/api/v1/hr/employees/{id}/` | Détail / modification (dont salaire → coût horaire) | Super-Admin, Responsable Administratif |
 | GET | `/api/v1/hr/employees/me/` | Son propre profil (lecture seule) | `IsAuthenticated`, propriétaire |
-| GET/POST | `/api/v1/hr/contracts/` | Liste / création de contrats | Super-Admin, Responsable RH |
+| GET/POST | `/api/v1/hr/contracts/` | Liste / création de contrats | Super-Admin, Responsable Administratif |
 | GET | `/api/v1/hr/contracts/me/` | Ses propres contrats (téléchargement) | `IsAuthenticated`, propriétaire |
 
 **Sécurité** : `gross_monthly_salary` chiffré au repos (même mécanisme que
@@ -242,7 +242,7 @@ contrainte d'unicité, `created_at` pour audit.
 
 | Méthode | Route | Description | Permission | Statut |
 |---|---|---|---|---|
-| GET/POST | `/api/v1/projects/` | Liste / création | Chef de Projet, Super-Admin (création) ; lecture élargie (lead, membre, ou rôle Directeur Financier/Super-Admin) | ✅ |
+| GET/POST | `/api/v1/projects/` | Liste / création | Chef de Projet, Super-Admin (création) ; lecture élargie (lead, membre, ou rôle Comptable/Super-Admin) | ✅ |
 | GET/PATCH/DELETE | `/api/v1/projects/{id}/` | Détail / modification | Lead du projet, Super-Admin (écriture) ; lead/membre/rôle élargi (lecture) | ✅ |
 | POST | `/api/v1/projects/{id}/members/` | Ajouter un membre | Lead du projet, Super-Admin | ✅ |
 | DELETE | `/api/v1/projects/{id}/members/{membership_id}/` | Retirer un membre | Lead du projet, Super-Admin | ✅ |
@@ -285,7 +285,7 @@ comptable simplifié, pas le PCG/OHADA complet.
 
 **`AccountingPeriod`** ✅ — `label` (ex. `2026-07`), `start_date`,
 `end_date`, `status` (Enum OUVERTE/CLOTUREE), `closed_by`/`closed_at`.
-Ouverture/clôture réservées à Directeur Financier + Super-Admin
+Ouverture/clôture réservées à Comptable + Super-Admin
 (`IsDirecteurFinancierOrSuperAdmin`, §4.1 "Seul rôle, avec le Super-Admin,
 habilité à ouvrir ou verrouiller définitivement des exercices").
 
@@ -359,7 +359,7 @@ Workflow complet :
   `POST /api/v1/finance/disbursement-requests/`.
 - **N2/N3 (validation hiérarchique finale)** ✅ : `POST
   /api/v1/finance/disbursement-requests/{id}/approve/` `{decision: APPROUVE
-  | REJETE}` — Directeur Financier/Super-Admin uniquement. Modélisé comme
+  | REJETE}` — Comptable/Super-Admin uniquement. Modélisé comme
   une **seule** étape d'approbation finale (le spec parle de "N2/N3" mais
   aucun rôle d'approbateur N1 intermédiaire distinct n'existe) plutôt que
   deux statuts EN_ATTENTE_N2 séquentiels.
@@ -398,7 +398,7 @@ initial) — un lettrage peut en théorie être refait via un nouveau `match`.
 | Méthode | Route | Permission |
 |---|---|---|
 | POST | `/api/v1/finance/tax-declarations/generate/` `{period_id}` | Comptable/Super-Admin — recalcule `collected_vat`/`deductible_vat` depuis les `TransactionLine` postées sur les comptes `4457`/`4456` de la période (`update_or_create`, donc regénérable) |
-| POST | `/api/v1/finance/tax-declarations/{id}/validate/` | Directeur Financier/Super-Admin uniquement (§4.1 "Gouvernance fiscale" — validation/signature) |
+| POST | `/api/v1/finance/tax-declarations/{id}/validate/` | Comptable/Super-Admin uniquement (§4.1 "Gouvernance fiscale" — validation/signature) |
 
 Pas de génération de "liasse fiscale" formatée — juste les trois montants.
 
@@ -406,8 +406,8 @@ Pas de génération de "liasse fiscale" formatée — juste les trois montants.
 
 | Méthode | Route | Permission |
 |---|---|---|
-| GET | `/api/v1/finance/dashboard/` | Directeur Financier/Super-Admin uniquement (§4.1 "Analytique & Reporting") |
-| GET | `/api/v1/finance/accounting-periods/{id}/fec-export/` | Comptable/Directeur Financier/Super-Admin — export texte simplifié (8 colonnes essentielles), **pas** le format FEC DGFiP certifié à 18 colonnes obligatoires |
+| GET | `/api/v1/finance/dashboard/` | Comptable/Super-Admin uniquement (§4.1 "Analytique & Reporting") |
+| GET | `/api/v1/finance/accounting-periods/{id}/fec-export/` | Comptable/Super-Admin — export texte simplifié (8 colonnes essentielles), **pas** le format FEC DGFiP certifié à 18 colonnes obligatoires |
 
 Contenu du dashboard, calculé à la volée (pas de vue matérialisée ni de
 cache Redis) :
@@ -438,9 +438,9 @@ FORMULAIRE_DEVIS/APPEL_ENTRANT/SITE_WEB/EVENEMENT), `message`, `status`
 | Méthode | Route | Description | Permission | Statut |
 |---|---|---|---|---|
 | POST | `/api/v1/public/leads/` | Ingestion publique (formulaire site vitrine) | **Public** — rate limiting Redis (3/IP/min) | ✅ (reCAPTCHA ⏳ — pas de clé configurée) |
-| GET/POST | `/api/v1/marketing/leads/` | Liste (filtrée par `assigned_to` pour les commerciaux) / création manuelle | Responsable Marketing, Commercial (ses leads), Super-Admin | ✅ |
-| PATCH | `/api/v1/marketing/leads/{id}/` | Qualification, réassignation | Responsable Marketing, Super-Admin (tout) ; Commercial (ses leads assignés) | ✅ |
-| POST | `/api/v1/marketing/leads/{id}/convert/` | Conversion en `ClientAccount` (transaction atomique) | Responsable Marketing, Commercial (ses leads), Super-Admin | ⏳ (bloqué sur `ClientAccount` indéfini) |
+| GET/POST | `/api/v1/marketing/leads/` | Liste (filtrée par `assigned_to` pour les commerciaux) / création manuelle | Responsable Marketing & Communication, Commercial (ses leads), Super-Admin | ✅ |
+| PATCH | `/api/v1/marketing/leads/{id}/` | Qualification, réassignation | Responsable Marketing & Communication, Super-Admin (tout) ; Commercial (ses leads assignés) | ✅ |
+| POST | `/api/v1/marketing/leads/{id}/convert/` | Conversion en `ClientAccount` (transaction atomique) | Responsable Marketing & Communication, Commercial (ses leads), Super-Admin | ⏳ (bloqué sur `ClientAccount` indéfini) |
 
 Notification (signal `post_save` → Celery → Firebase + email) : ⏳ pas
 implémentée (pas de backend email configuré, pas de collection Firestore
@@ -513,7 +513,7 @@ limitation que les autres départements, voir §0/§13).
 | Méthode | Route | Permission | Statut |
 |---|---|---|---|
 | GET | `/api/v1/public/cms/blog/` , `/api/v1/public/cms/blog/{slug}/` | **Public**, lecture seule, `status=PUBLIE` uniquement | ✅ |
-| GET/POST/PATCH/DELETE | `/api/v1/marketing/cms/blog/` | Responsable Marketing, Super-Admin uniquement | ✅ |
+| GET/POST/PATCH/DELETE | `/api/v1/marketing/cms/blog/` | Responsable Marketing & Communication, Super-Admin uniquement | ✅ |
 | — | `/api/v1/public/cms/projects/`, `/testimonials/`, `/partners/`, `/hero/` + équivalents `/marketing/cms/...` | idem | ⏳ (modèles pas encore créés) |
 
 ### 7.4 Publications Réseaux Sociaux & Plan Éditorial ✅ implémenté (hors moteur de publication, ⏳)
@@ -536,10 +536,10 @@ limitation que les autres départements, voir §0/§13).
 
 | Méthode | Route | Permission | Statut |
 |---|---|---|---|
-| GET/POST | `/api/v1/marketing/social-posts/` | Responsable Marketing, Super-Admin (tout statut) ; Commercial (création `DRAFT` uniquement — 400 s'il tente un autre statut) | ✅ |
-| PATCH/DELETE | `/api/v1/marketing/social-posts/{id}/` | Responsable Marketing, Super-Admin (tout) ; Commercial (lecture de ses propres posts uniquement) | ✅ |
-| POST | `/api/v1/marketing/social-posts/{id}/schedule/` | Responsable Marketing, Super-Admin — requiert `scheduled_at` déjà renseigné | ✅ (statut seulement, voir note ci-dessus) |
-| POST | `/api/v1/marketing/social-posts/{id}/cancel/` | Responsable Marketing, Super-Admin — uniquement depuis DRAFT/SCHEDULED | ✅ |
+| GET/POST | `/api/v1/marketing/social-posts/` | Responsable Marketing & Communication, Super-Admin (tout statut) ; Commercial (création `DRAFT` uniquement — 400 s'il tente un autre statut) | ✅ |
+| PATCH/DELETE | `/api/v1/marketing/social-posts/{id}/` | Responsable Marketing & Communication, Super-Admin (tout) ; Commercial (lecture de ses propres posts uniquement) | ✅ |
+| POST | `/api/v1/marketing/social-posts/{id}/schedule/` | Responsable Marketing & Communication, Super-Admin — requiert `scheduled_at` déjà renseigné | ✅ (statut seulement, voir note ci-dessus) |
+| POST | `/api/v1/marketing/social-posts/{id}/cancel/` | Responsable Marketing & Communication, Super-Admin — uniquement depuis DRAFT/SCHEDULED | ✅ |
 
 ### 7.5 Dashboard Marketing ✅ implémenté (version simplifiée)
 
@@ -558,7 +558,7 @@ limitation que les autres départements, voir §0/§13).
 
 | Méthode | Route | Permission | Statut |
 |---|---|---|---|
-| GET | `/api/v1/marketing/dashboard/` | Responsable Marketing, Super-Admin (complet) ; Commercial/Chef de Projet (lecture limitée à leur périmètre) | ✅ |
+| GET | `/api/v1/marketing/dashboard/` | Responsable Marketing & Communication, Super-Admin (complet) ; Commercial/Chef de Projet (lecture limitée à leur périmètre) | ✅ |
 
 ---
 
@@ -645,7 +645,7 @@ n'est pas critique pour ces widgets).
     Répartition finale : Firestore = identité/rôle/chat/notifications ;
     Django/Supabase = RH/Finance/Projets (voir `README.md`).
 18. ✅ App `hr` créée : `EmployeeProfile` (calcul auto de
-    `base_hourly_cost`), `Contract`, `Payslip`. `Responsable RH` = CRUD
+    `base_hourly_cost`), `Contract`, `Payslip`. `Responsable Administratif` = CRUD
     complet, collaborateur standard = lecture seule de son propre dossier
     (salaire masqué). Endpoints `core` ajoutés : `DepartmentViewSet`
     (Super-Admin), `UserListView` (lecture seule, Super-Admin/RH).
@@ -681,7 +681,7 @@ n'est pas critique pour ces widgets).
     lecture seule), **Leads** (`/admin/marketing/leads/`, Responsable
     Marketing/Commercial — qualification, score, réassignation).
     `core.views.CanListUsers` (nouvelle permission) élargit
-    `GET /api/v1/users/` à Responsable Marketing (lecture seule,
+    `GET /api/v1/users/` à Responsable Marketing & Communication (lecture seule,
     nécessaire pour réassigner un lead à un Commercial).
 23. ✅ Département Technique complété (Timesheets, Décaissements N1,
     écran Gestion de projet), **Messagerie temps réel** ajoutée (hors §1-9
@@ -726,12 +726,12 @@ n'est pas critique pour ces widgets).
 | Rôle | Leads | Devis | CMS | Réseaux Sociaux | RH (profils/contrats) | Projets/Timesheets | Comptabilité | Dashboards |
 |---|---|---|---|---|---|---|---|---|
 | **Super-Administrateur** | CRUD complet | CRUD complet | CRUD complet | CRUD complet | CRUD complet + rôles/permissions | CRUD complet | CRUD complet + clôture exercice | Tous, complets |
-| **Responsable RH** | — | — | — | — | CRUD complet (hors rôles/permissions) | — | — | Global |
-| **Responsable Marketing** | CRUD complet | CRUD complet | CRUD complet | CRUD complet (planif + publication) | — | Lecture | — | Marketing complet, Global |
+| **Responsable Administratif** | — | — | — | — | CRUD complet (hors rôles/permissions) | — | — | Global |
+| **Responsable Marketing & Communication** | CRUD complet | CRUD complet | CRUD complet | CRUD complet (planif + publication) | — | Lecture | — | Marketing complet, Global |
 | **Commercial** | Ses leads uniquement | Ses devis (création + envoi) | Lecture seule | Proposition (`DRAFT` uniquement) | Son profil (lecture) | — | — | Limité à son périmètre, Global |
 | **Chef de Projet** | Lecture seule | Collaboration technique | Lecture seule | Lecture seule | Son profil (lecture) | CRUD sur ses projets, validation timesheets équipe | Décaissements N1 (ses projets) | Projets propres, Global |
 | **Développeur/Ingénieur** | — | — | — | — | Son profil (lecture) | Timesheets (les siennes), messagerie projet | — | Global |
-| **Directeur Financier (CFO)** | Lecture seule | Validation prix/remises | Lecture seule | Lecture seule | Son profil (lecture) | Lecture | Complet + clôture exercice + validation N2/N3 + TVA | Finance complet, Global |
+| **Comptable (CFO)** | Lecture seule | Validation prix/remises | Lecture seule | Lecture seule | Son profil (lecture) | Lecture | Complet + clôture exercice + validation N2/N3 + TVA | Finance complet, Global |
 | **Comptable** | — | Lecture (conversion facture) | Lecture seule | Lecture seule | Son profil (lecture) | Lecture | Écritures, factures, rapprochement, TVA (brouillon), exécution décaissements | Finance opérationnel, Global |
 | **Stagiaires / Invités / Autres** | — | — | — | — | Son profil (lecture) | — | — | Global uniquement |
 

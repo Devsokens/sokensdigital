@@ -427,7 +427,7 @@ export function getTaxRates() {
   return apiFetch<TaxRates>("/api/v1/finance/settings/tax-rates/");
 }
 
-/** Directeur financier / Super-Admin uniquement (403 sinon). */
+/** Comptable / Super-Admin uniquement (403 sinon). */
 export function updateTaxRates(data: Partial<TaxRates>) {
   return apiFetch<TaxRates>("/api/v1/finance/settings/tax-rates/", { method: "PATCH", body: JSON.stringify(data) });
 }

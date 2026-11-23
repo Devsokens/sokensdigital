@@ -19,7 +19,6 @@ from procurement.serializers import (
 from procurement.tasks import create_disbursement_request_task, post_supplier_invoice_journal_entry
 from core.constants import (
     ROLE_COMPTABLE,
-    ROLE_DIRECTEUR_FINANCIER,
     ROLE_SUPER_ADMIN,
 )
 from core.permissions import has_role, is_gerant
@@ -35,20 +34,19 @@ class IsFinanceOrAdmin(permissions.BasePermission):
         # une méthode sur User (bug trouvé le 17/08 : `request.user.
         # has_role(...)` n'existe pas sur le modèle, plantait en 500 sur
         # CHAQUE requête — jamais détecté faute de tests sur cette app).
-        return has_role(request.user, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN)
+        return has_role(request.user, ROLE_COMPTABLE, ROLE_SUPER_ADMIN)
 
 
 class IsManagerOrAdmin(permissions.BasePermission):
     """RCF (Responsable Comptable et Financière).
 
     Pas de rôle dédié "RCF" dans core.constants.py — même raisonnement que
-    DisbursementRequest.Status.EN_ATTENTE_N3 (finance/models.py) : Comptable/
-    Directeur Financier tiennent lieu de RCF.
+    DisbursementRequest.Status.EN_ATTENTE_N3 (finance/models.py) : Comptable tiennent lieu de RCF.
     """
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        return has_role(request.user, ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN)
+        return has_role(request.user, ROLE_COMPTABLE, ROLE_SUPER_ADMIN)
 
 
 class IsGerantOrAdmin(permissions.BasePermission):
@@ -79,7 +77,7 @@ class IsOwnerOrFinanceOrAdmin(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
         return obj.requested_by_id == request.user.id or has_role(
-            request.user, ROLE_COMPTABLE, ROLE_DIRECTEUR_FINANCIER, ROLE_SUPER_ADMIN,
+            request.user, ROLE_COMPTABLE, ROLE_SUPER_ADMIN,
         )
 
 
@@ -228,7 +226,7 @@ class SupplierQuoteViewSet(viewsets.ModelViewSet):
         # Filtré sur l'action CRUD, pas sur la méthode HTTP : un filtre
         # "POST ⇒ IsFinanceOrAdmin" écrasait aussi les permission_classes
         # des @action (validate_rcf/validate_manager/reject, toutes en POST)
-        # — le Directeur Financier passait donc les deux paliers de
+        # — le Comptable passait donc les deux paliers de
         # validation, et le Comptable (RCF) n'en passait aucun.
         if self.action in ('create', 'update', 'partial_update', 'destroy'):
             return [IsFinanceOrAdmin()]

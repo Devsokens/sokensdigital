@@ -3,7 +3,7 @@ import { BankReconciliation } from "@/components/admin/finance/bank-reconciliati
 
 export default function RapprochementPage() {
   return (
-    <RequireRole roles={["SUPER_ADMIN", "DIRECTEUR_FINANCIER", "COMPTABLE"]}>
+    <RequireRole roles={["SUPER_ADMIN", "COMPTABLE"]}>
       <BankReconciliation />
     </RequireRole>
   );

@@ -31,7 +31,7 @@ class CashEntrySerializer(serializers.ModelSerializer):
             # 'created_by', 'reconciled_by', 'reconciled_at' ajoutés suite au
             # pentest du 24/09/2026 (T3) : un Caissier pouvait forger sa
             # propre pièce comme déjà rapprochée par quelqu'un d'autre (ex:
-            # le Directeur Financier), à une date de son choix — la pièce
+            # le Comptable), à une date de son choix — la pièce
             # devenait alors immuable (_reject_if_reconciled) sans qu'aucune
             # écriture n'ait été postée au Grand Livre. Le rapprochement
             # passe désormais uniquement par l'action `reconcile`.

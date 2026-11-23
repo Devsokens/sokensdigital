@@ -18,7 +18,12 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from core.constants import (
-    ROLE_ADMIN, ROLE_DEVELOPER, ROLE_PROJECT_MANAGER, ROLE_SUPER_ADMIN,
+    ROLE_RESPONSABLE_ADMINISTRATIF,
+    ROLE_DEVELOPER,
+    ROLE_PROJECT_MANAGER,
+    ROLE_SUPER_ADMIN,
+    ROLE_RESPONSABLE_TECHNIQUE,
+    ROLE_RESPONSABLE_OPERATIONS,
 )
 from core.models import AuditLog, Notification, User
 from core.permissions import has_role
@@ -36,7 +41,7 @@ from .serializers import (
 # rôle dédié dans core.constants — Chef de Projet / Admin / Super-Admin en
 # tiennent lieu, même raisonnement que le palier N3 des décaissements côté
 # Finance (aucun rôle "direction générale" n'existe non plus là-bas).
-MAINTENANCE_LEAD_ROLES = (ROLE_PROJECT_MANAGER, ROLE_ADMIN, ROLE_SUPER_ADMIN)
+MAINTENANCE_LEAD_ROLES = (ROLE_RESPONSABLE_TECHNIQUE, ROLE_RESPONSABLE_OPERATIONS, ROLE_PROJECT_MANAGER, ROLE_SUPER_ADMIN)
 # Qui compose "l'équipe technique", et voit donc les fiches et les rapports.
 MAINTENANCE_TEAM_ROLES = MAINTENANCE_LEAD_ROLES + (ROLE_DEVELOPER,)
 

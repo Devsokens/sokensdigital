@@ -16,9 +16,9 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from core.constants import ROLE_ADMIN, ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE, ROLE_CAISSIER
+from core.constants import ROLE_RESPONSABLE_ADMINISTRATIF, ROLE_SUPER_ADMIN, ROLE_PROJECT_MANAGER, ROLE_COMPTABLE, ROLE_CAISSIER
 from core.notifications import notify, notify_roles
-from core.permissions import gerant_recipients, has_role, is_gerant
+from core.permissions import gerant_recipients, has_role, is_gerant, is_subcontractor_only
 from core.storage import upload_disbursement_quote
 from decimal import Decimal as D
 from django.utils import timezone
@@ -53,16 +53,15 @@ from finance.serializers import (
 )
 
 CHEF_DE_PROJET_ROLES = (ROLE_PROJECT_MANAGER,)
-DIRECTEUR_FINANCIER_ROLES = (ROLE_DIRECTEUR_FINANCIER,)
 COMPTABLE_ROLES = (ROLE_COMPTABLE,)
-FINANCE_READ_ROLES = (ROLE_DIRECTEUR_FINANCIER, ROLE_COMPTABLE)
+FINANCE_READ_ROLES = (ROLE_COMPTABLE,)
 logger = logging.getLogger(__name__)
 
 
 def _can_decide_stage(user, pending_status, disbursement=None):
     """Circuit fixe RCF puis Gérant (process comptable et financier,
     "Demande de décaissement") — aucun seuil de montant. Comptable et
-    Directeur Financier tiennent lieu de RCF (même convention que
+    Comptable tiennent lieu de RCF (même convention que
     procurement.views.IsManagerOrAdmin) ; Super-Admin tient lieu de
     Gérant."""
     # Signataire figé sur la demande (en poste à sa création) : lui seul.
@@ -70,14 +69,14 @@ def _can_decide_stage(user, pending_status, disbursement=None):
         if disbursement is not None and disbursement.assigned_rcf_id:
             return disbursement.assigned_rcf_id == user.id
         # Demande antérieure ou aucun responsable désigné à sa création.
-        return has_role(user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN)
+        return has_role(user, *COMPTABLE_ROLES, ROLE_SUPER_ADMIN)
     if disbursement is not None and disbursement.assigned_gerant_id:
         return disbursement.assigned_gerant_id == user.id
     return is_gerant(user)
 
 
 BESOINS_LINK = '/admin/technique/decaissements'  # suivi côté demandeur
-DECAISSEMENTS_LINK = '/admin/finance/decaissements'  # validation (Directeur financier, Gérant)
+DECAISSEMENTS_LINK = '/admin/finance/decaissements'  # validation (Comptable, Gérant)
 
 
 def _besoin_label(disbursement):
@@ -86,7 +85,7 @@ def _besoin_label(disbursement):
 
 def _notify_besoin_stage(disbursement, exclude=None):
     """Prévient ceux qui doivent statuer à l'étape en cours : la RCF
-    (Comptable, Directeur Financier) puis le Gérant (Super-Admin)."""
+    (Comptable) puis le Gérant (Super-Admin)."""
     if disbursement.status == DisbursementRequest.Status.EN_ATTENTE_RCF and disbursement.assigned_rcf_id:
         if disbursement.assigned_rcf_id != getattr(exclude, 'pk', None):
             notify(
@@ -103,7 +102,7 @@ def _notify_besoin_stage(disbursement, exclude=None):
         return
     if disbursement.status == DisbursementRequest.Status.EN_ATTENTE_RCF:
         notify_roles(
-            (ROLE_DIRECTEUR_FINANCIER,), title='Nouveau besoin à examiner',
+            (ROLE_COMPTABLE,), title='Nouveau besoin à examiner',
             message=_besoin_label(disbursement), notification_type='GENERAL', link=DECAISSEMENTS_LINK,
             exclude=[exclude, disbursement.requested_by],
         )
@@ -151,16 +150,19 @@ class CanInitiateDisbursement(permissions.BasePermission):
         # tout employé connecté et actif peut créer une demande et voir les
         # siennes. Ce qu'il voit est borné par get_queryset (ses demandes,
         # son département, les projets qu'il dirige) ; la validation reste
-        # réservée au Directeur financier puis au Gérant (action approve).
+        # réservée au Comptable puis au Gérant (action approve).
         user = request.user
-        return bool(user and user.is_authenticated and user.is_active)
+        if not (user and user.is_authenticated and user.is_active):
+            return False
+        # Sous-traitants : aucune visibilité sur les finances.
+        return not is_subcontractor_only(user)
 
 
 @extend_schema_view(
     list=extend_schema(
         tags=['Finance & Comptabilité'],
         summary='List disbursement requests',
-        description='Chef de Projet sees requests for projects they lead; Directeur Financier/Comptable/Super-Admin see everything.',
+        description='Chef de Projet sees requests for projects they lead; Comptable/Super-Admin see everything.',
     ),
     create=extend_schema(tags=['Finance & Comptabilité'], summary='Initiate a disbursement request (N1)', description='Chef de Projet only, for a project they lead.'),
     retrieve=extend_schema(tags=['Finance & Comptabilité'], summary='Get a disbursement request'),
@@ -215,7 +217,7 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
             allowed = (
                 project.lead_project_manager_id == user.id
                 or project.memberships.filter(user=user).exists()
-                or has_role(user, ROLE_ADMIN, ROLE_SUPER_ADMIN)
+                or has_role(user, ROLE_RESPONSABLE_ADMINISTRATIF, ROLE_SUPER_ADMIN)
             )
             if not allowed:
                 raise PermissionDenied("Seuls le chef de projet et les membres de l'équipe du projet peuvent lui rattacher un besoin.")
@@ -233,7 +235,7 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
         tags=['Finance & Comptabilité'],
         summary='Give validation to a disbursement request',
         description="Circuit fixe, sans seuil de montant : la RCF (Comptable ou "
-        "Directeur Financier) examine d'abord — approuver transmet au Gérant "
+        "Comptable) examine d'abord — approuver transmet au Gérant "
         "(Super-Admin), rejeter clôture la demande. Le Gérant statue ensuite en "
         "dernier ressort. Rejeter exige `rejection_reason`.",
         request={'application/json': {'type': 'object', 'properties': {
@@ -270,7 +272,7 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
         at_rcf_stage = disbursement.status == DisbursementRequest.Status.EN_ATTENTE_RCF
 
         # Approuver = signer : signature manuscrite obligatoire, reprise sur
-        # le bon de demande PDF (Directeur financier puis Gérant).
+        # le bon de demande PDF (Comptable puis Gérant).
         signature_url = ''
         if decision == 'APPROUVE':
             from django.core.exceptions import ValidationError as DjangoValidationError
@@ -413,7 +415,7 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
         )
 
 
-class IsDirecteurFinancierOrSuperAdmin(permissions.BasePermission):
+class IsComptableOrSuperAdmin(permissions.BasePermission):
     """§4.1 "Clôture comptable": "Seul rôle, avec le Super-Admin, habilité à
     ouvrir ou verrouiller définitivement des exercices". Read access is
     wider (Comptable needs to know whether a period is open)."""
@@ -421,21 +423,21 @@ class IsDirecteurFinancierOrSuperAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
         if request.method in permissions.SAFE_METHODS:
             return has_role(request.user, *FINANCE_READ_ROLES, ROLE_SUPER_ADMIN)
-        return has_role(request.user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN)
+        return has_role(request.user, *COMPTABLE_ROLES, ROLE_SUPER_ADMIN)
 
 
 @extend_schema_view(
     list=extend_schema(tags=['Finance & Comptabilité'], summary='List accounting periods'),
-    create=extend_schema(tags=['Finance & Comptabilité'], summary='Create an accounting period', description='Directeur Financier/Super-Admin only.'),
+    create=extend_schema(tags=['Finance & Comptabilité'], summary='Create an accounting period', description='Comptable/Super-Admin only.'),
     retrieve=extend_schema(tags=['Finance & Comptabilité'], summary='Get an accounting period'),
 )
 class AccountingPeriodViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
     queryset = AccountingPeriod.objects.select_related('closed_by')
     serializer_class = AccountingPeriodSerializer
-    permission_classes = [IsDirecteurFinancierOrSuperAdmin]
+    permission_classes = [IsComptableOrSuperAdmin]
 
     @extend_schema(tags=['Finance & Comptabilité'], summary='Close (lock) an accounting period', responses={200: AccountingPeriodSerializer})
-    @action(detail=True, methods=['post'], permission_classes=[IsDirecteurFinancierOrSuperAdmin])
+    @action(detail=True, methods=['post'], permission_classes=[IsComptableOrSuperAdmin])
     def close(self, request, pk=None):
         period = self.get_object()
         period.status = AccountingPeriod.Status.CLOTUREE
@@ -445,7 +447,7 @@ class AccountingPeriodViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, 
         return Response(AccountingPeriodSerializer(period).data)
 
     @extend_schema(tags=['Finance & Comptabilité'], summary='Reopen a closed accounting period', responses={200: AccountingPeriodSerializer})
-    @action(detail=True, methods=['post'], permission_classes=[IsDirecteurFinancierOrSuperAdmin])
+    @action(detail=True, methods=['post'], permission_classes=[IsComptableOrSuperAdmin])
     def reopen(self, request, pk=None):
         period = self.get_object()
         period.status = AccountingPeriod.Status.OUVERTE
@@ -521,7 +523,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         invoice = serializer.save(created_by=self.request.user)
         notify_roles(
-            DIRECTEUR_FINANCIER_ROLES,
+            COMPTABLE_ROLES,
             title='Nouvelle facture créée',
             message=f'Facture {invoice.invoice_number} créée.',
             notification_type='GENERAL',
@@ -600,12 +602,12 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         tags=['Finance & Comptabilité'],
         summary='Marquer la facture comme payée',
         description="Enregistre le reste dû comme un versement reçu (avec son reçu). "
-        "`payment_method` facultatif (AUTRE par défaut). Comptable, Directeur financier, Super-Admin.",
+        "`payment_method` facultatif (AUTRE par défaut). Comptable, Super-Admin.",
         responses={200: InvoiceSerializer},
     )
     @action(detail=True, methods=['post'], url_path='mark-paid', permission_classes=[permissions.IsAuthenticated])
     def mark_paid(self, request, pk=None):
-        if not has_role(request.user, *COMPTABLE_ROLES, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN):
+        if not has_role(request.user, *COMPTABLE_ROLES, ROLE_SUPER_ADMIN):
             return Response(status=status.HTTP_403_FORBIDDEN)
         invoice = self.get_object()
         due = invoice.amount_ttc - invoice.amount_paid
@@ -725,7 +727,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         number = instance.invoice_number
         super().perform_destroy(instance)
         notify_roles(
-            DIRECTEUR_FINANCIER_ROLES,
+            COMPTABLE_ROLES,
             title='Facture supprimée',
             message=f'Facture {number} supprimée.',
             notification_type='GENERAL',
@@ -917,7 +919,7 @@ class PaymentViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.Retr
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def receive(self, request, pk=None, **kwargs):
         """Marquer versement reçu + auto-créer reçu."""
-        if not has_role(request.user, *COMPTABLE_ROLES, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN):
+        if not has_role(request.user, *COMPTABLE_ROLES, ROLE_SUPER_ADMIN):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         payment = self.get_object()
@@ -1015,12 +1017,12 @@ class TaxDeclarationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, vi
     @extend_schema(
         tags=['Finance & Comptabilité'],
         summary='Validate (sign) a TVA declaration',
-        description='Directeur Financier/Super-Admin only (§4.1 "Gouvernance fiscale").',
+        description='Comptable/Super-Admin only (§4.1 "Gouvernance fiscale").',
         responses={200: TaxDeclarationSerializer},
     )
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def validate(self, request, pk=None):
-        if not has_role(request.user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN):
+        if not has_role(request.user, *COMPTABLE_ROLES, ROLE_SUPER_ADMIN):
             return Response(status=status.HTTP_403_FORBIDDEN)
         declaration = self.get_object()
         if declaration.status != TaxDeclaration.Status.BROUILLON:
@@ -1035,7 +1037,7 @@ class TaxDeclarationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, vi
 @extend_schema(
     tags=['Finance & Comptabilité'],
     summary='Export the FEC (Fichier des Écritures Comptables) for a period',
-    description='Comptable/Directeur Financier/Super-Admin. NOTE: simplified subset of '
+    description='Comptable/Super-Admin. NOTE: simplified subset of '
     "the real French DGFiP FEC column spec (18 mandatory columns, strict formats) — "
     'covers the columns needed to reconstruct entries, not a certified export.',
 )
@@ -1104,7 +1106,7 @@ def invoice_tax_totals(year: int | None = None) -> dict:
 @extend_schema(
     tags=['Finance & Comptabilité'],
     summary='Finance dashboard (§4.1 Analytique & Reporting)',
-    description='Directeur Financier/Super-Admin. Simplified: trésorerie brute (solde du '
+    description='Comptable/Super-Admin. Simplified: trésorerie brute (solde du '
     "compte 512), résultat brut (produits - charges validés), DSO (délai moyen "
     "facture émise -> échéance sur factures validées), décaissements exécutés par "
     "projet. No true per-project margin (revenue isn't tracked per-project in "
@@ -1114,7 +1116,7 @@ def invoice_tax_totals(year: int | None = None) -> dict:
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def finance_dashboard(request):
-    if not has_role(request.user, *DIRECTEUR_FINANCIER_ROLES, ROLE_SUPER_ADMIN):
+    if not has_role(request.user, *COMPTABLE_ROLES, ROLE_SUPER_ADMIN):
         return Response(status=status.HTTP_403_FORBIDDEN)
 
     cached = cache.get(FINANCE_DASHBOARD_CACHE_KEY)
@@ -1165,7 +1167,7 @@ def finance_dashboard(request):
     "crédits bancaires (treasury.BankEntry type=ENTREE) et versements clients encaissés "
     "(finance.Payment status=RECU). Agrégé côté serveur plutôt que par 3 appels frontend "
     "séparés : une seule requête HTTP, un seul tri chronologique, des totaux cohérents.\n\n"
-    "Filtres optionnels `date_from`/`date_to` (YYYY-MM-DD). Accès Directeur Financier / "
+    "Filtres optionnels `date_from`/`date_to` (YYYY-MM-DD). Accès Comptable / "
     "Comptable / Super-Admin ; le Caissier y accède aussi mais ne voit que la caisse "
     "(la banque et les versements ne sont pas de son périmètre, cf. cahier des charges §3).",
     responses={200: {'type': 'object'}},
@@ -1311,7 +1313,7 @@ class PublicInvoiceVerificationView(APIView):
 class TaxRatesView(APIView):
     """Taux de TVA et de CSS appliqués par défaut aux nouvelles factures.
 
-    Lecture : rôles finance. Modification : Directeur financier ou
+    Lecture : rôles finance. Modification : Comptable ou
     Super-Admin uniquement, tracée dans le journal d'audit. Les factures
     déjà émises gardent les taux en vigueur à leur émission."""
 
