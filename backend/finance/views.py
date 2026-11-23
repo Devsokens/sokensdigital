@@ -727,13 +727,34 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         response['Content-Disposition'] = f'attachment; filename="{get_invoice_filename(invoice)}"'
         return response
 
+    def destroy(self, request, *args, **kwargs):
+        # Suppression propre (versements, reçus, écritures, période
+        # d'abonnement) ou refus en bloc si la comptabilité ne peut pas être
+        # défaite sans la fausser — voir finance.invoice_deletion.
+        from finance.invoice_deletion import invoice_blocking_reasons
+        invoice = self.get_object()
+        reasons = invoice_blocking_reasons(invoice)
+        if reasons:
+            return Response({
+                'detail': 'Suppression impossible sans fausser la comptabilité : ' + ' '.join(reasons),
+                'reasons': reasons,
+            }, status=status.HTTP_409_CONFLICT)
+        self.perform_destroy(invoice)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     def perform_destroy(self, instance):
         # Suppression d'une facture déjà validée/envoyée = action très
         # critique (décision du 10/09/2026) — e-mail en plus du push. Une
         # facture encore BROUILLON n'est qu'un brouillon, push suffit.
+        from core.models import AuditLog
+        from finance.invoice_deletion import delete_invoice_completely
         was_validated = instance.status != Invoice.Status.BROUILLON
         number = instance.invoice_number
-        super().perform_destroy(instance)
+        invoice_pk = instance.pk
+        ip = self.request.META.get('REMOTE_ADDR')
+        removed = delete_invoice_completely(instance, self.request.user, ip)
+        AuditLog.objects.log_action(self.request.user, 'FACTURE_SUPPRIMEE', 'Invoice', invoice_pk,
+                                    details=removed, ip_address=ip)
         notify_roles(
             COMPTABLE_ROLES,
             title='Facture supprimée',

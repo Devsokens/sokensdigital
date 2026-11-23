@@ -357,3 +357,39 @@ class EssentielQuotaTests(APITestCase):
         self.assertEqual(res.status_code, 200, res.content)
         dec.refresh_from_db()
         self.assertEqual(dec.quotas_alloues['publications'], 13)
+
+
+class FinanceInvoiceDeletionTests(APITestCase):
+    def setUp(self):
+        from finance.models import AccountingPeriod
+        AccountingPeriod.objects.create(label='2026-F', start_date=date(2026, 1, 1), end_date=date(2026, 12, 31))
+        self.cpt = _client(_user('cpt-del@x.dev', ROLE_COMPTABLE))
+        self.sub = Subscription.objects.create(client=Client.objects.create(company_name='Fin'),
+                                               offer=ServiceOffer.objects.get(code='com-pro'), start_date=date(2026, 11, 1))
+        period = ServicePeriod.objects.get(pk=self.cpt.post(f'{BASE}/subscriptions/{self.sub.pk}/generate-invoice/', {}, format='json').json()['id'])
+        self.period_pk = period.pk
+        self.invoice = period.invoice
+        self.assertEqual(self.cpt.post(f'/api/v1/finance/invoices/{self.invoice.pk}/validate/', {}, format='json').status_code, 200)
+        self.assertEqual(self.cpt.post(f'/api/v1/finance/invoices/{self.invoice.pk}/mark-paid/', {}, format='json').status_code, 200)
+
+    def test_dashboard_reflects_deletion(self):
+        before = self.cpt.get('/api/v1/finance/dashboard/').json()
+        self.assertGreater(Decimal(before['gross_result']), 0)
+        res = self.cpt.delete(f'/api/v1/finance/invoices/{self.invoice.pk}/')
+        self.assertEqual(res.status_code, 204, res.content)
+        after = self.cpt.get('/api/v1/finance/dashboard/').json()
+        self.assertEqual(Decimal(after['gross_result']), Decimal(before['gross_result']) - self.invoice.amount_ht)
+        self.assertEqual(Decimal(after['taxes']['all_time']['amount_ttc']),
+                         Decimal(before['taxes']['all_time']['amount_ttc']) - self.invoice.amount_ttc)
+        # La période d'abonnement de cette facture disparaît, l'abonnement reste.
+        self.assertFalse(ServicePeriod.objects.filter(pk=self.period_pk).exists())
+        self.assertTrue(Subscription.objects.filter(pk=self.sub.pk).exists())
+        self.assertTrue(AuditLog.objects.filter(action='FACTURE_SUPPRIMEE').exists())
+
+    def test_treasury_entry_blocks_invoice_deletion(self):
+        from treasury.models import CashEntry
+        payment = self.invoice.payments.first()
+        CashEntry.objects.create(type=CashEntry.Type.ENTREE, source=CashEntry.Source.CLIENT_ESPECES,
+                                 amount=payment.amount, payment=payment)
+        self.assertEqual(self.cpt.delete(f'/api/v1/finance/invoices/{self.invoice.pk}/').status_code, 409)
+        self.assertTrue(Invoice.objects.filter(pk=self.invoice.pk).exists())

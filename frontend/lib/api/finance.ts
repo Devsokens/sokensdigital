@@ -247,6 +247,12 @@ export function markInvoicePaid(id: string, paymentMethod?: string) {
   });
 }
 
+/** Suppression propre (versements, reçus, écritures) ; 409 avec le motif
+ * si la comptabilité ne peut pas être défaite sans la fausser. */
+export function deleteInvoice(id: string) {
+  return apiFetch<void>(`/api/v1/finance/invoices/${id}/`, { method: "DELETE" });
+}
+
 export function getInvoice(id: string) {
   return apiFetch<Invoice>(`/api/v1/finance/invoices/${id}/`);
 }

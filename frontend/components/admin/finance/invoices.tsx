@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, Download, Eye, LayoutGrid, List, Loader2, MoreHorizontal, Pencil, Plus, Search, Settings } from "lucide-react";
+import { CheckCircle2, Download, Eye, LayoutGrid, List, Loader2, MoreHorizontal, Pencil, Plus, Search, Settings, Trash2 } from "lucide-react";
+import { ConfirmModal } from "@/components/admin/confirm-modal";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -10,7 +11,7 @@ import { QuoteSettingsForm } from "@/components/admin/marketing/quote-list";
 import { inputClass } from "@/components/admin/form-styles";
 import { InvoiceViewer } from "@/components/admin/finance/invoice-viewer";
 import { TaxRatesForm } from "@/components/admin/finance/tax-rates-form";
-import { downloadInvoicePdf, getInvoiceEditorContext, listInvoices, validateInvoice, type InvoiceEditorContext } from "@/lib/api/finance";
+import { deleteInvoice, downloadInvoicePdf, getInvoiceEditorContext, listInvoices, validateInvoice, type InvoiceEditorContext } from "@/lib/api/finance";
 import { formatFcfa } from "@/lib/format-currency";
 import { cn } from "@/lib/utils";
 import type { Invoice } from "@/lib/api/types";
@@ -28,6 +29,7 @@ export function Invoices() {
   const [actingId, setActingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<Invoice | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [query, setQuery] = useState("");
@@ -214,7 +216,22 @@ export function Invoices() {
                     <StatusBadge invoice={invoice} />
                   </td>
                   <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                    <ActionsMenu invoice={invoice} acting={actingId === invoice.id} onView={() => setViewingId(invoice.id)} onPdf={() => downloadPdf(invoice)} onValidate={() => handleValidate(invoice.id)} />
+                    <ActionsMenu invoice={invoice} acting={actingId === invoice.id} onView={() => setViewingId(invoice.id)} onPdf={() => downloadPdf(invoice)} onValidate={() => handleValidate(invoice.id)} onDelete={() => setToDelete(invoice)} />
+                    {toDelete?.id === invoice.id && (
+                      <ConfirmModal
+                        open
+                        onOpenChange={(o) => !o && setToDelete(null)}
+                        title={`Supprimer la facture ${invoice.invoice_number}`}
+                        description="La facture sera supprimée avec ses versements, reçus, pièces jointes et écritures comptables (et le mois d'abonnement rattaché, s'il y en a un). L'analytique est mise à jour. Refusé si la facture est dans une période comptable clôturée, rapprochée en banque ou encaissée en caisse/banque."
+                        confirmLabel="Supprimer"
+                        requireTyping={invoice.status === "BROUILLON" ? undefined : "SUPPRIMER"}
+                        onConfirm={async () => {
+                          await deleteInvoice(invoice.id);
+                          setToDelete(null);
+                          load();
+                        }}
+                      />
+                    )}
                   </td>
                 </tr>
               ))}
@@ -310,7 +327,7 @@ function DueBadge({ invoice, small }: { invoice: Invoice; small?: boolean }) {
 }
 
 /** Actions d'une facture, dans un menu « ⋯ » comme pour les devis. */
-function ActionsMenu({ invoice, acting, onView, onPdf, onValidate }: { invoice: Invoice; acting: boolean; onView: () => void; onPdf: () => void; onValidate: () => void }) {
+function ActionsMenu({ invoice, acting, onView, onPdf, onValidate, onDelete }: { invoice: Invoice; acting: boolean; onView: () => void; onPdf: () => void; onValidate: () => void; onDelete: () => void }) {
   const item = "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50";
   return (
     <Popover>
@@ -342,6 +359,9 @@ function ActionsMenu({ invoice, acting, onView, onPdf, onValidate }: { invoice: 
             <CheckCircle2 className="size-3.5" /> Valider
           </button>
         )}
+        <button type="button" onClick={onDelete} className={cn(item, "text-destructive")}>
+          <Trash2 className="size-3.5" /> Supprimer
+        </button>
       </PopoverContent>
     </Popover>
   );
