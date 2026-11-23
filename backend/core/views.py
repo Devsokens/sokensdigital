@@ -1014,6 +1014,25 @@ def _rate(part, whole):
     return round(part * 100 / whole, 1) if whole else None
 
 
+
+def _subscriptions_summary():
+    """Abonnements de services : chiffres société (même cache pour tous)."""
+    from services.models import ServiceOffer, ServicePeriod, Subscription
+    today = timezone.now().date()
+    active = Subscription.objects.filter(status=Subscription.Status.ACTIVE).select_related('offer')
+    mrr = {}
+    for sub in active:
+        monthly = sub.price_ttc() / (12 if sub.offer.kind == ServiceOffer.Kind.ANNUEL else 1)
+        mrr[sub.offer.pole] = mrr.get(sub.offer.pole, 0) + monthly
+    return {
+        'active': active.count(),
+        'mrr': {k: str(round(v)) for k, v in mrr.items()},
+        'unpaid_started': ServicePeriod.objects.filter(
+            status=ServicePeriod.Status.EN_ATTENTE_PAIEMENT, period_start__lte=today,
+        ).count(),
+    }
+
+
 @extend_schema(
     tags=['Général'],
     summary='Global cross-department dashboard (§4.1/4.2)',
@@ -1024,6 +1043,7 @@ def _rate(part, whole):
     responses={200: {'type': 'object'}},
 )
 @api_view(['GET'])
+
 @permission_classes([IsAuthenticated])
 def global_dashboard(request):
     from core.permissions import is_subcontractor_only
@@ -1225,6 +1245,7 @@ def global_dashboard(request):
             {'name': c['name'], 'count': c['count'], 'budget': str(c['budget'])} for c in ranked
         ],
     }
+    payload['subscriptions'] = _subscriptions_summary()
     cache.set(GLOBAL_DASHBOARD_CACHE_KEY, payload, GLOBAL_DASHBOARD_CACHE_TTL)
     return Response(payload)
 

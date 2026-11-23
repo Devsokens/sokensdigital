@@ -1,5 +1,6 @@
 "use client";
 
+import { listOffers, type ServiceOffer } from "@/lib/api/services";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -53,6 +54,11 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
   const [lines, setLines] = useState<QuoteLineInput[]>(linesFromQuote(quote));
   const [terms, setTerms] = useState<QuotePaymentTerm[]>(quote?.payment_terms ?? []);
   const [settings, setSettings] = useState<QuoteSettings | null>(null);
+  // Catalogue des offres (grille tarifaire) — vide si l'utilisateur n'a accès à aucun pôle.
+  const [catalogue, setCatalogue] = useState<ServiceOffer[]>([]);
+  useEffect(() => {
+    listOffers(undefined, true).then((r) => setCatalogue(r.results)).catch(() => setCatalogue([]));
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [selectedEntity, setSelectedEntity] = useState<SelectedClientEntity | null>(null);
@@ -102,6 +108,16 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
   const vatRate = Number(quote?.vat_rate ?? settings?.vat_rate ?? 0.18);
   const cssRate = Number(quote?.css_rate ?? settings?.css_rate ?? 0.01);
   const estimatedTtc = estimatedHt * (1 + vatRate + cssRate);
+
+  // Prix de la grille = TTC ; les lignes du devis sont en HT.
+  function addCatalogueOffer(offerId: string) {
+    const offer = catalogue.find((o) => o.id === offerId);
+    if (!offer) return;
+    const ht = Number(offer.price_ttc) / (1 + vatRate + cssRate);
+    const period = offer.kind === "MENSUEL" ? " (abonnement mensuel, réglé en une fois chaque mois)" : offer.kind === "ANNUEL" ? " (abonnement annuel)" : "";
+    const line = { ...EMPTY_LINE, service_title: offer.name + period, description: offer.features, unit_price: ht.toFixed(2) };
+    setLines((prev) => (prev.length === 1 && !prev[0].service_title.trim() ? [line] : [...prev, line]));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -254,9 +270,24 @@ export function QuoteEditor({ quote, basePath = "/admin/marketing/devis" }: { qu
               <div>
                 <div className="mb-2 flex items-center justify-between">
                   <span className={labelClass}>Lignes de prestation</span>
-                  <button type="button" onClick={addLine} className="flex items-center gap-1 text-xs text-primary hover:underline">
-                    <Plus className="size-3.5" /> Ajouter une ligne
-                  </button>
+                  <span className="flex items-center gap-3">
+                    {catalogue.length > 0 && (
+                      <select
+                        value=""
+                        onChange={(e) => addCatalogueOffer(e.target.value)}
+                        className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700"
+                        aria-label="Ajouter une offre du catalogue"
+                      >
+                        <option value="">+ Offre du catalogue…</option>
+                        {catalogue.map((o) => (
+                          <option key={o.id} value={o.id}>{o.name} — {Math.round(Number(o.price_ttc)).toLocaleString("fr-FR")} F TTC</option>
+                        ))}
+                      </select>
+                    )}
+                    <button type="button" onClick={addLine} className="flex items-center gap-1 text-xs text-primary hover:underline">
+                      <Plus className="size-3.5" /> Ajouter une ligne
+                    </button>
+                  </span>
                 </div>
                 <div className="space-y-3">
                   {lines.map((line, i) => {

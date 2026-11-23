@@ -111,6 +111,7 @@ INSTALLED_APPS = [
     'procurement',
     'treasury',
     'support',
+    'services',
     # Rate-limit/lockout sur /admin/login — le formulaire Django admin
     # n'est couvert par aucun throttle DRF (ceux-ci ne s'appliquent qu'aux
     # vues API). Sans axes, /admin/ est bruteforçable sans limite.

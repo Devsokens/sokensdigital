@@ -48,6 +48,7 @@ urlpatterns = [
     path('api/v1/procurement/', include('procurement.urls')),
     path('api/v1/treasury/', include('treasury.urls')),
     path('api/v1/support/', include('support.urls')),
+    path('api/v1/services/', include('services.urls')),
     path('api/v1/public/', include(marketing_public_urlpatterns)),
     path('api/v1/public/', include(support_public_urlpatterns)),
     path('api/v1/public/invoices/verify/', PublicInvoiceVerificationView.as_view(), name='public-invoice-verify'),

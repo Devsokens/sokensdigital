@@ -106,3 +106,7 @@ plafond (rôles les plus élevés conservés selon l'ordre de
 aligne les profils Firestore quand les identifiants Firebase sont disponibles.
 L'interface reclasse aussi à la volée les anciens noms d'un profil pas encore
 aligné (`profileRoles`).
+
+## 8. Abonnements de services
+
+Droits détaillés dans `docs/ABONNEMENTS_SERVICES.md`.

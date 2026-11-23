@@ -1,0 +1,174 @@
+from datetime import date, timedelta
+from decimal import Decimal
+
+from django.utils import timezone
+from rest_framework.test import APIClient, APITestCase
+
+from administration.models import Client
+from core.constants import (
+    ROLE_COMMERCIAL, ROLE_COMPTABLE, ROLE_DEVELOPER, ROLE_RESPONSABLE_MARKETING_COM, ROLE_RESPONSABLE_TECHNIQUE,
+    ROLE_SOUS_TRAITANT_COMMERCIAL, ROLE_SUPER_ADMIN,
+)
+from core.models import AuditLog, Role, User
+from finance.models import Invoice, Payment
+from services.billing import ht_for_ttc
+from services.models import ServiceOffer, ServicePeriod, Subscription, add_months
+
+BASE = '/api/v1/services'
+
+
+def _user(email, *roles):
+    user = User.objects.create(email=email)
+    for name in roles:
+        user.roles.add(Role.objects.get_or_create(name=name)[0])
+    return user
+
+
+def _client(user):
+    c = APIClient()
+    c.force_authenticate(user=user)
+    return c
+
+
+class CatalogueTests(APITestCase):
+    def test_grid_is_seeded(self):
+        pro = ServiceOffer.objects.get(code='com-pro')
+        self.assertEqual(pro.price_ttc, Decimal('150000'))
+        self.assertEqual(pro.quotas['publications'], 12)
+        self.assertEqual(ServiceOffer.objects.get(code='hebergement-domaine').kind, 'ANNUEL')
+        self.assertEqual(ServiceOffer.objects.get(code='maintenance-premium').response_sla_hours, 4)
+
+    def test_ht_for_ttc_hits_exact_ttc(self):
+        for ttc in (Decimal('75000'), Decimal('150000'), Decimal('15000'), Decimal('40000')):
+            ht = ht_for_ttc(ttc, Decimal('0.18'), Decimal('0.01'), [])
+            total = ht + (ht * Decimal('0.18')).quantize(Decimal('0.01')) + (ht * Decimal('0.01')).quantize(Decimal('0.01'))
+            self.assertEqual(total, ttc)
+
+    def test_add_months_clamps(self):
+        self.assertEqual(add_months(date(2026, 1, 31), 1), date(2026, 2, 28))
+
+
+class SubscriptionFlowTests(APITestCase):
+    def setUp(self):
+        self.mkt = _user('mkt@x.dev', ROLE_RESPONSABLE_MARKETING_COM)
+        self.compta = _user('compta@x.dev', ROLE_COMPTABLE)
+        self.client_co = Client.objects.create(company_name='Hôtel Test')
+        self.offer = ServiceOffer.objects.get(code='com-pro')
+        self.sub = Subscription.objects.create(client=self.client_co, offer=self.offer, start_date=date(2026, 11, 1))
+        self.api = _client(self.mkt)
+
+    def _generate(self, api=None):
+        return (api or self.api).post(f'{BASE}/subscriptions/{self.sub.pk}/generate-invoice/', {}, format='json')
+
+    def _pay(self, period, amount=None):
+        invoice = Invoice.objects.get(pk=period.invoice_id)
+        Payment.objects.create(invoice=invoice, amount=amount or invoice.amount_ttc, payment_date=timezone.now().date(),
+                               payment_method='VIREMENT', status=Payment.Status.RECU)
+        period.refresh_from_db()
+
+    def test_generate_invoice_is_exact_and_not_doubled(self):
+        res = self._generate(_client(self.compta))
+        self.assertEqual(res.status_code, 201, res.content)
+        period = ServicePeriod.objects.get(pk=res.json()['id'])
+        self.assertEqual(period.invoice.amount_ttc, Decimal('150000.00'))
+        self.assertEqual(period.invoice.status, Invoice.Status.BROUILLON)
+        self.assertEqual((period.period_start, period.period_end), (date(2026, 11, 1), date(2026, 11, 30)))
+        # Période impayée : pas de seconde facture.
+        self.assertEqual(self._generate().status_code, 400)
+
+    def test_period_opens_only_when_fully_paid_then_quota_enforced(self):
+        period = ServicePeriod.objects.get(pk=self._generate().json()['id'])
+        self._pay(period, Decimal('50000'))
+        self.assertEqual(period.status, ServicePeriod.Status.EN_ATTENTE_PAIEMENT)
+        # Production refusée tant que le mois n'est pas payé.
+        res = self.api.post(f'{BASE}/deliverables/', {'period': str(period.pk), 'kind': 'VIDEO', 'title': 'v'}, format='json')
+        self.assertEqual(res.status_code, 400)
+        self._pay(period, Decimal('100000'))
+        self.assertEqual(period.status, ServicePeriod.Status.OUVERT)
+        self.assertEqual(period.quotas_alloues['videos'], 2)
+
+        ids = []
+        for i in range(3):
+            res = self.api.post(f'{BASE}/deliverables/', {'period': str(period.pk), 'kind': 'VIDEO', 'title': f'v{i}'}, format='json')
+            self.assertEqual(res.status_code, 201, res.content)
+            ids.append(res.json()['id'])
+        for i, pk in enumerate(ids):
+            for step in ('CONTROLE_INTERNE', 'VALIDE_CLIENT'):
+                self.assertEqual(self.api.post(f'{BASE}/deliverables/{pk}/transition/', {'status': step}, format='json').status_code, 200)
+            res = self.api.post(f'{BASE}/deliverables/{pk}/transition/', {'status': 'PUBLIE'}, format='json')
+            self.assertEqual(res.status_code, 200 if i < 2 else 400, res.content)
+        self.assertEqual(period.remaining()['videos'], 0)
+        # Saut d'étape interdit.
+        res = self.api.post(f'{BASE}/deliverables/', {'period': str(period.pk), 'kind': 'PUBLICATION', 'title': 'p'}, format='json')
+        self.assertEqual(self.api.post(f'{BASE}/deliverables/{res.json()["id"]}/transition/', {'status': 'PUBLIE'}, format='json').status_code, 400)
+
+    def test_close_requires_report_and_carry_over_is_audited(self):
+        period = ServicePeriod.objects.get(pk=self._generate().json()['id'])
+        self._pay(period)
+        url = f'{BASE}/periods/{period.pk}/close/'
+        self.assertEqual(self.api.post(url, {}, format='json').status_code, 400)
+        self.assertEqual(self.api.post(url, {'report_url': 'https://r.example/1', 'carry_over': {'videos': 1}}, format='json').status_code, 400)
+        self.assertEqual(self.api.post(url, {'report_url': 'https://r.example/1', 'carry_over': {'videos': 5}, 'carry_reason': 'x'}, format='json').status_code, 400)
+        res = self.api.post(url, {'report_url': 'https://r.example/1', 'carry_over': {'videos': 1}, 'carry_reason': 'Tournage reporté par le client'}, format='json')
+        self.assertEqual(res.status_code, 200, res.content)
+        self.assertTrue(AuditLog.objects.filter(action='QUOTA_REPORTE').exists())
+        # Le report s'ajoute au mois suivant, à son ouverture.
+        nxt = ServicePeriod.objects.get(pk=self._generate().json()['id'])
+        self.assertEqual(nxt.period_start, date(2026, 12, 1))
+        self._pay(nxt)
+        self.assertEqual(nxt.quotas_alloues['videos'], 3)
+
+    def test_premium_requires_meeting(self):
+        self.sub.offer = ServiceOffer.objects.get(code='com-premium')
+        self.sub.save()
+        period = ServicePeriod.objects.get(pk=self._generate().json()['id'])
+        self._pay(period)
+        url = f'{BASE}/periods/{period.pk}/close/'
+        self.assertEqual(self.api.post(url, {'report_notes': 'ok'}, format='json').status_code, 400)
+        self.assertEqual(self.api.post(url, {'report_notes': 'ok', 'meeting_held': True}, format='json').status_code, 200)
+
+
+class PermissionTests(APITestCase):
+    def setUp(self):
+        self.client_co = Client.objects.create(company_name='C')
+        self.com = Subscription.objects.create(client=self.client_co, offer=ServiceOffer.objects.get(code='com-essentiel'),
+                                               start_date=date(2026, 11, 1))
+        self.mnt = Subscription.objects.create(client=self.client_co, offer=ServiceOffer.objects.get(code='maintenance-pro'),
+                                               start_date=date(2026, 11, 1))
+
+    def test_subcontractors_and_developers_have_no_access(self):
+        for role in (ROLE_SOUS_TRAITANT_COMMERCIAL, ROLE_DEVELOPER):
+            api = _client(_user(f'{role[:5]}@x.dev', role))
+            self.assertEqual(api.get(f'{BASE}/subscriptions/').status_code, 403)
+            self.assertEqual(api.get(f'{BASE}/dashboard/').status_code, 403)
+
+    def test_poles_are_separated(self):
+        tech = _client(_user('t@x.dev', ROLE_RESPONSABLE_TECHNIQUE))
+        ids = {s['id'] for s in tech.get(f'{BASE}/subscriptions/').json()['results']}
+        self.assertEqual(ids, {str(self.mnt.pk)})
+        self.assertEqual(tech.post(f'{BASE}/subscriptions/{self.com.pk}/generate-invoice/', {}, format='json').status_code, 404)
+
+    def test_commercial_reads_but_cannot_write(self):
+        com = _client(_user('c@x.dev', ROLE_COMMERCIAL))
+        self.assertEqual(com.get(f'{BASE}/subscriptions/{self.com.pk}/').status_code, 200)
+        self.assertEqual(com.post(f'{BASE}/subscriptions/{self.com.pk}/generate-invoice/', {}, format='json').status_code, 403)
+        res = com.post(f'{BASE}/subscriptions/', {'client': self.client_co.pk, 'offer': ServiceOffer.objects.get(code='com-pro').pk,
+                                                  'start_date': '2026-12-01'}, format='json')
+        self.assertEqual(res.status_code, 403)
+
+    def test_ponctual_offer_cannot_be_subscribed(self):
+        sa = _client(_user('sa@x.dev', ROLE_SUPER_ADMIN))
+        res = sa.post(f'{BASE}/subscriptions/', {'client': self.client_co.pk, 'offer': ServiceOffer.objects.get(code='com-visuel').pk,
+                                                 'start_date': '2026-12-01'}, format='json')
+        self.assertEqual(res.status_code, 400)
+
+    def test_dashboard_flags_unpaid_and_sla(self):
+        from technique.models import Ticket
+        sa = _client(_user('sa2@x.dev', ROLE_SUPER_ADMIN))
+        self.assertEqual(sa.post(f'{BASE}/subscriptions/{self.com.pk}/generate-invoice/', {}, format='json').status_code, 201)
+        ticket = Ticket.objects.create(client=self.client_co, title='Site en panne', description='x')
+        Ticket.objects.filter(pk=ticket.pk).update(created_at=timezone.now() - timedelta(hours=30))
+        data = sa.get(f'{BASE}/dashboard/').json()
+        self.assertEqual(len(data['unpaid_started']), 1)
+        self.assertEqual([t['title'] for t in data['sla_overdue']], ['Site en panne'])
+        self.assertIn('COMMUNICATION', data['mrr'])
