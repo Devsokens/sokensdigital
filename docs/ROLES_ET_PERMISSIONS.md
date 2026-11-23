@@ -62,6 +62,10 @@ fois (contraintes en base `single_gerant` et `single_rcf`), hors plafond :
 | Gérant | `User.is_gerant` | Dernière signature des expressions de besoins, des demandes d'achat et des devis fournisseurs ; modification des taux de TVA et de CSS. |
 | Responsable Comptabilité & Finance | `User.is_rcf` | Première validation (contrôle budgétaire) des expressions de besoins. |
 
+Poste pourvu : toute nomination supplémentaire est refusée (409) et l'option
+de nomination n'est plus affichée ; il faut d'abord retirer le titre au
+titulaire en place.
+
 Seuls les titulaires **en poste au moment de la demande** signent leur palier
 (`DisbursementRequest.assigned_rcf` / `assigned_gerant`) : aucune substitution,
 pas même par un Super-Administrateur.
@@ -71,6 +75,9 @@ pas même par un Super-Administrateur.
 - **Autorité unique** : seul le Super-Administrateur attribue ou retire des
   rôles, y compris à la création d'un compte (`POST /api/v1/users/provision/`
   et `POST /api/v1/users/<id>/role/` réservés au Super-Admin).
+- Les rôles restent modifiables à tout moment après la création du compte,
+  y compris ceux d'un autre Super-Administrateur (Firestore : seul un
+  Super-Admin peut modifier `role`/`roles` d'un profil).
 - **Plafond standard** : 2 rôles fonctionnels au maximum par utilisateur
   (ex. Responsable des Opérations + Chef de Projet).
 - **Plafond Super-Admin** : le privilège Super-Admin + 2 rôles fonctionnels

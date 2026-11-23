@@ -25,6 +25,15 @@ service cloud.firestore {
       );
     }
 
+    // Seul le Super-Admin attribue ou retire des rôles (y compris à un
+    // autre Super-Admin).
+    function isSuperAdmin() {
+      return getUserData() != null && (
+        getUserData().role == 'SUPER_ADMIN' ||
+        (getUserData().roles is list && 'SUPER_ADMIN' in getUserData().roles)
+      );
+    }
+
     // TODO(chat): project membership lives in Django/Supabase, not
     // Firestore, so this can't `get()` a /projects/{id} doc here. Once
     // PROJECT-type chat rooms are built, Django needs to push a minimal
@@ -53,7 +62,11 @@ service cloud.firestore {
       // — only those four keys may appear in the diff, so a regular user
       // can never self-promote or change their department/email.
       allow update: if isAuth() && (
-        isAdmin() ||
+        isSuperAdmin() ||
+        (
+          isAdmin() &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'roles'])
+        ) ||
         (
           request.auth.uid == userUid &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['firstName', 'lastName', 'avatarUrl', 'updatedAt'])

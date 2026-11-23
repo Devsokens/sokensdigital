@@ -687,8 +687,13 @@ class SetGerantView(APIView):
 
         with transaction.atomic():
             previous = list(User.objects.select_for_update().filter(is_gerant=True).exclude(pk=target.pk))
-            if value:
-                User.objects.filter(pk__in=[u.pk for u in previous]).update(is_gerant=False)
+            # Poste occupé : aucune nomination supplémentaire, il faut d'abord
+            # retirer le titre au gérant en place.
+            if value and previous:
+                return Response(
+                    {'detail': "Un gérant est déjà désigné. Retirez-lui d'abord le titre."},
+                    status=status.HTTP_409_CONFLICT,
+                )
             target.is_gerant = value
             target.save(update_fields=['is_gerant'])
 
@@ -1353,8 +1358,11 @@ class SetRcfView(APIView):
             return Response({'detail': 'Un compte désactivé ne peut pas être désigné.'}, status=status.HTTP_400_BAD_REQUEST)
         with transaction.atomic():
             previous = list(User.objects.select_for_update().filter(is_rcf=True).exclude(pk=target.pk))
-            if value:
-                User.objects.filter(pk__in=[u.pk for u in previous]).update(is_rcf=False)
+            if value and previous:
+                return Response(
+                    {'detail': "Un Responsable Comptabilité & Finance est déjà désigné. Retirez-lui d'abord le titre."},
+                    status=status.HTTP_409_CONFLICT,
+                )
             target.is_rcf = value
             target.save(update_fields=['is_rcf'])
         AuditLog.objects.log_action(

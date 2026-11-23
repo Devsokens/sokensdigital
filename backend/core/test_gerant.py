@@ -39,9 +39,23 @@ class GerantTests(APITestCase):
     def test_designation_is_unique_and_audited(self):
         client = _client(self.admin)
         self.assertEqual(client.post(self.url(self.compta), {'is_gerant': True}, format='json').status_code, 200)
+        # Poste pourvu : nomination supplémentaire refusée.
+        self.assertEqual(client.post(self.url(self.dev), {'is_gerant': True}, format='json').status_code, 409)
+        self.assertEqual(list(User.objects.filter(is_gerant=True)), [self.compta])
+        # Après retrait du titre, un nouveau gérant peut être désigné.
+        self.assertEqual(client.post(self.url(self.compta), {'is_gerant': False}, format='json').status_code, 200)
         self.assertEqual(client.post(self.url(self.dev), {'is_gerant': True}, format='json').status_code, 200)
         self.assertEqual(list(User.objects.filter(is_gerant=True)), [self.dev])
         self.assertEqual(AuditLog.objects.filter(action='GERANT_DESIGNE').count(), 2)
+
+    def test_rcf_designation_locked_once_filled(self):
+        client = _client(self.admin)
+        rcf = lambda u, v: client.post(f'/api/v1/users/{u.pk}/rcf/', {'is_rcf': v}, format='json').status_code
+        self.assertEqual(rcf(self.compta, True), 200)
+        self.assertEqual(rcf(self.dev, True), 409)
+        self.assertEqual(list(User.objects.filter(is_rcf=True)), [self.compta])
+        self.assertEqual(rcf(self.compta, False), 200)
+        self.assertEqual(rcf(self.dev, True), 200)
 
     def test_rejects_non_boolean_and_inactive(self):
         client = _client(self.admin)

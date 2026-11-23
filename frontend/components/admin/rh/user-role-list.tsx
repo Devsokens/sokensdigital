@@ -109,7 +109,7 @@ export function UserRoleList() {
   async function handleToggleGerant(row: MergedUser) {
     const next = !row.isGerant;
     const message = next
-      ? `Désigner ${row.name || row.email} comme gérant ? Il ou elle validera les besoins, demandes d'achat et devis fournisseur au palier Gérant, et remplacera le gérant actuel s'il y en a un.`
+      ? `Désigner ${row.name || row.email} comme gérant ? Il ou elle validera les besoins, demandes d'achat et devis fournisseur au palier Gérant.`
       : `Retirer le titre de gérant à ${row.name || row.email} ? Le palier Gérant reviendra aux Super-Admins.`;
     if (!confirm(message)) return;
     try {
@@ -139,11 +139,17 @@ export function UserRoleList() {
   }
 
   const myEmail = me?.email?.toLowerCase() ?? "";
+  // Postes uniques : une fois pourvus, l'option de nomination disparaît
+  // (seul le titulaire garde « Retirer le titre »).
+  const gerantTaken = rows?.some((r) => r.isGerant) ?? false;
+  const rcfTaken = rows?.some((r) => r.isRcf) ?? false;
+  const showGerant = (row: MergedUser) => isSuperAdmin && (row.isGerant || !gerantTaken);
+  const showRcf = (row: MergedUser) => isSuperAdmin && (row.isRcf || !rcfTaken);
 
   async function handleToggleRcf(row: MergedUser) {
     const next = !row.isRcf;
     const message = next
-      ? `Désigner ${row.name || row.email} comme Responsable Comptabilité & Finance ? Il ou elle signera le premier palier des besoins créés à partir de maintenant, et remplacera le titulaire actuel s'il y en a un.`
+      ? `Désigner ${row.name || row.email} comme Responsable Comptabilité & Finance ? Il ou elle signera le premier palier des besoins créés à partir de maintenant.`
       : `Retirer à ${row.name || row.email} le titre de Responsable Comptabilité & Finance ?`;
     if (!confirm(message)) return;
     try {
@@ -159,17 +165,17 @@ export function UserRoleList() {
     return (
       <>
         <ContextMenuLabel>{row.name || row.email}</ContextMenuLabel>
-        {row.roles.length > 0 && (
+        {isSuperAdmin && (
           <ContextMenuItem icon={Pencil} onClick={() => setEditing(row)}>
             Modifier l&apos;utilisateur
           </ContextMenuItem>
         )}
-        {isSuperAdmin && row.roles.length > 0 && (
+        {showGerant(row) && row.roles.length > 0 && (
           <ContextMenuItem icon={Crown} onClick={() => handleToggleGerant(row)}>
             {row.isGerant ? "Retirer le titre de gérant" : "Désigner comme gérant"}
           </ContextMenuItem>
         )}
-        {isSuperAdmin && row.roles.length > 0 && (
+        {showRcf(row) && row.roles.length > 0 && (
           <ContextMenuItem icon={Crown} onClick={() => handleToggleRcf(row)}>
             {row.isRcf ? "Retirer le titre de Resp. Compta & Finance" : "Désigner Resp. Compta & Finance"}
           </ContextMenuItem>
@@ -295,7 +301,7 @@ export function UserRoleList() {
                     {row.departmentId ? departmentNameById.get(row.departmentId) ?? "—" : "—"}
                   </td>
                   <td className="px-5 py-3.5">
-                    {row.roles.length > 0 ? (
+                    {row.roles.length > 0 || isSuperAdmin ? (
                       <Popover>
                         <PopoverTrigger
                           render={
@@ -320,7 +326,7 @@ export function UserRoleList() {
                               </button>
                             }
                           />
-                          {isSuperAdmin && (
+                          {showGerant(row) && (
                             <button
                               type="button"
                               onClick={() => handleToggleGerant(row)}
@@ -329,7 +335,7 @@ export function UserRoleList() {
                               {row.isGerant ? "Retirer le titre de gérant" : "Désigner comme gérant"}
                             </button>
                           )}
-                          {isSuperAdmin && (
+                          {showRcf(row) && (
                             <button
                               type="button"
                               onClick={() => handleToggleRcf(row)}

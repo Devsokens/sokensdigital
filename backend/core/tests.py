@@ -1,4 +1,5 @@
 import io
+from core.permissions import has_role
 from unittest.mock import MagicMock, Mock, patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -446,6 +447,16 @@ class SetUserRoleViewTests(APITestCase):
             f'/api/v1/users/{self.employee.id}/role/', {'roles': ['COMPTABLE']}, format='json',
         )
         mock_notify_roles.assert_not_called()
+
+    @patch('core.views.notify_roles')
+    @patch('core.views.update_profile_fields')
+    def test_super_admin_can_change_another_super_admin_roles(self, mock_update, mock_notify_roles):
+        _give_role(self.employee, ROLE_SUPER_ADMIN)
+        response = self.client_super_admin.patch(
+            f'/api/v1/users/{self.employee.id}/role/', {'roles': ['COMPTABLE']}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(has_role(self.employee, ROLE_SUPER_ADMIN))
 
 
 class DeactivateUserViewTests(APITestCase):
