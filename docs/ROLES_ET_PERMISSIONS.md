@@ -73,8 +73,10 @@ pas même par un Super-Administrateur.
 ## 6. Règles d'attribution
 
 - **Autorité unique** : seul le Super-Administrateur attribue ou retire des
-  rôles, y compris à la création d'un compte (`POST /api/v1/users/provision/`
-  et `POST /api/v1/users/<id>/role/` réservés au Super-Admin).
+  rôles d'un compte existant (`/api/v1/users/<id>/role/`).
+- **Création de compte** : Super-Admin ou Responsable Administratif
+  (`POST /api/v1/users/provision/`) ; seul un Super-Admin crée un compte
+  Super-Admin. **Suppression** d'un compte : Super-Admin uniquement.
 - Les rôles restent modifiables à tout moment après la création du compte,
   **sauf ceux d'un autre Super-Administrateur** : règle stricte, refus 403
   côté serveur (rôles et permissions), option masquée dans l'interface,

@@ -262,6 +262,16 @@ class ProvisionUserViewTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('console', response.data['detail'])
 
+    @patch('core.views.create_profile')
+    @patch('firebase_admin.auth.create_user')
+    def test_responsable_administratif_can_provision_but_not_delete(self, mock_create_user, mock_create_profile):
+        mock_create_user.return_value = MagicMock(uid='firebase-uid-ra')
+        client = self._admin_staff_client()
+        self.assertEqual(client.post('/api/v1/users/provision/', self.payload(), format='json').status_code, 201)
+        created = User.objects.get(firebase_uid='firebase-uid-ra')
+        self.assertEqual(client.delete(f'/api/v1/users/{created.pk}/account/').status_code in (403, 405), True)
+        self.assertTrue(User.objects.filter(pk=created.pk, is_active=True).exists())
+
     @patch('firebase_admin.auth.create_user')
     def test_rh_cannot_provision_super_admin(self, mock_create_user):
         response = self._admin_staff_client().post('/api/v1/users/provision/', self.payload(roles=['SUPER_ADMIN']), format='json')
@@ -347,11 +357,6 @@ class ProvisionUserViewTests(APITestCase):
         client = APIClient()
         client.force_authenticate(user=self.admin_staff)
         return client
-
-    def test_responsable_administratif_cannot_provision(self):
-        client = APIClient()
-        client.force_authenticate(user=self.admin_staff)
-        self.assertEqual(client.post('/api/v1/users/provision/', self.payload(), format='json').status_code, 403)
 
 
 class SetUserRoleViewTests(APITestCase):

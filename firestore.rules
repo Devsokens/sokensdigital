@@ -53,9 +53,16 @@ service cloud.firestore {
       // this profile doc) are created by a Super-Admin/RH, either via the
       // Firebase Console directly or a future admin UI. See
       // docs/backend-specifications.md §3.1.
-      // Un profil porte ses rôles : création/suppression réservées au
-      // Super-Admin (personne d'autre n'attribue de rôle).
-      allow create: if isAuth() && isSuperAdmin();
+      // Création : Super-Admin, ou Responsable Administratif pour un profil
+      // non Super-Admin. Suppression : Super-Admin uniquement.
+      allow create: if isAuth() && (
+        isSuperAdmin() ||
+        (
+          isAdmin() &&
+          request.resource.data.get('role', '') != 'SUPER_ADMIN' &&
+          !(request.resource.data.get('roles', []) is list && 'SUPER_ADMIN' in request.resource.data.get('roles', []))
+        )
+      );
       allow delete: if isAuth() && isSuperAdmin();
       // Update: Super-Admin/RH can change anything (role, department...).
       // Anyone else may only touch their own doc, and only its

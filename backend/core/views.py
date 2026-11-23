@@ -371,9 +371,10 @@ class ProvisionUserView(APIView):
     already initialized in core/apps.py) has no such side effect.
     """
 
-    # Créer un compte = attribuer des rôles : réservé au Super-Admin
-    # (autorité unique sur les rôles, référentiel 2026).
-    permission_classes = [IsSuperAdmin]
+    # Création de compte : Super-Admin ou Responsable Administratif ; seul
+    # un Super-Admin peut créer un compte Super-Admin (garde ci-dessous).
+    # La suppression reste réservée au Super-Admin (DeleteUserAccountView).
+    permission_classes = [IsSuperAdminOrRH]
 
     @extend_schema(
         tags=['Administration & RH'],

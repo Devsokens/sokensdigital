@@ -8,7 +8,8 @@ import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { provisionUser, createEmployee, listDepartments } from "@/lib/api/hr";
 import { uploadAvatar } from "@/lib/api/upload";
 import type { Department } from "@/lib/api/types";
-import { ROLE_LABELS, type AppRole, MAX_FUNCTIONAL_ROLES } from "@/lib/firebase/types";
+import { ROLE_LABELS, type AppRole, MAX_FUNCTIONAL_ROLES, profileRoles } from "@/lib/firebase/types";
+import { useAuth } from "@/lib/auth/auth-context";
 import { ApiError } from "@/lib/api/client";
 
 /** Message lisible d'une erreur d'API : `detail`, sinon la première erreur de champ. */
@@ -56,6 +57,8 @@ export function AddEmployeeSheet({
    * from the Django user row being provisioned. */
   initialIdentity?: { firstName: string; lastName: string; email: string };
 }) {
+  const { profile: me } = useAuth();
+  const isSuperAdmin = profileRoles(me).includes("SUPER_ADMIN");
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(initialIdentity ? 1 : 0);
   const [form, setForm] = useState(() => ({
@@ -303,7 +306,7 @@ export function AddEmployeeSheet({
                   Rôle(s) — au moins un, 2 rôles fonctionnels maximum (+ Super-Administrateur)
                 </legend>
                 <div className="grid grid-cols-2 gap-2 rounded-lg border border-neutral-200 p-3">
-                  {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                  {Object.entries(ROLE_LABELS).filter(([value]) => value !== "SUPER_ADMIN" || isSuperAdmin).map(([value, label]) => (
                     <label key={value} className="flex items-center gap-2 text-sm text-neutral-700">
                       <input
                         type="checkbox"
