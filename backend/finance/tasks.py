@@ -77,59 +77,13 @@ Sokens Digital
 
 @app.task
 def send_invoice_reminders():
-    """
-    Envoie des relances pour factures impayées.
+    """Relance INTERNE des factures échues non soldées : aucun e-mail au
+    client — le département concerné et la Comptabilité & Finance sont
+    notifiés et relancent le client manuellement. Même logique que la
+    tâche quotidienne (core send_quote_and_invoice_reminders)."""
+    from core.management.commands.send_quote_and_invoice_reminders import notify_overdue_invoices
 
-    Logique:
-    - Factures VALIDEE avec due_date < aujourd'hui
-    - Première relance: due_date + 7 jours
-    - Deuxième relance: due_date + 14 jours
-    - Pas de 3e relance (arrêter après 14 jours)
-
-    Safe dispatch: log en cas d'erreur, ne bloque pas le cron.
-    """
-
-    def _do_send():
-        now = timezone.now().date()
-        invoices = Invoice.objects.filter(
-            status=Invoice.Status.VALIDEE,
-            due_date__lt=now,
-        ).select_related('client', 'quote__lead', 'created_by')
-
-        for invoice in invoices:
-            days_overdue = (now - invoice.due_date).days
-
-            # Première relance: 7-14 jours
-            if 7 <= days_overdue < 14:
-                subject = f'Rappel: Facture {invoice.invoice_number} en retard'
-                message = f"""
-Facture {invoice.invoice_number} due le {invoice.due_date.strftime('%d/%m/%Y')} n'a pas été payée.
-
-Montant: {invoice.amount_ttc} FCFA
-
-Nous vous demandons de régulariser votre situation au plus tôt.
-"""
-                try:
-                    safe_dispatch(
-                        send_invoice_pdf_email.apply_async,
-                        args=[str(invoice.id)],
-                    )
-                except Exception as e:
-                    print(f'Failed to send reminder for {invoice.invoice_number}: {e}')
-
-            # Notification interne après 30 jours
-            if days_overdue >= 30:
-                if invoice.created_by:
-                    notify(
-                        user=invoice.created_by,
-                        title='Facture en impayé critique',
-                        message=f'Facture {invoice.invoice_number}: {days_overdue} jours de retard',
-                        notification_type='INVOICE_OVERDUE',
-                        link=f'/admin/finance/facturation/{invoice.id}/',
-                        email=True,
-                    )
-
-    safe_dispatch(_do_send)
+    notify_overdue_invoices(timezone.now().date())
     return 'Invoice reminders sent'
 
 

@@ -56,7 +56,7 @@ L'entrée de menu dépend du module de droits **Abonnements communication**
 | **Comptabilité** | La validation de la facture passe l'écriture des ventes (411 / 706 / TVA / CSS). Aucun encaissement n'est accepté avant. |
 | **Suppression de facture** | Depuis Finance (Super-Admin uniquement pour une facture de mois), la suppression d'une facture de mois supprime aussi ce mois et ses livrables ; l'abonnement reste et le mois peut être refacturé. Refus si période comptable clôturée, rapprochement bancaire ou encaissement en trésorerie. L'analytique Finance s'ajuste immédiatement. |
 | **Encaissements** | Versements partiels ou « Marquer comme payée », avec reçu. Le paiement complet ouvre le mois de production. |
-| **Relances** | Une facture validée et échue déclenche les relances quotidiennes habituelles (si le planificateur est configuré). |
+| **Relances** | Une facture validée, échue et non soldée déclenche chaque jour une relance **interne** (responsables Marketing & Communication, Comptables, RCF) ; aucun e-mail automatique au client, qui est relancé manuellement (si le planificateur est configuré). |
 | **Notifications** | Ouverture d'un mois : notification au responsable de compte et à l'équipe Marketing & Communication. |
 | **Journal d'audit** | Création, changement de statut, facturation, clôture et report de quotas sont tracés. |
 | **Tableau de bord global** | Nombre d'abonnements actifs, revenu mensuel récurrent, mois impayés entamés (clé `subscriptions`). |
@@ -200,6 +200,6 @@ Chaque alerte ouvre la fiche de l'abonnement concerné.
 ## 9. Points d'attention
 
 - La facture du mois suivant est générée **à la main** (choix de fonctionnement) : penser à la créer en fin de mois.
-- Les **relances automatiques** d'impayés supposent le planificateur configuré (secret `CRON_SECRET` sur le backend, secrets GitHub `BACKEND_URL` et `CRON_SECRET`).
+- Les **relances internes** d'impayés supposent le planificateur configuré (secret `CRON_SECRET` sur le backend, secrets GitHub `BACKEND_URL` et `CRON_SECRET`).
 - Un prix ou un quota personnalisé pour un client peut être saisi sur l'abonnement (champ réservé à l'API pour l'instant, pas encore dans l'écran).
 - Les livrables ne sont pas encore reliés aux tâches de projet depuis l'interface.

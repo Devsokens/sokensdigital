@@ -30,7 +30,7 @@ Développeur, Commercial, Designer).
 **Désignations** (champs `is_gerant`, `is_rcf`), attribuées par le Super-Admin :
 - Un seul titulaire à la fois pour chacune (contrainte en base).
 - **Poste pourvu : toute nomination supplémentaire est refusée (409) et l'option disparaît de l'interface.** Il faut d'abord retirer le titre au titulaire actuel.
-- Seul le titulaire en poste **au moment de la demande** signe son palier : aucune substitution, pas même par le Super-Admin.
+- Seul le titulaire en poste **au moment de la demande** signe son palier : aucune substitution, pas même par le Super-Admin. Exception : si le poste était **vacant** à la création du besoin, le palier RCF peut être signé par un Comptable ou le Super-Admin, et le palier Gérant par le Super-Admin.
 
 ## 2. Besoins et décaissements
 
@@ -58,7 +58,7 @@ Finance > Décaissement.
 - Mentions obligatoires : identification fournisseur et client (NIF), numéro séquentiel `FAC-AAAA-NNNNN`, détail des lignes, HT / TVA / CSS / autres taxes / TTC, **QR code fiscal** signé.
 - Cycle : **Brouillon** → validation par le Comptable → **Validée**. La validation crée l'écriture des ventes (clients 411, ventes 706, TVA 4457, CSS, autres taxes) dans une période comptable ouverte ; une facture validée n'est plus modifiable.
 - Encaissement : versements partiels ou solde en une fois, avec reçu PDF. Une facture est « payée » quand les versements reçus couvrent le TTC.
-- Le **tableau de bord Finance** affiche TVA et CSS collectées ; relances d'impayés envoyées aux factures validées échues (7 à 14 jours de retard).
+- Le **tableau de bord Finance** affiche TVA et CSS collectées ; relances d'impayés **internes** : chaque jour, pour toute facture validée, échue et non soldée, l'auteur de la facture (et, pour un abonnement, les responsables du pôle), les Comptables et le RCF sont notifiés dans l'application ; **aucun e-mail n'est envoyé au client**, ils le relancent manuellement. Une facture entièrement payée n'est plus relancée.
 
 ## 5. Documents et authentification
 

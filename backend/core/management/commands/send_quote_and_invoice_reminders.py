@@ -14,6 +14,7 @@ yet, see marketing.models.Lead's own "client account" TODO).
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand
+from django.db import models
 from django.utils import timezone
 
 from core.notifications import notify
@@ -21,6 +22,54 @@ from finance.models import Invoice
 from marketing.models import Quote
 
 QUOTE_REMINDER_AFTER_DAYS = 5
+
+
+def overdue_invoice_recipients(invoice):
+    """Relance INTERNE : personne n'écrit au client automatiquement. On
+    prévient le département qui porte la facture (son auteur ; pour une
+    facture d'abonnement, les responsables du pôle) et la Comptabilité &
+    Finance (Comptables + RCF désigné), qui relancent le client à la main."""
+    from core.constants import ROLE_COMPTABLE
+    from core.models import User
+
+    users = {}
+    if invoice.created_by_id and invoice.created_by.is_active:
+        users[invoice.created_by_id] = invoice.created_by
+    # Reverse one-to-one absent : RelatedObjectDoesNotExist (AttributeError) → None.
+    period = getattr(invoice, 'service_period', None)
+    role_names = [ROLE_COMPTABLE]
+    if period is not None:
+        from services.permissions import pole_roles
+        role_names += list(pole_roles(period.subscription.offer.pole))
+    qs = User.objects.filter(is_active=True).filter(
+        models.Q(roles__name__in=role_names) | models.Q(is_rcf=True)
+    ).distinct()
+    for u in qs:
+        users.setdefault(u.pk, u)
+    return list(users.values())
+
+
+def notify_overdue_invoices(today):
+    """Factures validées, échues ET non soldées (une facture payée garde le
+    statut VALIDEE : on compare le payé au TTC)."""
+    count = 0
+    invoices = Invoice.objects.filter(status=Invoice.Status.VALIDEE, due_date__lt=today).select_related('created_by')
+    for invoice in invoices:
+        if invoice.amount_paid >= invoice.amount_ttc:
+            continue
+        days = (today - invoice.due_date).days
+        due = invoice.amount_ttc - invoice.amount_paid
+        for user in overdue_invoice_recipients(invoice):
+            notify(
+                user,
+                title=f'Facture {invoice.invoice_number} impayée — relance client à faire',
+                message=(f'« {invoice.client_name} » — échéance dépassée de {days} jour{"s" if days > 1 else ""}, '
+                         f'reste dû {due:,.0f} FCFA. Contactez le client manuellement.').replace(',', ' '),
+                notification_type='GENERAL',
+                link=f'/admin/finance/facturation/{invoice.id}',
+            )
+        count += 1
+    return count
 
 
 class Command(BaseCommand):
@@ -48,22 +97,6 @@ class Command(BaseCommand):
             )
             quote_count += 1
 
-        overdue_invoices = Invoice.objects.filter(
-            status=Invoice.Status.VALIDEE,
-            due_date__lt=today,
-        ).select_related('created_by')
-        invoice_count = 0
-        for invoice in overdue_invoices:
-            if not invoice.created_by:
-                continue
-            days_overdue = (today - invoice.due_date).days
-            notify(
-                invoice.created_by,
-                title=f'Facture {invoice.invoice_number} impayée',
-                message=f'« {invoice.client_name} » — échéance dépassée de {days_overdue} jour{"s" if days_overdue > 1 else ""}.',
-                notification_type='GENERAL',
-                link='/admin/finance/facturation',
-            )
-            invoice_count += 1
+        invoice_count = notify_overdue_invoices(today)
 
         self.stdout.write(f'{quote_count} devis relancé(s), {invoice_count} facture(s) impayée(s) signalée(s).')
