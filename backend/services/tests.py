@@ -257,3 +257,18 @@ class EssentielQuotaTests(APITestCase):
         res = api.post(f'{BASE}/deliverables/{pk}/transition/', {'status': 'PUBLIE'}, format='json')
         self.assertEqual(res.status_code, 400, res.content)
         self.assertEqual(res.json()['code'], 'quota_exceeded')
+
+    def test_communication_cannot_skip_to_livre(self):
+        api = _client(_user('mkt3@x.dev', ROLE_RESPONSABLE_MARKETING_COM))
+        sub = Subscription.objects.create(client=Client.objects.create(company_name='D'),
+                                          offer=ServiceOffer.objects.get(code='com-pro'), start_date=date(2026, 11, 1))
+        period = ServicePeriod.objects.get(pk=api.post(f'{BASE}/subscriptions/{sub.pk}/generate-invoice/', {}, format='json').json()['id'])
+        Invoice.objects.filter(pk=period.invoice_id).update(status=Invoice.Status.VALIDEE)
+        Payment.objects.create(invoice=Invoice.objects.get(pk=period.invoice_id), amount=period.invoice.amount_ttc,
+                               payment_date=timezone.now().date(), payment_method='VIREMENT', status=Payment.Status.RECU)
+        pk = api.post(f'{BASE}/deliverables/', {'period': str(period.pk), 'kind': 'PUBLICATION', 'title': 'p'}, format='json').json()['id']
+        api.post(f'{BASE}/deliverables/{pk}/transition/', {'status': 'CONTROLE_INTERNE'}, format='json')
+        self.assertEqual(api.post(f'{BASE}/deliverables/{pk}/transition/', {'status': 'LIVRE'}, format='json').status_code, 400)
+        api.post(f'{BASE}/deliverables/{pk}/transition/', {'status': 'VALIDE_CLIENT'}, format='json')
+        self.assertEqual(api.post(f'{BASE}/deliverables/{pk}/transition/', {'status': 'LIVRE'}, format='json').status_code, 400)
+        self.assertEqual(api.post(f'{BASE}/deliverables/{pk}/transition/', {'status': 'PUBLIE'}, format='json').status_code, 200)

@@ -272,7 +272,11 @@ class DeliverableViewSet(viewsets.ModelViewSet):
                 pk=self.get_object().pk,
             )
             self._check_manage(deliverable.period)
-            if target not in Deliverable.TRANSITIONS.get(deliverable.status, set()):
+            # Étape finale propre au pôle : Communication publie (après
+            # validation client), Maintenance livre. Pas de saut d'étape.
+            pole = self._pole_of(deliverable)
+            forbidden_final = {'COMMUNICATION': 'LIVRE', 'MAINTENANCE': 'PUBLIE'}.get(pole)
+            if target not in Deliverable.TRANSITIONS.get(deliverable.status, set()) or target == forbidden_final:
                 return Response({'detail': f'Transition impossible : {deliverable.status} → {target}.'},
                                 status=status.HTTP_400_BAD_REQUEST)
             period = deliverable.period
