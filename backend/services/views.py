@@ -12,8 +12,13 @@ from core.models import AuditLog
 from services.billing import create_period_invoice
 from services.models import KIND_QUOTA_KEY, QUOTA_LABELS, Deliverable, ServiceOffer, ServicePeriod, Subscription
 from services.permissions import (
-    HasServicesAccess, can_bill, can_manage, can_read, readable_poles,
+    HasServicesAccess, can_bill, can_manage, can_read, manages_any_pole, portfolio_filter, readable_poles,
 )
+
+
+def _scoped(qs, user, prefix=''):
+    scope = portfolio_filter(user, prefix)
+    return qs.filter(scope) if scope is not None else qs
 from services.serializers import (
     DeliverableSerializer, ServiceOfferSerializer, ServicePeriodSerializer, SubscriptionSerializer,
 )
@@ -77,6 +82,7 @@ class SubscriptionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixi
         qs = Subscription.objects.select_related('client', 'offer', 'quote', 'maintained_app', 'account_manager').filter(
             offer__pole__in=readable_poles(self.request.user),
         )
+        qs = _scoped(qs, self.request.user)
         params = self.request.query_params
         if params.get('pole'):
             qs = qs.filter(offer__pole=params['pole'])
@@ -136,9 +142,10 @@ class ServicePeriodViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated, HasServicesAccess]
 
     def get_queryset(self):
-        return ServicePeriod.objects.select_related('subscription__offer', 'invoice').filter(
+        qs = ServicePeriod.objects.select_related('subscription__offer', 'invoice').filter(
             subscription__offer__pole__in=readable_poles(self.request.user),
         )
+        return _scoped(qs, self.request.user, 'subscription__')
 
     @action(detail=True, methods=['post'])
     def close(self, request, pk=None):
@@ -211,9 +218,12 @@ class DeliverableViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         poles = readable_poles(self.request.user)
-        qs = Deliverable.objects.select_related('period__subscription__offer', 'assigned_to').filter(
-            Q(period__subscription__offer__pole__in=poles) | Q(period__isnull=True),
-        )
+        # Prestations ponctuelles (sans période, donc sans pôle) : responsables seulement.
+        cond = Q(period__subscription__offer__pole__in=poles)
+        if manages_any_pole(self.request.user):
+            cond |= Q(period__isnull=True)
+        qs = _scoped(Deliverable.objects.select_related('period__subscription__offer', 'assigned_to').filter(cond),
+                     self.request.user, 'period__subscription__')
         if self.request.query_params.get('period'):
             qs = qs.filter(period_id=self.request.query_params['period'])
         return qs
@@ -294,7 +304,7 @@ class DeliverableViewSet(viewsets.ModelViewSet):
 def build_dashboard(user, poles=None):
     today = timezone.now().date()
     poles = [p for p in (poles or readable_poles(user)) if can_read(user, p)]
-    subs = Subscription.objects.filter(offer__pole__in=poles).select_related('offer', 'client')
+    subs = _scoped(Subscription.objects.filter(offer__pole__in=poles).select_related('offer', 'client'), user)
     active = subs.filter(status=Subscription.Status.ACTIVE)
 
     mrr = {}

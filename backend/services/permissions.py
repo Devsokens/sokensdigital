@@ -36,6 +36,26 @@ def can_bill(user, pole) -> bool:
     return can_manage(user, pole) or has_role(user, ROLE_COMPTABLE)
 
 
+def portfolio_filter(user, prefix=''):
+    """Q limitant un lecteur Commercial (ni responsable, ni Comptable) aux
+    abonnements de SON portefeuille : client qui lui est attribué ou devis
+    qu'il a créé. None = pas de restriction."""
+    from django.db.models import Q
+    if can_manage(user, 'COMMUNICATION') or has_role(user, ROLE_COMPTABLE) or not has_role(user, ROLE_COMMERCIAL):
+        return None
+    # Seul le pôle Communication est concerné (un Commercial qui serait aussi
+    # responsable Maintenance garde l'accès complet à ce pôle).
+    return (
+        ~Q(**{f'{prefix}offer__pole': 'COMMUNICATION'})
+        | Q(**{f'{prefix}client__assigned_to': user})
+        | Q(**{f'{prefix}quote__created_by': user})
+    )
+
+
+def manages_any_pole(user) -> bool:
+    return any(can_manage(user, p) for p in POLE_MANAGER_ROLES)
+
+
 def readable_poles(user):
     return [p for p in POLE_MANAGER_ROLES if can_read(user, p)]
 

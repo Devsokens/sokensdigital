@@ -149,8 +149,21 @@ class PermissionTests(APITestCase):
         self.assertEqual(ids, {str(self.mnt.pk)})
         self.assertEqual(tech.post(f'{BASE}/subscriptions/{self.com.pk}/generate-invoice/', {}, format='json').status_code, 404)
 
+    def test_commercial_reads_only_his_portfolio(self):
+        other = _client(_user('c2@x.dev', ROLE_COMMERCIAL))
+        self.assertEqual(other.get(f'{BASE}/subscriptions/{self.com.pk}/').status_code, 404)
+        self.assertEqual(other.get(f'{BASE}/subscriptions/').json()['results'], [])
+        self.assertEqual(other.get(f'{BASE}/dashboard/').json()['active_count'], 0)
+        # Commercial + Responsable Technique : maintenance complète, communication limitée.
+        both = _client(_user('c3@x.dev', ROLE_COMMERCIAL, ROLE_RESPONSABLE_TECHNIQUE))
+        ids = {s['id'] for s in both.get(f'{BASE}/subscriptions/').json()['results']}
+        self.assertEqual(ids, {str(self.mnt.pk)})
+
     def test_commercial_reads_but_cannot_write(self):
-        com = _client(_user('c@x.dev', ROLE_COMMERCIAL))
+        seller = _user('c@x.dev', ROLE_COMMERCIAL)
+        self.client_co.assigned_to = seller
+        self.client_co.save()
+        com = _client(seller)
         self.assertEqual(com.get(f'{BASE}/subscriptions/{self.com.pk}/').status_code, 200)
         self.assertEqual(com.post(f'{BASE}/subscriptions/{self.com.pk}/generate-invoice/', {}, format='json').status_code, 403)
         res = com.post(f'{BASE}/subscriptions/', {'client': self.client_co.pk, 'offer': ServiceOffer.objects.get(code='com-pro').pk,
