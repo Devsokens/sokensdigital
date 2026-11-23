@@ -44,3 +44,5 @@ tableau de bord global, clé `subscriptions`).
 | Maintenance | Super-Admin, Resp. Technique, Resp. des Opérations | Comptable |
 
 Le Comptable peut aussi générer les factures. Sous-traitants : aucun accès.
+
+**Suppression d'un abonnement** (communication ou maintenance & hébergement) : Super-Administrateur uniquement. Les périodes et livrables sont supprimés, les factures émises conservées ; audit `ABONNEMENT_SUPPRIME`. Préférer la résiliation pour garder l'historique.

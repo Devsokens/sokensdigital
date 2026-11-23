@@ -197,6 +197,8 @@ export const createSubscription = (data: Partial<Subscription>) =>
   apiFetch<Subscription>(`${BASE}/subscriptions/`, json(data));
 export const updateSubscription = (id: string, data: Partial<Subscription>) =>
   apiFetch<Subscription>(`${BASE}/subscriptions/${id}/`, json(data, "PATCH"));
+export const deleteSubscription = (id: string) =>
+  apiFetch<void>(`${BASE}/subscriptions/${id}/`, { method: "DELETE" });
 export const listPeriods = (id: string) => apiFetch<ServicePeriod[]>(`${BASE}/subscriptions/${id}/periods/`);
 export const generateInvoice = (id: string) =>
   apiFetch<ServicePeriod>(`${BASE}/subscriptions/${id}/generate-invoice/`, json({}));

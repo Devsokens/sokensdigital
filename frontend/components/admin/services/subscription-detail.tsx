@@ -2,13 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ConfirmModal } from "@/components/admin/confirm-modal";
+import { useAuth } from "@/lib/auth/auth-context";
+import { profileRoles } from "@/lib/firebase/types";
 import { ArrowLeft, CheckCircle2, FileText, Loader2, Plus, Receipt, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import {
   DELIVERABLE_KIND_LABELS, DELIVERABLE_STATUS_LABELS, KINDS_BY_POLE, PERIOD_STATUS_LABELS, QUOTA_LABELS,
-  apiErrorMessage, closePeriod, createDeliverable, deleteDeliverable, formatFcfa, generateInvoice, getSubscription,
+  apiErrorMessage, closePeriod, createDeliverable, deleteDeliverable, deleteSubscription, formatFcfa, generateInvoice, getSubscription,
   listPeriods, transitionDeliverable, updateSubscription,
   type Deliverable, type DeliverableKind, type DeliverableStatus, type ServicePeriod, type Subscription,
 } from "@/lib/api/services";
@@ -40,6 +44,10 @@ export function SubscriptionDetail({ id, backHref }: { id: string; backHref: str
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [closing, setClosing] = useState<ServicePeriod | null>(null);
+  const router = useRouter();
+  // Suppression réservée au Super-Admin (le serveur refuse les autres).
+  const { profile } = useAuth();
+  const isSuperAdmin = profileRoles(profile).includes("SUPER_ADMIN");
 
   const load = useCallback(() => {
     Promise.all([getSubscription(id), listPeriods(id)])
@@ -102,6 +110,23 @@ export function SubscriptionDetail({ id, backHref }: { id: string; backHref: str
         <Button disabled={busy || sub.status !== "ACTIVE"} onClick={() => run(() => generateInvoice(sub.id), "Facture brouillon créée : à valider et encaisser en Finance.")} className="rounded-full">
           <Receipt className="size-4" /> Générer la facture {sub.kind === "ANNUEL" ? "de l'année" : "du mois"}
         </Button>
+        {isSuperAdmin && (
+          <ConfirmModal
+            title="Supprimer l'abonnement"
+            description={`L'abonnement « ${sub.offer_name} » de ${sub.client_name} sera supprimé définitivement, avec ses ${periods.length} période(s) et leurs livrables. Les factures déjà émises sont conservées en Finance.`}
+            confirmLabel="Supprimer"
+            requireTyping="SUPPRIMER"
+            onConfirm={async () => {
+              await deleteSubscription(sub.id);
+              router.push(backHref);
+            }}
+            trigger={
+              <Button variant="outline" className="rounded-full text-destructive">
+                <Trash2 className="size-4" /> Supprimer
+              </Button>
+            }
+          />
+        )}
       </div>
 
       {notice && <p className="mb-4 rounded-lg border border-neutral-200 bg-neutral-50 px-3.5 py-2.5 text-xs text-neutral-700">{notice}</p>}

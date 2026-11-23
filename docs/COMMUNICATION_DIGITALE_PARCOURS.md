@@ -72,6 +72,8 @@ L'entrée de menu dépend du module de droits **Abonnements communication**
 | **Suspendu** | Plus de nouvelle facture ; le mois déjà ouvert peut être terminé et clôturé. |
 | **Résilié** | Fin du contrat ; un nouvel abonnement à la même formule redevient possible. |
 
+**Suppression** (Super-Administrateur uniquement, confirmation en tapant SUPPRIMER) : efface l'abonnement, ses mois et ses livrables. Les **factures déjà émises restent** en Finance (pièces comptables, paiements et écritures intacts) ; seul leur lien avec l'abonnement disparaît. Tracé `ABONNEMENT_SUPPRIME` avec la liste des factures conservées. Pour un simple arrêt de contrat, préférer **Résilié**, qui garde l'historique.
+
 Règles à la création :
 - formule mensuelle uniquement (les prestations ponctuelles se facturent directement) ;
 - si un devis est indiqué, il doit être **accepté** et appartenir au même client ;

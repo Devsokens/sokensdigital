@@ -227,6 +227,25 @@ class CoherenceTests(APITestCase):
         self.assertTrue(on_invoice_paid(invoice))
 
 
+class DeletionTests(APITestCase):
+    def test_only_super_admin_deletes_and_invoices_are_kept(self):
+        client_co = Client.objects.create(company_name='Del')
+        for code in ('com-pro', 'maintenance-pro'):
+            sub = Subscription.objects.create(client=client_co, offer=ServiceOffer.objects.get(code=code), start_date=date(2026, 11, 1))
+            sa = _client(_user(f'sa-del-{code}@x.dev', ROLE_SUPER_ADMIN))
+            period = ServicePeriod.objects.get(pk=sa.post(f'{BASE}/subscriptions/{sub.pk}/generate-invoice/', {}, format='json').json()['id'])
+            invoice_id = period.invoice_id
+            manager_role = ROLE_RESPONSABLE_MARKETING_COM if code.startswith('com') else ROLE_RESPONSABLE_TECHNIQUE
+            for role in (manager_role, ROLE_COMPTABLE):
+                other = _client(_user(f'{role[:6]}-{code}@x.dev', role))
+                self.assertEqual(other.delete(f'{BASE}/subscriptions/{sub.pk}/').status_code, 403)
+            self.assertEqual(sa.delete(f'{BASE}/subscriptions/{sub.pk}/').status_code, 204)
+            self.assertFalse(Subscription.objects.filter(pk=sub.pk).exists())
+            self.assertFalse(ServicePeriod.objects.filter(pk=period.pk).exists())
+            self.assertTrue(Invoice.objects.filter(pk=invoice_id).exists())
+            self.assertTrue(AuditLog.objects.filter(action='ABONNEMENT_SUPPRIME', entity_id=str(sub.pk)).exists())
+
+
 class CronEndpointTests(APITestCase):
     def test_cron_requires_secret(self):
         import os

@@ -74,7 +74,7 @@ class ServiceOfferViewSet(viewsets.ModelViewSet):
 
 
 class SubscriptionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin,
-                          mixins.UpdateModelMixin, viewsets.GenericViewSet):
+                          mixins.UpdateModelMixin, mixins.DestroyModelMixin, viewsets.GenericViewSet):
     serializer_class = SubscriptionSerializer
     permission_classes = [permissions.IsAuthenticated, HasServicesAccess]
 
@@ -114,6 +114,31 @@ class SubscriptionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixi
         if sub.status != before:
             AuditLog.objects.log_action(self.request.user, 'ABONNEMENT_STATUT', 'Subscription', sub.pk,
                                         details={'from': before, 'to': sub.status})
+
+    def destroy(self, request, *args, **kwargs):
+        """Suppression définitive : Super-Admin uniquement, quel que soit le
+        pôle. Supprime les périodes et livrables ; les factures émises sont
+        conservées (pièces comptables), seul leur lien à la période disparaît."""
+        from core.constants import ROLE_SUPER_ADMIN
+        from core.permissions import has_role
+        sub = self.get_object()
+        if not has_role(request.user, ROLE_SUPER_ADMIN):
+            return _forbidden("Seul un Super-Administrateur peut supprimer un abonnement.")
+        invoices = [p.invoice.invoice_number for p in sub.periods.select_related('invoice') if p.invoice_id]
+        AuditLog.objects.log_action(
+            request.user, 'ABONNEMENT_SUPPRIME', 'Subscription', sub.pk,
+            details={'client': sub.client.company_name, 'offer': sub.offer.code, 'pole': sub.offer.pole,
+                     'periods': sub.periods.count(), 'invoices_kept': invoices},
+            ip_address=request.META.get('REMOTE_ADDR'),
+        )
+        with transaction.atomic():
+            for period in sub.periods.all():
+                period.deliverables.all().delete()
+            sub.periods.all().delete()
+            sub.delete(user=request.user, ip_address=request.META.get('REMOTE_ADDR'))
+        from services.activation import _invalidate_dashboard
+        _invalidate_dashboard()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=['get'])
     def periods(self, request, pk=None):
