@@ -29,6 +29,7 @@ def generate_cash_voucher_pdf(voucher):
     _require_weasyprint()
     context = {
         'voucher': voucher,
+        **_brand_and_qr('caisse', voucher),
         'company_address': 'Adresse Sokens Digital',
         'company_phone': '+XXX-XXX-XXXX',
         'company_email': 'contact@sokensdigital.com',
@@ -72,6 +73,7 @@ def generate_cash_register_statement_pdf(period_start, period_end, cash_entries,
         'total_entries': total_entries,
         'total_exits': total_exits,
         'final_balance': running_balance,
+        'logo_uri': _logo(),
         'cashier_name': cashier_name,
         'company_address': 'Adresse Sokens Digital',
         'now': timezone.now(),
@@ -94,6 +96,7 @@ def generate_disbursement_request_pdf(disbursement):
     context = {
         'disbursement': disbursement,
         'current_gerant': current_gerant,
+        **_brand_and_qr('besoin', disbursement),
         'company_address': 'Adresse Sokens Digital',
         'now': timezone.now(),
     }
@@ -118,3 +121,24 @@ def get_cash_register_statement_filename(period_year, period_month):
 def get_disbursement_request_filename(disbursement):
     """Retourne nom fichier pour demande de décaissement."""
     return f'DecaissementN{disbursement.id}.pdf'
+
+
+
+def _logo() -> str:
+    from finance.fiscal import brand_logo_data_uri
+    return brand_logo_data_uri()
+
+
+def _brand_and_qr(kind: str, obj) -> dict:
+    """Logo et QR code d'authentification (signé, vérifiable en ligne)."""
+    from finance.fiscal import document_qr_data_uri, document_verification_url, sign_document
+    try:
+        qr = document_qr_data_uri(kind, obj)
+    except ImportError:
+        qr = ''
+    return {
+        'logo_uri': _logo(),
+        'qr_uri': qr,
+        'control_code': sign_document(kind, obj),
+        'verification_url': document_verification_url(kind, obj),
+    }

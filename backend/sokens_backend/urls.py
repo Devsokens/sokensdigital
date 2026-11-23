@@ -16,7 +16,7 @@ from drf_spectacular.views import (
 
 from marketing.urls import public_urlpatterns as marketing_public_urlpatterns
 from support.urls import public_urlpatterns as support_public_urlpatterns
-from finance.views import PublicInvoiceVerificationView
+from finance.views import PublicDocumentVerificationView, PublicInvoiceVerificationView
 
 # Django admin only manages the DB directly (bypasses every DRF role check
 # audited elsewhere) and its login has no built-in brute-force lockout — the
@@ -51,6 +51,7 @@ urlpatterns = [
     path('api/v1/public/', include(marketing_public_urlpatterns)),
     path('api/v1/public/', include(support_public_urlpatterns)),
     path('api/v1/public/invoices/verify/', PublicInvoiceVerificationView.as_view(), name='public-invoice-verify'),
+    path('api/v1/public/documents/verify/', PublicDocumentVerificationView.as_view(), name='public-document-verify'),
     path('api/administration/', include('administration.urls')),
     path('api/technique/', include('technique.urls')),
     path('api/messaging/', include('messaging.urls')),

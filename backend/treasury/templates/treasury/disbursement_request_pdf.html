@@ -240,6 +240,7 @@
 <body>
     <div class="header">
         <div class="company-info">
+            {% if logo_uri %}<img src="{{ logo_uri }}" alt="Soken's Digital" style="height: 46px; display: block; margin-bottom: 6px;">{% endif %}
             <h1>SOKEN'S DIGITAL</h1>
             <p>{{ company_address }}</p>
         </div>
@@ -361,6 +362,18 @@
             </tr>
         </table>
     </div>
+
+    
+    {% if qr_uri %}
+    <div style="margin-top: 18px; display: table; width: 100%; font-size: 8pt; color: #555;">
+        <div style="display: table-cell; width: 92px; vertical-align: top;"><img src="{{ qr_uri }}" alt="QR code d'authentification" style="width: 84px; height: 84px;"></div>
+        <div style="display: table-cell; vertical-align: top; padding-left: 8px;">
+            <p style="margin: 0 0 3px; font-weight: bold; color: #222;">Document authentique — vérification par QR code</p>
+            <p style="margin: 0 0 3px;">Scannez ce QR code pour vérifier que ce document a été émis par Soken's Digital et n'a pas été modifié. Code de contrôle : <strong>{{ control_code }}</strong>.</p>
+            <p style="margin: 0; word-break: break-all;">{{ verification_url }}</p>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="footer">
         <p>Document généré le {{ now|date:"d/m/Y à H:i" }} — Soken's Digital</p>

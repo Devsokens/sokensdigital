@@ -78,3 +78,51 @@ def qr_code_svg_data_uri(invoice) -> str:
     import segno
     qr = segno.make(verification_url(invoice), error='m')
     return qr.svg_data_uri(scale=4, border=1)
+
+
+
+# --- Documents de trésorerie (pièces de caisse d'entrée / de sortie, bons
+# de demande) : même principe que les factures — QR code signé, vérifié
+# en ligne contre les données en base.
+
+DOCUMENT_KINDS = ('caisse', 'besoin')
+
+
+def document_payload(kind: str, obj) -> str:
+    if kind == 'caisse':
+        return '|'.join(['caisse-v1', str(obj.pk), obj.voucher_number or '', obj.type,
+                         _iso_date(obj.date), _money(obj.amount)])
+    if kind == 'besoin':
+        return '|'.join(['besoin-v1', str(obj.pk), obj.reference or '', _iso_date(obj.request_date),
+                         _money(obj.amount)])
+    raise ValueError(kind)
+
+
+def sign_document(kind: str, obj) -> str:
+    digest = hmac.new(_signing_key(), document_payload(kind, obj).encode(), hashlib.sha256).digest()
+    return base64.b32encode(digest).decode().rstrip('=')[:SIGNATURE_LENGTH]
+
+
+def verify_document(kind: str, obj, signature: str) -> bool:
+    return hmac.compare_digest(sign_document(kind, obj), (signature or '').strip().upper())
+
+
+def document_verification_url(kind: str, obj) -> str:
+    base = getattr(settings, 'PUBLIC_SITE_URL', '').rstrip('/')
+    return f'{base}/verification-document?t={kind}&id={obj.pk}&s={sign_document(kind, obj)}'
+
+
+def document_qr_data_uri(kind: str, obj) -> str:
+    import segno
+    return segno.make(document_verification_url(kind, obj), error='m').svg_data_uri(scale=4, border=1)
+
+
+def brand_logo_data_uri() -> str:
+    """Logo Soken's Digital (version bleue, pour fond clair) en data URI —
+    intégré au PDF sans dépendre d'un chemin de fichier."""
+    from pathlib import Path
+    path = Path(__file__).resolve().parent.parent / 'marketing' / 'static' / 'marketing' / 'logo-sokens-digital-blue.png'
+    try:
+        return 'data:image/png;base64,' + base64.b64encode(path.read_bytes()).decode()
+    except OSError:
+        return ''

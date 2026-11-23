@@ -130,3 +130,25 @@ class BesoinSheetGerantTests(APITestCase):
         })
         self.assertIn('Jackie Moubeyi', html)
         self.assertIn('Signature à la validation', html)
+
+
+class TreasuryDocumentQrTests(APITestCase):
+    def test_cash_voucher_qr_and_verification(self):
+        from django.template.loader import render_to_string
+        from django.utils import timezone
+        from finance.fiscal import sign_document
+        from treasury.models import CashEntry
+        from treasury.pdf import _brand_and_qr
+        entry = CashEntry.objects.create(type=CashEntry.Type.SORTIE, source=CashEntry.Source.choices[0][0], amount=Decimal('25000'))
+        ctx = _brand_and_qr('caisse', entry)
+        self.assertTrue(ctx['logo_uri'].startswith('data:image/png;base64,'))
+        self.assertTrue(ctx['qr_uri'].startswith('data:image/svg+xml'))
+        html = render_to_string('treasury/cash_voucher_pdf.html', {'voucher': entry, **ctx, 'now': timezone.now()})
+        self.assertIn(ctx['control_code'], html)
+        url = '/api/v1/public/documents/verify/'
+        ok = APIClient().get(url, {'t': 'caisse', 'id': str(entry.pk), 's': sign_document('caisse', entry)}).json()
+        self.assertTrue(ok['valid'])
+        self.assertEqual(Decimal(ok['amount']), Decimal('25000.00'))
+        self.assertEqual(APIClient().get(url, {'t': 'caisse', 'id': str(entry.pk), 's': 'FAUX'}).json(), {'valid': False})
+        CashEntry.objects.filter(pk=entry.pk).update(amount=Decimal('1'))
+        self.assertFalse(APIClient().get(url, {'t': 'caisse', 'id': str(entry.pk), 's': ctx['control_code']}).json()['valid'])

@@ -176,7 +176,8 @@
 <body>
     <div class="header">
         <div class="company-info">
-            <h1>SOKENS DIGITAL</h1>
+            {% if logo_uri %}<img src="{{ logo_uri }}" alt="Soken's Digital" style="height: 46px; display: block; margin-bottom: 6px;">{% endif %}
+            <h1>SOKEN'S DIGITAL</h1>
             <p>Société Koweïtienne d'Electronique Numérique Services</p>
             <p>{{ company_address }}</p>
         </div>

@@ -1319,3 +1319,47 @@ class TaxRatesView(APIView):
             ip_address=request.META.get('REMOTE_ADDR'),
         )
         return Response(serializer.data)
+
+
+
+class PublicDocumentVerificationView(APIView):
+    """Vérification publique d'une pièce de caisse (entrée/sortie) ou d'un
+    bon de demande via son QR code. Données renvoyées seulement si la
+    signature, recalculée sur la pièce en base, correspond."""
+
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'invoice_verify'
+
+    @extend_schema(tags=['Public'], summary='Verify a treasury document QR code')
+    def get(self, request):
+        import uuid as _uuid
+        from finance.fiscal import verify_document
+        from treasury.models import CashEntry
+        kind = request.query_params.get('t') or ''
+        doc_id = request.query_params.get('id') or ''
+        signature = request.query_params.get('s') or ''
+        try:
+            _uuid.UUID(doc_id)
+        except ValueError:
+            return Response({'valid': False})
+        if kind == 'caisse':
+            obj = CashEntry.objects.filter(pk=doc_id).first()
+            if not obj or not verify_document(kind, obj, signature):
+                return Response({'valid': False})
+            return Response({
+                'valid': True, 'kind': 'Pièce de caisse',
+                'direction': obj.get_type_display(), 'number': obj.voucher_number or obj.reference,
+                'date': obj.date, 'amount': obj.amount, 'issuer': "Soken's Digital",
+            })
+        if kind == 'besoin':
+            obj = DisbursementRequest.objects.filter(pk=doc_id).first()
+            if not obj or not verify_document(kind, obj, signature):
+                return Response({'valid': False})
+            return Response({
+                'valid': True, 'kind': 'Bon de demande', 'number': obj.reference,
+                'date': obj.request_date, 'amount': obj.amount, 'status': obj.get_status_display(),
+                'beneficiary': obj.beneficiary, 'issuer': "Soken's Digital",
+            })
+        return Response({'valid': False})
