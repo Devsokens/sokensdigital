@@ -1,0 +1,44 @@
+name: Security checks
+
+# Audit des dépendances (guide DevSecOps du 24/11/2026, §5) : à chaque PR,
+# à chaque push sur main et tous les 14 jours. Échoue sur toute
+# vulnérabilité élevée ou critique ; les moyennes sont suivies dans
+# docs/AUDIT_SECURITE_2026-11-24.md.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 6 */14 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: npm audit (frontend)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+
+  backend:
+    name: pip-audit (backend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade pip pip-audit
+      - run: pip-audit -r backend/requirements.txt

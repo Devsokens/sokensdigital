@@ -17,7 +17,7 @@ x-backend-base: &backend-base
 
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:16.16-alpine  # 16.16 : correctifs du 12/11/2026
     env_file: .env
     volumes:
       - postgres_data:/var/lib/postgresql/data

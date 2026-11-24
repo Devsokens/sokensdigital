@@ -25,7 +25,7 @@ jobs:
         # SQLite du fallback local : les différences de comportement entre
         # les deux (contraintes, types, transactions) sont exactement ce
         # qu'une CI doit attraper.
-        image: postgres:16
+        image: postgres:16.16
         env:
           POSTGRES_PASSWORD: ci
           POSTGRES_DB: sokens_ci
