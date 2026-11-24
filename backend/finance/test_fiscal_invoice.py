@@ -199,3 +199,12 @@ class AssignedSignatoriesTests(APITestCase):
         self.assertEqual(self.admin_c.post(url, ok, format='json').status_code, 403)
         self.assertEqual(new_gerant_c.post(url, ok, format='json').status_code, 403)
         self.assertEqual(self.gerant_c.post(url, ok, format='json').status_code, 200)
+
+
+def test_invoice_density_follows_real_rows():
+    from finance.pdf import _density
+    long = {'description': 'A' * 61}
+    assert _density([long]) == ''
+    assert _density([long] * 3) == 'dense'
+    assert _density([long] * 6) == 'dense xdense'
+    assert _density([{'description': 'court'}] * 4) == ''

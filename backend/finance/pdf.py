@@ -32,6 +32,21 @@ def _quantity(value) -> str:
     return f'{value.normalize():f}' if value == value.to_integral() else f'{value:.2f}'.replace('.', ',')
 
 
+def _density(lines) -> str:
+    """Resserre la facture pour tenir sur une page A4 : compte les rangées
+    réellement occupées (une description longue ou à plusieurs lignes en
+    prend plusieurs ; ~55 caractères par rangée dans la colonne)."""
+    rows = 0
+    for line in lines:
+        text = line.get('description') or ''
+        rows += sum(max(1, -(-len(part) // 55)) for part in text.split('\n')) + (1 if line.get('note') else 0)
+    if rows > 10:
+        return 'dense xdense'
+    if rows > 4:
+        return 'dense'
+    return ''
+
+
 def render_invoice_html(invoice) -> str:
     """HTML de la facture, avant conversion en PDF — séparé pour être testé
     sans WeasyPrint."""
@@ -99,6 +114,7 @@ def render_invoice_html(invoice) -> str:
         'client_label': client_label,
         'address_lines': (settings_obj.company_address or '').split('\n'),
         'lines': lines,
+        'density': _density(lines),
         'quote_number': invoice.quote.quote_number if invoice.quote_id else '',
         'show_discount': discount > 0,
         'subtotal': f'{_amount(invoice.amount_ht + discount)} FCFA',
