@@ -12,6 +12,8 @@ export interface InvoiceDocumentData {
   invoice_number: string;
   client_name: string;
   issue_date: string;
+  /** Échéance (AAAA-MM-JJ). */
+  due_date?: string | null;
   lines: InvoiceLine[];
   /** Réduction HT, à part des lignes. */
   discount_amount: number;
@@ -26,6 +28,16 @@ export interface InvoiceDocumentData {
   /** Devis d'origine, rappelé dans l'encadré pour la traçabilité. */
   quote_number?: string | null;
 }
+
+/** QR code fiscal et code de contrôle (GET invoices/{id}/fiscal/). */
+export interface InvoiceFiscal {
+  signature: string;
+  verification_url: string;
+  qr_uri: string;
+}
+
+const frDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString("fr-FR") : "");
+const pct = (rate: number) => String(Math.round(rate * 1000) / 10).replace(".", ",");
 
 function amount(value: number) {
   return new Intl.NumberFormat("fr-FR").format(Math.round(value));
@@ -59,10 +71,12 @@ export function InvoiceDocument({
   invoice,
   settings,
   accentColor,
+  fiscal,
 }: {
   invoice: InvoiceDocumentData;
   settings: InvoiceEditorContext["settings"];
   accentColor: string;
+  fiscal?: InvoiceFiscal | null;
 }) {
   const cssRate = invoice.css_rate ?? 0.01;
   const totals = invoiceTotals(invoice.lines, invoice.discount_amount, invoice.vat_rate, invoice.amount_paid, cssRate, invoice.extra_taxes ?? []);
@@ -78,13 +92,14 @@ export function InvoiceDocument({
           <p className="text-[13px] font-bold whitespace-nowrap" style={{ color: accentColor }}>
             N° {invoice.invoice_number || "—"}
           </p>
-          <p className="mt-2">Date : {invoice.issue_date ? new Date(invoice.issue_date).toLocaleDateString("fr-FR") : "—"}</p>
+          <p className="mt-2">Date : {frDate(invoice.issue_date) || "—"}</p>
+          {invoice.due_date && <p className="mt-2">Échéance : {frDate(invoice.due_date)}</p>}
           <p className="mt-2">Client : {clientLabel}</p>
           {invoice.quote_number && <p className="mt-1 text-[10px] text-neutral-500">Réf. devis : {invoice.quote_number}</p>}
         </div>
       </div>
 
-      <div className="flex-1 px-14 pt-12 pb-10 text-[11.5px] leading-snug text-neutral-900">
+      <div className="px-14 pt-12 pb-6 text-[11.5px] leading-snug text-neutral-900">
         <div className="pl-6 leading-relaxed text-neutral-800">
           <p className="mb-1 text-sm font-bold text-neutral-900">SOKEN&apos;S DIGITAL</p>
           {settings.company_address.split("\n").map((line, i) => (
@@ -100,8 +115,9 @@ export function InvoiceDocument({
             </p>
           )}
         </div>
+        <p className="mt-4 pl-6 text-[13.5px] font-bold">FACTURÉ À : {clientLabel}</p>
 
-        <table className="mt-9 w-full border-collapse">
+        <table className="mt-7 w-full border-collapse">
           <thead>
             <tr style={{ background: accentColor, ...printColorAdjust }}>
               {["Description", "Qté", "Prix unitaire", "Total"].map((label, i) => (
@@ -192,6 +208,10 @@ export function InvoiceDocument({
                   ))}
                 </>
               )}
+              <tr className="text-[10.5px]">
+                <td className="px-2.5 py-0.5 text-right tracking-wide text-neutral-500 uppercase">Total TTC</td>
+                <td className="px-2.5 py-0.5 text-right whitespace-nowrap">{amount(totals.ttc)} FCFA</td>
+              </tr>
               <tr>
                 <td className="px-2.5 py-[7px] text-right tracking-wide uppercase" style={{ color: accentColor }}>Total à payer</td>
                 <td className="min-w-[92px] px-2.5 py-[7px] text-right whitespace-nowrap text-white" style={{ background: accentColor, ...printColorAdjust }}>
@@ -221,7 +241,39 @@ export function InvoiceDocument({
             <Signer who="SOKEN'S DIGITAL" image={settings.company_stamp_url} alt="Cachet Soken's Digital" />
           </div>
         </div>
+
+        <div className="mt-6 flex gap-4 text-[9.5px] leading-normal text-neutral-600">
+          <div className="w-[88px] shrink-0">
+            {fiscal?.qr_uri && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={fiscal.qr_uri} alt="QR code fiscal" className="size-[88px]" />
+            )}
+          </div>
+          <div className="space-y-1">
+            <p className="text-[10px] font-bold text-neutral-800">QR code fiscal — vérification de l&apos;authenticité</p>
+            <p>
+              Scannez ce QR code pour vérifier que cette facture a bien été émise par Soken&apos;s Digital et que ses montants n&apos;ont pas été modifiés.
+              {fiscal?.signature && <> Code de contrôle : <strong>{fiscal.signature}</strong>.</>}
+            </p>
+            {fiscal?.verification_url && <p className="break-all">{fiscal.verification_url}</p>}
+            <p>
+              Montants exprimés en francs CFA (XAF). TVA {pct(invoice.vat_rate)} %
+              {cssRate > 0 && ` et CSS ${pct(cssRate)} % (Contribution Spéciale de Solidarité)`}
+              {totals.extras.map((t) => `, ${t.name} ${String(Number(t.percent)).replace(".", ",")} %`).join("")} calculées sur le montant hors taxes.{" "}
+              {invoice.due_date ? `Paiement à régler au plus tard le ${frDate(invoice.due_date)}.` : "Paiement à réception de facture."} Tout retard de
+              paiement peut donner lieu à des pénalités de retard. Pas d&apos;escompte pour paiement anticipé.
+              {invoice.quote_number && ` Facture émise en application du devis ${invoice.quote_number}.`}
+            </p>
+          </div>
+        </div>
       </div>
+
+      {/* Note propre aux factures, ancrée en bas de la page A4. */}
+      {settings.invoice_footer_note && (
+        <p className="mt-auto pr-14 pb-6 pl-[150px] text-[9.5px] leading-relaxed whitespace-pre-line text-neutral-600">
+          {settings.invoice_footer_note}
+        </p>
+      )}
     </Page>
   );
 }

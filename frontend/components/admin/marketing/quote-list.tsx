@@ -605,10 +605,20 @@ export function QuoteSettingsForm({ onSaved }: { onSaved: () => void }) {
       </div>
 
       <label className="block">
-        <span className={labelClass}>Mention légale (bas de page)</span>
+        <span className={labelClass}>Mention légale des devis (bas de page)</span>
         <textarea
           value={settings.footer_note}
           onChange={(e) => setSettings({ ...settings, footer_note: e.target.value })}
+          rows={3}
+          className={inputClass}
+        />
+      </label>
+
+      <label className="block">
+        <span className={labelClass}>Note de bas de page des factures</span>
+        <textarea
+          value={settings.invoice_footer_note ?? ""}
+          onChange={(e) => setSettings({ ...settings, invoice_footer_note: e.target.value })}
           rows={3}
           className={inputClass}
         />

@@ -208,3 +208,34 @@ def test_invoice_density_follows_real_rows():
     assert _density([long] * 3) == 'dense'
     assert _density([long] * 6) == 'dense xdense'
     assert _density([{'description': 'court'}] * 4) == ''
+
+
+def test_invoice_pdf_uses_invoice_footer_note_not_quote_note(db):
+    from decimal import Decimal
+    from finance.models import Invoice
+    from finance.pdf import render_invoice_html
+    from marketing.models import QuoteSettings
+    s = QuoteSettings.load()
+    s.footer_note = 'Le présent devis est établi…'
+    s.invoice_footer_note = 'Note propre aux factures.'
+    s.save()
+    inv = Invoice.objects.create(client_name='X', amount_ht=Decimal('1000'),
+                                 lines=[{'description': 'a', 'quantity': '1', 'unit_price': '1000'}])
+    html = render_invoice_html(inv)
+    assert 'Note propre aux factures.' in html
+    assert 'Le présent devis' not in html
+
+
+def test_fiscal_endpoint(db):
+    from decimal import Decimal
+    from rest_framework.test import APIClient
+    from core.constants import ROLE_COMPTABLE
+    from core.models import Role, User
+    from finance.fiscal import sign_invoice
+    from finance.models import Invoice
+    u = User.objects.create(email='fisc@x.dev'); u.roles.add(Role.objects.get_or_create(name=ROLE_COMPTABLE)[0])
+    inv = Invoice.objects.create(client_name='X', amount_ht=Decimal('1000'))
+    api = APIClient(); api.force_authenticate(user=u)
+    res = api.get(f'/api/v1/finance/invoices/{inv.pk}/fiscal/')
+    assert res.status_code == 200
+    assert res.json()['signature'] == sign_invoice(inv)

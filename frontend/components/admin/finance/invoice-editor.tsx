@@ -113,6 +113,7 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
       invoice_number: current?.invoice_number ?? "",
       client_name: clientName,
       issue_date: issueDate,
+      due_date: dueDate || null,
       lines,
       discount_amount: Number(discount) || 0,
       discount_reason: discountReason,

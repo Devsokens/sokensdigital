@@ -633,6 +633,18 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         description="Devis récupérables (avec leurs lignes, pour pré-remplir une facture) et "
         "coordonnées de la société pour l'aperçu (paramètres des devis).",
     )
+    @action(detail=True, methods=['get'], permission_classes=[IsFinanceRole])
+    def fiscal(self, request, pk=None):
+        """QR code fiscal et code de contrôle, pour l'aperçu de l'admin (même
+        contenu que le PDF). À part de la liste : calculé à la demande."""
+        from finance.fiscal import qr_code_svg_data_uri, sign_invoice, verification_url
+        invoice = self.get_object()
+        try:
+            qr = qr_code_svg_data_uri(invoice)
+        except ImportError:
+            qr = ''
+        return Response({'signature': sign_invoice(invoice), 'verification_url': verification_url(invoice), 'qr_uri': qr})
+
     @action(detail=False, methods=['get'], url_path='editor-context', permission_classes=[IsFinanceRole])
     def editor_context(self, request):
         from marketing.models import Quote, QuoteSettings
@@ -678,6 +690,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 'company_nif': settings_obj.company_nif,
                 'company_stamp_url': settings_obj.company_stamp_url,
                 'payment_methods': settings_obj.payment_methods or [],
+                'invoice_footer_note': settings_obj.invoice_footer_note,
             },
             # Taux par défaut des nouvelles factures (paramètres Finance).
             'tax_rates': {

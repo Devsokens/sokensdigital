@@ -844,6 +844,11 @@ class QuoteSettings(LoggedModel):
     payment_methods = models.JSONField(default=list, blank=True)
     default_payment_terms = models.JSONField(default=list, blank=True)
     footer_note = models.TextField(blank=True)
+    # Note de bas de page propre aux factures (footer_note parle du devis).
+    invoice_footer_note = models.TextField(
+        blank=True,
+        default="Merci pour votre confiance. Merci d'indiquer le numéro de la facture lors de tout règlement.",
+    )
     # Cahier des charges §4.7 "signature électronique" — the company's
     # digital stamp/seal image, uploaded once here and stamped onto every
     # devis PDF/print view and the public acceptance page once signed.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Dialog } from "@base-ui/react/dialog";
 import { Download, Mail, Pencil, Wallet, X } from "lucide-react";
@@ -8,7 +8,8 @@ import { DocumentPreviewCards } from "@/components/admin/marketing/document-prev
 import { InvoiceDocument } from "@/components/admin/finance/invoice-document";
 import { InvoicePayments } from "@/components/admin/finance/invoice-payments";
 import { SendDocumentModal } from "@/components/admin/marketing/send-document-modal";
-import { sendInvoice, type InvoiceEditorContext } from "@/lib/api/finance";
+import { getInvoiceFiscal, sendInvoice, type InvoiceEditorContext } from "@/lib/api/finance";
+import type { InvoiceFiscal } from "@/components/admin/finance/invoice-document";
 import { formatFcfa } from "@/lib/format-currency";
 import { cn } from "@/lib/utils";
 import type { Invoice } from "@/lib/api/types";
@@ -35,6 +36,19 @@ export function InvoiceViewer({
   const [sendOpen, setSendOpen] = useState(false);
   if (invoice && invoice !== shown) setShown(invoice);
   const current = invoice ?? shown;
+  // QR code fiscal : chargé à l'ouverture (pas dans la liste, coûteux).
+  const [fiscal, setFiscal] = useState<{ id: string; data: InvoiceFiscal } | null>(null);
+  const currentId = current?.id;
+  useEffect(() => {
+    if (!currentId) return;
+    let alive = true;
+    getInvoiceFiscal(currentId)
+      .then((data) => alive && setFiscal({ id: currentId, data }))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [currentId, current?.amount_ttc]);
   const remaining = current ? Math.max(Number(current.amount_ttc) - Number(current.amount_paid), 0) : 0;
 
   return (
@@ -120,7 +134,9 @@ export function InvoiceViewer({
                             extra_taxes: current.extra_taxes ?? [],
                             amount_paid: Number(current.amount_paid),
                             quote_number: current.quote_number,
+                            due_date: current.due_date,
                           }}
+                          fiscal={fiscal?.id === current.id ? fiscal.data : null}
                           settings={settings}
                           accentColor={current.document_color || "#123f91"}
                         />

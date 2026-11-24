@@ -221,6 +221,8 @@ export interface InvoiceEditorContext {
     company_nif: string;
     company_stamp_url: string;
     payment_methods: { label: string }[];
+    /** Note de bas de page des factures (distincte de celle des devis). */
+    invoice_footer_note?: string;
   };
   /** Taux par défaut des nouvelles factures (paramètres Finance). */
   tax_rates?: { vat_rate: string; css_rate: string; extra_taxes?: ExtraTaxSetting[] };
@@ -271,6 +273,10 @@ export function updateInvoice(id: string, data: Partial<InvoiceInput>) {
     method: "PATCH",
     body: JSON.stringify(data),
   });
+}
+
+export function getInvoiceFiscal(id: string) {
+  return apiFetch<import("@/components/admin/finance/invoice-document").InvoiceFiscal>(`/api/v1/finance/invoices/${id}/fiscal/`);
 }
 
 export function getInvoiceEditorContext() {

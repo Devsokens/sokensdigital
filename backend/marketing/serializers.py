@@ -463,7 +463,7 @@ class QuoteSettingsSerializer(serializers.ModelSerializer):
         model = QuoteSettings
         fields = [
             'company_address', 'company_phone', 'company_email', 'company_rccm', 'company_nif', 'company_stamp_url',
-            'payment_methods', 'default_payment_terms', 'footer_note', 'amount_basis', 'css_rate', 'vat_rate',
+            'payment_methods', 'default_payment_terms', 'footer_note', 'invoice_footer_note', 'amount_basis', 'css_rate', 'vat_rate',
         ]
 
     def to_representation(self, instance):
