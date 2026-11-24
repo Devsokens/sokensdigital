@@ -17,6 +17,7 @@ import {
   type ServiceOffer, type ServicePole, type ServicesDashboard, type Subscription,
 } from "@/lib/api/services";
 import { cn } from "@/lib/utils";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 function basePath(pole: ServicePole) {
   return pole === "COMMUNICATION" ? "/admin/marketing/abonnements" : "/admin/technique/abonnements";
@@ -47,6 +48,7 @@ export function SubscriptionsHub({ pole }: { pole: ServicePole }) {
   }, [pole]);
 
   useEffect(() => load(), [load]);
+  useAutoRefresh(load);
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
   if (!subs || !dash) {

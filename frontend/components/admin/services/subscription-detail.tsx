@@ -17,6 +17,7 @@ import {
   type Deliverable, type DeliverableKind, type DeliverableStatus, type ServicePeriod, type Subscription,
 } from "@/lib/api/services";
 import { cn } from "@/lib/utils";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 // Étape suivante du circuit de validation (la maintenance « livre », la
 // communication « publie »).
@@ -59,6 +60,7 @@ export function SubscriptionDetail({ id, backHref }: { id: string; backHref: str
   }, [id]);
 
   useEffect(() => load(), [load]);
+  useAutoRefresh(load);
 
   async function run(fn: () => Promise<unknown>, ok?: string) {
     setBusy(true);

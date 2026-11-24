@@ -21,6 +21,7 @@ import type {
   BankEntry, BankEntrySource, CapitalContribution,
   CashEntry, CashEntrySource,
 } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const CAN_MANAGE_CAISSE = ["SUPER_ADMIN", "COMPTABLE", "CAISSIER"];
 const CAN_MANAGE_BANQUE_CAPITAL = ["SUPER_ADMIN", "COMPTABLE"];
@@ -77,6 +78,7 @@ function CaissePanel() {
   const [actingId, setActingId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const res = await listCashEntries();
@@ -307,6 +309,7 @@ function BanquePanel() {
   const [open, setOpen] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const res = await listBankEntries();
@@ -497,6 +500,7 @@ function CapitalPanel() {
   const [open, setOpen] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const res = await listCapitalContributions();

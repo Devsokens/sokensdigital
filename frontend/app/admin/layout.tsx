@@ -12,6 +12,7 @@ import type { Metadata, Viewport } from "next";
 import { AdminThemeScope } from "@/components/admin/admin-theme-toggle";
 
 import { AdminAccessGuard } from "@/components/admin/admin-access-guard";
+import { AutoRefresh } from "@/lib/admin/auto-refresh";
 
 /* Surface claire de l'espace d'administration.
  *
@@ -78,6 +79,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </AdminShell>
               <div className="print:hidden">
                 <MobileBottomNav />
+                <AutoRefresh />
                 <OnboardingOverlay />
                 <ModuleTourOverlay />
               </div>

@@ -6,11 +6,13 @@ import { cardClass } from "@/components/admin/form-styles";
 import { getFinanceDashboard } from "@/lib/api/finance";
 import { formatFcfa } from "@/lib/format-currency";
 import type { FinanceDashboard as FinanceDashboardData } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 export function FinanceDashboard() {
   const [data, setData] = useState<FinanceDashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  useAutoRefresh(() => getFinanceDashboard().then(setData).catch(() => {}));
   useEffect(() => {
     getFinanceDashboard()
       .then(setData)

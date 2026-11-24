@@ -77,6 +77,9 @@ const POSTHOG_INGEST_HOST = process.env.POSTHOG_INGEST_HOST ?? "https://eu.i.pos
 const POSTHOG_ASSETS_HOST = process.env.POSTHOG_ASSETS_HOST ?? "https://eu-assets.i.posthog.com";
 
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_BUILD_ID: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.RENDER_GIT_COMMIT ?? String(Date.now()),
+  },
   images: {
     // Sans ça, next/image refuse toute image distante (Cloudinary,
     // Supabase Storage) — c'est très probablement pourquoi le code utilise

@@ -1,4 +1,5 @@
 import { auth } from "@/lib/firebase/config";
+import { apiFetch } from "@/lib/api/client";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
@@ -154,4 +155,10 @@ export async function openChatAttachment(roomId: string, messageId: string) {
     tab?.close();
     alert("Ce fichier n'est pas disponible.");
   }
+}
+
+
+/** Salon lu par l'utilisateur + aperçu du dernier message (côté serveur). */
+export function markChatRoomRead(roomId: string) {
+  return apiFetch<void>(`/api/v1/chat/rooms/${encodeURIComponent(roomId)}/read/`, { method: "POST" });
 }

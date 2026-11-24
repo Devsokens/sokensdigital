@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth/auth-context";
 import { profileRoles } from "@/lib/firebase/types";
 import type { Invoice } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 type StatusFilter = "TOUS" | "BROUILLON" | "VALIDEE";
 type PaymentFilter = "TOUS" | "A_PAYER" | "PAYEE";
@@ -44,6 +45,7 @@ export function Invoices() {
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>("TOUS");
   const [view, setView] = useState<"liste" | "clients">("liste");
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const res = await listInvoices();

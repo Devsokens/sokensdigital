@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { getGlobalDashboard } from "@/lib/api/core";
 import { GlobalDashboardView } from "@/components/admin/global-dashboard-view";
 import type { GlobalDashboard } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 /** Cross-department rich overview dashboard with multi-indicators, sparklines,
  * dual-ring goal gauge, comparative bar chart, and category donut distribution. */
@@ -17,6 +18,8 @@ export default function AdminDashboardPage() {
       .then(setData)
       .catch(() => setError("Impossible de charger le tableau de bord global."));
   }, []);
+  // Actualisation silencieuse : on garde l'affichage en cas d'échec.
+  useAutoRefresh(() => getGlobalDashboard().then(setData).catch(() => {}));
 
   if (error) {
     return (

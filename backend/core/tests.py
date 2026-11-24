@@ -469,6 +469,25 @@ class SetUserRoleViewTests(APITestCase):
         self.assertEqual(res.status_code, 403)
 
 
+class ChatRoomReadViewTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create(email='reader@sokensdigital.com', firebase_uid='uid-reader')
+        self.client.force_authenticate(user=self.user)
+
+    @patch('core.firestore_client.sync_chat_room_activity')
+    @patch('core.views._can_access_room', return_value=True)
+    def test_member_marks_room_read(self, _access, sync):
+        res = self.client.post('/api/v1/chat/rooms/room123/read/')
+        self.assertEqual(res.status_code, 204)
+        sync.assert_called_once_with('room123', 'uid-reader')
+
+    @patch('core.firestore_client.sync_chat_room_activity')
+    @patch('core.views._can_access_room', return_value=False)
+    def test_non_member_refused(self, _access, sync):
+        self.assertEqual(self.client.post('/api/v1/chat/rooms/room123/read/').status_code, 403)
+        sync.assert_not_called()
+
+
 class DeactivateUserViewTests(APITestCase):
     def setUp(self):
         self.super_admin = User.objects.create(email='super@sokensdigital.com', first_name='Super')

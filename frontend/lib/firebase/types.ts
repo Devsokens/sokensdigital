@@ -165,6 +165,10 @@ export interface ChatRoom {
   participantNames?: Record<string, string>;
   isActive: boolean;
   createdAt: unknown;
+  /** Écrits par le serveur (POST /api/v1/chat/rooms/<id>/read/) : dernier
+   * message du salon et « lu jusqu'ici » de chaque membre. */
+  lastMessage?: { text: string; authorUid: string; authorName: string; createdAt: unknown; hasAttachment?: boolean } | null;
+  readAt?: Record<string, unknown>;
 }
 
 /** Firestore doc at /chatRooms/{roomId}/messages/{messageId}. Content

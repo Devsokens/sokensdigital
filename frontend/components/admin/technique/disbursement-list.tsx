@@ -27,6 +27,7 @@ import { listUsers } from "@/lib/api/hr";
 import { getMe } from "@/lib/api/me";
 import { useIsGerant } from "@/lib/admin/use-is-gerant";
 import type { DisbursementRequest, DisbursementStatus, Project, UserBrief } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const STATUS_LABELS: Record<DisbursementStatus, string> = {
   EN_ATTENTE_RCF: "En attente RCF",
@@ -116,6 +117,7 @@ export function DisbursementList({ mode = "department", departmentLabel }: { mod
     }
   }
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const [reqRes, projRes] = await Promise.all([listDisbursementRequests(isFinanceView ? undefined : { scope: "department" }), listProjects({ pageSize: 500 })]);

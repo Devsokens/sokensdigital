@@ -349,6 +349,36 @@ def get_chat_message(room_id: str, message_id: str) -> dict | None:
     return snapshot.to_dict() if snapshot.exists else None
 
 
+def sync_chat_room_activity(room_id: str, reader_uid: str) -> None:
+    """Accusé de lecture + aperçu du dernier message, écrits par le serveur
+    (les clients ne peuvent pas modifier un salon, voir firestore.rules).
+
+    - readAt.<uid> = heure serveur : « lu jusqu'ici » pour ce membre ;
+    - lastMessage = copie du DERNIER message réel du salon (relu en base,
+      jamais fourni par le client : impossible d'y injecter un faux aperçu).
+    """
+    from firebase_admin import firestore as fb_firestore
+
+    room_ref = _get_client().collection('chatRooms').document(room_id)
+    latest = None
+    query = room_ref.collection('messages').order_by('createdAt', direction='DESCENDING').limit(10)
+    for snap in query.stream():
+        data = snap.to_dict() or {}
+        if not data.get('parentMessageId'):  # les réponses en fil ne remontent pas
+            latest = data
+            break
+    update = {f'readAt.{reader_uid}': fb_firestore.SERVER_TIMESTAMP}
+    if latest:
+        update['lastMessage'] = {
+            'text': (latest.get('text') or '')[:140],
+            'authorUid': latest.get('authorUid') or '',
+            'authorName': latest.get('authorName') or '',
+            'createdAt': latest.get('createdAt'),
+            'hasAttachment': bool(latest.get('attachment')),
+        }
+    room_ref.update(update)
+
+
 def user_can_read_chat_room(firebase_uid: str, room: dict) -> bool:
     """Mêmes règles que firestore.rules (chatRooms read) : salon entreprise
     pour tous, salon de département pour ses membres, projet et direct pour

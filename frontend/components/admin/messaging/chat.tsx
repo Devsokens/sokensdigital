@@ -1,6 +1,6 @@
 "use client";
 
-import { openChatAttachment } from "@/lib/api/upload";
+import { markChatRoomRead, openChatAttachment } from "@/lib/api/upload";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import {
@@ -107,6 +107,22 @@ function formatTime(value: unknown) {
   return d ? d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "";
 }
 
+function toMillis(value: unknown): number {
+  return toDate(value)?.getTime() ?? 0;
+}
+
+/** Heure (aujourd'hui), « Hier », ou date courte — comme dans une liste de discussions. */
+function formatListTime(value: unknown) {
+  const d = toDate(value);
+  if (!d) return "";
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  if (d.toDateString() === yesterday.toDateString()) return "Hier";
+  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
+
 function formatDay(value: unknown) {
   const d = toDate(value);
   if (!d) return "";
@@ -118,10 +134,6 @@ function formatDay(value: unknown) {
   return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 }
 
-// Fond texturé discret de la conversation (motif SVG, aucun fichier externe).
-const WALLPAPER =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='%23000' fill-opacity='0.035'%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3Ccircle cx='50' cy='30' r='1.5'/%3E%3Cpath d='M30 60h6v2h-6zM62 64l4 4-1.4 1.4-4-4z'/%3E%3Crect x='64' y='8' width='5' height='5' rx='1'/%3E%3C/g%3E%3C/svg%3E\")";
-
 function Avatar({ name, room, size = "md" }: { name: string; room?: ChatRoom; size?: "sm" | "md" | "lg" }) {
   const Icon = room && room.roomType !== "DIRECT" ? ROOM_TYPE_ICON[room.roomType] : null;
   const palette = ["bg-emerald-600", "bg-sky-600", "bg-violet-600", "bg-rose-600", "bg-amber-600", "bg-teal-600", "bg-indigo-600"];
@@ -132,7 +144,7 @@ function Avatar({ name, room, size = "md" }: { name: string; room?: ChatRoom; si
         size === "sm" && "size-8 text-[11px]",
         size === "md" && "size-12 text-sm",
         size === "lg" && "size-10 text-sm",
-        Icon ? "bg-[#dfe5e7] text-[#54656f]" : palette[hash(name) % palette.length],
+        Icon ? "bg-(--wa-avatar) text-(--wa-icon)" : palette[hash(name) % palette.length],
       )}
     >
       {Icon ? <Icon className={size === "md" ? "size-5" : "size-4"} /> : initials(name)}
@@ -181,6 +193,17 @@ export function Chat() {
     return subscribeToMessages(activeRoomId, (list) => setRoomMessages({ roomId: activeRoomId, list }));
   }, [activeRoomId]);
 
+  // Accusé de lecture : à l'ouverture et à chaque nouveau message tant que
+  // la discussion est affichée et l'onglet visible (léger délai groupé).
+  const lastMessageId = roomMessages.roomId === activeRoomId ? roomMessages.list[roomMessages.list.length - 1]?.id : undefined;
+  useEffect(() => {
+    if (!activeRoomId) return;
+    const timer = window.setTimeout(() => {
+      if (document.visibilityState === "visible") markChatRoomRead(activeRoomId).catch(() => {});
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [activeRoomId, lastMessageId]);
+
   // Messages et fil ouvert n'appartiennent qu'au salon affiché.
   const messages = useMemo(() => (roomMessages.roomId === activeRoomId ? roomMessages.list : []), [roomMessages, activeRoomId]);
   const threadRootId = thread && thread.roomId === activeRoomId ? thread.id : null;
@@ -202,7 +225,12 @@ export function Chat() {
     return rooms
       .filter((room) => (filter === "ALL" ? true : filter === "DIRECT" ? room.roomType === "DIRECT" : room.roomType !== "DIRECT"))
       .filter((room) => matchesSearch(room, search, user?.uid))
-      .sort((a, b) => ROOM_ORDER[a.roomType] - ROOM_ORDER[b.roomType] || roomDisplayName(a).localeCompare(roomDisplayName(b)));
+      .sort(
+        (a, b) =>
+          toMillis(b.lastMessage?.createdAt) - toMillis(a.lastMessage?.createdAt) ||
+          ROOM_ORDER[a.roomType] - ROOM_ORDER[b.roomType] ||
+          roomDisplayName(a).localeCompare(roomDisplayName(b)),
+      );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rooms, filter, search, user?.uid]);
 
@@ -243,6 +271,19 @@ export function Chat() {
       setPendingAttachment(null);
       setPendingLink(null);
     }
+    // Met à jour l'aperçu « dernier message » vu par les autres membres.
+    markChatRoomRead(activeRoomId).catch(() => {});
+  }
+
+  /** État de lecture d'un de mes messages : lu par tous (discussion privée
+   * ou groupe à membres connus), ou par au moins un collègue (grands groupes). */
+  function readState(message: ChatMessage): { read: boolean; readers: number } {
+    const at = toMillis(message.createdAt);
+    const readAt = activeRoom?.readAt ?? {};
+    const readers = Object.entries(readAt).filter(([uid, v]) => uid !== user?.uid && toMillis(v) >= at).map(([uid]) => uid);
+    const others = (activeRoom?.memberUids ?? []).filter((uid) => uid !== user?.uid);
+    const read = others.length > 0 ? others.every((uid) => readers.includes(uid)) : readers.length > 0;
+    return { read, readers: readers.length };
   }
 
   async function handleReact(message: ChatMessage, emoji: string) {
@@ -258,39 +299,39 @@ export function Chat() {
 
   // `dvh` et non `vh` : la barre d'URL mobile fausse `100vh`.
   return (
-    <div className="flex h-[calc(100dvh-13rem-env(safe-area-inset-bottom))] min-h-[24rem] overflow-hidden rounded-xl border border-[#d1d7db] bg-white shadow-sm sm:h-[calc(100dvh-13.5rem-env(safe-area-inset-bottom))] lg:h-[calc(100dvh-8rem)]">
+    <div className="flex h-[calc(100dvh-13rem-env(safe-area-inset-bottom))] min-h-[24rem] wa overflow-hidden rounded-xl border border-(--wa-border) bg-(--wa-surface) shadow-sm sm:h-[calc(100dvh-13.5rem-env(safe-area-inset-bottom))] lg:h-[calc(100dvh-8rem)]">
       {/* ===== Liste des discussions ===== */}
       <aside
         data-tour="module-messagerie"
         className={cn(
-          "relative min-h-0 flex-col border-r border-[#d1d7db] bg-white lg:flex lg:w-[380px] lg:shrink-0",
+          "relative min-h-0 flex-col border-r border-(--wa-border) bg-(--wa-surface) lg:flex lg:w-[380px] lg:shrink-0",
           activeRoom ? "hidden" : "flex w-full",
         )}
       >
-        <header className="flex h-16 shrink-0 items-center justify-between bg-[#f0f2f5] px-4">
-          <h1 className="text-xl font-bold text-[#111b21]">Discussions</h1>
+        <header className="flex h-16 shrink-0 items-center justify-between bg-(--wa-panel) px-4">
+          <h1 className="text-xl font-bold text-(--wa-text)">Discussions</h1>
           <button
             type="button"
             onClick={() => setNewChatOpen(true)}
             title="Nouvelle discussion"
             aria-label="Nouvelle discussion"
-            className="flex size-10 items-center justify-center rounded-full text-[#54656f] hover:bg-black/5"
+            className="flex size-10 items-center justify-center rounded-full text-(--wa-icon) hover:bg-black/5"
           >
             <MessageSquarePlus className="size-5" />
           </button>
         </header>
 
         <div className="shrink-0 space-y-2 px-3 pt-2 pb-2">
-          <label className="flex items-center gap-3 rounded-lg bg-[#f0f2f5] px-3 py-2">
-            <Search className="size-4 shrink-0 text-[#54656f]" />
+          <label className="flex items-center gap-3 rounded-lg bg-(--wa-panel) px-3 py-2">
+            <Search className="size-4 shrink-0 text-(--wa-icon)" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Rechercher une discussion"
-              className="w-full min-w-0 bg-transparent text-sm text-[#111b21] outline-none placeholder:text-[#667781]"
+              className="w-full min-w-0 bg-transparent text-sm text-(--wa-text) outline-none placeholder:text-(--wa-muted)"
             />
             {search && (
-              <button type="button" onClick={() => setSearch("")} aria-label="Effacer" className="text-[#54656f]">
+              <button type="button" onClick={() => setSearch("")} aria-label="Effacer" className="text-(--wa-icon)">
                 <X className="size-4" />
               </button>
             )}
@@ -303,7 +344,7 @@ export function Chat() {
                 onClick={() => setFilter(f.key)}
                 className={cn(
                   "rounded-full px-3 py-1 text-sm transition-colors",
-                  filter === f.key ? "bg-[#d9fdd3] font-medium text-[#008069]" : "bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef]",
+                  filter === f.key ? "bg-(--wa-chip) font-medium text-(--wa-accent)" : "bg-(--wa-panel) text-(--wa-icon) hover:bg-(--wa-divider)",
                 )}
               >
                 {f.label}
@@ -314,13 +355,26 @@ export function Chat() {
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {visibleRooms.length === 0 && (
-            <p className="px-6 py-10 text-center text-sm text-[#667781]">
+            <p className="px-6 py-10 text-center text-sm text-(--wa-muted)">
               {search ? "Aucune discussion trouvée." : "Aucune discussion pour l'instant."}
             </p>
           )}
           {visibleRooms.map((room) => {
             const name = roomDisplayName(room);
             const active = room.id === activeRoomId;
+            const last = room.lastMessage;
+            const mine = Boolean(last && last.authorUid === user?.uid);
+            const myRead = toMillis(room.readAt?.[user?.uid ?? ""]);
+            const unread = Boolean(last && !mine && toMillis(last.createdAt) > myRead && !active);
+            const lastAt = toMillis(last?.createdAt);
+            const othersRead = mine
+              ? (room.memberUids ?? []).filter((u) => u !== user?.uid).length > 0
+                ? (room.memberUids ?? []).filter((u) => u !== user?.uid).every((u) => toMillis(room.readAt?.[u]) >= lastAt)
+                : Object.entries(room.readAt ?? {}).some(([u, v]) => u !== user?.uid && toMillis(v) >= lastAt)
+              : false;
+            const preview = last
+              ? `${!mine && room.roomType !== "DIRECT" ? `${last.authorName.split(" ")[0]} : ` : ""}${last.text || (last.hasAttachment ? "📎 Fichier" : "")}`
+              : ROOM_TYPE_LABEL[room.roomType];
             return (
               <button
                 key={room.id}
@@ -328,13 +382,24 @@ export function Chat() {
                 onClick={() => setActiveRoomId(room.id)}
                 className={cn(
                   "flex w-full items-center gap-3 px-3 text-left transition-colors",
-                  active ? "bg-[#f0f2f5]" : "hover:bg-[#f5f6f6]",
+                  active ? "bg-(--wa-panel)" : "hover:bg-(--wa-hover)",
                 )}
               >
                 <Avatar name={name} room={room} />
-                <span className="flex min-w-0 flex-1 flex-col border-b border-[#e9edef] py-3.5">
-                  <span className="truncate text-[15px] text-[#111b21]">{name}</span>
-                  <span className="truncate text-[13px] text-[#667781]">{ROOM_TYPE_LABEL[room.roomType]}</span>
+                <span className="flex min-w-0 flex-1 flex-col border-b border-(--wa-divider) py-3">
+                  <span className="flex items-baseline gap-2">
+                    <span className={cn("min-w-0 flex-1 truncate text-[15px] text-(--wa-text)", unread && "font-semibold")}>{name}</span>
+                    {last && (
+                      <span className={cn("shrink-0 text-xs", unread ? "font-medium text-[#25d366]" : "text-(--wa-muted)")}>
+                        {formatListTime(last.createdAt)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    {mine && (othersRead ? <CheckCheck className="size-4 shrink-0 text-sky-400" /> : <CheckCheck className="size-4 shrink-0 text-(--wa-muted)" />)}
+                    <span className={cn("min-w-0 flex-1 truncate text-[13px]", unread ? "font-medium text-(--wa-text)" : "text-(--wa-muted)")}>{preview}</span>
+                    {unread && <span className="size-2.5 shrink-0 rounded-full bg-[#25d366]" aria-label="Non lu" />}
+                  </span>
                 </span>
               </button>
             );
@@ -350,19 +415,19 @@ export function Chat() {
       <section className={cn("min-h-0 min-w-0 flex-1 flex-col lg:flex", activeRoom ? "flex" : "hidden lg:flex")}>
         {activeRoom ? (
           <>
-            <header className="flex h-16 shrink-0 items-center gap-3 border-l border-[#d1d7db] bg-[#f0f2f5] px-2 sm:px-4 lg:border-l-0">
+            <header className="flex h-16 shrink-0 items-center gap-3 border-l border-(--wa-border) bg-(--wa-panel) px-2 sm:px-4 lg:border-l-0">
               <button
                 type="button"
                 onClick={() => setActiveRoomId(null)}
                 aria-label="Retour aux discussions"
-                className="flex size-10 items-center justify-center rounded-full text-[#54656f] hover:bg-black/5 lg:hidden"
+                className="flex size-10 items-center justify-center rounded-full text-(--wa-icon) hover:bg-black/5 lg:hidden"
               >
                 <ArrowLeft className="size-5" />
               </button>
               <Avatar name={roomDisplayName(activeRoom)} room={activeRoom} size="lg" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[15px] font-medium text-[#111b21]">{roomDisplayName(activeRoom)}</p>
-                <p className="truncate text-xs text-[#667781]">{ROOM_TYPE_LABEL[activeRoom.roomType]}</p>
+                <p className="truncate text-[15px] font-medium text-(--wa-text)">{roomDisplayName(activeRoom)}</p>
+                <p className="truncate text-xs text-(--wa-muted)">{ROOM_TYPE_LABEL[activeRoom.roomType]}</p>
               </div>
               <Popover>
                 <PopoverTrigger
@@ -371,7 +436,7 @@ export function Chat() {
                       type="button"
                       title="Messages épinglés"
                       aria-label="Messages épinglés"
-                      className="relative flex size-10 items-center justify-center rounded-full text-[#54656f] hover:bg-black/5"
+                      className="relative flex size-10 items-center justify-center rounded-full text-(--wa-icon) hover:bg-black/5"
                     >
                       <Pin className="size-5" />
                       {pinnedMessages.length > 0 && (
@@ -382,13 +447,13 @@ export function Chat() {
                     </button>
                   }
                 />
-                <PopoverContent className="max-h-80 w-72 overflow-y-auto p-2" align="end">
-                  <p className="px-2.5 pb-1 text-xs font-semibold text-[#667781]">Messages épinglés</p>
-                  {pinnedMessages.length === 0 && <p className="p-3 text-xs text-[#667781]">Aucun message épinglé.</p>}
+                <PopoverContent className="wa bg-(--wa-surface) max-h-80 w-72 overflow-y-auto p-2" align="end">
+                  <p className="px-2.5 pb-1 text-xs font-semibold text-(--wa-muted)">Messages épinglés</p>
+                  {pinnedMessages.length === 0 && <p className="p-3 text-xs text-(--wa-muted)">Aucun message épinglé.</p>}
                   {pinnedMessages.map((m) => (
-                    <div key={m.id} className="rounded-lg px-2.5 py-2 hover:bg-[#f5f6f6]">
-                      <p className="text-xs font-medium text-[#111b21]">{m.authorName}</p>
-                      <p className="truncate text-xs text-[#667781]">{m.text || m.attachment?.name}</p>
+                    <div key={m.id} className="rounded-lg px-2.5 py-2 hover:bg-(--wa-hover)">
+                      <p className="text-xs font-medium text-(--wa-text)">{m.authorName}</p>
+                      <p className="truncate text-xs text-(--wa-muted)">{m.text || m.attachment?.name}</p>
                     </div>
                   ))}
                 </PopoverContent>
@@ -400,15 +465,15 @@ export function Chat() {
                       type="button"
                       title="Fichiers partagés"
                       aria-label="Fichiers partagés"
-                      className="flex size-10 items-center justify-center rounded-full text-[#54656f] hover:bg-black/5"
+                      className="flex size-10 items-center justify-center rounded-full text-(--wa-icon) hover:bg-black/5"
                     >
                       <MoreVertical className="size-5" />
                     </button>
                   }
                 />
-                <PopoverContent className="max-h-80 w-72 overflow-y-auto p-2" align="end">
-                  <p className="px-2.5 pb-1 text-xs font-semibold text-[#667781]">Fichiers partagés</p>
-                  {filesMessages.length === 0 && <p className="p-3 text-xs text-[#667781]">Aucun fichier partagé.</p>}
+                <PopoverContent className="wa bg-(--wa-surface) max-h-80 w-72 overflow-y-auto p-2" align="end">
+                  <p className="px-2.5 pb-1 text-xs font-semibold text-(--wa-muted)">Fichiers partagés</p>
+                  {filesMessages.length === 0 && <p className="p-3 text-xs text-(--wa-muted)">Aucun fichier partagé.</p>}
                   {filesMessages.map((m) => (
                     <a
                       key={m.id}
@@ -421,9 +486,9 @@ export function Chat() {
                         e.preventDefault();
                         openChatAttachment(activeRoomId, m.id);
                       }}
-                      className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-[#111b21] hover:bg-[#f5f6f6]"
+                      className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-(--wa-text) hover:bg-(--wa-hover)"
                     >
-                      <FileText className="size-4 shrink-0 text-[#54656f]" />
+                      <FileText className="size-4 shrink-0 text-(--wa-icon)" />
                       <span className="truncate">{m.attachment?.name}</span>
                     </a>
                   ))}
@@ -434,11 +499,10 @@ export function Chat() {
             <div className="relative flex min-h-0 flex-1 overflow-hidden">
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 <div
-                  className="min-h-0 flex-1 overflow-y-auto bg-[#efeae2] px-3 py-3 sm:px-[6%]"
-                  style={{ backgroundImage: WALLPAPER }}
+                  className="wa-wallpaper min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-[6%]"
                 >
                   {rootMessages.length === 0 && (
-                    <div className="mx-auto mt-6 max-w-sm rounded-lg bg-[#fff5c4] px-4 py-2.5 text-center text-xs text-[#54656f] shadow-sm">
+                    <div className="mx-auto mt-6 max-w-sm rounded-lg bg-(--wa-notice) px-4 py-2.5 text-center text-xs text-(--wa-icon) shadow-sm">
                       Aucun message. Écrivez le premier !
                     </div>
                   )}
@@ -452,7 +516,7 @@ export function Chat() {
                       <div key={message.id}>
                         {newDay && day && (
                           <div className="my-3 flex justify-center">
-                            <span className="rounded-lg bg-white px-3 py-1 text-xs text-[#54656f] shadow-sm">{day}</span>
+                            <span className="rounded-lg bg-(--wa-surface) px-3 py-1 text-xs text-(--wa-icon) shadow-sm">{day}</span>
                           </div>
                         )}
                         <MessageBubble
@@ -466,6 +530,7 @@ export function Chat() {
                           onPin={() => handlePin(message)}
                           onOpenThread={() => setThreadRootId(message.id)}
                           currentUid={user?.uid}
+                          readInfo={message.authorUid === user?.uid ? readState(message) : undefined}
                         />
                       </div>
                     );
@@ -473,7 +538,7 @@ export function Chat() {
                   <div ref={bottomRef} />
                 </div>
 
-                <footer className="shrink-0 bg-[#f0f2f5] px-2 py-2 sm:px-4">
+                <footer className="shrink-0 bg-(--wa-panel) px-2 py-2 sm:px-4">
                   {canPostInActiveRoom ? (
                     <Composer
                       roomId={activeRoomId}
@@ -484,7 +549,7 @@ export function Chat() {
                       onLink={setPendingLink}
                     />
                   ) : (
-                    <p className="py-2 text-center text-xs text-[#667781]">
+                    <p className="py-2 text-center text-xs text-(--wa-muted)">
                       Seules la direction et l&apos;équipe Marketing &amp; Communication peuvent publier dans ce groupe.
                     </p>
                   )}
@@ -493,22 +558,22 @@ export function Chat() {
 
               {/* Fil de réponses : panneau à droite sur ordinateur, plein écran sur mobile. */}
               {threadRoot && (
-                <aside className="absolute inset-0 z-20 flex flex-col bg-white lg:static lg:z-auto lg:w-[360px] lg:shrink-0 lg:border-l lg:border-[#d1d7db]">
-                  <header className="flex h-16 shrink-0 items-center gap-3 bg-[#f0f2f5] px-3">
+                <aside className="absolute inset-0 z-20 flex flex-col bg-(--wa-surface) lg:static lg:z-auto lg:w-[360px] lg:shrink-0 lg:border-l lg:border-(--wa-border)">
+                  <header className="flex h-16 shrink-0 items-center gap-3 bg-(--wa-panel) px-3">
                     <button
                       type="button"
                       onClick={() => setThreadRootId(null)}
                       aria-label="Fermer le fil"
-                      className="flex size-10 items-center justify-center rounded-full text-[#54656f] hover:bg-black/5"
+                      className="flex size-10 items-center justify-center rounded-full text-(--wa-icon) hover:bg-black/5"
                     >
                       <X className="size-5" />
                     </button>
                     <div>
-                      <p className="text-[15px] font-medium text-[#111b21]">Réponses</p>
-                      <p className="text-xs text-[#667781]">{repliesOf(threadRoot.id).length} réponse(s)</p>
+                      <p className="text-[15px] font-medium text-(--wa-text)">Réponses</p>
+                      <p className="text-xs text-(--wa-muted)">{repliesOf(threadRoot.id).length} réponse(s)</p>
                     </div>
                   </header>
-                  <div className="min-h-0 flex-1 overflow-y-auto bg-[#efeae2] px-3 py-3" style={{ backgroundImage: WALLPAPER }}>
+                  <div className="wa-wallpaper min-h-0 flex-1 overflow-y-auto px-3 py-3">
                     <MessageBubble
                       roomId={activeRoomId}
                       message={threadRoot}
@@ -521,7 +586,7 @@ export function Chat() {
                       currentUid={user?.uid}
                     />
                     <div className="my-3 flex justify-center">
-                      <span className="rounded-lg bg-white px-3 py-1 text-xs text-[#54656f] shadow-sm">Réponses</span>
+                      <span className="rounded-lg bg-(--wa-surface) px-3 py-1 text-xs text-(--wa-icon) shadow-sm">Réponses</span>
                     </div>
                     {repliesOf(threadRoot.id).map((reply, i, all) => (
                       <MessageBubble
@@ -538,7 +603,7 @@ export function Chat() {
                       />
                     ))}
                   </div>
-                  <footer className="shrink-0 bg-[#f0f2f5] px-2 py-2">
+                  <footer className="shrink-0 bg-(--wa-panel) px-2 py-2">
                     <Composer onSend={(text) => handleSend(text, threadRoot.id)} />
                   </footer>
                 </aside>
@@ -546,12 +611,12 @@ export function Chat() {
             </div>
           </>
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 border-b-[6px] border-[#25d366] bg-[#f0f2f5] px-6 text-center">
-            <span className="flex size-20 items-center justify-center rounded-full bg-white text-[#54656f] shadow-sm">
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 border-b-[6px] border-[#25d366] bg-(--wa-panel) px-6 text-center">
+            <span className="flex size-20 items-center justify-center rounded-full bg-(--wa-surface) text-(--wa-icon) shadow-sm">
               <MessageSquarePlus className="size-9" />
             </span>
-            <p className="text-2xl font-light text-[#41525d]">Messagerie Soken&apos;s Digital</p>
-            <p className="max-w-md text-sm text-[#667781]">
+            <p className="text-2xl font-light text-(--wa-title)">Messagerie Soken&apos;s Digital</p>
+            <p className="max-w-md text-sm text-(--wa-muted)">
               Choisissez une discussion à gauche, ou démarrez-en une nouvelle avec un collègue.
             </p>
           </div>
@@ -582,6 +647,7 @@ function MessageBubble({
   onPin,
   onOpenThread,
   currentUid,
+  readInfo,
 }: {
   roomId?: string | null;
   message: ChatMessage;
@@ -593,6 +659,7 @@ function MessageBubble({
   onPin: () => void;
   onOpenThread?: () => void;
   currentUid?: string;
+  readInfo?: { read: boolean; readers: number };
 }) {
   const linkMeta = message.linkedEntity ? LINKED_ENTITY_META[message.linkedEntity.type] : null;
   const LinkIcon = linkMeta?.icon;
@@ -605,7 +672,7 @@ function MessageBubble({
         <div
           className={cn(
             "relative min-w-[90px] rounded-lg px-2 pt-1.5 pb-1 shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]",
-            isSelf ? "bg-[#d9fdd3]" : "bg-white",
+            isSelf ? "bg-(--wa-out)" : "bg-(--wa-in)",
             firstOfGroup && (isSelf ? "rounded-tr-none" : "rounded-tl-none"),
           )}
         >
@@ -616,8 +683,8 @@ function MessageBubble({
               className={cn(
                 "absolute top-0 size-0 border-t-[8px] border-t-current",
                 isSelf
-                  ? "-right-2 border-r-[8px] border-r-transparent text-[#d9fdd3]"
-                  : "-left-2 border-l-[8px] border-l-transparent text-white",
+                  ? "-right-2 border-r-[8px] border-r-transparent text-(--wa-out)"
+                  : "-left-2 border-l-[8px] border-l-transparent text-(--wa-in)",
               )}
             />
           )}
@@ -637,14 +704,14 @@ function MessageBubble({
                 e.preventDefault();
                 openChatAttachment(roomId, message.id);
               }}
-              className={cn("mb-1 flex items-center gap-3 rounded-md px-2.5 py-2", isSelf ? "bg-[#c8f0c0]" : "bg-[#f5f6f6]")}
+              className={cn("mb-1 flex items-center gap-3 rounded-md px-2.5 py-2", isSelf ? "bg-(--wa-out-inner)" : "bg-(--wa-in-inner)")}
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded bg-white text-[#54656f]">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded bg-(--wa-surface) text-(--wa-icon)">
                 <FileText className="size-5" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm text-[#111b21]">{message.attachment.name}</span>
-                <span className="block text-[11px] text-[#667781]">{Math.max(1, Math.round(message.attachment.size / 1024))} Ko</span>
+                <span className="block truncate text-sm text-(--wa-text)">{message.attachment.name}</span>
+                <span className="block text-[11px] text-(--wa-muted)">{Math.max(1, Math.round(message.attachment.size / 1024))} Ko</span>
               </span>
             </a>
           )}
@@ -652,26 +719,33 @@ function MessageBubble({
           {message.linkedEntity && linkMeta && LinkIcon && (
             <Link
               href={linkMeta.href(message.linkedEntity.id)}
-              className={cn("mb-1 flex items-center gap-3 rounded-md border-l-4 border-[#06cf9c] px-2.5 py-1.5", isSelf ? "bg-[#c8f0c0]" : "bg-[#f5f6f6]")}
+              className={cn("mb-1 flex items-center gap-3 rounded-md border-l-4 border-(--wa-accent) px-2.5 py-1.5", isSelf ? "bg-(--wa-out-inner)" : "bg-(--wa-in-inner)")}
             >
-              <LinkIcon className="size-4 shrink-0 text-[#008069]" />
+              <LinkIcon className="size-4 shrink-0 text-(--wa-accent)" />
               <span className="min-w-0 flex-1">
-                <span className="block text-[11px] font-medium text-[#008069]">{linkMeta.label}</span>
-                <span className="block truncate text-xs text-[#111b21]">{message.linkedEntity.label}</span>
+                <span className="block text-[11px] font-medium text-(--wa-accent)">{linkMeta.label}</span>
+                <span className="block truncate text-xs text-(--wa-text)">{message.linkedEntity.label}</span>
               </span>
             </Link>
           )}
 
-          <p className="text-[14.2px] leading-[19px] break-words whitespace-pre-wrap text-[#111b21]">
+          <p className="text-[14.2px] leading-[19px] break-words whitespace-pre-wrap text-(--wa-text)">
             {message.text}
             {/* Réserve la place de l'heure en bas à droite, comme dans une bulle de messagerie. */}
             <span className="inline-block w-[70px]" aria-hidden />
           </p>
 
-          <span className="absolute right-2 bottom-1 flex items-center gap-1 text-[11px] text-[#667781]">
+          <span className="absolute right-2 bottom-1 flex items-center gap-1 text-[11px] text-(--wa-muted)">
             {message.pinned && <Pin className="size-3 fill-current" />}
             {formatTime(message.createdAt)}
-            {isSelf && (message.createdAt ? <CheckCheck className="size-4 text-[#53bdeb]" /> : <Check className="size-3.5" />)}
+            {isSelf &&
+              (!message.createdAt ? (
+                <Check className="size-3.5" aria-label="Envoi en cours" />
+              ) : (
+                <span title={readInfo?.read ? "Lu" : readInfo?.readers ? `Lu par ${readInfo.readers}` : "Envoyé"}>
+                  <CheckCheck className={cn("size-4", readInfo?.read ? "text-sky-400" : "text-(--wa-muted)")} />
+                </span>
+              ))}
           </span>
 
           {reactions.length > 0 && (
@@ -682,12 +756,12 @@ function MessageBubble({
                   type="button"
                   onClick={() => onReact(emoji)}
                   className={cn(
-                    "flex items-center gap-0.5 rounded-full border bg-white px-1.5 py-0 text-xs shadow-sm",
-                    currentUid && uids.includes(currentUid) ? "border-[#25d366]" : "border-white",
+                    "flex items-center gap-0.5 rounded-full border bg-(--wa-surface) px-1.5 py-0 text-xs shadow-sm",
+                    currentUid && uids.includes(currentUid) ? "border-[#25d366]" : "border-(--wa-surface)",
                   )}
                 >
                   {emoji}
-                  {uids.length > 1 && <span className="text-[10px] text-[#667781]">{uids.length}</span>}
+                  {uids.length > 1 && <span className="text-[10px] text-(--wa-muted)">{uids.length}</span>}
                 </button>
               ))}
             </div>
@@ -697,7 +771,7 @@ function MessageBubble({
             <button
               type="button"
               onClick={onOpenThread}
-              className="mt-1 flex w-full items-center gap-1 border-t border-black/5 pt-1 text-xs font-medium text-[#027eb5]"
+              className="mt-1 flex w-full items-center gap-1 border-t border-black/5 pt-1 text-xs font-medium text-sky-500"
             >
               <CornerUpLeft className="size-3.5" />
               {replyCount} réponse{replyCount > 1 ? "s" : ""}
@@ -713,13 +787,13 @@ function MessageBubble({
                 <button
                   type="button"
                   aria-label="Réagir"
-                  className="flex size-7 items-center justify-center rounded-full bg-white/80 text-[#54656f] shadow-sm hover:bg-white"
+                  className="flex size-7 items-center justify-center rounded-full bg-(--wa-surface)/80 text-(--wa-icon) shadow-sm hover:bg-(--wa-surface)"
                 >
                   <Smile className="size-4" />
                 </button>
               }
             />
-            <PopoverContent className="flex w-auto gap-1 rounded-full p-1.5" align={isSelf ? "end" : "start"}>
+            <PopoverContent className="wa bg-(--wa-surface) flex w-auto gap-1 rounded-full p-1.5" align={isSelf ? "end" : "start"}>
               {QUICK_REACTIONS.map((emoji) => (
                 <button
                   key={emoji}
@@ -738,20 +812,20 @@ function MessageBubble({
                 <button
                   type="button"
                   aria-label="Plus d'actions"
-                  className="flex size-7 items-center justify-center rounded-full bg-white/80 text-[#54656f] shadow-sm hover:bg-white"
+                  className="flex size-7 items-center justify-center rounded-full bg-(--wa-surface)/80 text-(--wa-icon) shadow-sm hover:bg-(--wa-surface)"
                 >
                   <MoreVertical className="size-4" />
                 </button>
               }
             />
-            <PopoverContent className="w-44 p-1" align={isSelf ? "end" : "start"}>
+            <PopoverContent className="wa bg-(--wa-surface) w-44 p-1" align={isSelf ? "end" : "start"}>
               {onOpenThread && (
-                <button type="button" onClick={onOpenThread} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-[#111b21] hover:bg-[#f5f6f6]">
-                  <CornerUpLeft className="size-4 text-[#54656f]" /> Répondre
+                <button type="button" onClick={onOpenThread} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-(--wa-text) hover:bg-(--wa-hover)">
+                  <CornerUpLeft className="size-4 text-(--wa-icon)" /> Répondre
                 </button>
               )}
-              <button type="button" onClick={onPin} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-[#111b21] hover:bg-[#f5f6f6]">
-                <Pin className="size-4 text-[#54656f]" /> {message.pinned ? "Désépingler" : "Épingler"}
+              <button type="button" onClick={onPin} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-(--wa-text) hover:bg-(--wa-hover)">
+                <Pin className="size-4 text-(--wa-icon)" /> {message.pinned ? "Désépingler" : "Épingler"}
               </button>
             </PopoverContent>
           </Popover>
@@ -817,21 +891,21 @@ function Composer({
       {(pendingAttachment || pendingLink) && (
         <div className="mb-2 space-y-1">
           {pendingAttachment && (
-            <div className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm text-[#111b21] shadow-sm">
-              <FileText className="size-4 text-[#54656f]" />
+            <div className="flex items-center gap-2 rounded-lg bg-(--wa-surface) px-3 py-2 text-sm text-(--wa-text) shadow-sm">
+              <FileText className="size-4 text-(--wa-icon)" />
               <span className="min-w-0 flex-1 truncate">{pendingAttachment.name}</span>
-              <button type="button" onClick={() => onAttach?.(null)} aria-label="Retirer le fichier" className="text-[#54656f] hover:text-red-600">
+              <button type="button" onClick={() => onAttach?.(null)} aria-label="Retirer le fichier" className="text-(--wa-icon) hover:text-red-600">
                 <X className="size-4" />
               </button>
             </div>
           )}
           {pendingLink && (
-            <div className="flex items-center gap-2 rounded-lg border-l-4 border-[#06cf9c] bg-white px-3 py-2 text-sm text-[#111b21] shadow-sm">
-              <Link2 className="size-4 text-[#008069]" />
+            <div className="flex items-center gap-2 rounded-lg border-l-4 border-(--wa-accent) bg-(--wa-surface) px-3 py-2 text-sm text-(--wa-text) shadow-sm">
+              <Link2 className="size-4 text-(--wa-accent)" />
               <span className="min-w-0 flex-1 truncate">
                 {LINKED_ENTITY_META[pendingLink.type].label} : {pendingLink.label}
               </span>
-              <button type="button" onClick={() => onLink?.(null)} aria-label="Retirer le lien" className="text-[#54656f] hover:text-red-600">
+              <button type="button" onClick={() => onLink?.(null)} aria-label="Retirer le lien" className="text-(--wa-icon) hover:text-red-600">
                 <X className="size-4" />
               </button>
             </div>
@@ -845,7 +919,7 @@ function Composer({
         }}
         className="flex items-end gap-2"
       >
-        <div className="flex min-w-0 flex-1 items-end gap-1 rounded-3xl bg-white px-2 py-1.5 shadow-sm">
+        <div className="flex min-w-0 flex-1 items-end gap-1 rounded-3xl bg-(--wa-surface) px-2 py-1.5 shadow-sm">
           {onLink && <LinkEntityButton onPick={(link) => onLink(link)} />}
           <textarea
             ref={textRef}
@@ -859,7 +933,7 @@ function Composer({
               }
             }}
             placeholder="Écrire un message"
-            className="max-h-36 min-h-[24px] flex-1 resize-none bg-transparent px-1 py-1.5 text-[15px] leading-5 text-[#111b21] outline-none placeholder:text-[#667781]"
+            className="max-h-36 min-h-[24px] flex-1 resize-none bg-transparent px-1 py-1.5 text-[15px] leading-5 text-(--wa-text) outline-none placeholder:text-(--wa-muted)"
           />
           {onAttach && (
             <>
@@ -870,7 +944,7 @@ function Composer({
                 disabled={uploading}
                 title="Joindre un fichier"
                 aria-label="Joindre un fichier"
-                className="flex size-9 shrink-0 items-center justify-center rounded-full text-[#54656f] hover:bg-black/5"
+                className="flex size-9 shrink-0 items-center justify-center rounded-full text-(--wa-icon) hover:bg-black/5"
               >
                 {uploading ? <Loader2 className="size-5 animate-spin" /> : <Paperclip className="size-5" />}
               </button>
@@ -924,14 +998,14 @@ function LinkEntityButton({ onPick }: { onPick: (link: ChatMessage["linkedEntity
             onClick={() => loadOptions(type)}
             title="Lier un projet, un lead ou un devis"
             aria-label="Lier un projet, un lead ou un devis"
-            className="flex size-9 shrink-0 items-center justify-center rounded-full text-[#54656f] hover:bg-black/5"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full text-(--wa-icon) hover:bg-black/5"
           >
             <Link2 className="size-5" />
           </button>
         }
       />
-      <PopoverContent className="w-72 p-2" align="start">
-        <div className="mb-2 flex gap-1 rounded-full bg-[#f0f2f5] p-0.5">
+      <PopoverContent className="wa bg-(--wa-surface) w-72 p-2" align="start">
+        <div className="mb-2 flex gap-1 rounded-full bg-(--wa-panel) p-0.5">
           {(Object.keys(LINKED_ENTITY_META) as LinkedEntityType[]).map((t) => (
             <button
               key={t}
@@ -940,21 +1014,21 @@ function LinkEntityButton({ onPick }: { onPick: (link: ChatMessage["linkedEntity
                 setType(t);
                 loadOptions(t);
               }}
-              className={cn("flex-1 rounded-full py-1 text-xs font-medium", type === t ? "bg-white text-[#008069] shadow-sm" : "text-[#54656f]")}
+              className={cn("flex-1 rounded-full py-1 text-xs font-medium", type === t ? "bg-(--wa-surface) text-(--wa-accent) shadow-sm" : "text-(--wa-icon)")}
             >
               {LINKED_ENTITY_META[t].label}
             </button>
           ))}
         </div>
         <div className="max-h-56 overflow-y-auto">
-          {loading && <Loader2 className="mx-auto my-3 size-4 animate-spin text-[#667781]" />}
-          {!loading && options.length === 0 && <p className="p-2 text-xs text-[#667781]">Rien à afficher.</p>}
+          {loading && <Loader2 className="mx-auto my-3 size-4 animate-spin text-(--wa-muted)" />}
+          {!loading && options.length === 0 && <p className="p-2 text-xs text-(--wa-muted)">Rien à afficher.</p>}
           {options.map((opt) => (
             <button
               key={opt.id}
               type="button"
               onClick={() => onPick({ type, id: opt.id, label: opt.label })}
-              className="block w-full truncate rounded-md px-2.5 py-1.5 text-left text-sm text-[#111b21] hover:bg-[#f5f6f6]"
+              className="block w-full truncate rounded-md px-2.5 py-1.5 text-left text-sm text-(--wa-text) hover:bg-(--wa-hover)"
             >
               {opt.label}
             </button>
@@ -987,29 +1061,29 @@ function NewChatPanel({
     .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`));
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-white">
-      <header className="flex h-[108px] shrink-0 items-end gap-4 bg-[#008069] px-4 pb-4 text-white">
+    <div className="absolute inset-0 z-30 flex flex-col bg-(--wa-surface)">
+      <header className="flex h-[108px] shrink-0 items-end gap-4 bg-(--wa-accent) px-4 pb-4 text-white">
         <button type="button" onClick={onClose} aria-label="Retour" className="flex size-8 items-center justify-center rounded-full hover:bg-white/10">
           <ArrowLeft className="size-5" />
         </button>
         <p className="text-lg font-medium">Nouvelle discussion</p>
       </header>
       <div className="shrink-0 px-3 py-2">
-        <label className="flex items-center gap-3 rounded-lg bg-[#f0f2f5] px-3 py-2">
-          <Search className="size-4 shrink-0 text-[#54656f]" />
+        <label className="flex items-center gap-3 rounded-lg bg-(--wa-panel) px-3 py-2">
+          <Search className="size-4 shrink-0 text-(--wa-icon)" />
           <input
             autoFocus
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Rechercher un collègue"
-            className="w-full min-w-0 bg-transparent text-sm text-[#111b21] outline-none placeholder:text-[#667781]"
+            className="w-full min-w-0 bg-transparent text-sm text-(--wa-text) outline-none placeholder:text-(--wa-muted)"
           />
         </label>
       </div>
-      <p className="px-6 py-3 text-sm text-[#008069]">Collègues</p>
+      <p className="px-6 py-3 text-sm text-(--wa-accent)">Collègues</p>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {profiles === null && <Loader2 className="mx-auto my-6 size-5 animate-spin text-[#667781]" />}
-        {profiles !== null && filtered.length === 0 && <p className="py-6 text-center text-sm text-[#667781]">Aucun collègue trouvé.</p>}
+        {profiles === null && <Loader2 className="mx-auto my-6 size-5 animate-spin text-(--wa-muted)" />}
+        {profiles !== null && filtered.length === 0 && <p className="py-6 text-center text-sm text-(--wa-muted)">Aucun collègue trouvé.</p>}
         {filtered.map((p) => {
           const name = `${p.firstName} ${p.lastName}`;
           return (
@@ -1017,12 +1091,12 @@ function NewChatPanel({
               key={p.uid}
               type="button"
               onClick={() => onPick(p)}
-              className="flex w-full items-center gap-3 px-3 text-left hover:bg-[#f5f6f6]"
+              className="flex w-full items-center gap-3 px-3 text-left hover:bg-(--wa-hover)"
             >
               <Avatar name={name} />
-              <span className="flex min-w-0 flex-1 flex-col border-b border-[#e9edef] py-3">
-                <span className="truncate text-[15px] text-[#111b21]">{name}</span>
-                <span className="truncate text-[13px] text-[#667781]">{p.email}</span>
+              <span className="flex min-w-0 flex-1 flex-col border-b border-(--wa-divider) py-3">
+                <span className="truncate text-[15px] text-(--wa-text)">{name}</span>
+                <span className="truncate text-[13px] text-(--wa-muted)">{p.email}</span>
               </span>
             </button>
           );

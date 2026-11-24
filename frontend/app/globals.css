@@ -234,3 +234,53 @@ html[data-admin-theme="dark"] .admin-paper {
   --color-neutral-900: oklch(0.205 0 0);
   --color-neutral-950: oklch(0.145 0 0);
 }
+
+/* Messagerie : palette dédiée (claire / sombre), pour garder un bon
+ * contraste quel que soit le thème de l'administration. */
+.wa {
+  --wa-text: #111b21;
+  --wa-title: #41525d;
+  --wa-icon: #54656f;
+  --wa-muted: #667781;
+  --wa-panel: #f0f2f5;
+  --wa-surface: #ffffff;
+  --wa-hover: #f5f6f6;
+  --wa-divider: #e9edef;
+  --wa-border: #d1d7db;
+  --wa-chat-bg: #efeae2;
+  --wa-in: #ffffff;
+  --wa-out: #d9fdd3;
+  --wa-out-inner: #c8f0c0;
+  --wa-in-inner: #f5f6f6;
+  --wa-avatar: #dfe5e7;
+  --wa-notice: #fff5c4;
+  --wa-accent: #008069;
+  --wa-chip: #d9fdd3;
+  --wa-dot: rgba(0, 0, 0, 0.035);
+}
+html[data-admin-theme="dark"] .wa {
+  --wa-text: #e9edef;
+  --wa-title: #e9edef;
+  --wa-icon: #aebac1;
+  --wa-muted: #8696a0;
+  --wa-panel: #202c33;
+  --wa-surface: #111b21;
+  --wa-hover: #2a3942;
+  --wa-divider: #222d34;
+  --wa-border: #313d45;
+  --wa-chat-bg: #0b141a;
+  --wa-in: #202c33;
+  --wa-out: #005c4b;
+  --wa-out-inner: #025144;
+  --wa-in-inner: #2a3942;
+  --wa-avatar: #2a3942;
+  --wa-notice: #182229;
+  --wa-accent: #00a884;
+  --wa-chip: #0a332c;
+  --wa-dot: rgba(255, 255, 255, 0.04);
+}
+.wa-wallpaper {
+  background-color: var(--wa-chat-bg);
+  background-image: radial-gradient(var(--wa-dot) 1.5px, transparent 1.5px);
+  background-size: 22px 22px;
+}

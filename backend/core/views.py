@@ -197,6 +197,25 @@ def _can_access_room(user, room_id: str) -> bool:
 CHAT_ROOM_FOLDERS_SINCE = datetime(2026, 11, 17, tzinfo=dt_timezone.utc)
 
 
+class ChatRoomReadView(APIView):
+    """Marque le salon comme lu par l'appelant et met à jour l'aperçu du
+    dernier message (appelé à l'ouverture d'une discussion, à la réception
+    d'un message pendant qu'elle est ouverte, et après un envoi)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, room_id):
+        from core import firestore_client
+        if not _can_access_room(request.user, room_id):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        try:
+            firestore_client.sync_chat_room_activity(room_id, request.user.firebase_uid)
+        except Exception:
+            logger.exception('Lecture du salon %s non enregistrée', room_id)
+            return Response(status=status.HTTP_502_BAD_GATEWAY)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class ChatAttachmentLinkView(APIView):
     """Lien frais (1 h) vers la pièce jointe d'un message, pour un membre du
     salon. La pièce est lue dans le message Firestore lui-même (jamais un
