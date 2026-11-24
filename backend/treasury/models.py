@@ -24,7 +24,9 @@ class CashEntry(LoggedModel):
         # Entrées
         CLIENT_ESPECES = 'CLIENT_ESPECES', 'Client paie en espèces'
         RETRAIT_BANQUE = 'RETRAIT_BANQUE', 'Retrait compte bancaire'
+        CONVERSION_APPORT_CAPITAL = 'CONVERSION_APPORT_CAPITAL', "Conversion d'apport capital en liquidité de caisse"
         # Sorties
+        RETOUR_APPORT_CAPITAL = 'RETOUR_APPORT_CAPITAL', "Retour de la caisse vers l'apport capital"
         DEPOT_BANQUE = 'DEPOT_BANQUE', 'Dépôt espèces → banque'
         DEPENSE_OPERATIONNELLE = 'DEPENSE_OPERATIONNELLE', 'Dépense opérationnelle'
         FOURNISSEUR_ESPECES = 'FOURNISSEUR_ESPECES', 'Paiement fournisseur en espèces'

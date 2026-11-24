@@ -1,5 +1,5 @@
 from rest_framework import viewsets, status, permissions
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from django.utils import timezone
 from django.http import FileResponse
@@ -35,6 +35,14 @@ class IsCaissierFinanceOrAdmin(permissions.BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
         return has_role(request.user, ROLE_CAISSIER, ROLE_COMPTABLE, ROLE_SUPER_ADMIN)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated, IsCaissierFinanceOrAdmin])
+def capital_liquidity_view(request):
+    """Suivi de l'apport capital converti en liquidité de caisse."""
+    from treasury.capital_liquidity import capital_liquidity
+    return Response({k: str(v) for k, v in capital_liquidity().items()})
 
 
 class CashEntryViewSet(viewsets.ModelViewSet):

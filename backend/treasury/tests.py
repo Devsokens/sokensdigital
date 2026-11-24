@@ -337,3 +337,47 @@ class TreasuryFullWorkflowIntegrationTest(TreasuryTestBase):
             f'/api/v1/treasury/cash-entries/{entry.id}/', {'amount': '1'}, format='json',
         )
         self.assertEqual(response.status_code, 400)
+
+
+class CapitalLiquidityTests(TreasuryTestBase):
+    """Conversion d'apport capital en liquidité de caisse, et retour."""
+
+    URL = '/api/v1/treasury/cash-entries/'
+
+    def setUp(self):
+        super().setUp()
+        CapitalContribution.objects.create(amount=Decimal('1000000'), status=CapitalContribution.Status.VALIDEE)
+
+    def _post(self, type_, source, amount):
+        return self.client_cfo.post(self.URL, {
+            'type': type_, 'source': source, 'amount': str(amount), 'date': '2026-08-10',
+        }, format='json')
+
+    def test_convert_spend_and_return_keep_capital(self):
+        res = self._post('ENTREE', 'CONVERSION_APPORT_CAPITAL', 400000)
+        self.assertEqual(res.status_code, 201, res.content)
+        state = self.client_cfo.get('/api/v1/treasury/capital-liquidity/').json()
+        self.assertEqual(Decimal(state['available']), Decimal('600000'))
+        self.assertEqual(Decimal(state['in_cash']), Decimal('400000'))
+        self.assertEqual(Decimal(state['capital_contributed']), Decimal('1000000'))
+        # Charges réglées en espèces avec ces fonds.
+        self.assertEqual(self._post('SORTIE', 'DEPENSE_OPERATIONNELLE', 150000).status_code, 201)
+        # Retour limité au converti encore en caisse et au solde réel (250 000).
+        self.assertEqual(self._post('SORTIE', 'RETOUR_APPORT_CAPITAL', 300000).status_code, 400)
+        self.assertEqual(self._post('SORTIE', 'RETOUR_APPORT_CAPITAL', 250000).status_code, 201)
+        state = self.client_cfo.get('/api/v1/treasury/capital-liquidity/').json()
+        self.assertEqual(Decimal(state['available']), Decimal('850000'))
+        self.assertEqual(Decimal(state['capital_contributed']), Decimal('1000000'))
+
+    def test_conversion_cannot_exceed_available_capital_and_type_is_checked(self):
+        self.assertEqual(self._post('ENTREE', 'CONVERSION_APPORT_CAPITAL', 1000001).status_code, 400)
+        self.assertEqual(self._post('SORTIE', 'CONVERSION_APPORT_CAPITAL', 1000).status_code, 400)
+
+    def test_reconciled_conversion_posts_cash_and_bank_never_capital(self):
+        entry = CashEntry.objects.create(type='ENTREE', source='CONVERSION_APPORT_CAPITAL', amount=Decimal('5000'),
+                                         date='2026-08-10', reconciled_at='2026-08-10T10:00:00Z')
+        post_cash_entry_journal_entry.apply(args=(str(entry.id),))
+        journal = JournalEntry.objects.get(label__contains='Conversion')
+        codes = set(journal.lines.values_list('account__code', flat=True))
+        self.assertNotIn('101', codes)
+        self.assertEqual(len(codes), 2)

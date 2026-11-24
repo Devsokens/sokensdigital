@@ -46,6 +46,32 @@ class CashEntrySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Le montant doit être positif.')
         return value
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        from treasury.capital_liquidity import capital_liquidity
+        entry_type = attrs.get('type', getattr(self.instance, 'type', None))
+        source = attrs.get('source', getattr(self.instance, 'source', None))
+        amount = attrs.get('amount', getattr(self.instance, 'amount', None))
+        S = CashEntry.Source
+        if source == S.CONVERSION_APPORT_CAPITAL and entry_type != CashEntry.Type.ENTREE:
+            raise serializers.ValidationError({'source': "La conversion d'apport capital est une entrée de caisse."})
+        if source == S.RETOUR_APPORT_CAPITAL and entry_type != CashEntry.Type.SORTIE:
+            raise serializers.ValidationError({'source': "Le retour vers l'apport capital est une sortie de caisse."})
+        if source in (S.CONVERSION_APPORT_CAPITAL, S.RETOUR_APPORT_CAPITAL) and amount:
+            state = capital_liquidity(exclude_entry_id=getattr(self.instance, 'pk', None))
+            if source == S.CONVERSION_APPORT_CAPITAL and amount > state['available']:
+                raise serializers.ValidationError({'amount': (
+                    f"Montant supérieur à l'apport capital disponible ({state['available']:,.0f} FCFA)."
+                ).replace(',', ' ')})
+            if source == S.RETOUR_APPORT_CAPITAL:
+                limit = min(state['in_cash'], state['cash_balance'])
+                if amount > limit:
+                    raise serializers.ValidationError({'amount': (
+                        f"Retour limité à {max(limit, 0):,.0f} FCFA (montant converti encore en caisse, "
+                        f"dans la limite du solde de caisse)."
+                    ).replace(',', ' ')})
+        return attrs
+
     def validate_disbursement(self, value):
         if value is None:
             return value

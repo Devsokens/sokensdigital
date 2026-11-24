@@ -1127,7 +1127,8 @@ export interface SupplierInvoice {
 
 export type CashEntryType = "ENTREE" | "SORTIE";
 export type CashEntrySource =
-  | "CLIENT_ESPECES" | "RETRAIT_BANQUE" | "DEPOT_BANQUE" | "DEPENSE_OPERATIONNELLE" | "FOURNISSEUR_ESPECES";
+  | "CLIENT_ESPECES" | "RETRAIT_BANQUE" | "DEPOT_BANQUE" | "DEPENSE_OPERATIONNELLE" | "FOURNISSEUR_ESPECES"
+  | "CONVERSION_APPORT_CAPITAL" | "RETOUR_APPORT_CAPITAL";
 
 export interface CashEntry {
   id: string;

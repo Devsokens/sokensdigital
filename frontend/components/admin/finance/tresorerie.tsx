@@ -15,6 +15,7 @@ import {
   listBankEntries, createBankEntry, reconcileBankEntry,
   listCapitalContributions, createCapitalContribution, validateCapitalContribution,
   submitCapitalContributionForLegalRegistration, postCapitalContributionJournalEntry,
+  getCapitalLiquidity, type CapitalLiquidity,
 } from "@/lib/api/treasury";
 import type {
   BankEntry, BankEntrySource, CapitalContribution,
@@ -63,6 +64,8 @@ const CASH_SOURCE_LABELS: Record<CashEntrySource, string> = {
   DEPOT_BANQUE: "Dépôt espèces → banque",
   DEPENSE_OPERATIONNELLE: "Dépense opérationnelle",
   FOURNISSEUR_ESPECES: "Paiement fournisseur en espèces",
+  CONVERSION_APPORT_CAPITAL: "Conversion d'apport capital en liquidité de caisse",
+  RETOUR_APPORT_CAPITAL: "Retour de la caisse vers l'apport capital",
 };
 
 function CaissePanel() {
@@ -200,7 +203,19 @@ function CashEntryForm({ onSaved }: { onSaved: () => void }) {
   const [saving, setSaving] = useState(false);
 
   const sourcesForType: CashEntrySource[] =
-    type === "ENTREE" ? ["CLIENT_ESPECES", "RETRAIT_BANQUE"] : ["DEPOT_BANQUE", "DEPENSE_OPERATIONNELLE", "FOURNISSEUR_ESPECES"];
+    type === "ENTREE"
+      ? ["CLIENT_ESPECES", "RETRAIT_BANQUE", "CONVERSION_APPORT_CAPITAL"]
+      : ["DEPOT_BANQUE", "DEPENSE_OPERATIONNELLE", "FOURNISSEUR_ESPECES", "RETOUR_APPORT_CAPITAL"];
+  const isCapitalMove = source === "CONVERSION_APPORT_CAPITAL" || source === "RETOUR_APPORT_CAPITAL";
+  const [capital, setCapital] = useState<CapitalLiquidity | null>(null);
+  useEffect(() => {
+    if (isCapitalMove) getCapitalLiquidity().then(setCapital).catch(() => setCapital(null));
+  }, [isCapitalMove]);
+  const capitalLimit = capital
+    ? source === "CONVERSION_APPORT_CAPITAL"
+      ? Number(capital.available)
+      : Math.max(0, Math.min(Number(capital.in_cash), Number(capital.cash_balance)))
+    : null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -209,8 +224,10 @@ function CashEntryForm({ onSaved }: { onSaved: () => void }) {
     try {
       await createCashEntry({ type, source, amount, date, description });
       onSaved();
-    } catch {
-      setError("Impossible de créer la pièce de caisse.");
+    } catch (err) {
+      const body = (err as { body?: Record<string, unknown> })?.body;
+      const first = body && Object.values(body)[0];
+      setError(Array.isArray(first) && typeof first[0] === "string" ? first[0] : "Impossible de créer la pièce de caisse.");
     } finally {
       setSaving(false);
     }
@@ -232,6 +249,21 @@ function CashEntryForm({ onSaved }: { onSaved: () => void }) {
           {sourcesForType.map((s) => <option key={s} value={s}>{CASH_SOURCE_LABELS[s]}</option>)}
         </select>
       </label>
+      {isCapitalMove && (
+        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3.5 py-2.5 text-xs text-sky-900">
+          {source === "CONVERSION_APPORT_CAPITAL"
+            ? "Les fonds de l'apport capital passent en caisse pour régler les charges en espèces. Le capital social n'est pas modifié."
+            : "Les espèces non utilisées retournent vers l'apport capital, qui redevient disponible."}
+          {capital && (
+            <span className="mt-1.5 block font-semibold">
+              {source === "CONVERSION_APPORT_CAPITAL"
+                ? `Apport disponible à convertir : ${Math.round(Number(capital.available)).toLocaleString("fr-FR")} FCFA`
+                : `Retour possible : ${Math.round(capitalLimit ?? 0).toLocaleString("fr-FR")} FCFA (converti encore en caisse : ${Math.round(Number(capital.in_cash)).toLocaleString("fr-FR")} FCFA)`}
+              {" · "}Capital apporté : {Math.round(Number(capital.capital_contributed)).toLocaleString("fr-FR")} FCFA
+            </span>
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className={labelClass}>Montant (FCFA)</span>

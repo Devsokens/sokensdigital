@@ -50,11 +50,22 @@ def post_cash_entry_journal_entry(self, cash_entry_id):
                     {'account': account_cash, 'label': 'Retrait espèces banque', 'debit': entry.amount, 'credit': Decimal('0')},
                     {'account': account_bank, 'label': 'Retrait compte bancaire', 'debit': Decimal('0'), 'credit': entry.amount},
                 ]
+            elif entry.source == CashEntry.Source.CONVERSION_APPORT_CAPITAL:
+                # Fonds de l'apport (banque) mis en caisse ; capital (101) inchangé.
+                lines = [
+                    {'account': account_cash, 'label': "Conversion d'apport capital en caisse", 'debit': entry.amount, 'credit': Decimal('0')},
+                    {'account': account_bank, 'label': 'Fonds apport capital vers caisse', 'debit': Decimal('0'), 'credit': entry.amount},
+                ]
         else:  # SORTIE
             if entry.source == CashEntry.Source.DEPOT_BANQUE:
                 lines = [
                     {'account': account_bank, 'label': 'Dépôt espèces caisse', 'debit': entry.amount, 'credit': Decimal('0')},
                     {'account': account_cash, 'label': 'Dépôt à la banque', 'debit': Decimal('0'), 'credit': entry.amount},
+                ]
+            elif entry.source == CashEntry.Source.RETOUR_APPORT_CAPITAL:
+                lines = [
+                    {'account': account_bank, 'label': "Retour vers l'apport capital", 'debit': entry.amount, 'credit': Decimal('0')},
+                    {'account': account_cash, 'label': 'Sortie caisse vers apport capital', 'debit': Decimal('0'), 'credit': entry.amount},
                 ]
             elif entry.source == CashEntry.Source.FOURNISSEUR_ESPECES:
                 account_supplier = get_or_create_account(settings.default_supplier_account_code, 'Fournisseurs', Account.AccountClass.PASSIF)

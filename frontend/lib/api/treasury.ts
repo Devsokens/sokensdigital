@@ -19,6 +19,20 @@ export interface CashEntryInput {
   description?: string;
 }
 
+/** Apport capital converti en liquidité de caisse (le capital social reste inchangé). */
+export interface CapitalLiquidity {
+  capital_contributed: string;
+  converted: string;
+  returned: string;
+  available: string;
+  in_cash: string;
+  cash_balance: string;
+}
+
+export function getCapitalLiquidity() {
+  return apiFetch<CapitalLiquidity>("/api/v1/treasury/capital-liquidity/");
+}
+
 export function createCashEntry(data: CashEntryInput) {
   return apiFetch<CashEntry>("/api/v1/treasury/cash-entries/", {
     method: "POST",

@@ -5,6 +5,7 @@ from treasury.views import (
     BankEntryViewSet,
     CapitalContributionViewSet,
     DisbursementRequestPDFViewSet,
+    capital_liquidity_view,
 )
 
 router = DefaultRouter()
@@ -16,5 +17,6 @@ router.register(r'disbursement-pdf', DisbursementRequestPDFViewSet, basename='di
 app_name = 'treasury'
 
 urlpatterns = [
+    path('capital-liquidity/', capital_liquidity_view, name='capital-liquidity'),
     path('', include(router.urls)),
 ]
