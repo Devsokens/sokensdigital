@@ -1,21 +1,25 @@
 "use client";
 
 import { openChatAttachment } from "@/lib/api/upload";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import {
-  ChevronLeft,
+  ArrowLeft,
   Building2,
+  Check,
+  CheckCheck,
+  CornerUpLeft,
   FileText,
   FolderKanban,
   Globe,
+  Link2,
   Loader2,
-  MessageSquare,
+  MessageSquarePlus,
+  MoreVertical,
   Paperclip,
   Pin,
-  Plus,
   Search,
-  Send,
+  SendHorizontal,
   Smile,
   Target,
   X,
@@ -33,29 +37,46 @@ import {
 } from "@/lib/firebase/chat";
 import { listProfiles } from "@/lib/firebase/profile";
 import { profileRoles, type ChatMessage, type ChatRoom, type LinkedEntityType, type Profile } from "@/lib/firebase/types";
-import { inputClass } from "@/components/admin/form-styles";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Sheet, SheetTrigger, SheetContent } from "@/components/ui/sheet";
 import { listProjects } from "@/lib/api/projects";
 import { listLeads, listQuotes } from "@/lib/api/marketing";
+
+/* Messagerie au format des applications de messagerie mobiles :
+ * - liste des discussions à gauche (plein écran sur mobile), filtres en
+ *   pastilles, recherche ;
+ * - conversation à droite : en-tête avec avatar, fond texturé, bulles
+ *   (les miennes à droite en vert clair, les autres à gauche en blanc),
+ *   heure dans la bulle, séparateurs de jour, barre de saisie arrondie avec
+ *   bouton d'envoi rond ;
+ * - réponses en fil, réactions et épingles conservées. */
 
 const ROOM_TYPE_ICON: Record<ChatRoom["roomType"], React.ComponentType<{ className?: string }>> = {
   COMPANY: Globe,
   DEPARTMENT: Building2,
   PROJECT: FolderKanban,
-  DIRECT: MessageSquare,
+  DIRECT: MessageSquarePlus,
 };
 
 const ROOM_TYPE_LABEL: Record<ChatRoom["roomType"], string> = {
-  COMPANY: "Entreprise",
-  DEPARTMENT: "Département",
-  PROJECT: "Projets",
-  DIRECT: "Direct",
+  COMPANY: "Annonces de l'entreprise",
+  DEPARTMENT: "Groupe du département",
+  PROJECT: "Groupe projet",
+  DIRECT: "Discussion privée",
 };
 
-const ROOM_TYPE_ORDER: ChatRoom["roomType"][] = ["COMPANY", "DEPARTMENT", "PROJECT"];
+type Filter = "ALL" | "GROUPS" | "DIRECT";
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: "ALL", label: "Toutes" },
+  { key: "GROUPS", label: "Groupes" },
+  { key: "DIRECT", label: "Privées" },
+];
 
-const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "👀", "✅"];
+const ROOM_ORDER: Record<ChatRoom["roomType"], number> = { COMPANY: 0, DEPARTMENT: 1, PROJECT: 2, DIRECT: 3 };
+
+const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "🙏", "✅"];
+
+// Couleurs de nom d'auteur dans les groupes (stables par personne).
+const AUTHOR_COLORS = ["text-emerald-700", "text-sky-700", "text-violet-700", "text-rose-700", "text-amber-700", "text-teal-700", "text-indigo-700", "text-fuchsia-700"];
 
 const LINKED_ENTITY_META: Record<LinkedEntityType, { label: string; icon: React.ComponentType<{ className?: string }>; href: (id: string) => string }> = {
   project: { label: "Projet", icon: FolderKanban, href: (id) => `/admin/technique/projets/${id}` },
@@ -68,18 +89,10 @@ function initials(name: string) {
   return `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase() || "?";
 }
 
-function formatTime(value: unknown) {
-  const d = toDate(value);
-  return d ? d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "";
-}
-
-function formatDay(value: unknown) {
-  const d = toDate(value);
-  if (!d) return "";
-  const today = new Date();
-  const isToday = d.toDateString() === today.toDateString();
-  if (isToday) return "Aujourd'hui";
-  return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+function hash(value: string) {
+  let h = 0;
+  for (let i = 0; i < value.length; i++) h = (h * 31 + value.charCodeAt(i)) | 0;
+  return Math.abs(h);
 }
 
 function toDate(value: unknown): Date | null {
@@ -89,55 +102,112 @@ function toDate(value: unknown): Date | null {
   return null;
 }
 
+function formatTime(value: unknown) {
+  const d = toDate(value);
+  return d ? d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "";
+}
+
+function formatDay(value: unknown) {
+  const d = toDate(value);
+  if (!d) return "";
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return "Aujourd'hui";
+  if (d.toDateString() === yesterday.toDateString()) return "Hier";
+  return d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+}
+
+// Fond texturé discret de la conversation (motif SVG, aucun fichier externe).
+const WALLPAPER =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='%23000' fill-opacity='0.035'%3E%3Ccircle cx='10' cy='10' r='2'/%3E%3Ccircle cx='50' cy='30' r='1.5'/%3E%3Cpath d='M30 60h6v2h-6zM62 64l4 4-1.4 1.4-4-4z'/%3E%3Crect x='64' y='8' width='5' height='5' rx='1'/%3E%3C/g%3E%3C/svg%3E\")";
+
+function Avatar({ name, room, size = "md" }: { name: string; room?: ChatRoom; size?: "sm" | "md" | "lg" }) {
+  const Icon = room && room.roomType !== "DIRECT" ? ROOM_TYPE_ICON[room.roomType] : null;
+  const palette = ["bg-emerald-600", "bg-sky-600", "bg-violet-600", "bg-rose-600", "bg-amber-600", "bg-teal-600", "bg-indigo-600"];
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-full font-semibold text-white",
+        size === "sm" && "size-8 text-[11px]",
+        size === "md" && "size-12 text-sm",
+        size === "lg" && "size-10 text-sm",
+        Icon ? "bg-[#dfe5e7] text-[#54656f]" : palette[hash(name) % palette.length],
+      )}
+    >
+      {Icon ? <Icon className={size === "md" ? "size-5" : "size-4"} /> : initials(name)}
+    </span>
+  );
+}
+
 export function Chat() {
   const { user, profile } = useAuth();
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
-  const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [sidebarTab, setSidebarTab] = useState<"rooms" | "direct">("rooms");
+  const [chosenRoomId, setActiveRoomId] = useState<string | null>(null);
+  const [roomMessages, setRoomMessages] = useState<{ roomId: string | null; list: ChatMessage[] }>({ roomId: null, list: [] });
+  const [filter, setFilter] = useState<Filter>("ALL");
   const [search, setSearch] = useState("");
-  const [threadRootId, setThreadRootId] = useState<string | null>(null);
+  const [thread, setThread] = useState<{ roomId: string | null; id: string } | null>(null);
   const [pendingAttachment, setPendingAttachment] = useState<ChatMessage["attachment"]>(null);
   const [pendingLink, setPendingLink] = useState<ChatMessage["linkedEntity"]>(null);
+  const [newChatOpen, setNewChatOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Sur ordinateur, une conversation est ouverte d'office ; sur mobile, on
+  // commence par la liste (comme une application de messagerie).
+  const desktop = useSyncExternalStore(
+    (cb) => {
+      const mq = window.matchMedia("(min-width: 1024px)");
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    () => window.matchMedia("(min-width: 1024px)").matches,
+    () => false,
+  );
 
   useEffect(() => {
     if (!user) return;
     return subscribeToRooms(
       { departmentId: profile?.departmentId ?? null, uid: user.uid },
-      (nextRooms) => {
-        setRooms(nextRooms);
-        setActiveRoomId((current) => current ?? nextRooms.find((r) => r.roomType !== "DIRECT")?.id ?? nextRooms[0]?.id ?? null);
-      }
+      (nextRooms) => setRooms(nextRooms),
     );
   }, [user, profile?.departmentId]);
 
+  const activeRoomId =
+    chosenRoomId ?? (desktop && rooms.length > 0 ? rooms.find((r) => r.roomType !== "DIRECT")?.id ?? rooms[0].id : null);
+
   useEffect(() => {
-    setThreadRootId(null);
-    if (!activeRoomId) {
-      setMessages([]);
-      return;
-    }
-    return subscribeToMessages(activeRoomId, setMessages);
+    if (!activeRoomId) return;
+    return subscribeToMessages(activeRoomId, (list) => setRoomMessages({ roomId: activeRoomId, list }));
   }, [activeRoomId]);
 
+  // Messages et fil ouvert n'appartiennent qu'au salon affiché.
+  const messages = useMemo(() => (roomMessages.roomId === activeRoomId ? roomMessages.list : []), [roomMessages, activeRoomId]);
+  const threadRootId = thread && thread.roomId === activeRoomId ? thread.id : null;
+  const setThreadRootId = (id: string | null) => setThread(id ? { roomId: activeRoomId, id } : null);
+
   useEffect(() => {
-    if (!threadRootId) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!threadRootId) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, threadRootId]);
 
-  const groupedRooms = useMemo(() => {
-    return ROOM_TYPE_ORDER.map((roomType) => ({
-      roomType,
-      rooms: rooms.filter((room) => room.roomType === roomType && matchesSearch(room, search, user?.uid)),
-    })).filter((group) => group.rooms.length > 0);
-  }, [rooms, search, user?.uid]);
+  function roomDisplayName(room: ChatRoom) {
+    if (room.roomType === "DIRECT" && user) {
+      const otherUid = room.memberUids?.find((uid) => uid !== user.uid);
+      return (otherUid && room.participantNames?.[otherUid]) || "Conversation";
+    }
+    return room.name;
+  }
 
-  const directRooms = useMemo(
-    () => rooms.filter((room) => room.roomType === "DIRECT" && matchesSearch(room, search, user?.uid)),
-    [rooms, search, user?.uid]
-  );
+  const visibleRooms = useMemo(() => {
+    return rooms
+      .filter((room) => (filter === "ALL" ? true : filter === "DIRECT" ? room.roomType === "DIRECT" : room.roomType !== "DIRECT"))
+      .filter((room) => matchesSearch(room, search, user?.uid))
+      .sort((a, b) => ROOM_ORDER[a.roomType] - ROOM_ORDER[b.roomType] || roomDisplayName(a).localeCompare(roomDisplayName(b)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rooms, filter, search, user?.uid]);
 
   const activeRoom = rooms.find((room) => room.id === activeRoomId) ?? null;
+  const isGroup = activeRoom ? activeRoom.roomType !== "DIRECT" : false;
   const rootMessages = messages.filter((m) => !m.parentMessageId);
   const repliesOf = (id: string) => messages.filter((m) => m.parentMessageId === id);
   const threadRoot = threadRootId ? messages.find((m) => m.id === threadRootId) ?? null : null;
@@ -149,26 +219,18 @@ export function Chat() {
     activeRoom.roomType !== "COMPANY" ||
     profileRoles(profile).some((r) => r === "SUPER_ADMIN" || r === "RESPONSABLE_MARKETING_COM");
 
-  function roomDisplayName(room: ChatRoom) {
-    if (room.roomType === "DIRECT" && user) {
-      const otherUid = room.memberUids?.find((uid) => uid !== user.uid);
-      return (otherUid && room.participantNames?.[otherUid]) || "Conversation";
-    }
-    return room.name;
-  }
-
   async function handleStartDm(other: Profile & { uid: string }) {
     if (!user || !profile) return;
     const roomId = await getOrCreateDirectRoom(
       { uid: user.uid, name: `${profile.firstName} ${profile.lastName}` },
-      { uid: other.uid, name: `${other.firstName} ${other.lastName}` }
+      { uid: other.uid, name: `${other.firstName} ${other.lastName}` },
     );
-    setSidebarTab("direct");
+    setNewChatOpen(false);
     setActiveRoomId(roomId);
   }
 
   async function handleSend(text: string, parentMessageId?: string) {
-    if (!text.trim() || !activeRoomId || !user || !profile) return;
+    if ((!text.trim() && !pendingAttachment) || !activeRoomId || !user || !profile) return;
     await sendMessage(activeRoomId, {
       text: text.trim(),
       authorUid: user.uid,
@@ -194,146 +256,139 @@ export function Chat() {
     await togglePinned(activeRoomId, message.id, !message.pinned, user.uid);
   }
 
-  // `dvh` et non `vh` : la barre d'URL mobile fausse `100vh`, ce qui faisait
-  // dépasser la messagerie sous la barre de navigation. La marge basse plus
-  // généreuse sous `lg` laisse la place à celle-ci.
+  // `dvh` et non `vh` : la barre d'URL mobile fausse `100vh`.
   return (
-    <div className="flex h-[calc(100dvh-13rem-env(safe-area-inset-bottom))] min-h-[22rem] overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm sm:h-[calc(100dvh-13.5rem-env(safe-area-inset-bottom))] lg:h-[calc(100dvh-8rem)]">
-      {/* Sous `lg`, liste et conversation ne tiennent pas côte à côte :
-          312px + 340px + les messages débordaient largement d'un écran de
-          téléphone, et la page ne s'affichait qu'au prix d'un dézoom. On
-          n'en montre donc qu'une à la fois, la liste cédant la place dès
-          qu'une conversation est ouverte. */}
+    <div className="flex h-[calc(100dvh-13rem-env(safe-area-inset-bottom))] min-h-[24rem] overflow-hidden rounded-xl border border-[#d1d7db] bg-white shadow-sm sm:h-[calc(100dvh-13.5rem-env(safe-area-inset-bottom))] lg:h-[calc(100dvh-8rem)]">
+      {/* ===== Liste des discussions ===== */}
       <aside
         data-tour="module-messagerie"
         className={cn(
-          "min-h-0 flex-col border-r border-neutral-200 lg:flex lg:w-[312px] lg:shrink-0",
-          activeRoom ? "hidden" : "flex w-full"
+          "relative min-h-0 flex-col border-r border-[#d1d7db] bg-white lg:flex lg:w-[380px] lg:shrink-0",
+          activeRoom ? "hidden" : "flex w-full",
         )}
       >
-        <div className="shrink-0 p-4 pb-3">
-          <div className="mb-4 flex items-center justify-between">
-            <h1 className="text-lg font-bold text-neutral-900">Messagerie</h1>
-            <NewDmButton onPick={handleStartDm} currentUid={user?.uid} />
-          </div>
-          <div className="mb-3 flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2">
-            <Search className="size-3.5 shrink-0 text-neutral-400" />
+        <header className="flex h-16 shrink-0 items-center justify-between bg-[#f0f2f5] px-4">
+          <h1 className="text-xl font-bold text-[#111b21]">Discussions</h1>
+          <button
+            type="button"
+            onClick={() => setNewChatOpen(true)}
+            title="Nouvelle discussion"
+            aria-label="Nouvelle discussion"
+            className="flex size-10 items-center justify-center rounded-full text-[#54656f] hover:bg-black/5"
+          >
+            <MessageSquarePlus className="size-5" />
+          </button>
+        </header>
+
+        <div className="shrink-0 space-y-2 px-3 pt-2 pb-2">
+          <label className="flex items-center gap-3 rounded-lg bg-[#f0f2f5] px-3 py-2">
+            <Search className="size-4 shrink-0 text-[#54656f]" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Rechercher dans les messages"
-              className="w-full min-w-0 bg-transparent text-xs text-neutral-700 outline-none placeholder:text-neutral-400"
+              placeholder="Rechercher une discussion"
+              className="w-full min-w-0 bg-transparent text-sm text-[#111b21] outline-none placeholder:text-[#667781]"
             />
-          </div>
-          <div className="flex gap-1 rounded-lg bg-neutral-100 p-0.5">
-            <button
-              type="button"
-              onClick={() => setSidebarTab("rooms")}
-              className={cn(
-                "flex-1 rounded-md py-1.5 text-xs font-medium transition-colors",
-                sidebarTab === "rooms" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500"
-              )}
-            >
-              Salons
-            </button>
-            <button
-              type="button"
-              onClick={() => setSidebarTab("direct")}
-              className={cn(
-                "flex-1 rounded-md py-1.5 text-xs font-medium transition-colors",
-                sidebarTab === "direct" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500"
-              )}
-            >
-              Direct
-            </button>
+            {search && (
+              <button type="button" onClick={() => setSearch("")} aria-label="Effacer" className="text-[#54656f]">
+                <X className="size-4" />
+              </button>
+            )}
+          </label>
+          <div className="flex gap-2">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setFilter(f.key)}
+                className={cn(
+                  "rounded-full px-3 py-1 text-sm transition-colors",
+                  filter === f.key ? "bg-[#d9fdd3] font-medium text-[#008069]" : "bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef]",
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-          {sidebarTab === "rooms" ? (
-            <>
-              {groupedRooms.length === 0 && <p className="p-4 text-xs text-neutral-400">Aucun salon.</p>}
-              {groupedRooms.map((group) => {
-                const Icon = ROOM_TYPE_ICON[group.roomType];
-                return (
-                  <div key={group.roomType} className="py-2">
-                    <p className="px-2.5 py-1 text-[0.65rem] font-semibold tracking-wider text-neutral-400 uppercase">
-                      {ROOM_TYPE_LABEL[group.roomType]}
-                    </p>
-                    {group.rooms.map((room) => (
-                      <RoomButton
-                        key={room.id}
-                        icon={Icon}
-                        name={roomDisplayName(room)}
-                        active={room.id === activeRoomId}
-                        onClick={() => setActiveRoomId(room.id)}
-                      />
-                    ))}
-                  </div>
-                );
-              })}
-            </>
-          ) : (
-            <div className="py-2">
-              {directRooms.length === 0 && (
-                <p className="p-4 text-xs text-neutral-400">Aucune conversation directe pour l&apos;instant.</p>
-              )}
-              {directRooms.map((room) => (
-                <RoomButton
-                  key={room.id}
-                  icon={MessageSquare}
-                  name={roomDisplayName(room)}
-                  active={room.id === activeRoomId}
-                  onClick={() => setActiveRoomId(room.id)}
-                  isDirect
-                />
-              ))}
-            </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {visibleRooms.length === 0 && (
+            <p className="px-6 py-10 text-center text-sm text-[#667781]">
+              {search ? "Aucune discussion trouvée." : "Aucune discussion pour l'instant."}
+            </p>
           )}
+          {visibleRooms.map((room) => {
+            const name = roomDisplayName(room);
+            const active = room.id === activeRoomId;
+            return (
+              <button
+                key={room.id}
+                type="button"
+                onClick={() => setActiveRoomId(room.id)}
+                className={cn(
+                  "flex w-full items-center gap-3 px-3 text-left transition-colors",
+                  active ? "bg-[#f0f2f5]" : "hover:bg-[#f5f6f6]",
+                )}
+              >
+                <Avatar name={name} room={room} />
+                <span className="flex min-w-0 flex-1 flex-col border-b border-[#e9edef] py-3.5">
+                  <span className="truncate text-[15px] text-[#111b21]">{name}</span>
+                  <span className="truncate text-[13px] text-[#667781]">{ROOM_TYPE_LABEL[room.roomType]}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
+
+        {newChatOpen && (
+          <NewChatPanel currentUid={user?.uid} onClose={() => setNewChatOpen(false)} onPick={handleStartDm} />
+        )}
       </aside>
 
-      <div className={cn("min-h-0 min-w-0 flex-1 flex-col bg-white lg:flex", activeRoom ? "flex" : "hidden lg:flex")}>
+      {/* ===== Conversation ===== */}
+      <section className={cn("min-h-0 min-w-0 flex-1 flex-col lg:flex", activeRoom ? "flex" : "hidden lg:flex")}>
         {activeRoom ? (
           <>
-            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-200 px-4 py-3 lg:px-5">
-              {/* Retour à la liste — le seul chemin de sortie sur mobile,
-                  où la liste n'est plus affichée à côté. */}
+            <header className="flex h-16 shrink-0 items-center gap-3 border-l border-[#d1d7db] bg-[#f0f2f5] px-2 sm:px-4 lg:border-l-0">
               <button
                 type="button"
                 onClick={() => setActiveRoomId(null)}
-                aria-label="Retour aux conversations"
-                className="-ml-1 rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-100 lg:hidden"
+                aria-label="Retour aux discussions"
+                className="flex size-10 items-center justify-center rounded-full text-[#54656f] hover:bg-black/5 lg:hidden"
               >
-                <ChevronLeft className="size-5" />
+                <ArrowLeft className="size-5" />
               </button>
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                {(() => {
-                  const Icon = ROOM_TYPE_ICON[activeRoom.roomType];
-                  return <Icon className="size-4" />;
-                })()}
-              </span>
+              <Avatar name={roomDisplayName(activeRoom)} room={activeRoom} size="lg" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-neutral-900">{roomDisplayName(activeRoom)}</p>
-                <p className="text-xs text-neutral-400">{ROOM_TYPE_LABEL[activeRoom.roomType]}</p>
+                <p className="truncate text-[15px] font-medium text-[#111b21]">{roomDisplayName(activeRoom)}</p>
+                <p className="truncate text-xs text-[#667781]">{ROOM_TYPE_LABEL[activeRoom.roomType]}</p>
               </div>
               <Popover>
                 <PopoverTrigger
                   render={
                     <button
                       type="button"
-                      className="flex items-center gap-1.5 rounded-full border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition-colors hover:border-primary/40 hover:text-primary"
+                      title="Messages épinglés"
+                      aria-label="Messages épinglés"
+                      className="relative flex size-10 items-center justify-center rounded-full text-[#54656f] hover:bg-black/5"
                     >
-                      <Pin className="size-3.5" /> {pinnedMessages.length} épinglé{pinnedMessages.length !== 1 ? "s" : ""}
+                      <Pin className="size-5" />
+                      {pinnedMessages.length > 0 && (
+                        <span className="absolute top-1.5 right-1.5 flex size-4 items-center justify-center rounded-full bg-[#25d366] text-[9px] font-bold text-white">
+                          {pinnedMessages.length}
+                        </span>
+                      )}
                     </button>
                   }
                 />
-                <PopoverContent className="w-72 max-h-80 overflow-y-auto p-2" align="end">
-                  {pinnedMessages.length === 0 && <p className="p-3 text-xs text-neutral-400">Aucun message épinglé.</p>}
+                <PopoverContent className="max-h-80 w-72 overflow-y-auto p-2" align="end">
+                  <p className="px-2.5 pb-1 text-xs font-semibold text-[#667781]">Messages épinglés</p>
+                  {pinnedMessages.length === 0 && <p className="p-3 text-xs text-[#667781]">Aucun message épinglé.</p>}
                   {pinnedMessages.map((m) => (
-                    <div key={m.id} className="rounded-lg px-2.5 py-2 hover:bg-neutral-50">
-                      <p className="text-xs font-medium text-neutral-900">{m.authorName}</p>
-                      <p className="truncate text-xs text-neutral-500">{m.text}</p>
+                    <div key={m.id} className="rounded-lg px-2.5 py-2 hover:bg-[#f5f6f6]">
+                      <p className="text-xs font-medium text-[#111b21]">{m.authorName}</p>
+                      <p className="truncate text-xs text-[#667781]">{m.text || m.attachment?.name}</p>
                     </div>
                   ))}
                 </PopoverContent>
@@ -343,14 +398,17 @@ export function Chat() {
                   render={
                     <button
                       type="button"
-                      className="flex items-center gap-1.5 rounded-full border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 transition-colors hover:border-primary/40 hover:text-primary"
+                      title="Fichiers partagés"
+                      aria-label="Fichiers partagés"
+                      className="flex size-10 items-center justify-center rounded-full text-[#54656f] hover:bg-black/5"
                     >
-                      <Paperclip className="size-3.5" /> Fichiers
+                      <MoreVertical className="size-5" />
                     </button>
                   }
                 />
-                <PopoverContent className="w-72 max-h-80 overflow-y-auto p-2" align="end">
-                  {filesMessages.length === 0 && <p className="p-3 text-xs text-neutral-400">Aucun fichier partagé.</p>}
+                <PopoverContent className="max-h-80 w-72 overflow-y-auto p-2" align="end">
+                  <p className="px-2.5 pb-1 text-xs font-semibold text-[#667781]">Fichiers partagés</p>
+                  {filesMessages.length === 0 && <p className="p-3 text-xs text-[#667781]">Aucun fichier partagé.</p>}
                   {filesMessages.map((m) => (
                     <a
                       key={m.id}
@@ -363,35 +421,46 @@ export function Chat() {
                         e.preventDefault();
                         openChatAttachment(activeRoomId, m.id);
                       }}
-                      className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-neutral-700 hover:bg-neutral-50"
+                      className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-[#111b21] hover:bg-[#f5f6f6]"
                     >
-                      <Paperclip className="size-3.5 shrink-0 text-neutral-400" />
+                      <FileText className="size-4 shrink-0 text-[#54656f]" />
                       <span className="truncate">{m.attachment?.name}</span>
                     </a>
                   ))}
                 </PopoverContent>
               </Popover>
-            </div>
+            </header>
 
             <div className="relative flex min-h-0 flex-1 overflow-hidden">
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4 sm:px-5">
+                <div
+                  className="min-h-0 flex-1 overflow-y-auto bg-[#efeae2] px-3 py-3 sm:px-[6%]"
+                  style={{ backgroundImage: WALLPAPER }}
+                >
+                  {rootMessages.length === 0 && (
+                    <div className="mx-auto mt-6 max-w-sm rounded-lg bg-[#fff5c4] px-4 py-2.5 text-center text-xs text-[#54656f] shadow-sm">
+                      Aucun message. Écrivez le premier !
+                    </div>
+                  )}
                   {rootMessages.map((message, index) => {
-                    const prevDay = index > 0 ? formatDay(rootMessages[index - 1].createdAt) : null;
+                    const prev = index > 0 ? rootMessages[index - 1] : null;
                     const day = formatDay(message.createdAt);
+                    const newDay = !prev || formatDay(prev.createdAt) !== day;
+                    // Messages consécutifs d'une même personne : bulles groupées.
+                    const firstOfGroup = newDay || !prev || prev.authorUid !== message.authorUid;
                     return (
                       <div key={message.id}>
-                        {day !== prevDay && (
-                          <div className="my-4 flex items-center gap-3">
-                            <span className="h-px flex-1 bg-neutral-100" />
-                            <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">{day}</span>
-                            <span className="h-px flex-1 bg-neutral-100" />
+                        {newDay && day && (
+                          <div className="my-3 flex justify-center">
+                            <span className="rounded-lg bg-white px-3 py-1 text-xs text-[#54656f] shadow-sm">{day}</span>
                           </div>
                         )}
                         <MessageBubble
                           roomId={activeRoomId}
                           message={message}
                           isSelf={message.authorUid === user?.uid}
+                          showAuthor={isGroup && firstOfGroup}
+                          firstOfGroup={firstOfGroup}
                           replyCount={repliesOf(message.id).length}
                           onReact={(emoji) => handleReact(message, emoji)}
                           onPin={() => handlePin(message)}
@@ -404,7 +473,7 @@ export function Chat() {
                   <div ref={bottomRef} />
                 </div>
 
-                <div className="shrink-0 border-t border-neutral-200 p-3">
+                <footer className="shrink-0 bg-[#f0f2f5] px-2 py-2 sm:px-4">
                   {canPostInActiveRoom ? (
                     <Composer
                       roomId={activeRoomId}
@@ -415,72 +484,79 @@ export function Chat() {
                       onLink={setPendingLink}
                     />
                   ) : (
-                    <p className="text-center text-xs text-neutral-400">
-                      Seuls les annonces de la direction/marketing peuvent être publiées ici.
+                    <p className="py-2 text-center text-xs text-[#667781]">
+                      Seules la direction et l&apos;équipe Marketing &amp; Communication peuvent publier dans ce groupe.
                     </p>
                   )}
-                </div>
+                </footer>
               </div>
 
-              {/* En dessous de `lg`, le fil se superpose au lieu de prendre
-                  une troisième colonne : il n'y a pas la largeur pour trois. */}
+              {/* Fil de réponses : panneau à droite sur ordinateur, plein écran sur mobile. */}
               {threadRoot && (
-                <aside className="absolute inset-0 z-20 flex flex-col border-l border-neutral-200 bg-neutral-50/50 lg:static lg:z-auto lg:w-[340px] lg:shrink-0">
-                  <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 px-4 py-3">
-                    <div>
-                      <p className="text-sm font-semibold text-neutral-900">Fil de discussion</p>
-                      <p className="text-xs text-neutral-400">{repliesOf(threadRoot.id).length} réponse(s)</p>
-                    </div>
+                <aside className="absolute inset-0 z-20 flex flex-col bg-white lg:static lg:z-auto lg:w-[360px] lg:shrink-0 lg:border-l lg:border-[#d1d7db]">
+                  <header className="flex h-16 shrink-0 items-center gap-3 bg-[#f0f2f5] px-3">
                     <button
                       type="button"
                       onClick={() => setThreadRootId(null)}
-                      className="flex size-7 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-200 hover:text-neutral-700"
+                      aria-label="Fermer le fil"
+                      className="flex size-10 items-center justify-center rounded-full text-[#54656f] hover:bg-black/5"
                     >
-                      <X className="size-4" />
+                      <X className="size-5" />
                     </button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto px-4 py-4">
-                    <div className="rounded-xl border border-neutral-200 bg-white p-3">
+                    <div>
+                      <p className="text-[15px] font-medium text-[#111b21]">Réponses</p>
+                      <p className="text-xs text-[#667781]">{repliesOf(threadRoot.id).length} réponse(s)</p>
+                    </div>
+                  </header>
+                  <div className="min-h-0 flex-1 overflow-y-auto bg-[#efeae2] px-3 py-3" style={{ backgroundImage: WALLPAPER }}>
+                    <MessageBubble
+                      roomId={activeRoomId}
+                      message={threadRoot}
+                      isSelf={threadRoot.authorUid === user?.uid}
+                      showAuthor
+                      firstOfGroup
+                      replyCount={0}
+                      onReact={(emoji) => handleReact(threadRoot, emoji)}
+                      onPin={() => handlePin(threadRoot)}
+                      currentUid={user?.uid}
+                    />
+                    <div className="my-3 flex justify-center">
+                      <span className="rounded-lg bg-white px-3 py-1 text-xs text-[#54656f] shadow-sm">Réponses</span>
+                    </div>
+                    {repliesOf(threadRoot.id).map((reply, i, all) => (
                       <MessageBubble
+                        key={reply.id}
                         roomId={activeRoomId}
-                        message={threadRoot}
-                        isSelf={threadRoot.authorUid === user?.uid}
+                        message={reply}
+                        isSelf={reply.authorUid === user?.uid}
+                        showAuthor={isGroup && (i === 0 || all[i - 1].authorUid !== reply.authorUid)}
+                        firstOfGroup={i === 0 || all[i - 1].authorUid !== reply.authorUid}
                         replyCount={0}
-                        compact
-                        onReact={(emoji) => handleReact(threadRoot, emoji)}
-                        onPin={() => handlePin(threadRoot)}
+                        onReact={(emoji) => handleReact(reply, emoji)}
+                        onPin={() => handlePin(reply)}
                         currentUid={user?.uid}
                       />
-                    </div>
-                    <div className="mt-4 space-y-3">
-                      {repliesOf(threadRoot.id).map((reply) => (
-                        <MessageBubble
-                          key={reply.id}
-                          roomId={activeRoomId}
-                          message={reply}
-                          isSelf={reply.authorUid === user?.uid}
-                          replyCount={0}
-                          compact
-                          onReact={(emoji) => handleReact(reply, emoji)}
-                          onPin={() => handlePin(reply)}
-                          currentUid={user?.uid}
-                        />
-                      ))}
-                    </div>
+                    ))}
                   </div>
-                  <div className="shrink-0 border-t border-neutral-200 p-3">
-                    <Composer onSend={(text) => handleSend(text, threadRoot.id)} compact />
-                  </div>
+                  <footer className="shrink-0 bg-[#f0f2f5] px-2 py-2">
+                    <Composer onSend={(text) => handleSend(text, threadRoot.id)} />
+                  </footer>
                 </aside>
               )}
             </div>
           </>
         ) : (
-          <div className="flex flex-1 items-center justify-center text-sm text-neutral-400">
-            Sélectionnez un salon.
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 border-b-[6px] border-[#25d366] bg-[#f0f2f5] px-6 text-center">
+            <span className="flex size-20 items-center justify-center rounded-full bg-white text-[#54656f] shadow-sm">
+              <MessageSquarePlus className="size-9" />
+            </span>
+            <p className="text-2xl font-light text-[#41525d]">Messagerie Soken&apos;s Digital</p>
+            <p className="max-w-md text-sm text-[#667781]">
+              Choisissez une discussion à gauche, ou démarrez-en une nouvelle avec un collègue.
+            </p>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
@@ -488,198 +564,198 @@ export function Chat() {
 function matchesSearch(room: ChatRoom, search: string, uid?: string) {
   if (!search.trim()) return true;
   const q = search.trim().toLowerCase();
-  const name = room.roomType === "DIRECT" && uid
-    ? Object.entries(room.participantNames ?? {}).find(([id]) => id !== uid)?.[1] ?? ""
-    : room.name;
+  const name =
+    room.roomType === "DIRECT" && uid
+      ? Object.entries(room.participantNames ?? {}).find(([id]) => id !== uid)?.[1] ?? ""
+      : room.name;
   return name.toLowerCase().includes(q);
-}
-
-function RoomButton({
-  icon: Icon,
-  name,
-  active,
-  onClick,
-  isDirect,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  name: string;
-  active: boolean;
-  onClick: () => void;
-  isDirect?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
-        active ? "bg-primary/10 text-primary" : "text-neutral-700 hover:bg-neutral-50"
-      )}
-    >
-      {isDirect ? (
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-[10px] font-semibold text-neutral-600">
-          {initials(name)}
-        </span>
-      ) : (
-        <Icon className="size-4 shrink-0" />
-      )}
-      <span className="truncate">{name}</span>
-    </button>
-  );
 }
 
 function MessageBubble({
   roomId,
   message,
   isSelf,
+  showAuthor,
+  firstOfGroup,
   replyCount,
   onReact,
   onPin,
   onOpenThread,
   currentUid,
-  compact,
 }: {
   roomId?: string | null;
   message: ChatMessage;
   isSelf: boolean;
+  showAuthor: boolean;
+  firstOfGroup: boolean;
   replyCount: number;
   onReact: (emoji: string) => void;
   onPin: () => void;
   onOpenThread?: () => void;
   currentUid?: string;
-  compact?: boolean;
 }) {
   const linkMeta = message.linkedEntity ? LINKED_ENTITY_META[message.linkedEntity.type] : null;
   const LinkIcon = linkMeta?.icon;
+  const reactions = Object.entries(message.reactions ?? {}).filter(([, uids]) => uids.length > 0);
+  const authorColor = AUTHOR_COLORS[hash(message.authorUid || message.authorName) % AUTHOR_COLORS.length];
 
   return (
-    <div
-      className={cn(
-        "group flex gap-3 rounded-lg px-2 py-2 hover:bg-neutral-50",
-        compact && "px-0 hover:bg-transparent",
-        isSelf && !compact && "bg-primary/[0.03]"
-      )}
-    >
-      <span
-        className={cn(
-          "flex size-8 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
-          isSelf ? "bg-primary/15 text-primary" : "bg-neutral-200 text-neutral-600"
-        )}
-      >
-        {initials(message.authorName)}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="mb-0.5 flex items-baseline gap-2">
-          <span className="text-sm font-semibold text-neutral-900">
-            {message.authorName}
-            {isSelf && <span className="ml-1.5 rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500">Vous</span>}
+    <div className={cn("group flex", isSelf ? "justify-end" : "justify-start", firstOfGroup ? "mt-2" : "mt-0.5", reactions.length > 0 && "mb-3")}>
+      <div className={cn("relative flex max-w-[85%] items-center gap-1 sm:max-w-[65%]", isSelf && "flex-row-reverse")}>
+        <div
+          className={cn(
+            "relative min-w-[90px] rounded-lg px-2 pt-1.5 pb-1 shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]",
+            isSelf ? "bg-[#d9fdd3]" : "bg-white",
+            firstOfGroup && (isSelf ? "rounded-tr-none" : "rounded-tl-none"),
+          )}
+        >
+          {/* Queue de la bulle, sur le premier message d'une série. */}
+          {firstOfGroup && (
+            <span
+              aria-hidden
+              className={cn(
+                "absolute top-0 size-0 border-t-[8px] border-t-current",
+                isSelf
+                  ? "-right-2 border-r-[8px] border-r-transparent text-[#d9fdd3]"
+                  : "-left-2 border-l-[8px] border-l-transparent text-white",
+              )}
+            />
+          )}
+
+          {showAuthor && !isSelf && <p className={cn("mb-0.5 text-[13px] font-medium", authorColor)}>{message.authorName}</p>}
+
+          {message.attachment && (
+            <a
+              href={message.attachment.url}
+              target="_blank"
+              rel="noreferrer"
+              download={message.attachment.name}
+              onClick={(e) => {
+                // Lien frais à chaque ouverture : un fichier partagé ne
+                // devient jamais indisponible avec le temps.
+                if (!roomId) return;
+                e.preventDefault();
+                openChatAttachment(roomId, message.id);
+              }}
+              className={cn("mb-1 flex items-center gap-3 rounded-md px-2.5 py-2", isSelf ? "bg-[#c8f0c0]" : "bg-[#f5f6f6]")}
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded bg-white text-[#54656f]">
+                <FileText className="size-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-[#111b21]">{message.attachment.name}</span>
+                <span className="block text-[11px] text-[#667781]">{Math.max(1, Math.round(message.attachment.size / 1024))} Ko</span>
+              </span>
+            </a>
+          )}
+
+          {message.linkedEntity && linkMeta && LinkIcon && (
+            <Link
+              href={linkMeta.href(message.linkedEntity.id)}
+              className={cn("mb-1 flex items-center gap-3 rounded-md border-l-4 border-[#06cf9c] px-2.5 py-1.5", isSelf ? "bg-[#c8f0c0]" : "bg-[#f5f6f6]")}
+            >
+              <LinkIcon className="size-4 shrink-0 text-[#008069]" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[11px] font-medium text-[#008069]">{linkMeta.label}</span>
+                <span className="block truncate text-xs text-[#111b21]">{message.linkedEntity.label}</span>
+              </span>
+            </Link>
+          )}
+
+          <p className="text-[14.2px] leading-[19px] break-words whitespace-pre-wrap text-[#111b21]">
+            {message.text}
+            {/* Réserve la place de l'heure en bas à droite, comme dans une bulle de messagerie. */}
+            <span className="inline-block w-[70px]" aria-hidden />
+          </p>
+
+          <span className="absolute right-2 bottom-1 flex items-center gap-1 text-[11px] text-[#667781]">
+            {message.pinned && <Pin className="size-3 fill-current" />}
+            {formatTime(message.createdAt)}
+            {isSelf && (message.createdAt ? <CheckCheck className="size-4 text-[#53bdeb]" /> : <Check className="size-3.5" />)}
           </span>
-          <span className="text-[11px] text-neutral-400">{formatTime(message.createdAt)}</span>
-          {message.pinned && <Pin className="size-3 fill-primary text-primary" />}
+
+          {reactions.length > 0 && (
+            <div className={cn("absolute -bottom-3.5 flex gap-0.5", isSelf ? "right-2" : "left-2")}>
+              {reactions.map(([emoji, uids]) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => onReact(emoji)}
+                  className={cn(
+                    "flex items-center gap-0.5 rounded-full border bg-white px-1.5 py-0 text-xs shadow-sm",
+                    currentUid && uids.includes(currentUid) ? "border-[#25d366]" : "border-white",
+                  )}
+                >
+                  {emoji}
+                  {uids.length > 1 && <span className="text-[10px] text-[#667781]">{uids.length}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {onOpenThread && replyCount > 0 && (
+            <button
+              type="button"
+              onClick={onOpenThread}
+              className="mt-1 flex w-full items-center gap-1 border-t border-black/5 pt-1 text-xs font-medium text-[#027eb5]"
+            >
+              <CornerUpLeft className="size-3.5" />
+              {replyCount} réponse{replyCount > 1 ? "s" : ""}
+            </button>
+          )}
         </div>
-        {message.text && <p className="whitespace-pre-wrap text-sm text-neutral-800">{message.text}</p>}
 
-        {message.attachment && (
-          <a
-            href={message.attachment.url}
-            target="_blank"
-            rel="noreferrer"
-            download={message.attachment.name}
-            onClick={(e) => {
-              // Lien frais à chaque ouverture : un fichier partagé ne
-              // devient jamais indisponible avec le temps.
-              if (!roomId) return;
-              e.preventDefault();
-              openChatAttachment(roomId, message.id);
-            }}
-            className="mt-2 flex max-w-[320px] items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5"
-          >
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-neutral-500">
-              <Paperclip className="size-4" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-xs font-semibold text-neutral-900">{message.attachment.name}</span>
-              <span className="block text-[11px] text-neutral-400">{Math.round(message.attachment.size / 1024)} Ko</span>
-            </span>
-          </a>
-        )}
-
-        {message.linkedEntity && linkMeta && LinkIcon && (
-          <Link
-            href={linkMeta.href(message.linkedEntity.id)}
-            className="mt-2 flex max-w-[320px] items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 hover:border-primary/40"
-          >
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <LinkIcon className="size-4" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[10px] font-semibold uppercase tracking-wide text-neutral-400">{linkMeta.label} lié</span>
-              <span className="block truncate text-xs font-semibold text-neutral-900">{message.linkedEntity.label}</span>
-            </span>
-          </Link>
-        )}
-
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          {Object.entries(message.reactions ?? {})
-            .filter(([, uids]) => uids.length > 0)
-            .map(([emoji, uids]) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => onReact(emoji)}
-                className={cn(
-                  "flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs",
-                  currentUid && uids.includes(currentUid)
-                    ? "border-primary/40 bg-primary/10 text-primary"
-                    : "border-neutral-200 bg-white text-neutral-600"
-                )}
-              >
-                {emoji} <span>{uids.length}</span>
-              </button>
-            ))}
+        {/* Actions au survol (ordinateur) ou au toucher (mobile). */}
+        <div className="flex shrink-0 flex-col gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
           <Popover>
             <PopoverTrigger
               render={
                 <button
                   type="button"
-                  className="flex size-6 items-center justify-center rounded-full border border-dashed border-neutral-200 text-neutral-400 opacity-0 transition-opacity group-hover:opacity-100 hover:border-primary/40 hover:text-primary"
+                  aria-label="Réagir"
+                  className="flex size-7 items-center justify-center rounded-full bg-white/80 text-[#54656f] shadow-sm hover:bg-white"
                 >
-                  <Smile className="size-3.5" />
+                  <Smile className="size-4" />
                 </button>
               }
             />
-            <PopoverContent className="flex w-auto gap-1 p-1.5" align="start">
+            <PopoverContent className="flex w-auto gap-1 rounded-full p-1.5" align={isSelf ? "end" : "start"}>
               {QUICK_REACTIONS.map((emoji) => (
                 <button
                   key={emoji}
                   type="button"
                   onClick={() => onReact(emoji)}
-                  className="flex size-8 items-center justify-center rounded-lg text-lg hover:bg-neutral-100"
+                  className="flex size-9 items-center justify-center rounded-full text-xl transition-transform hover:scale-125"
                 >
                   {emoji}
                 </button>
               ))}
             </PopoverContent>
           </Popover>
-          <button
-            type="button"
-            onClick={onPin}
-            className="flex size-6 items-center justify-center rounded-full text-neutral-300 opacity-0 transition-opacity group-hover:opacity-100 hover:text-primary"
-            title={message.pinned ? "Désépingler" : "Épingler"}
-          >
-            <Pin className={cn("size-3.5", message.pinned && "fill-primary text-primary")} />
-          </button>
+          <Popover>
+            <PopoverTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Plus d'actions"
+                  className="flex size-7 items-center justify-center rounded-full bg-white/80 text-[#54656f] shadow-sm hover:bg-white"
+                >
+                  <MoreVertical className="size-4" />
+                </button>
+              }
+            />
+            <PopoverContent className="w-44 p-1" align={isSelf ? "end" : "start"}>
+              {onOpenThread && (
+                <button type="button" onClick={onOpenThread} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-[#111b21] hover:bg-[#f5f6f6]">
+                  <CornerUpLeft className="size-4 text-[#54656f]" /> Répondre
+                </button>
+              )}
+              <button type="button" onClick={onPin} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-[#111b21] hover:bg-[#f5f6f6]">
+                <Pin className="size-4 text-[#54656f]" /> {message.pinned ? "Désépingler" : "Épingler"}
+              </button>
+            </PopoverContent>
+          </Popover>
         </div>
-
-        {onOpenThread && (
-          <button
-            type="button"
-            onClick={onOpenThread}
-            className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-          >
-            <MessageSquare className="size-3.5" />
-            {replyCount > 0 ? `${replyCount} réponse${replyCount > 1 ? "s" : ""}` : "Répondre"}
-          </button>
-        )}
       </div>
     </div>
   );
@@ -691,7 +767,6 @@ function Composer({
   onAttach,
   pendingLink,
   onLink,
-  compact,
   roomId,
 }: {
   roomId?: string | null;
@@ -700,12 +775,19 @@ function Composer({
   onAttach?: (attachment: ChatMessage["attachment"]) => void;
   pendingLink?: ChatMessage["linkedEntity"];
   onLink?: (link: ChatMessage["linkedEntity"]) => void;
-  compact?: boolean;
 }) {
   const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+
+  // Zone de saisie qui grandit avec le texte (jusqu'à 6 lignes).
+  useEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 144)}px`;
+  }, [draft]);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -721,51 +803,64 @@ function Composer({
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!draft.trim()) return;
-    setSending(true);
-    try {
-      onSend(draft);
-      setDraft("");
-    } finally {
-      setSending(false);
-    }
+  function submit() {
+    if (!draft.trim() && !pendingAttachment) return;
+    onSend(draft);
+    setDraft("");
+    textRef.current?.focus();
   }
 
+  const canSend = Boolean(draft.trim() || pendingAttachment);
+
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm">
-      {pendingAttachment && (
-        <div className="flex items-center gap-2 border-b border-neutral-100 px-3 py-2 text-xs text-neutral-600">
-          <Paperclip className="size-3.5" /> {pendingAttachment.name}
-          <button type="button" onClick={() => onAttach?.(null)} className="ml-auto text-neutral-400 hover:text-destructive">
-            <X className="size-3.5" />
-          </button>
+    <div>
+      {(pendingAttachment || pendingLink) && (
+        <div className="mb-2 space-y-1">
+          {pendingAttachment && (
+            <div className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm text-[#111b21] shadow-sm">
+              <FileText className="size-4 text-[#54656f]" />
+              <span className="min-w-0 flex-1 truncate">{pendingAttachment.name}</span>
+              <button type="button" onClick={() => onAttach?.(null)} aria-label="Retirer le fichier" className="text-[#54656f] hover:text-red-600">
+                <X className="size-4" />
+              </button>
+            </div>
+          )}
+          {pendingLink && (
+            <div className="flex items-center gap-2 rounded-lg border-l-4 border-[#06cf9c] bg-white px-3 py-2 text-sm text-[#111b21] shadow-sm">
+              <Link2 className="size-4 text-[#008069]" />
+              <span className="min-w-0 flex-1 truncate">
+                {LINKED_ENTITY_META[pendingLink.type].label} : {pendingLink.label}
+              </span>
+              <button type="button" onClick={() => onLink?.(null)} aria-label="Retirer le lien" className="text-[#54656f] hover:text-red-600">
+                <X className="size-4" />
+              </button>
+            </div>
+          )}
         </div>
       )}
-      {pendingLink && (
-        <div className="flex items-center gap-2 border-b border-neutral-100 px-3 py-2 text-xs text-neutral-600">
-          {LINKED_ENTITY_META[pendingLink.type].label} : {pendingLink.label}
-          <button type="button" onClick={() => onLink?.(null)} className="ml-auto text-neutral-400 hover:text-destructive">
-            <X className="size-3.5" />
-          </button>
-        </div>
-      )}
-      <form onSubmit={handleSubmit}>
-        <textarea
-          rows={compact ? 1 : 2}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSubmit(e);
-            }
-          }}
-          placeholder="Écrire un message…"
-          className="w-full resize-none rounded-t-2xl border-0 bg-transparent px-4 py-3 text-sm text-neutral-800 outline-none placeholder:text-neutral-400"
-        />
-        <div className="flex items-center gap-1 px-2.5 pb-2.5">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+        className="flex items-end gap-2"
+      >
+        <div className="flex min-w-0 flex-1 items-end gap-1 rounded-3xl bg-white px-2 py-1.5 shadow-sm">
+          {onLink && <LinkEntityButton onPick={(link) => onLink(link)} />}
+          <textarea
+            ref={textRef}
+            rows={1}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            placeholder="Écrire un message"
+            className="max-h-36 min-h-[24px] flex-1 resize-none bg-transparent px-1 py-1.5 text-[15px] leading-5 text-[#111b21] outline-none placeholder:text-[#667781]"
+          />
           {onAttach && (
             <>
               <input ref={fileInputRef} type="file" onChange={handleFile} className="hidden" />
@@ -773,23 +868,23 @@ function Composer({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="flex size-8 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100"
                 title="Joindre un fichier"
+                aria-label="Joindre un fichier"
+                className="flex size-9 shrink-0 items-center justify-center rounded-full text-[#54656f] hover:bg-black/5"
               >
-                {uploading ? <Loader2 className="size-4 animate-spin" /> : <Paperclip className="size-4" />}
+                {uploading ? <Loader2 className="size-5 animate-spin" /> : <Paperclip className="size-5" />}
               </button>
             </>
           )}
-          {onLink && <LinkEntityButton onPick={(link) => onLink(link)} />}
-          <span className="flex-1" />
-          <button
-            type="submit"
-            disabled={sending || !draft.trim()}
-            className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity disabled:opacity-40"
-          >
-            Envoyer <Send className="size-3.5" />
-          </button>
         </div>
+        <button
+          type="submit"
+          disabled={!canSend}
+          aria-label="Envoyer"
+          className="flex size-12 shrink-0 items-center justify-center rounded-full bg-[#00a884] text-white shadow-sm transition-opacity hover:bg-[#008f6f] disabled:opacity-50"
+        >
+          <SendHorizontal className="size-5" />
+        </button>
       </form>
     </div>
   );
@@ -827,37 +922,39 @@ function LinkEntityButton({ onPick }: { onPick: (link: ChatMessage["linkedEntity
           <button
             type="button"
             onClick={() => loadOptions(type)}
-            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-neutral-500 hover:bg-neutral-100"
+            title="Lier un projet, un lead ou un devis"
+            aria-label="Lier un projet, un lead ou un devis"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full text-[#54656f] hover:bg-black/5"
           >
-            <Target className="size-3.5" /> Lier
+            <Link2 className="size-5" />
           </button>
         }
       />
-      <PopoverContent className="w-72 p-2">
-        <div className="mb-2 flex gap-1 rounded-lg bg-neutral-100 p-0.5">
+      <PopoverContent className="w-72 p-2" align="start">
+        <div className="mb-2 flex gap-1 rounded-full bg-[#f0f2f5] p-0.5">
           {(Object.keys(LINKED_ENTITY_META) as LinkedEntityType[]).map((t) => (
             <button
               key={t}
               type="button"
-              onClick={() => { setType(t); loadOptions(t); }}
-              className={cn(
-                "flex-1 rounded-md py-1 text-xs font-medium",
-                type === t ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500"
-              )}
+              onClick={() => {
+                setType(t);
+                loadOptions(t);
+              }}
+              className={cn("flex-1 rounded-full py-1 text-xs font-medium", type === t ? "bg-white text-[#008069] shadow-sm" : "text-[#54656f]")}
             >
               {LINKED_ENTITY_META[t].label}
             </button>
           ))}
         </div>
         <div className="max-h-56 overflow-y-auto">
-          {loading && <Loader2 className="mx-auto my-3 size-4 animate-spin text-neutral-400" />}
-          {!loading && options.length === 0 && <p className="p-2 text-xs text-neutral-400">Rien à afficher.</p>}
+          {loading && <Loader2 className="mx-auto my-3 size-4 animate-spin text-[#667781]" />}
+          {!loading && options.length === 0 && <p className="p-2 text-xs text-[#667781]">Rien à afficher.</p>}
           {options.map((opt) => (
             <button
               key={opt.id}
               type="button"
               onClick={() => onPick({ type, id: opt.id, label: opt.label })}
-              className="block w-full truncate rounded-lg px-2.5 py-1.5 text-left text-xs text-neutral-700 hover:bg-neutral-50"
+              className="block w-full truncate rounded-md px-2.5 py-1.5 text-left text-sm text-[#111b21] hover:bg-[#f5f6f6]"
             >
               {opt.label}
             </button>
@@ -868,64 +965,69 @@ function LinkEntityButton({ onPick }: { onPick: (link: ChatMessage["linkedEntity
   );
 }
 
-function NewDmButton({ onPick, currentUid }: { onPick: (profile: Profile & { uid: string }) => void; currentUid?: string }) {
-  const [open, setOpen] = useState(false);
+/** Nouvelle discussion : panneau qui glisse par-dessus la liste. */
+function NewChatPanel({
+  onPick,
+  onClose,
+  currentUid,
+}: {
+  onPick: (profile: Profile & { uid: string }) => void;
+  onClose: () => void;
+  currentUid?: string;
+}) {
   const [profiles, setProfiles] = useState<(Profile & { uid: string })[] | null>(null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    if (open && profiles === null) {
-      listProfiles().then(setProfiles).catch(() => setProfiles([]));
-    }
-  }, [open, profiles]);
+    listProfiles().then(setProfiles).catch(() => setProfiles([]));
+  }, []);
 
-  const filtered = (profiles ?? []).filter(
-    (p) => p.uid !== currentUid && `${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = (profiles ?? [])
+    .filter((p) => p.uid !== currentUid && `${p.firstName} ${p.lastName}`.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`));
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger
-        render={
-          <button
-            type="button"
-            title="Nouvelle conversation"
-            className="flex size-8 items-center justify-center rounded-lg border border-neutral-200 text-neutral-500 hover:border-primary/40 hover:text-primary"
-          >
-            <Plus className="size-4" />
-          </button>
-        }
-      />
-      <SheetContent title="Nouvelle conversation">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Rechercher un collègue…"
-          className={inputClass}
-        />
-        <div className="mt-4 space-y-1">
-          {profiles === null && <Loader2 className="mx-auto my-6 size-5 animate-spin text-neutral-400" />}
-          {profiles !== null && filtered.length === 0 && (
-            <p className="py-6 text-center text-sm text-neutral-400">Aucun collègue trouvé.</p>
-          )}
-          {filtered.map((p) => (
+    <div className="absolute inset-0 z-30 flex flex-col bg-white">
+      <header className="flex h-[108px] shrink-0 items-end gap-4 bg-[#008069] px-4 pb-4 text-white">
+        <button type="button" onClick={onClose} aria-label="Retour" className="flex size-8 items-center justify-center rounded-full hover:bg-white/10">
+          <ArrowLeft className="size-5" />
+        </button>
+        <p className="text-lg font-medium">Nouvelle discussion</p>
+      </header>
+      <div className="shrink-0 px-3 py-2">
+        <label className="flex items-center gap-3 rounded-lg bg-[#f0f2f5] px-3 py-2">
+          <Search className="size-4 shrink-0 text-[#54656f]" />
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Rechercher un collègue"
+            className="w-full min-w-0 bg-transparent text-sm text-[#111b21] outline-none placeholder:text-[#667781]"
+          />
+        </label>
+      </div>
+      <p className="px-6 py-3 text-sm text-[#008069]">Collègues</p>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {profiles === null && <Loader2 className="mx-auto my-6 size-5 animate-spin text-[#667781]" />}
+        {profiles !== null && filtered.length === 0 && <p className="py-6 text-center text-sm text-[#667781]">Aucun collègue trouvé.</p>}
+        {filtered.map((p) => {
+          const name = `${p.firstName} ${p.lastName}`;
+          return (
             <button
               key={p.uid}
               type="button"
-              onClick={() => { onPick(p); setOpen(false); }}
-              className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-neutral-50"
+              onClick={() => onPick(p)}
+              className="flex w-full items-center gap-3 px-3 text-left hover:bg-[#f5f6f6]"
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-xs font-semibold text-neutral-600">
-                {initials(`${p.firstName} ${p.lastName}`)}
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-medium text-neutral-900">{p.firstName} {p.lastName}</span>
-                <span className="block truncate text-xs text-neutral-400">{p.email}</span>
+              <Avatar name={name} />
+              <span className="flex min-w-0 flex-1 flex-col border-b border-[#e9edef] py-3">
+                <span className="truncate text-[15px] text-[#111b21]">{name}</span>
+                <span className="truncate text-[13px] text-[#667781]">{p.email}</span>
               </span>
             </button>
-          ))}
-        </div>
-      </SheetContent>
-    </Sheet>
+          );
+        })}
+      </div>
+    </div>
   );
 }

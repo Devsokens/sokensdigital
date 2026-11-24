@@ -261,7 +261,15 @@ class DisbursementRequestViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixi
         # cumule le rôle demandeur et un rôle d'approbation (ex: Chef de
         # Projet qui est aussi Comptable) ne doit jamais pouvoir valider sa
         # propre demande, à aucun des deux paliers.
-        if disbursement.requested_by_id == request.user.id:
+        # Exception voulue (décision du 24/11/2026) : le Responsable
+        # Comptabilité & Finance désigné sur la demande peut valider le
+        # palier RCF de ses propres besoins ; le Gérant signe toujours
+        # ensuite, et ne peut jamais valider sa propre demande.
+        own_rcf_stage = (
+            disbursement.status == DisbursementRequest.Status.EN_ATTENTE_RCF
+            and disbursement.assigned_rcf_id == request.user.id
+        )
+        if disbursement.requested_by_id == request.user.id and not own_rcf_stage:
             return Response(
                 {'detail': 'Vous ne pouvez pas approuver votre propre demande.'},
                 status=status.HTTP_403_FORBIDDEN,

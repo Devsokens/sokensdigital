@@ -2,72 +2,85 @@
 {% comment %}
   Facture, d'après le modèle papier de Soken's Digital — même mise en page
   que l'aperçu de l'admin (frontend/components/admin/finance/invoice-document.tsx).
-  Modifier les deux ensemble. Une page ; si le tableau déborde, il continue
-  sur la page suivante avec son en-tête de colonnes répété.
+  Modifier les deux ensemble. Toujours UNE page A4 : mise en page resserrée,
+  tableau compacté au-delà de 6 puis 12 lignes.
 {% endcomment %}
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <title>Facture {{ invoice.invoice_number }}</title>
 <style>
+  /* Une seule page A4 : marges, espacements et tailles resserrés ; au-delà
+     de 6 lignes (.dense) puis 12 lignes (.xdense), le tableau se compacte
+     encore. Le contenu ne déborde jamais sur une seconde page. */
   @page { size: A4; margin: 0; background: #f2f3f5; }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: "DejaVu Sans", Arial, sans-serif; color: #171717; font-size: 11.5px; line-height: 1.45; }
+  body { margin: 0; font-family: "DejaVu Sans", Arial, sans-serif; color: #171717; font-size: 9.5px; line-height: 1.35; }
   p { margin: 0; }
 
-  .banner { position: relative; padding: 30px 72px; background: {{ accent }}; height: 116px; }
-  .banner img { height: 56px; width: auto; display: block; }
-  .info-card { position: absolute; top: 34px; right: 48px; width: 272px; padding: 16px 20px; background: #fff; border-radius: 8px; }
-  .info-card .title { font-size: 20px; font-weight: bold; letter-spacing: 0.03em; color: {{ accent }}; }
-  .info-card .number { font-size: 13px; font-weight: bold; color: {{ accent }}; white-space: nowrap; }
-  .info-card p.meta { margin-top: 8px; font-size: 11.5px; }
-  .info-card p.ref { margin-top: 4px; font-size: 10px; color: #737373; }
+  .banner { position: relative; padding: 18px 40px; background: {{ accent }}; height: 92px; }
+  .banner img { height: 46px; width: auto; display: block; margin-top: 4px; }
+  .info-card { position: absolute; top: 14px; right: 34px; width: 250px; padding: 10px 14px; background: #fff; border-radius: 6px; }
+  .info-card .title { font-size: 16px; font-weight: bold; letter-spacing: 0.03em; color: {{ accent }}; }
+  .info-card .number { font-size: 11px; font-weight: bold; color: {{ accent }}; white-space: nowrap; }
+  .info-card p.meta { margin-top: 3px; font-size: 9.5px; }
+  .info-card p.ref { margin-top: 2px; font-size: 8.5px; color: #737373; }
 
-  .content { padding: 48px 56px 40px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  .content { padding: 22px 40px 0; }
 
-  .company { padding-left: 24px; font-size: 11.5px; line-height: 1.55; color: #262626; }
-  .company .name { font-size: 14px; font-weight: bold; color: #171717; margin-bottom: 4px; }
-  .company .legal { margin-top: 6px; font-size: 10px; letter-spacing: 0.02em; color: #737373; }
+  .parties { display: table; width: 100%; table-layout: fixed; }
+  .parties > div { display: table-cell; vertical-align: top; }
+  .company { font-size: 9.5px; line-height: 1.4; color: #262626; }
+  .company .name { font-size: 11px; font-weight: bold; color: #171717; margin-bottom: 2px; }
+  .company .legal { margin-top: 3px; font-size: 8.5px; letter-spacing: 0.02em; color: #737373; }
 
-  table.lines { margin-top: 36px; width: 100%; border-collapse: collapse; font-size: 11.5px; }
-  table.lines thead { display: table-header-group; }
-  table.lines th { background: {{ accent }}; color: #fff; font-weight: normal; letter-spacing: 0.04em; text-transform: uppercase; padding: 16px 10px; border: 1px solid #d4d4d8; text-align: center; }
-  table.lines td { padding: 12px 10px; border: 1px solid #a1a1aa; text-align: center; vertical-align: top; background: #f2f3f5; }
+  table.lines { margin-top: 16px; width: 100%; border-collapse: collapse; font-size: 9.5px; }
+  table.lines th { background: {{ accent }}; color: #fff; font-weight: normal; letter-spacing: 0.04em; text-transform: uppercase; padding: 7px 8px; border: 1px solid #d4d4d8; text-align: center; }
+  table.lines td { padding: 6px 8px; border: 1px solid #a1a1aa; text-align: center; vertical-align: top; background: #f2f3f5; }
   table.lines td.desc { text-align: left; }
   table.lines td.price { font-weight: bold; }
-  table.lines td.price .note { display: block; margin-top: 2px; font-weight: normal; font-size: 10px; line-height: 1.35; }
+  table.lines td.price .note { display: block; margin-top: 1px; font-weight: normal; font-size: 8px; line-height: 1.3; }
   table.lines tr { page-break-inside: avoid; break-inside: avoid; }
   table.lines th.desc { width: 50%; }
   table.lines th.qty { width: 8%; }
-  table.lines th.price { width: 25%; }
+  table.lines th.price { width: 22%; }
+  .dense table.lines { font-size: 8.5px; }
+  .dense table.lines td { padding: 3px 6px; }
+  .xdense table.lines { font-size: 7.5px; }
+  .xdense table.lines td { padding: 2px 5px; line-height: 1.2; }
 
-  .summary { margin-top: 44px; display: table; width: 100%; page-break-inside: avoid; break-inside: avoid; }
+  .summary { margin-top: 14px; display: table; width: 100%; }
   .summary > div { display: table-cell; vertical-align: top; }
-  .methods { width: 52%; padding-top: 44px; }
-  .methods .title { font-size: 13px; font-weight: bold; color: {{ accent }}; }
-  .methods ul { margin: 12px 0 0; padding-left: 16px; font-size: 10.5px; }
-  .methods li + li { margin-top: 2px; }
+  .methods { width: 50%; padding-top: 6px; }
+  .methods .title { font-size: 10.5px; font-weight: bold; color: {{ accent }}; }
+  .methods ul { margin: 5px 0 0; padding-left: 14px; font-size: 9px; }
 
-  table.totals { margin-left: auto; border-collapse: collapse; font-size: 12px; }
-  table.totals td { padding: 7px 10px; }
+  table.totals { margin-left: auto; border-collapse: collapse; font-size: 10px; }
+  table.totals td { padding: 3px 8px; }
   table.totals td.label { text-align: right; color: {{ accent }}; letter-spacing: 0.03em; text-transform: uppercase; }
-  table.totals td.value { text-align: right; min-width: 92px; white-space: nowrap; }
-  table.totals tr.due td.value { background: {{ accent }}; color: #fff; }
-  table.totals tr.detail td { font-size: 10.5px; padding-top: 3px; padding-bottom: 3px; }
+  table.totals td.value { text-align: right; min-width: 86px; white-space: nowrap; }
+  table.totals tr.due td.value { background: {{ accent }}; color: #fff; font-weight: bold; }
+  table.totals tr.detail td { font-size: 9px; padding-top: 1px; padding-bottom: 1px; }
   table.totals tr.detail td.label { color: #737373; }
   table.totals tr.paid td.value { border-bottom: 2px solid {{ accent }}; }
   table.totals tr.discount td.value { color: #b91c1c; }
 
-  .accept { margin-top: 56px; page-break-inside: avoid; break-inside: avoid; }
-  .accept .title { padding-left: 24px; font-size: 13px; font-weight: bold; color: {{ accent }}; }
-  .signers { margin-top: 20px; display: table; width: 100%; table-layout: fixed; }
+  .accept { margin-top: 14px; }
+  .accept .title { font-size: 10.5px; font-weight: bold; color: {{ accent }}; }
+  .signers { margin-top: 6px; display: table; width: 100%; table-layout: fixed; }
   .signers > div { display: table-cell; vertical-align: top; }
   .signer { display: table; width: 100%; }
   .signer > * { display: table-cell; vertical-align: middle; }
-  .signer .who { width: 42%; padding-left: 36px; font-size: 10.5px; font-weight: bold; }
-  .sign-box { position: relative; width: 148px; height: 76px; background: #fff; border-radius: 6px; text-align: center; }
-  .sign-box img { max-height: 66px; max-width: 136px; margin-top: 6px; }
-  .sign-box .hint { position: absolute; top: 5px; left: 0; right: 0; font-size: 6.5px; color: #a3a3a3; font-style: italic; }
+  .signer .who { width: 40%; font-size: 9px; font-weight: bold; }
+  .sign-box { position: relative; width: 130px; height: 58px; background: #fff; border-radius: 5px; text-align: center; }
+  .sign-box img { max-height: 52px; max-width: 120px; margin-top: 3px; }
+  .sign-box .hint { position: absolute; top: 4px; left: 0; right: 0; font-size: 6px; color: #a3a3a3; font-style: italic; }
+
+  .legal-footer { margin-top: 12px; display: table; width: 100%; font-size: 7px; line-height: 1.3; color: #555; }
+  .legal-footer > div { display: table-cell; vertical-align: top; }
+  .legal-footer .qr { width: 74px; }
+  .legal-footer .qr img { width: 68px; height: 68px; }
+  .legal-footer p { margin: 0 0 2px; }
 </style>
 </head>
 <body>
@@ -83,21 +96,22 @@
     </div>
   </div>
 
-  <div class="content">
-    <div class="company">
-      <p class="name">SOKEN'S DIGITAL</p>
-      {% for line in address_lines %}<p>{{ line }}</p>{% endfor %}
-      {% if settings.company_phone %}<p>Tél : {{ settings.company_phone }}</p>{% endif %}
-      {% if settings.company_email %}<p>Mail : {{ settings.company_email }}</p>{% endif %}
-      {% if settings.company_rccm or settings.company_nif %}
-      <p class="legal">{% if settings.company_rccm %}RCCM : {{ settings.company_rccm }}{% endif %}{% if settings.company_rccm and settings.company_nif %} &nbsp;·&nbsp; {% endif %}{% if settings.company_nif %}NIF : {{ settings.company_nif }}{% endif %}</p>
-      {% endif %}
-    </div>
-
-    <div class="company" style="margin-top: 10px;">
-      <p class="name">FACTURÉ À : {{ client_label }}</p>
-      {% for line in client_lines %}<p>{{ line }}</p>{% endfor %}
-      {% if client_nif %}<p class="legal">NIF : {{ client_nif }}</p>{% elif not client_vat_subject %}<p class="legal">Client non assujetti à la TVA</p>{% endif %}
+  <div class="content{% if lines|length > 12 %} xdense{% elif lines|length > 6 %} dense{% endif %}">
+    <div class="parties">
+      <div class="company">
+        <p class="name">SOKEN'S DIGITAL</p>
+        {% for line in address_lines %}<p>{{ line }}</p>{% endfor %}
+        {% if settings.company_phone %}<p>Tél : {{ settings.company_phone }}</p>{% endif %}
+        {% if settings.company_email %}<p>Mail : {{ settings.company_email }}</p>{% endif %}
+        {% if settings.company_rccm or settings.company_nif %}
+        <p class="legal">{% if settings.company_rccm %}RCCM : {{ settings.company_rccm }}{% endif %}{% if settings.company_rccm and settings.company_nif %} &nbsp;·&nbsp; {% endif %}{% if settings.company_nif %}NIF : {{ settings.company_nif }}{% endif %}</p>
+        {% endif %}
+      </div>
+      <div class="company">
+        <p class="name">FACTURÉ À : {{ client_label }}</p>
+        {% for line in client_lines %}<p>{{ line }}</p>{% endfor %}
+        {% if client_nif %}<p class="legal">NIF : {{ client_nif }}</p>{% elif not client_vat_subject %}<p class="legal">Client non assujetti à la TVA</p>{% endif %}
+      </div>
     </div>
 
     <table class="lines">
@@ -165,15 +179,13 @@
         </div>
       </div>
     </div>
-    <div style="margin-top: 14px; display: table; width: 100%; font-size: 8pt; color: #555;">
-      <div style="display: table-cell; width: 96px; vertical-align: top;">
-        {% if qr_uri %}<img src="{{ qr_uri }}" alt="QR code fiscal" style="width: 88px; height: 88px;">{% endif %}
-      </div>
-      <div style="display: table-cell; vertical-align: top; padding-left: 8px;">
-        <p style="margin: 0 0 3px; font-weight: bold; color: #222;">QR code fiscal — vérification de l'authenticité</p>
-        <p style="margin: 0 0 3px;">Scannez ce QR code pour vérifier que cette facture a bien été émise par Soken's Digital et que ses montants n'ont pas été modifiés. Code de contrôle : <strong>{{ fiscal_signature }}</strong>.</p>
-        <p style="margin: 0 0 3px; word-break: break-all;">{{ verification_url }}</p>
-        <p style="margin: 6px 0 0;">
+    <div class="legal-footer">
+      <div class="qr">{% if qr_uri %}<img src="{{ qr_uri }}" alt="QR code fiscal">{% endif %}</div>
+      <div>
+        <p style="font-weight: bold; color: #222;">QR code fiscal — vérification de l'authenticité</p>
+        <p>Scannez ce QR code pour vérifier que cette facture a bien été émise par Soken's Digital et que ses montants n'ont pas été modifiés. Code de contrôle : <strong>{{ fiscal_signature }}</strong>.</p>
+        <p style="word-break: break-all;">{{ verification_url }}</p>
+        <p>
           Montants exprimés en francs CFA (XAF). TVA {{ vat_percent }} %{% if show_css %} et CSS {{ css_percent }} % (Contribution Spéciale de Solidarité){% endif %}{% for tax in extra_taxes %}, {{ tax.name }} {{ tax.percent }} %{% endfor %} calculées sur le montant hors taxes.
           {% if due_date %}Paiement à régler au plus tard le {{ due_date }}.{% else %}Paiement à réception de facture.{% endif %}
           Tout retard de paiement peut donner lieu à des pénalités de retard. Pas d'escompte pour paiement anticipé.

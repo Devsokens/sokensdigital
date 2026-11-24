@@ -207,6 +207,22 @@ class DisbursementRequestViewSetTests(APITestCase):
         )
         self.assertEqual(response.status_code, 403)
 
+    def test_designated_rcf_can_validate_own_request_at_rcf_stage_only(self):
+        rcf = User.objects.create(email='rcf-self@sokensdigital.com', first_name='Rcf', is_rcf=True)
+        _give_role(rcf, ROLE_COMPTABLE)
+        gerant = User.objects.create(email='gerant-self@sokensdigital.com', first_name='Ger', is_gerant=True)
+        client = APIClient()
+        client.force_authenticate(user=rcf)
+        disbursement = DisbursementRequest.objects.create(
+            requested_by=rcf, amount=1000, beneficiary='X', reason='Y', assigned_rcf=rcf, assigned_gerant=gerant,
+        )
+        url = f'/api/v1/finance/disbursement-requests/{disbursement.id}/approve/'
+        response = client.post(url, {'decision': 'APPROUVE', 'signature': SIG}, format='json')
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['status'], 'EN_ATTENTE_GERANT')
+        # Le palier Gérant reste à son titulaire.
+        self.assertEqual(client.post(url, {'decision': 'APPROUVE', 'signature': SIG}, format='json').status_code, 403)
+
     def test_chef_cannot_approve(self):
         disbursement = DisbursementRequest.objects.create(
             project=self.project_a, requested_by=self.chef_a, amount=1000, beneficiary='X', reason='Y',
