@@ -24,6 +24,7 @@ import { profileRoles } from "@/lib/firebase/types";
 import { PlatformBadge } from "@/components/admin/marketing/social-platform";
 import { SocialCalendar } from "@/components/admin/marketing/social-calendar";
 import { SocialPostPreview } from "@/components/admin/marketing/social-post-preview";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const STATUS_LABELS: Record<SocialPostStatus, string> = {
   DRAFT: "Brouillon",
@@ -70,6 +71,7 @@ export function SocialPostList() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [credentialsConfigured, setCredentialsConfigured] = useState<boolean | null>(null);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const data = await listSocialPosts();

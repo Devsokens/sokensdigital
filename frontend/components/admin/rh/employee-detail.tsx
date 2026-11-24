@@ -9,6 +9,7 @@ import type { EmployeeProfile } from "@/lib/api/types";
 import { inputClass, labelClass, readOnlyInputClass, cardClass } from "@/components/admin/form-styles";
 import { cn } from "@/lib/utils";
 import { formatFcfa } from "@/lib/format-currency";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const TABS = [
   { key: "poste", label: "Poste & rémunération" },
@@ -26,6 +27,7 @@ export function EmployeeDetail({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>("poste");
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       setEmployee(await getEmployee(id));

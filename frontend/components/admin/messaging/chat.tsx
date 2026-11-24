@@ -3,6 +3,7 @@
 import { markChatRoomRead, openChatAttachment } from "@/lib/api/upload";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Building2,
@@ -155,7 +156,8 @@ function Avatar({ name, room, size = "md" }: { name: string; room?: ChatRoom; si
 export function Chat() {
   const { user, profile } = useAuth();
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
-  const [chosenRoomId, setActiveRoomId] = useState<string | null>(null);
+  // undefined = pas encore choisi (salon du lien ou par défaut) ; null = liste affichée.
+  const [chosenRoomId, setActiveRoomId] = useState<string | null | undefined>(undefined);
   const [roomMessages, setRoomMessages] = useState<{ roomId: string | null; list: ChatMessage[] }>({ roomId: null, list: [] });
   const [filter, setFilter] = useState<Filter>("ALL");
   const [search, setSearch] = useState("");
@@ -185,8 +187,9 @@ export function Chat() {
     );
   }, [user, profile?.departmentId]);
 
+  const roomFromLink = useSearchParams().get("room");
   const activeRoomId =
-    chosenRoomId ?? (desktop && rooms.length > 0 ? rooms.find((r) => r.roomType !== "DIRECT")?.id ?? rooms[0].id : null);
+    chosenRoomId !== undefined ? chosenRoomId : (roomFromLink && rooms.some((r) => r.id === roomFromLink) ? roomFromLink : null) ?? (desktop && rooms.length > 0 ? rooms.find((r) => r.roomType !== "DIRECT")?.id ?? rooms[0].id : null);
 
   useEffect(() => {
     if (!activeRoomId) return;
@@ -271,8 +274,9 @@ export function Chat() {
       setPendingAttachment(null);
       setPendingLink(null);
     }
-    // Met à jour l'aperçu « dernier message » vu par les autres membres.
-    markChatRoomRead(activeRoomId).catch(() => {});
+    // Aperçu « dernier message » + notifications (in-app et push) aux autres
+    // membres — seulement pour les messages principaux, pas les réponses en fil.
+    markChatRoomRead(activeRoomId, { sent: !parentMessageId }).catch(() => {});
   }
 
   /** État de lecture d'un de mes messages : lu par tous (discussion privée

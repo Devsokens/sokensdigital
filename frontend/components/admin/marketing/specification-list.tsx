@@ -8,6 +8,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { ConfirmModal } from "@/components/admin/confirm-modal";
 import { listSpecifications, deleteSpecification, updateSpecification } from "@/lib/api/marketing";
 import type { SpecificationListItem, SpecType, SpecStatus } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const TYPE_LABELS: Record<SpecType, string> = {
   FONCTIONNEL: "Fonctionnel",
@@ -39,6 +40,7 @@ export function SpecificationList({ basePath = "/admin/marketing/cahier-des-char
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const data = await listSpecifications();

@@ -24,6 +24,7 @@ import { ServiceProposalViewerModal } from "@/components/admin/marketing/service
 import { SendDocumentModal } from "@/components/admin/marketing/send-document-modal";
 import { sendServiceProposalByEmail } from "@/lib/api/documents-service";
 import { cn } from "@/lib/utils";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const STATUS_LABELS: Record<string, string> = {
   BROUILLON: "Brouillon",
@@ -58,8 +59,9 @@ export function ServiceProposalList({
   const [viewing, setViewing] = useState<ServiceProposal | null>(null);
   const [sendingProposal, setSendingProposal] = useState<ServiceProposal | null>(null);
 
-  async function load() {
-    setLoading(true);
+  useAutoRefresh(() => load(true));
+  async function load(silent = false) {
+    if (!silent) setLoading(true);
     try {
       const data = await listServiceProposals();
       setProposals(data);

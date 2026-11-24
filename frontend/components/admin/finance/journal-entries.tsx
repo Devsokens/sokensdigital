@@ -7,6 +7,7 @@ import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/s
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { createJournalEntry, listAccountingPeriods, listAccounts, listJournalEntries } from "@/lib/api/finance";
 import type { Account, AccountingPeriod, JournalCode, JournalEntry } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const JOURNAL_LABELS: Record<JournalCode, string> = {
   VE: "Ventes", AC: "Achats", BQ: "Banque", OD: "Opérations diverses",
@@ -21,6 +22,7 @@ export function JournalEntries() {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const [entriesRes, periodsRes, accountsRes] = await Promise.all([

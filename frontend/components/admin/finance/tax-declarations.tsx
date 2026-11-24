@@ -15,6 +15,7 @@ import {
   validateTaxDeclaration,
 } from "@/lib/api/finance";
 import type { AccountingPeriod, TaxDeclaration } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 export function TaxDeclarations() {
   const { profile } = useAuth();
@@ -27,6 +28,7 @@ export function TaxDeclarations() {
   const myRoles = profileRoles(profile);
   const canValidate = myRoles.includes("COMPTABLE") || myRoles.includes("SUPER_ADMIN");
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const [declRes, periodRes] = await Promise.all([listTaxDeclarations(), listAccountingPeriods()]);

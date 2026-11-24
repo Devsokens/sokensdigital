@@ -19,6 +19,7 @@ import {
 } from "@/components/admin/context-menu";
 import { cn } from "@/lib/utils";
 import { formatFcfa } from "@/lib/format-currency";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const CONTRACT_LABELS: Record<string, string> = {
   CDI: "CDI",
@@ -56,6 +57,7 @@ export function EmployeeList() {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"tous" | "actifs" | "inactifs">("tous");
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const data = await listEmployees();

@@ -27,6 +27,7 @@ import {
   type BlogPostInput,
 } from "@/lib/api/marketing";
 import type { BlogPost } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const EMPTY: BlogPostInput = {
   title: "",
@@ -48,6 +49,7 @@ export function BlogPostList() {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"list" | "card">("card");
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const data = await listBlogPosts();

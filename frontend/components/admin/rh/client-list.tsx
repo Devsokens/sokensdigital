@@ -12,6 +12,7 @@ import { ConfirmModal } from "@/components/admin/confirm-modal";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { usePermissions } from "@/lib/admin/permissions-context";
 import { cn } from "@/lib/utils";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const STATUS_LABELS: Record<ClientStatus, string> = {
   CLIENT_ACTIF: "Client actif",
@@ -51,6 +52,7 @@ export function ClientList() {
   // défaut.
   const [view, setView] = useState<"card" | "list">("card");
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const data = await listClients();

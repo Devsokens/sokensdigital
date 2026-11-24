@@ -12,6 +12,7 @@ import {
   matchBankTransaction,
 } from "@/lib/api/finance";
 import type { BankStatementImport, TransactionLine } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 type RowDraft = { date: string; label: string; amount: string };
 
@@ -23,6 +24,7 @@ export function BankReconciliation() {
   const [suggestions, setSuggestions] = useState<TransactionLine[]>([]);
   const [matching, setMatching] = useState(false);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const res = await listBankImports();

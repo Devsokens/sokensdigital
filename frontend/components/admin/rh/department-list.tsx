@@ -8,6 +8,7 @@ import type { Department } from "@/lib/api/types";
 import { DepartmentFormModal } from "@/components/admin/rh/department-form-modal";
 import { ConfirmModal } from "@/components/admin/confirm-modal";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const DEFAULT_COLOR = "#22d3ee";
 
@@ -19,6 +20,7 @@ export function DepartmentList() {
   const [departments, setDepartments] = useState<Department[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const data = await listDepartments();

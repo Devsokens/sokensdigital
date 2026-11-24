@@ -11,6 +11,7 @@ import { ProjectVisualEditor } from "@/components/admin/marketing/project-visual
 import { ApiError } from "@/lib/api/client";
 import { listShowcaseProjects, createShowcaseProject, deleteShowcaseProject } from "@/lib/api/marketing";
 import type { ShowcaseProject } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 /* Projets vitrine : liste (cartes ou tableau) ; « Modifier » ouvre la page de
  * détail du projet telle qu'en ligne, modifiable au clic (ProjectVisualEditor). */
@@ -22,6 +23,7 @@ export function ShowcaseProjectList() {
   const [creating, setCreating] = useState(false);
   const [view, setView] = useState<"list" | "card">("card");
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const data = await listShowcaseProjects();

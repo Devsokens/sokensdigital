@@ -209,11 +209,48 @@ class ChatRoomReadView(APIView):
         if not _can_access_room(request.user, room_id):
             return Response(status=status.HTTP_403_FORBIDDEN)
         try:
-            firestore_client.sync_chat_room_activity(room_id, request.user.firebase_uid)
+            latest = firestore_client.sync_chat_room_activity(room_id, request.user.firebase_uid)
         except Exception:
             logger.exception('Lecture du salon %s non enregistrée', room_id)
             return Response(status=status.HTTP_502_BAD_GATEWAY)
+        # Après un envoi : notification (in-app + push navigateur) aux autres
+        # membres, pour le dernier message réel, s'il est bien de l'appelant.
+        if request.data.get('sent') and latest and latest.get('authorUid') == request.user.firebase_uid:
+            try:
+                _notify_chat_message(room_id, latest, request.user)
+            except Exception:
+                logger.exception('Notifications du message %s/%s non envoyées', room_id, latest.get('id'))
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+def _chat_recipients(room: dict, sender):
+    """Destinataires d'un message, selon le type de salon (mêmes règles que
+    l'accès au salon) — l'expéditeur exclu, comptes actifs seulement."""
+    users = User.objects.filter(is_active=True).exclude(pk=sender.pk).exclude(firebase_uid__isnull=True).exclude(firebase_uid='')
+    room_type = room.get('roomType')
+    if room_type in ('DIRECT', 'PROJECT'):
+        return users.filter(firebase_uid__in=room.get('memberUids') or [])
+    if room_type == 'DEPARTMENT':
+        return users.filter(department_id=room.get('departmentId')) if room.get('departmentId') else users.none()
+    if room_type == 'COMPANY':
+        return users
+    return users.none()
+
+
+def _notify_chat_message(room_id: str, message: dict, sender):
+    from core import firestore_client
+    from core.notifications import notify
+    if not message.get('id') or not firestore_client.claim_message_notification(room_id, message['id']):
+        return
+    room = firestore_client.get_chat_room(room_id) or {}
+    sender_name = message.get('authorName') or f'{sender.first_name} {sender.last_name}'.strip()
+    text = (message.get('text') or '').strip() or ('📎 Fichier' if message.get('attachment') else '')
+    preview = text if len(text) <= 120 else text[:117] + '…'
+    is_group = room.get('roomType') != 'DIRECT'
+    title = f"{sender_name} · {room.get('name') or 'Groupe'}" if is_group else sender_name
+    link = f'/admin/messagerie?room={room_id}'
+    for user in _chat_recipients(room, sender):
+        notify(user, title=title, message=preview, notification_type='MESSAGE', link=link)
 
 
 class ChatAttachmentLinkView(APIView):

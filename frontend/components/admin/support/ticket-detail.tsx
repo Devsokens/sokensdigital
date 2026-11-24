@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { getTicket, replyTicket, updateTicket } from "@/lib/api/support";
 import { listUsers } from "@/lib/api/hr";
 import type { SupportTicket, TicketStatus, UserBrief } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const STATUS_LABELS: Record<TicketStatus, string> = {
   OUVERT: "Ouvert",
@@ -29,6 +30,7 @@ export function TicketDetail({ id }: { id: string }) {
   const [updating, setUpdating] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const [ticketData, usersRes] = await Promise.all([

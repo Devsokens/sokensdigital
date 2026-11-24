@@ -12,6 +12,7 @@ import {
   reopenAccountingPeriod,
 } from "@/lib/api/finance";
 import type { AccountingPeriod } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 export function AccountingPeriods() {
   const [periods, setPeriods] = useState<AccountingPeriod[] | null>(null);
@@ -19,6 +20,7 @@ export function AccountingPeriods() {
   const [open, setOpen] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const res = await listAccountingPeriods();

@@ -18,6 +18,7 @@ import {
   ContextMenuLabel,
   ContextMenuSeparator,
 } from "@/components/admin/context-menu";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 interface MergedUser {
   djangoId: string;
@@ -46,6 +47,7 @@ export function UserRoleList() {
   const [editing, setEditing] = useState<MergedUser | null>(null);
   const [toDelete, setToDelete] = useState<MergedUser | null>(null);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const [usersRes, profiles, deptRes] = await Promise.all([

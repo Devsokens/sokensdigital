@@ -7,6 +7,7 @@ import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { downloadPaymentReceipt, createPayment, listPayments, receivePayment } from "@/lib/api/finance";
 import { formatFcfa } from "@/lib/format-currency";
 import type { Invoice, Payment, PaymentMethod } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const METHODS: { value: PaymentMethod; label: string }[] = [
   { value: "VIREMENT", label: "Virement" },
@@ -41,6 +42,7 @@ export function InvoicePayments({ invoice, onChanged }: { invoice: Invoice; onCh
   const [showForm, setShowForm] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const res = await listPayments(invoice.id);

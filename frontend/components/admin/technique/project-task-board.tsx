@@ -45,6 +45,7 @@ import type {
   ProjectUserBrief,
   Sprint,
 } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const STATUS_ORDER: ProjectTaskStatus[] = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
 
@@ -340,6 +341,7 @@ export function ProjectTaskBoard({
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [today] = useState(todayIso);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       setTasks(await listProjectTasks(project.id));

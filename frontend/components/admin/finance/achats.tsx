@@ -26,6 +26,7 @@ import {
 import type {
   Department, DisbursementRequest, ProcurementRequest, Supplier, SupplierInvoice, SupplierQuote,
 } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const CAN_APPROVE = ["SUPER_ADMIN", "COMPTABLE"];
 const CAN_MANAGE_SUPPLIERS = ["SUPER_ADMIN", "COMPTABLE"];
@@ -107,6 +108,7 @@ function FichesPanel() {
   const [open, setOpen] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       // Une demande de décaissement EST l'expression d'un besoin, au même
@@ -359,6 +361,7 @@ function DevisPanel() {
   const [open, setOpen] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const [quoteRes, reqRes, supRes] = await Promise.all([listSupplierQuotes(), listProcurementRequests(), listSuppliers()]);
@@ -536,6 +539,7 @@ function FacturesPanel() {
   const [open, setOpen] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const [invRes, reqRes, supRes] = await Promise.all([listSupplierInvoices(), listProcurementRequests(), listSuppliers()]);
@@ -698,6 +702,7 @@ function FournisseursPanel() {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const res = await listSuppliers();

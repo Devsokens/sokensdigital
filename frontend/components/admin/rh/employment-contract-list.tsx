@@ -35,6 +35,7 @@ import {
   listServiceContracts,
   type ServiceContract,
 } from "@/lib/api/contracts";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const NEW_CONTRACT_CHOICES = [
   { href: "/nouveau", label: "Contrat de travail", hint: "CDI, CDD, stage ou freelance avec un collaborateur.", icon: User },
@@ -113,8 +114,9 @@ export function EmploymentContractList({
     [contracts, partyFilter]
   );
 
-  async function load() {
-    setLoading(true);
+  useAutoRefresh(() => load(true));
+  async function load(silent = false) {
+    if (!silent) setLoading(true);
     try {
       const [data, services] = await Promise.all([
         listEmploymentContracts(),

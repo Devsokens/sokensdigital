@@ -6,6 +6,7 @@ import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { formatFcfa } from "@/lib/format-currency";
 import { getEncaissements } from "@/lib/api/finance";
 import type { EncaissementOrigin, EncaissementsResponse } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const ORIGIN_COLORS: Record<EncaissementOrigin, string> = {
   CAISSE: "bg-amber-100 text-amber-700",
@@ -31,8 +32,8 @@ export function Encaissements() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       setData(await getEncaissements({ date_from: dateFrom, date_to: dateTo }));
@@ -42,6 +43,7 @@ export function Encaissements() {
       setLoading(false);
     }
   }, [dateFrom, dateTo]);
+  useAutoRefresh(() => load(true));
 
   useEffect(() => { load(); }, [load]);
 

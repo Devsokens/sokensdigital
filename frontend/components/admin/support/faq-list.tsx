@@ -9,6 +9,7 @@ import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { ConfirmModal } from "@/components/admin/confirm-modal";
 import { listFAQ, createFAQ, updateFAQ, deleteFAQ, type FAQInput } from "@/lib/api/support";
 import type { FAQEntry, FAQAudience } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const AUDIENCE_LABELS: Record<FAQAudience, string> = {
   PUBLIC: "Public",
@@ -25,6 +26,7 @@ export function FAQList() {
   const [error, setError] = useState<string | null>(null);
   const [editEntry, setEditEntry] = useState<FAQEntry | "new" | null>(null);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const data = await listFAQ();

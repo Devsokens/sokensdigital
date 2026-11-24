@@ -159,6 +159,11 @@ export async function openChatAttachment(roomId: string, messageId: string) {
 
 
 /** Salon lu par l'utilisateur + aperçu du dernier message (côté serveur). */
-export function markChatRoomRead(roomId: string) {
-  return apiFetch<void>(`/api/v1/chat/rooms/${encodeURIComponent(roomId)}/read/`, { method: "POST" });
+export function markChatRoomRead(roomId: string, options?: { sent?: boolean }) {
+  return apiFetch<void>(`/api/v1/chat/rooms/${encodeURIComponent(roomId)}/read/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    // sent : après un envoi, le serveur notifie les autres membres (in-app + push).
+    body: JSON.stringify(options?.sent ? { sent: true } : {}),
+  });
 }

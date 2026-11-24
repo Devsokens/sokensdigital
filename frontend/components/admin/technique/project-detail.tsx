@@ -27,6 +27,7 @@ import { AmbientVideoBackground } from "@/components/admin/technique/ambient-vid
 import { formatFcfa } from "@/lib/format-currency";
 import { cn } from "@/lib/utils";
 import type { Epic, Project, ProjectPriority, ProjectStatus, ProjectTask, ProjectTaskStatus } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   EN_COURS: "En cours",
@@ -693,6 +694,7 @@ export function ProjectDetail({ id }: { id: string }) {
   // cette clé change.
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       setProject(await getProject(id));

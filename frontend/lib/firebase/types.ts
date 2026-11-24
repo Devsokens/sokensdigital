@@ -97,6 +97,7 @@ export type NotificationType =
   | "TASK_ASSIGNED"
   | "TASK_COMMENT"
   | "FOLLOW_UP"
+  | "MESSAGE"
   | "GENERAL";
 
 /** Firestore doc at /notifications/{id} — written server-side only (see

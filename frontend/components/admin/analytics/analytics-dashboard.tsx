@@ -14,6 +14,7 @@ import {
   type TechniqueAnalytics,
 } from "@/lib/api/analytics";
 import { cn } from "@/lib/utils";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const PERIODS: AnalyticsPeriod[] = [7, 30, 90];
 const NUMBER = new Intl.NumberFormat("fr-FR");
@@ -186,6 +187,7 @@ export function AnalyticsDashboard({ department }: { department: AnalyticsDepart
       setState({ kind: "error", message });
     }
   }, [department, days]);
+  useAutoRefresh(() => load());
 
   useEffect(() => {
     void load();

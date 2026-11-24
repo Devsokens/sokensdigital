@@ -15,6 +15,7 @@ import { listSpecifications } from "@/lib/api/marketing";
 import type { SpecificationListItem } from "@/lib/api/types";
 import { formatFcfa } from "@/lib/format-currency";
 import { cn } from "@/lib/utils";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const STAGE_STYLES: Record<WorkflowStage, string> = {
   SOUMIS: "bg-amber-100 text-amber-700",
@@ -66,6 +67,7 @@ export function SubmittedProjects({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stages?.join(",")]);
+  useAutoRefresh(() => load());
 
   useEffect(() => {
     load();

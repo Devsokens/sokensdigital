@@ -24,6 +24,7 @@ import {
 import type { Quote, QuoteStatus, QuotePaymentTerm, QuoteSettings } from "@/lib/api/types";
 import { QuoteViewerModal } from "@/components/admin/marketing/quote-viewer-modal";
 import { ConfirmModal } from "@/components/admin/confirm-modal";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const STATUS_LABELS: Record<QuoteStatus, string> = {
   BROUILLON: "Brouillon",
@@ -51,6 +52,7 @@ export function QuoteList({ basePath = "/admin/marketing/devis" }: { basePath?: 
   const [viewing, setViewing] = useState<Quote | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const data = await listQuotes();

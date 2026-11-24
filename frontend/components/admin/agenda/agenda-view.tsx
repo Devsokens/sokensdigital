@@ -19,6 +19,7 @@ import {
 } from "@/lib/api/administration";
 import { listUsers } from "@/lib/api/hr";
 import type { Appointment, Client, UserBrief } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 // Rendez-vous client en bleu ciel, rendez-vous interne en indigo.
 const CLIENT_COLOR = "#0ea5e9";
@@ -46,6 +47,7 @@ export function AgendaView() {
   const [meetingFor, setMeetingFor] = useState<Appointment | null>(null);
   const [meetingOpen, setMeetingOpen] = useState(false);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const data = await listAppointments();

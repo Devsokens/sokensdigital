@@ -10,6 +10,7 @@ import {
   type BlogCommentAdmin,
   type BlogCommentStatus,
 } from "@/lib/api/marketing";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const STATUS_LABEL: Record<BlogCommentStatus, string> = {
   VISIBLE: "Visible",
@@ -38,6 +39,7 @@ export function CommentModeration() {
   const [filter, setFilter] = useState<BlogCommentStatus | "TOUS">("TOUS");
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const data = await listBlogComments(filter === "TOUS" ? {} : { status: filter });

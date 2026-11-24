@@ -481,6 +481,32 @@ class ChatRoomReadViewTests(APITestCase):
         self.assertEqual(res.status_code, 204)
         sync.assert_called_once_with('room123', 'uid-reader')
 
+    @patch('core.notifications.notify')
+    @patch('core.firestore_client.claim_message_notification', return_value=True)
+    @patch('core.firestore_client.get_chat_room', return_value={'roomType': 'DIRECT', 'memberUids': ['uid-reader', 'uid-other'], 'name': ''})
+    @patch('core.firestore_client.sync_chat_room_activity')
+    @patch('core.views._can_access_room', return_value=True)
+    def test_sent_message_notifies_other_members_once(self, _access, sync, _room, claim, notify_mock):
+        other = User.objects.create(email='other@sokensdigital.com', firebase_uid='uid-other')
+        User.objects.create(email='stranger@sokensdigital.com', firebase_uid='uid-stranger')
+        sync.return_value = {'id': 'm1', 'authorUid': 'uid-reader', 'authorName': 'Moi', 'text': 'Bonjour'}
+        self.assertEqual(self.client.post('/api/v1/chat/rooms/room123/read/', {'sent': True}, format='json').status_code, 204)
+        notify_mock.assert_called_once()
+        self.assertEqual(notify_mock.call_args.args[0], other)
+        self.assertEqual(notify_mock.call_args.kwargs['message'], 'Bonjour')
+        # Simple lecture : aucune notification.
+        notify_mock.reset_mock()
+        self.client.post('/api/v1/chat/rooms/room123/read/')
+        notify_mock.assert_not_called()
+
+    @patch('core.notifications.notify')
+    @patch('core.firestore_client.sync_chat_room_activity')
+    @patch('core.views._can_access_room', return_value=True)
+    def test_cannot_notify_for_someone_elses_message(self, _access, sync, notify_mock):
+        sync.return_value = {'id': 'm2', 'authorUid': 'uid-other', 'text': 'x'}
+        self.client.post('/api/v1/chat/rooms/room123/read/', {'sent': True}, format='json')
+        notify_mock.assert_not_called()
+
     @patch('core.firestore_client.sync_chat_room_activity')
     @patch('core.views._can_access_room', return_value=False)
     def test_non_member_refused(self, _access, sync):

@@ -349,7 +349,7 @@ def get_chat_message(room_id: str, message_id: str) -> dict | None:
     return snapshot.to_dict() if snapshot.exists else None
 
 
-def sync_chat_room_activity(room_id: str, reader_uid: str) -> None:
+def sync_chat_room_activity(room_id: str, reader_uid: str) -> dict | None:
     """Accusé de lecture + aperçu du dernier message, écrits par le serveur
     (les clients ne peuvent pas modifier un salon, voir firestore.rules).
 
@@ -365,7 +365,7 @@ def sync_chat_room_activity(room_id: str, reader_uid: str) -> None:
     for snap in query.stream():
         data = snap.to_dict() or {}
         if not data.get('parentMessageId'):  # les réponses en fil ne remontent pas
-            latest = data
+            latest = {**data, 'id': snap.id}
             break
     update = {f'readAt.{reader_uid}': fb_firestore.SERVER_TIMESTAMP}
     if latest:
@@ -377,6 +377,26 @@ def sync_chat_room_activity(room_id: str, reader_uid: str) -> None:
             'hasAttachment': bool(latest.get('attachment')),
         }
     room_ref.update(update)
+    return latest
+
+
+def claim_message_notification(room_id: str, message_id: str) -> bool:
+    """Réserve l'envoi des notifications d'un message (une seule fois, même
+    si l'expéditeur appelle plusieurs fois) : transaction sur le salon."""
+    from google.cloud import firestore as gc_firestore
+
+    client = _get_client()
+    room_ref = client.collection('chatRooms').document(room_id)
+
+    @gc_firestore.transactional
+    def _claim(transaction):
+        snap = room_ref.get(transaction=transaction)
+        if (snap.to_dict() or {}).get('lastNotifiedMessageId') == message_id:
+            return False
+        transaction.update(room_ref, {'lastNotifiedMessageId': message_id})
+        return True
+
+    return _claim(client.transaction())
 
 
 def user_can_read_chat_room(firebase_uid: str, room: dict) -> bool:

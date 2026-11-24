@@ -18,6 +18,7 @@ import type {
   MaintainedApp, MaintainedAppSecrets, MaintenanceFrequency,
   MaintenanceReport, MaintenanceReportStatus, UserBrief,
 } from "@/lib/api/types";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 /** Le "responsable de l'équipe technique" du cahier des charges — pas de
  * rôle dédié côté back non plus, Chef de Projet/Admin en tiennent lieu. */
@@ -87,6 +88,7 @@ function AppsPanel() {
       setError("Impossible de charger les applications maintenues.");
     }
   }, [isLead]);
+  useAutoRefresh(() => load());
 
   useEffect(() => { load(); }, [load]);
 
@@ -418,6 +420,7 @@ function ReportsPanel() {
       setError("Impossible de charger les rapports.");
     }
   }, []);
+  useAutoRefresh(() => load());
 
   useEffect(() => { load(); }, [load]);
 

@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import { usePermissions } from "@/lib/admin/permissions-context";
 import { cn } from "@/lib/utils";
+import { useAutoRefresh } from "@/lib/admin/auto-refresh";
 
 const STATUS_LABELS: Record<ClientStatus, string> = {
   CLIENT_ACTIF: "Client actif",
@@ -67,6 +68,7 @@ export function ClientDetail({ id }: { id: string }) {
   const [users, setUsers] = useState<UserBrief[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  useAutoRefresh(() => load());
   async function load() {
     try {
       const [c, contactsRes, interactionsRes, docsRes, usersRes, projectsRes, meetingsRes, emailsRes] = await Promise.all([
