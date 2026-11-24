@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Lock, Plus, Unlock } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, Lock, Plus, Trash2, Unlock } from "lucide-react";
+import { ConfirmModal } from "@/components/admin/confirm-modal";
+import { useAuth } from "@/lib/auth/auth-context";
+import { profileRoles } from "@/lib/firebase/types";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetTrigger, SheetContent, SheetClose } from "@/components/ui/sheet";
 import { inputClass, labelClass } from "@/components/admin/form-styles";
 import {
   closeAccountingPeriod,
   createAccountingPeriod,
+  deleteAccountingPeriod,
   listAccountingPeriods,
   reopenAccountingPeriod,
 } from "@/lib/api/finance";
@@ -19,6 +23,13 @@ export function AccountingPeriods() {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
+  // Suppression : Super-Admin uniquement, en trois confirmations successives.
+  const { profile } = useAuth();
+  const isSuperAdmin = profileRoles(profile).includes("SUPER_ADMIN");
+  const [deleting, setDeleting] = useState<{ period: AccountingPeriod; step: 1 | 2 | 3 } | null>(null);
+  // La fenêtre se ferme après chaque « Continuer » : ce drapeau distingue le
+  // passage à l'étape suivante d'une annulation.
+  const advancing = useRef(false);
 
   useAutoRefresh(() => load());
   async function load() {
@@ -77,6 +88,41 @@ export function AccountingPeriods() {
         </Sheet>
       </div>
 
+      {deleting && (
+        <ConfirmModal
+          key={deleting.step}
+          open
+          onOpenChange={(o) => {
+            if (o) return;
+            if (advancing.current) {
+              advancing.current = false;
+              return;
+            }
+            setDeleting(null);
+          }}
+          title={`Supprimer la période ${deleting.period.label} — confirmation ${deleting.step}/3`}
+          description={
+            deleting.step === 1
+              ? `Voulez-vous supprimer la période comptable « ${deleting.period.label} » (${deleting.period.start_date} → ${deleting.period.end_date}) ?`
+              : deleting.step === 2
+                ? "Cette action est définitive et sera tracée dans le journal d'audit. La suppression est refusée si des écritures comptables sont passées dans cette période. Continuer ?"
+                : `Dernière confirmation : saisissez le libellé exact de la période, « ${deleting.period.label} ».`
+          }
+          confirmLabel={deleting.step === 3 ? "Supprimer définitivement" : "Continuer"}
+          requireTyping={deleting.step === 3 ? deleting.period.label : undefined}
+          onConfirm={async () => {
+            if (deleting.step < 3) {
+              advancing.current = true;
+              setDeleting({ period: deleting.period, step: (deleting.step + 1) as 2 | 3 });
+              return;
+            }
+            await deleteAccountingPeriod(deleting.period.id, deleting.period.label);
+            setDeleting(null);
+            load();
+          }}
+        />
+      )}
+
       <div className="overflow-x-auto rounded-xl border border-neutral-200 shadow-sm">
         <table className="table-responsive w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500 uppercase">
@@ -110,6 +156,15 @@ export function AccountingPeriods() {
                     {period.status === "OUVERTE" ? <Lock className="size-3" /> : <Unlock className="size-3" />}
                     {period.status === "OUVERTE" ? "Clôturer" : "Rouvrir"}
                   </button>
+                  {isSuperAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setDeleting({ period, step: 1 })}
+                      className="mt-1.5 flex items-center gap-1.5 rounded-full bg-destructive/10 px-3 py-1 text-xs text-destructive"
+                    >
+                      <Trash2 className="size-3" /> Supprimer
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

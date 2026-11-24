@@ -197,6 +197,40 @@ def _can_access_room(user, room_id: str) -> bool:
 CHAT_ROOM_FOLDERS_SINCE = datetime(2026, 11, 17, tzinfo=dt_timezone.utc)
 
 
+class ChatRoomsEnsureView(APIView):
+    """Garantit que les salons de l'utilisateur existent : salon entreprise
+    et salon de SON département (créé s'il manque — départements créés avant
+    la messagerie, ou hors interface). Aligne aussi le département du profil
+    Firestore sur celui de Django : c'est lui que les règles et la liste des
+    discussions utilisent. Appelé à l'ouverture de la messagerie."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from core import firestore_client
+        user = request.user
+        department = user.department
+        try:
+            if firestore_client.get_chat_room('company') is None:
+                upsert_chat_room('company', {'name': "Salon de l'entreprise", 'roomType': 'COMPANY'})
+            if department is not None:
+                room_id = f'dept-{department.id}'
+                room = firestore_client.get_chat_room(room_id)
+                if room is None or room.get('name') != f'Salon {department.name}':
+                    upsert_chat_room(room_id, {
+                        'name': f'Salon {department.name}', 'roomType': 'DEPARTMENT', 'departmentId': str(department.id),
+                    })
+            if user.firebase_uid:
+                wanted = str(department.id) if department else None
+                profile_department = firestore_client.get_profile_department(user.firebase_uid)
+                if profile_department != wanted:
+                    update_profile_fields(user.firebase_uid, {'departmentId': wanted})
+                    invalidate_role_cache(user.firebase_uid)
+        except Exception:
+            logger.exception('Salons de messagerie non vérifiés pour %s', user.pk)
+        return Response({'department_id': str(department.id) if department else None})
+
+
 class ChatRoomReadView(APIView):
     """Marque le salon comme lu par l'appelant et met à jour l'aperçu du
     dernier message (appelé à l'ouverture d'une discussion, à la réception
@@ -334,6 +368,14 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         # Mirrors into Firestore's chat system — firestore.rules only lets
         # SUPER_ADMIN write chatRooms directly, so every department needs
         # its room pushed from here, not created client-side.
+        upsert_chat_room(f'dept-{department.id}', {
+            'name': f'Salon {department.name}',
+            'roomType': 'DEPARTMENT',
+            'departmentId': str(department.id),
+        })
+
+    def perform_update(self, serializer):
+        department = serializer.save()
         upsert_chat_room(f'dept-{department.id}', {
             'name': f'Salon {department.name}',
             'roomType': 'DEPARTMENT',

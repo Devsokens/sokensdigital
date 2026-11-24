@@ -158,6 +158,11 @@ export async function openChatAttachment(roomId: string, messageId: string) {
 }
 
 
+/** Crée au besoin les salons entreprise / département de l'utilisateur. */
+export function ensureChatRooms() {
+  return apiFetch<{ department_id: string | null }>("/api/v1/chat/rooms/ensure/", { method: "POST" });
+}
+
 /** Salon lu par l'utilisateur + aperçu du dernier message (côté serveur). */
 export function markChatRoomRead(roomId: string, options?: { sent?: boolean }) {
   return apiFetch<void>(`/api/v1/chat/rooms/${encodeURIComponent(roomId)}/read/`, {

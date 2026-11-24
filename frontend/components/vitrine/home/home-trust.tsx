@@ -25,7 +25,7 @@ export function HomeTrust({ section }: { section: Section }) {
               {partner.logo ? (
                 <Editable section={section} path={{ scope: "item", index: i, key: "logo_url" }} kind="image" value={partner.logo} hint={hint}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img className="sd-logo" src={partner.logo} alt={partner.name} loading="lazy" decoding="async" style={{ display: "block", height: "clamp(56px, 7vw, 76px)", width: "auto", maxWidth: "clamp(150px, 20vw, 240px)", objectFit: "contain" }} />
+                  <img className="sd-logo" src={partner.logo} alt={partner.name} loading="lazy" decoding="async" style={{ display: "block", height: "clamp(56px, 7vw, 76px)", width: "clamp(150px, 20vw, 240px)", objectFit: "contain" }} />
                 </Editable>
               ) : editor ? (
                 <Editable section={section} path={{ scope: "item", index: i, key: "logo_url" }} kind="image" value="" hint={hint}>

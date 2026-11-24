@@ -349,6 +349,11 @@ def get_chat_message(room_id: str, message_id: str) -> dict | None:
     return snapshot.to_dict() if snapshot.exists else None
 
 
+def get_profile_department(firebase_uid: str) -> str | None:
+    snap = _get_client().collection('profiles').document(firebase_uid).get()
+    return (snap.to_dict() or {}).get('departmentId') if snap.exists else None
+
+
 def sync_chat_room_activity(room_id: str, reader_uid: str) -> dict | None:
     """Accusé de lecture + aperçu du dernier message, écrits par le serveur
     (les clients ne peuvent pas modifier un salon, voir firestore.rules).

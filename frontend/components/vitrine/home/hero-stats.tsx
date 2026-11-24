@@ -52,8 +52,17 @@ export function HeroStats({ section }: { section: Section }) {
                   <ItemTools section={section} index={i} />
                   <span className="sd-stat-value" style={{ fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: "clamp(34px, 3.4vw, 46px)", lineHeight: 1.1, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}>
                     <Editable section={section} path={{ scope: "item", index: i, key: "value" }} value={stat.value} hint="Commencez par un nombre pour l'effet de compteur : « 10+ », « 2 ans ».">
-                      {count !== null && Math.round(count * eased)}
-                      {suffix}
+                      {/* CLS : largeur de la valeur finale réservée pendant le comptage. */}
+                      <span style={{ display: "inline-grid" }}>
+                        <span aria-hidden="true" style={{ gridArea: "1 / 1", visibility: "hidden" }}>
+                          {count !== null && Math.round(count)}
+                          {suffix}
+                        </span>
+                        <span style={{ gridArea: "1 / 1", textAlign: "center" }}>
+                          {count !== null && Math.round(count * eased)}
+                          {suffix}
+                        </span>
+                      </span>
                     </Editable>
                   </span>
                   <span className="sd-stat-label" style={{ fontSize: "14px", color: "oklch(var(--sd-fg-3))" }}>

@@ -60,7 +60,7 @@ export function TechStack({ section }: { section?: PageSection | null }) {
           >
             {tech.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={tech.logo_url} alt={tech.name} className="h-8 w-auto object-contain" loading="lazy" decoding="async" />
+              <img src={tech.logo_url} alt={tech.name} width={64} height={32} className="h-8 w-16 object-contain" loading="lazy" decoding="async" />
             ) : (
               <span className="text-sm font-semibold text-foreground">{tech.name}</span>
             )}

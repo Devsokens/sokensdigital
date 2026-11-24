@@ -147,6 +147,15 @@ export function closeAccountingPeriod(id: string) {
   return apiFetch<AccountingPeriod>(`/api/v1/finance/accounting-periods/${id}/close/`, { method: "POST" });
 }
 
+/** Super-Admin uniquement ; `confirm` = libellé exact de la période. */
+export function deleteAccountingPeriod(id: string, confirm: string) {
+  return apiFetch<void>(`/api/v1/finance/accounting-periods/${id}/`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirm }),
+  });
+}
+
 export function reopenAccountingPeriod(id: string) {
   return apiFetch<AccountingPeriod>(`/api/v1/finance/accounting-periods/${id}/reopen/`, { method: "POST" });
 }

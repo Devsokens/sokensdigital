@@ -469,6 +469,24 @@ class SetUserRoleViewTests(APITestCase):
         self.assertEqual(res.status_code, 403)
 
 
+class ChatRoomsEnsureViewTests(APITestCase):
+    @patch('core.views.invalidate_role_cache')
+    @patch('core.views.update_profile_fields')
+    @patch('core.firestore_client.get_profile_department', return_value=None)
+    @patch('core.views.upsert_chat_room')
+    @patch('core.firestore_client.get_chat_room', return_value=None)
+    def test_creates_missing_department_room_and_syncs_profile(self, _get, upsert, _pdep, update_profile, _inv):
+        dept = Department.objects.create(name='Marketing', color='#000')
+        user = User.objects.create(email='m@sokensdigital.com', firebase_uid='uid-m', department=dept)
+        self.client.force_authenticate(user=user)
+        res = self.client.post('/api/v1/chat/rooms/ensure/')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()['department_id'], str(dept.id))
+        room_ids = [c.args[0] for c in upsert.call_args_list]
+        self.assertIn(f'dept-{dept.id}', room_ids)
+        update_profile.assert_called_once_with('uid-m', {'departmentId': str(dept.id)})
+
+
 class ChatRoomReadViewTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create(email='reader@sokensdigital.com', firebase_uid='uid-reader')

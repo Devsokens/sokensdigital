@@ -445,10 +445,47 @@ class IsComptableOrSuperAdmin(permissions.BasePermission):
     create=extend_schema(tags=['Finance & Comptabilité'], summary='Create an accounting period', description='Comptable/Super-Admin only.'),
     retrieve=extend_schema(tags=['Finance & Comptabilité'], summary='Get an accounting period'),
 )
-class AccountingPeriodViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+class AccountingPeriodViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, mixins.CreateModelMixin,
+                              mixins.DestroyModelMixin, viewsets.GenericViewSet):
     queryset = AccountingPeriod.objects.select_related('closed_by')
     serializer_class = AccountingPeriodSerializer
     permission_classes = [IsComptableOrSuperAdmin]
+
+    def destroy(self, request, *args, **kwargs):
+        """Suppression d'une période : Super-Admin uniquement, après une
+        triple confirmation dans l'interface ; le serveur exige en plus le
+        libellé exact de la période (`confirm`). Refusée si des écritures y
+        sont passées ou si sa déclaration fiscale est validée : supprimer la
+        période les effacerait ou les laisserait sans période."""
+        from django.db import transaction
+        from core.models import AuditLog
+        if not has_role(request.user, ROLE_SUPER_ADMIN):
+            return Response({'detail': 'Seul un Super-Administrateur peut supprimer une période comptable.'},
+                            status=status.HTTP_403_FORBIDDEN)
+        with transaction.atomic():
+            period = AccountingPeriod.objects.select_for_update().get(pk=self.get_object().pk)
+            if (request.data.get('confirm') or '').strip() != period.label:
+                return Response({'detail': f'Confirmation invalide : saisissez exactement « {period.label} ».'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            entries = period.entries.count()
+            if entries:
+                return Response({'detail': f'Suppression impossible : {entries} écriture(s) comptable(s) sont passées dans '
+                                           'cette période. Supprimez ou déplacez-les d\'abord.'},
+                                status=status.HTTP_409_CONFLICT)
+            declaration = getattr(period, 'tax_declaration', None)
+            if declaration is not None and declaration.status != declaration.Status.BROUILLON:
+                return Response({'detail': 'Suppression impossible : la déclaration fiscale de cette période est validée.'},
+                                status=status.HTTP_409_CONFLICT)
+            snapshot = {'label': period.label, 'start_date': str(period.start_date), 'end_date': str(period.end_date),
+                        'status': period.status}
+            period_pk = period.pk
+            period.delete()
+        AuditLog.objects.log_action(request.user, 'PERIODE_COMPTABLE_SUPPRIMEE', 'AccountingPeriod', period_pk,
+                                    details=snapshot, ip_address=request.META.get('REMOTE_ADDR'))
+        notify_roles(COMPTABLE_ROLES, title='Période comptable supprimée',
+                     message=f"La période {snapshot['label']} a été supprimée.", notification_type='GENERAL',
+                     link='/admin/finance/cloture', email=True, exclude=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(tags=['Finance & Comptabilité'], summary='Close (lock) an accounting period', responses={200: AccountingPeriodSerializer})
     @action(detail=True, methods=['post'], permission_classes=[IsComptableOrSuperAdmin])

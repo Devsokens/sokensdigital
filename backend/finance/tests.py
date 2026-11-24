@@ -982,6 +982,33 @@ class FecExportAndDashboardTests(APITestCase):
         self.assertEqual(response.status_code, 403)
 
 
+class AccountingPeriodDeletionTests(APITestCase):
+    def setUp(self):
+        self.period = AccountingPeriod.objects.create(label='2030-01', start_date=datetime.date(2030, 1, 1), end_date=datetime.date(2030, 1, 31))
+        self.url = f'/api/v1/finance/accounting-periods/{self.period.pk}/'
+
+    def _client(self, role):
+        user = User.objects.create(email=f'{role[:5]}-per@sokens.test')
+        user.roles.add(Role.objects.get_or_create(name=role)[0])
+        client = APIClient()
+        client.force_authenticate(user=user)
+        return client
+
+    def test_only_super_admin_with_exact_label(self):
+        self.assertEqual(self._client(ROLE_COMPTABLE).delete(self.url, {'confirm': '2030-01'}, format='json').status_code, 403)
+        sa = self._client(ROLE_SUPER_ADMIN)
+        self.assertEqual(sa.delete(self.url, {'confirm': 'oui'}, format='json').status_code, 400)
+        self.assertEqual(sa.delete(self.url, {'confirm': '2030-01'}, format='json').status_code, 204)
+        self.assertFalse(AccountingPeriod.objects.filter(pk=self.period.pk).exists())
+
+    def test_period_with_entries_is_protected(self):
+        JournalEntry.objects.create(period=self.period, journal_code=JournalEntry.JournalCode.VENTES,
+                                    date=datetime.date(2030, 1, 5), label='x')
+        res = self._client(ROLE_SUPER_ADMIN).delete(self.url, {'confirm': '2030-01'}, format='json')
+        self.assertEqual(res.status_code, 409)
+        self.assertTrue(AccountingPeriod.objects.filter(pk=self.period.pk).exists())
+
+
 class PaymentBeforeValidationTests(APITestCase):
     def test_payment_on_draft_invoice_is_refused(self):
         user = User.objects.create(email='cpt-draft@sokens.test')

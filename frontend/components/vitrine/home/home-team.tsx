@@ -114,8 +114,20 @@ export function HomeTeam({ section }: { section: Section }) {
           <div style={{ position: "relative", flex: "1 1 420px", minWidth: "0" }}>
             <ItemTools section={section} index={current} />
             <span style={{ fontFamily: FONT_MONO, fontSize: "13px", letterSpacing: "0.08em", color: "oklch(var(--sd-fg-4))" }}>{`${pad(current + 1)} / ${pad(team.length)}`}</span>
-            <div style={{ minHeight: "220px", marginTop: "18px" }}>
-              <div key={current} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            {/* CLS : tous les profils sont empilés (invisibles) dans la même
+                cellule de grille, la zone garde la hauteur du plus long et le
+                défilement automatique ne décale plus la page. */}
+            <div style={{ minHeight: "220px", marginTop: "18px", display: "grid" }}>
+              {team.map((m, i) =>
+                i === current ? null : (
+                  <div key={`ghost-${i}`} aria-hidden="true" style={{ gridArea: "1 / 1", visibility: "hidden", display: "flex", flexDirection: "column", gap: "14px", pointerEvents: "none" }}>
+                    <h3 style={{ margin: "0", fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: "clamp(32px, 3.6vw, 48px)", lineHeight: 1.05, letterSpacing: "-0.03em" }}>{m.name}</h3>
+                    <p style={{ margin: "0", fontSize: "16px", fontWeight: 500 }}>{m.role}</p>
+                    <p style={{ margin: "4px 0 0", maxWidth: "480px", fontSize: "17px", lineHeight: 1.65 }}>{frenchSpacing(m.bio)}</p>
+                  </div>
+                ),
+              )}
+              <div key={current} style={{ gridArea: "1 / 1", display: "flex", flexDirection: "column", gap: "14px" }}>
                 <h3 className="sd-bwb" style={{ margin: "0", fontFamily: FONT_DISPLAY, fontWeight: 600, fontSize: "clamp(32px, 3.6vw, 48px)", lineHeight: 1.05, letterSpacing: "-0.03em" }}>
                   <Editable section={section} path={{ scope: "item", index: current, key: "name" }} value={member.name}>
                     {member.name}

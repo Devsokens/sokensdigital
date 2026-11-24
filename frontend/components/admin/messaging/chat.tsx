@@ -1,6 +1,6 @@
 "use client";
 
-import { markChatRoomRead, openChatAttachment } from "@/lib/api/upload";
+import { ensureChatRooms, markChatRoomRead, openChatAttachment } from "@/lib/api/upload";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -179,13 +179,24 @@ export function Chat() {
     () => false,
   );
 
+  // Salons garantis côté serveur (département compris) ; son département
+  // fait foi si le profil n'est pas encore à jour.
+  const [serverDepartmentId, setServerDepartmentId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    ensureChatRooms()
+      .then((r) => setServerDepartmentId(r.department_id))
+      .catch(() => {});
+  }, [user]);
+  const departmentId = serverDepartmentId ?? profile?.departmentId ?? null;
+
   useEffect(() => {
     if (!user) return;
     return subscribeToRooms(
-      { departmentId: profile?.departmentId ?? null, uid: user.uid },
+      { departmentId, uid: user.uid },
       (nextRooms) => setRooms(nextRooms),
     );
-  }, [user, profile?.departmentId]);
+  }, [user, departmentId]);
 
   const roomFromLink = useSearchParams().get("room");
   const activeRoomId =

@@ -93,7 +93,27 @@ export function HomeServices({ section }: { section: Section }) {
                     </svg>
                   </button>
                   {on && (
-                    <div key={cycle} className="sd-vin" style={{ padding: "0 0 24px 38px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                    <div style={{ display: "grid" }}>
+                    {/* CLS : copies invisibles des autres services dans la même
+                        cellule — le bloc ouvert a toujours la hauteur du plus
+                        long, la rotation automatique ne décale plus la page. */}
+                    {services.map((other, j) =>
+                      j === i ? null : (
+                        <div key={`ghost-${j}`} aria-hidden="true" style={{ gridArea: "1 / 1", visibility: "hidden", pointerEvents: "none", padding: "0 0 24px 38px", display: "flex", flexDirection: "column", gap: "16px" }}>
+                          <p style={{ margin: "0", fontSize: "16px" }}>{frenchSpacing(other.text)}</p>
+                          <ul style={{ margin: "0", padding: "0", listStyle: "none", display: "flex", flexDirection: "column", gap: "10px" }}>
+                            {other.points.map((point) => (
+                              <li key={point} style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "15px" }}>
+                                <span style={{ width: "16px", height: "16px", flex: "none" }} />
+                                {point}
+                              </li>
+                            ))}
+                          </ul>
+                          <span style={{ display: "block", height: "2px" }} />
+                        </div>
+                      ),
+                    )}
+                    <div key={cycle} className="sd-vin" style={{ gridArea: "1 / 1", padding: "0 0 24px 38px", display: "flex", flexDirection: "column", gap: "16px" }}>
                       <p style={{ margin: "0", fontSize: "16px", color: "oklch(var(--sd-fg-3))", textWrap: "pretty" }}>
                         <Editable section={section} path={{ scope: "item", index: i, key: "description" }} kind="textarea" value={service.text}>
                           {frenchSpacing(service.text)}
@@ -114,6 +134,7 @@ export function HomeServices({ section }: { section: Section }) {
                       <span aria-hidden="true" style={{ display: "block", height: "2px", borderRadius: "2px", background: "rgba(255,255,255,0.07)", overflow: "hidden" }}>
                         <span className="sd-prog" style={{ display: "block", height: "100%", background: "linear-gradient(90deg, oklch(var(--sd-primary)), oklch(var(--sd-accent-hi)))" }} />
                       </span>
+                    </div>
                     </div>
                   )}
                 </div>
