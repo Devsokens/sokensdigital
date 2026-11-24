@@ -142,6 +142,23 @@ JournalEntry (banque):
 
 ---
 
+### **Cas 4: Apport capital converti en liquidité de caisse (et retour)** — 24/11/2026
+
+```
+Pièce de caisse ENTREE, source CONVERSION_APPORT_CAPITAL
+  ↓ plafond : capital apporté − converti + retourné
+  ↓ [Rapprochement] Débit Caisse (530) / Crédit Banque (512)
+Dépenses en espèces (SORTIE DEPENSE_OPERATIONNELLE, FOURNISSEUR_ESPECES…)
+Pièce de caisse SORTIE, source RETOUR_APPORT_CAPITAL
+  ↓ plafond : converti encore en caisse, dans la limite du solde de caisse
+  ↓ [Rapprochement] Débit Banque (512) / Crédit Caisse (530)
+```
+
+Le capital social (101) n'est jamais modifié. Calculs : `treasury/capital_liquidity.py`,
+suivi `GET /api/v1/treasury/capital-liquidity/`.
+
+---
+
 ## Architecture Implémentée
 
 ### Modèles

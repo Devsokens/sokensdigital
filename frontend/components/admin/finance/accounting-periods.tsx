@@ -105,7 +105,7 @@ export function AccountingPeriods() {
             deleting.step === 1
               ? `Voulez-vous supprimer la période comptable « ${deleting.period.label} » (${deleting.period.start_date} → ${deleting.period.end_date}) ?`
               : deleting.step === 2
-                ? "Cette action est définitive et sera tracée dans le journal d'audit. La suppression est refusée si des écritures comptables sont passées dans cette période. Continuer ?"
+                ? "Les écritures comptables de la période sont conservées (sans période) et seront rattachées à la prochaine période créée couvrant leurs dates. Le Responsable des Opérations et le Responsable Comptabilité & Finance seront notifiés. Une période clôturée doit d'abord être rouverte. Continuer ?"
                 : `Dernière confirmation : saisissez le libellé exact de la période, « ${deleting.period.label} ».`
           }
           confirmLabel={deleting.step === 3 ? "Supprimer définitivement" : "Continuer"}

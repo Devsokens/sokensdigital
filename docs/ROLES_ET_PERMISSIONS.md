@@ -110,3 +110,17 @@ aligné (`profileRoles`).
 ## 8. Abonnements de services
 
 Droits détaillés dans `docs/ABONNEMENTS_SERVICES.md`.
+
+## 9. Actions sensibles réservées (mise à jour 24/11/2026)
+
+| Action | Qui | Garde-fous |
+|---|---|---|
+| Modifier les rôles d'un compte | Super-Admin (jamais ceux d'un autre Super-Admin) | Plafond de 2 rôles fonctionnels |
+| Créer un compte | Super-Admin, Responsable Administratif (hors compte Super-Admin) | — |
+| Supprimer / désactiver un compte | Super-Admin | Double confirmation |
+| Désigner Gérant / RCF | Super-Admin | Poste unique, nomination refusée s'il est pourvu |
+| Valider le palier RCF de son propre besoin | RCF désigné sur la demande | Le Gérant signe toujours ensuite |
+| Supprimer un abonnement | Super-Admin | Factures supprimées proprement ou refus si comptabilité figée |
+| Supprimer une facture | Comptable (brouillon hors abonnement) ; Super-Admin (toutes) | Refus si période clôturée, rapprochement bancaire ou encaissement en trésorerie |
+| Supprimer une période comptable | Super-Admin | Triple confirmation, écritures conservées, refus si clôturée ou TVA validée ; notifications Resp. des Opérations et RCF |
+| Encaisser une facture | Comptable, Super-Admin | Facture validée obligatoire |

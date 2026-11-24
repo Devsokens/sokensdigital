@@ -5,7 +5,7 @@ import { RefreshCw } from "lucide-react";
 
 /* Actualisation automatique, sans gêner l'utilisateur.
  *
- * 1. Données : un signal « app:refresh » est émis toutes les 60 s quand
+ * 1. Données : un signal « app:refresh » est émis toutes les 30 s quand
  *    l'onglet est visible ET que l'utilisateur ne fait rien (pas de saisie
  *    en cours, aucune fenêtre ouverte, pas d'action depuis 20 s), et au
  *    retour sur l'onglet après une absence. Les écrans abonnés via
@@ -19,7 +19,7 @@ import { RefreshCw } from "lucide-react";
  * La messagerie et les notifications sont déjà en temps réel (Firestore). */
 
 const REFRESH_EVENT = "app:refresh";
-const DATA_INTERVAL_MS = 60_000;
+const DATA_INTERVAL_MS = 30_000;
 const VERSION_INTERVAL_MS = 5 * 60_000;
 const IDLE_AFTER_MS = 20_000;
 const CURRENT_BUILD = process.env.NEXT_PUBLIC_BUILD_ID ?? "dev";

@@ -158,6 +158,20 @@ L'autorisation est demandée depuis le panneau de la cloche, sur un geste
 explicite : le navigateur ne pose la question qu'une fois et un refus est
 définitif.
 
+### Messages de la messagerie
+
+Chaque message envoyé déclenche, côté serveur, une notification in-app et
+push aux autres membres du salon (`core.views.ChatRoomReadView` avec
+`sent: true`, appelé par le client après l'envoi). Le serveur relit le dernier
+message en base, vérifie qu'il est bien de l'appelant et réserve son envoi par
+transaction (`lastNotifiedMessageId` sur le salon) : une seule notification par
+message, impossible d'en forger. Le lien ouvre la discussion
+(`/admin/messagerie?room=<id>`). Les réponses en fil ne notifient pas.
+
+Le même appel enregistre l'accusé de lecture (`readAt.<uid>`) et l'aperçu du
+dernier message (`lastMessage`) sur le salon, affichés dans la liste des
+discussions.
+
 ### Variable requise
 
 | Variable | Rôle |

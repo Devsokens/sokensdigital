@@ -451,14 +451,24 @@ class AccountingPeriodViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, 
     serializer_class = AccountingPeriodSerializer
     permission_classes = [IsComptableOrSuperAdmin]
 
+    def perform_create(self, serializer):
+        period = serializer.save()
+        # Écritures restées sans période (période supprimée) : rattachées à
+        # la nouvelle période si leur date est couverte.
+        JournalEntry.objects.filter(period__isnull=True, date__gte=period.start_date, date__lte=period.end_date).update(period=period)
+
     def destroy(self, request, *args, **kwargs):
         """Suppression d'une période : Super-Admin uniquement, après une
         triple confirmation dans l'interface ; le serveur exige en plus le
-        libellé exact de la période (`confirm`). Refusée si des écritures y
-        sont passées ou si sa déclaration fiscale est validée : supprimer la
-        période les effacerait ou les laisserait sans période."""
+        libellé exact (`confirm`). Les écritures de la période sont
+        CONSERVÉES (sans période), puis rattachées à la prochaine période
+        créée qui couvre leur date. Refusée si la période est clôturée
+        (rouvrir d'abord : ses écritures verrouillées redeviendraient
+        modifiables) ou si sa déclaration fiscale est validée."""
         from django.db import transaction
         from core.models import AuditLog
+        from core.constants import ROLE_RESPONSABLE_OPERATIONS
+        from core.models import User
         if not has_role(request.user, ROLE_SUPER_ADMIN):
             return Response({'detail': 'Seul un Super-Administrateur peut supprimer une période comptable.'},
                             status=status.HTTP_403_FORBIDDEN)
@@ -467,24 +477,41 @@ class AccountingPeriodViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, 
             if (request.data.get('confirm') or '').strip() != period.label:
                 return Response({'detail': f'Confirmation invalide : saisissez exactement « {period.label} ».'},
                                 status=status.HTTP_400_BAD_REQUEST)
-            entries = period.entries.count()
-            if entries:
-                return Response({'detail': f'Suppression impossible : {entries} écriture(s) comptable(s) sont passées dans '
-                                           'cette période. Supprimez ou déplacez-les d\'abord.'},
+            if period.status == AccountingPeriod.Status.CLOTUREE:
+                return Response({'detail': "Période clôturée : rouvrez-la d'abord pour pouvoir la supprimer."},
                                 status=status.HTTP_409_CONFLICT)
             declaration = getattr(period, 'tax_declaration', None)
             if declaration is not None and declaration.status != declaration.Status.BROUILLON:
                 return Response({'detail': 'Suppression impossible : la déclaration fiscale de cette période est validée.'},
                                 status=status.HTTP_409_CONFLICT)
+            kept = period.entries.update(period=None)
             snapshot = {'label': period.label, 'start_date': str(period.start_date), 'end_date': str(period.end_date),
-                        'status': period.status}
+                        'status': period.status, 'entries_kept_without_period': kept}
             period_pk = period.pk
             period.delete()
         AuditLog.objects.log_action(request.user, 'PERIODE_COMPTABLE_SUPPRIMEE', 'AccountingPeriod', period_pk,
                                     details=snapshot, ip_address=request.META.get('REMOTE_ADDR'))
-        notify_roles(COMPTABLE_ROLES, title='Période comptable supprimée',
-                     message=f"La période {snapshot['label']} a été supprimée.", notification_type='GENERAL',
-                     link='/admin/finance/cloture', email=True, exclude=request.user)
+        by = f'{request.user.first_name} {request.user.last_name}'.strip() or request.user.email
+        dates = f"du {period.start_date:%d/%m/%Y} au {period.end_date:%d/%m/%Y}"
+        # Responsable des Opérations : information de pilotage.
+        notify_roles(
+            (ROLE_RESPONSABLE_OPERATIONS,), title='Période comptable supprimée',
+            message=f"{by} a supprimé la période {snapshot['label']} ({dates}). Aucune action de votre part n'est requise ; "
+                    "les données comptables sont conservées.",
+            notification_type='GENERAL', link='/admin/finance/cloture', exclude=request.user,
+        )
+        # Responsable Comptabilité & Finance : détail comptable et action attendue.
+        compta_message = (
+            f"{by} a supprimé la période {snapshot['label']} ({dates}). {kept} écriture(s) sont conservées sans période : "
+            "créez une période couvrant ces dates pour les y rattacher automatiquement (Grand Livre, export FEC, clôture)."
+        )
+        rcf = User.objects.filter(is_rcf=True, is_active=True).exclude(pk=request.user.pk).first()
+        if rcf:
+            notify(rcf, title='Période comptable supprimée — écritures à rattacher', message=compta_message,
+                   notification_type='GENERAL', link='/admin/finance/cloture', email=True)
+        else:
+            notify_roles(COMPTABLE_ROLES, title='Période comptable supprimée — écritures à rattacher', message=compta_message,
+                         notification_type='GENERAL', link='/admin/finance/cloture', email=True, exclude=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(tags=['Finance & Comptabilité'], summary='Close (lock) an accounting period', responses={200: AccountingPeriodSerializer})

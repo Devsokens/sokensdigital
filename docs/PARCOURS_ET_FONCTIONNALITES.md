@@ -7,7 +7,11 @@ détaillées : `ROLES_ET_PERMISSIONS.md`, `ABONNEMENTS_SERVICES.md`.
 
 Sommaire : 1. Rôles et désignations · 2. Besoins et décaissements · 3. Devis ·
 4. Factures et taxes · 5. Documents et authentification · 6. Abonnements de
-services · 7. Notifications et messagerie · 8. Parcours par profil · 9. Vérification de cohérence et écarts connus.
+services · 7. Notifications et messagerie · 8. Parcours par profil ·
+9. Vérification de cohérence et écarts connus · 10. Clôture comptable ·
+11. Trésorerie : apport capital en caisse · 12. Actualisation automatique.
+
+*Mis à jour le 24/11/2026.*
 
 ---
 
@@ -41,7 +45,10 @@ Parcours d'un besoin :
 4. **Approuvé**, puis **Exécuté** par le Comptable (ou le Super-Admin) : l'argent a bougé.
 5. Le demandeur est notifié à chaque étape.
 
-Garde-fous : on ne valide jamais sa propre demande ; les deux signatures
+Garde-fous : on ne valide jamais sa propre demande — **une exception** :
+le Responsable Comptabilité & Finance désigné sur la demande peut valider le
+palier RCF de ses propres besoins (le Gérant signe toujours ensuite et ne
+valide jamais sa propre demande) ; les deux signatures
 figurent sur le bon PDF, avec le nom du gérant en poste ; tout est visible dans
 Finance > Décaissement.
 
@@ -57,7 +64,10 @@ Finance > Décaissement.
 
 - Mentions obligatoires : identification fournisseur et client (NIF), numéro séquentiel `FAC-AAAA-NNNNN`, détail des lignes, HT / TVA / CSS / autres taxes / TTC, **QR code fiscal** signé.
 - Cycle : **Brouillon** → validation par le Comptable → **Validée**. La validation crée l'écriture des ventes (clients 411, ventes 706, TVA 4457, CSS, autres taxes) dans une période comptable ouverte ; une facture validée n'est plus modifiable.
-- Encaissement : versements partiels ou solde en une fois, avec reçu PDF. Une facture est « payée » quand les versements reçus couvrent le TTC.
+- Encaissement : versements partiels ou solde en une fois, avec reçu PDF. Une facture est « payée » quand les versements reçus couvrent le TTC. **Aucun encaissement sur une facture Brouillon** : elle doit d'abord être validée (écriture comptable).
+- **PDF sur une seule page A4**, police 12 px aérée ; au-delà de 8 lignes puis de 14, seul le tableau se resserre.
+- **Suppression** (menu « ⋯ » de la liste des factures) : le Comptable ne supprime qu'un brouillon hors abonnement ; une facture validée, payée ou issue d'un abonnement exige le Super-Admin. La suppression emporte versements, reçus, pièces jointes, écritures de vente et le mois d'abonnement rattaché. Refusée si une écriture est dans une période clôturée, rapprochée d'un relevé bancaire, ou si un versement est enregistré en caisse/banque. Audit `FACTURE_SUPPRIMEE`.
+- **Analytique Finance et tableau de bord global toujours à jour** : recalculés dès qu'une facture, un versement ou une écriture change (création, modification, suppression).
 - Le **tableau de bord Finance** affiche TVA et CSS collectées ; relances d'impayés **internes** : chaque jour, pour toute facture validée, échue et non soldée, l'auteur de la facture (et, pour un abonnement, les responsables du pôle), les Comptables et le RCF sont notifiés dans l'application ; **aucun e-mail n'est envoyé au client**, ils le relancent manuellement. Une facture entièrement payée n'est plus relancée.
 
 ## 5. Documents et authentification
@@ -82,24 +92,35 @@ Une nouvelle app `services` s'appuie sur les modules existants sans créer de se
 
 **Droits** : Communication gérée par Super-Admin et Resp. Marketing & Communication ; Maintenance par Super-Admin, Resp. Technique et Resp. des Opérations ; Comptable en lecture et facturation ; Commercial en lecture limitée à son portefeuille ; sous-traitants exclus.
 
+**Suppression d'un abonnement** : Super-Admin uniquement (confirmation en tapant SUPPRIMER) ; emporte ses mois, livrables et factures (même suppression propre et mêmes refus que ci-dessus). Pour un arrêt de contrat, préférer « Résilié ».
+
 **Tableau de bord** : mois commencés non payés, consommation des quotas, alerte de rythme (moins de 40 % produit passé la moitié du mois), périodes terminées non clôturées, renouvellements d'hébergement à 30 jours, tickets sans réponse dans le délai de la formule (72 h / 24 h / 4 h), revenu mensuel récurrent par pôle.
 
 ## 7. Notifications et messagerie
 
-- Notifications in-app, navigateur et e-mail (selon l'événement) ; bouton **Effacer les lues** et marquage comme lues.
+**Notifications**
+- In-app, navigateur (push) et e-mail selon l'événement ; bouton **Effacer les lues** et marquage comme lues.
 - Réunions et rendez-vous : notification à la création, avec lien visio ; les rendez-vous vont à tous les membres.
-- Pièces jointes de messagerie **permanentes** (stockage privé, liens signés à la demande) ; création de message horodatée par le serveur.
+- **Nouveau message** : chaque message envoyé (hors réponses en fil) notifie les autres membres du salon, in-app et push. Titre = expéditeur (et nom du groupe), texte = aperçu du message ; le clic ouvre directement la discussion (`/admin/messagerie?room=…`). Une seule notification par message, contenu relu en base par le serveur (impossible d'en forger). Salon Entreprise : tous les comptes actifs ; Département : ses employés ; Projet / Direct : leurs membres.
+
+**Messagerie** (mise en page des applications de messagerie mobiles)
+- Liste des discussions : recherche, filtres *Toutes / Groupes / Privées*, **aperçu du dernier message**, heure, non-lus en gras avec pastille, tri par activité récente. Sur mobile, liste puis conversation plein écran.
+- Conversation : bulles (les miennes à droite), heure dans la bulle, séparateurs « Aujourd'hui / Hier », saisie arrondie extensible, pièces jointes, liens vers projet / lead / devis, réactions, épingles, réponses en fil.
+- **Accusés de lecture** : deux coches grises = envoyé, bleues = lu (par tous en discussion privée ou groupe de projet ; par au moins un collègue dans les grands groupes, nombre de lecteurs au survol). Le serveur enregistre la lecture (`POST /api/v1/chat/rooms/<id>/read/`).
+- **Salons de département** : à l'ouverture de la messagerie, le serveur crée le salon du département de la personne s'il manque et aligne le département du profil (`POST /api/v1/chat/rooms/ensure/`). Renommer un département renomme son salon.
+- **Thème sombre** : palette dédiée, contraste correct.
+- Pièces jointes **permanentes** (stockage privé, liens signés à la demande) ; création de message horodatée par le serveur.
 
 ## 8. Parcours par profil
 
 | Profil | Parcours type |
 |---|---|
-| **Super-Admin** | Crée les comptes et attribue 1 à 2 rôles ; désigne le Gérant et le RCF ; supervise tous les pôles ; peut tout gérer sauf modifier un autre Super-Admin. |
+| **Super-Admin** | Crée les comptes et attribue 1 à 2 rôles ; désigne le Gérant et le RCF ; supervise tous les pôles ; seul à supprimer abonnements, factures validées et périodes comptables ; peut tout gérer sauf modifier un autre Super-Admin. |
 | **Resp. Administratif** | Crée les comptes (hors Super-Admin), tient les dossiers collaborateurs et contrats ; ne peut ni attribuer de rôle ni supprimer un compte. |
-| **Gérant / RCF** | Reçoit une notification pour chaque besoin à son palier, signe ou rejette ; le gérant voit aussi les taxes collectées (avec la comptabilité et le Super-Admin). |
+| **Gérant / RCF** | Reçoit une notification pour chaque besoin à son palier, signe ou rejette ; le RCF peut valider le palier RCF de ses propres besoins ; il est notifié (avec l'action à faire) quand une période comptable est supprimée ; le gérant voit aussi les taxes collectées. |
 | **Comptable** | Valide les factures, encaisse, exécute les décaissements, règle TVA/CSS, génère les factures d'abonnement. |
 | **Resp. Marketing & Communication** | Devis, tunnel commercial, blog, abonnements de communication : abonnement → facture → quota ouvert → livrables → clôture. |
-| **Resp. Technique / Opérations** | Projets, maintenance, tickets ; abonnements de maintenance et d'hébergement, suivi des délais de réponse. |
+| **Resp. Technique / Opérations** | Projets, maintenance, tickets ; abonnements de maintenance et d'hébergement, suivi des délais de réponse ; le Resp. des Opérations est informé des suppressions de période comptable. |
 | **Commercial** | Ses leads et ses devis, offres du catalogue dans l'éditeur ; lecture de ses abonnements de communication. |
 | **Chef de projet / Développeur** | Projets et tâches, expression de besoins par département ; aucun accès aux abonnements. |
 | **Sous-traitants** | Uniquement leurs projets ou leur portefeuille ; jamais de finances ni de tableau de bord société. |
@@ -122,3 +143,28 @@ Une nouvelle app `services` s'appuie sur les modules existants sans créer de se
 **Reste à faire (hors code)** :
 - **Relances** : définir `CRON_SECRET` sur le service backend (Render) et les secrets GitHub `BACKEND_URL` et `CRON_SECRET` ; sans eux, le point d'entrée reste désactivé et le workflow ne fait rien.
 - **Règles Firestore** : `firebase deploy --only firestore:rules --project sokensdigital-2d82a` avec le compte propriétaire du projet.
+
+
+## 10. Clôture comptable : suppression d'une période
+
+- **Super-Admin uniquement**, bouton « Supprimer » dans Finance > Clôture comptable, **triple confirmation** (la dernière en tapant le libellé exact de la période, vérifié aussi par le serveur).
+- **Les écritures comptables sont conservées** : elles restent « sans période » puis sont **rattachées automatiquement** à la prochaine période créée qui couvre leur date. Grand Livre, analytique et rapports gardent toutes les données.
+- Refusée si la période est **clôturée** (la rouvrir d'abord : ses écritures verrouillées redeviendraient modifiables) ou si sa **déclaration fiscale est validée**.
+- **Notifications distinctes** :
+  - *Responsable des Opérations* : information (qui, quelle période, données conservées, aucune action requise) ;
+  - *Responsable Comptabilité & Finance* (à défaut, les Comptables), aussi par e-mail : nombre d'écritures sans période et action attendue (créer une période couvrant ces dates).
+- Audit `PERIODE_COMPTABLE_SUPPRIMEE`.
+
+## 11. Trésorerie : apport capital converti en caisse
+
+- Pièce de caisse **Entrée**, motif « Conversion d'apport capital en liquidité de caisse » : les fonds de l'apport passent en caisse pour régler les charges en espèces. Plafond : apport disponible (capital apporté − converti + retourné).
+- Pièce de caisse **Sortie**, motif « Retour de la caisse vers l'apport capital » : plafond = converti encore en caisse, dans la limite du solde réel.
+- **Le capital social (compte 101) n'est jamais modifié.** Écritures au rapprochement : conversion = Débit Caisse 530 / Crédit Banque 512 ; retour = l'inverse (hypothèse : apport déposé en banque).
+- Suivi : `GET /api/v1/treasury/capital-liquidity/`, affiché dans le formulaire.
+
+## 12. Actualisation automatique
+
+- Les écrans de données (tableaux de bord, Finance, Marketing, RH, Technique, Support, Agenda, Abonnements…) se rechargent **en arrière-plan toutes les 30 s**, uniquement si l'onglet est visible et que l'utilisateur est inactif (aucune saisie, aucune fenêtre ouverte, aucune action depuis 20 s), ainsi qu'au retour sur l'onglet. Pas d'écran de chargement, filtres et défilement conservés.
+- Exclus volontairement : l'éditeur de sections de page et le détail d'un département (une actualisation écraserait la saisie ou la sélection).
+- **Nouvelle version** déployée (`/api/version`) : rechargement automatique si l'onglet est caché, sinon bandeau « Actualiser / Plus tard ».
+- Messagerie et notifications : temps réel (Firestore).

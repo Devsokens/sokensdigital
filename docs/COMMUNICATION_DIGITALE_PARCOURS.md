@@ -199,6 +199,8 @@ Chaque alerte ouvre la fiche de l'abonnement concerné.
 
 ## 9. Points d'attention
 
+- Les écrans d'abonnements et l'analytique se rafraîchissent seuls toutes les 30 s (utilisateur inactif) ; les indicateurs Finance sont recalculés dès qu'une facture ou un versement change.
+
 - La facture du mois suivant est générée **à la main** (choix de fonctionnement) : penser à la créer en fin de mois.
 - Les **relances internes** d'impayés supposent le planificateur configuré (secret `CRON_SECRET` sur le backend, secrets GitHub `BACKEND_URL` et `CRON_SECRET`).
 - Un prix ou un quota personnalisé pour un client peut être saisi sur l'abonnement (champ réservé à l'API pour l'instant, pas encore dans l'écran).

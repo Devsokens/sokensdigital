@@ -188,6 +188,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
             'source_invoice', 'is_locked', 'lines', 'created_at',
         ]
         read_only_fields = ['created_by', 'source_invoice']
+        extra_kwargs = {'period': {'required': True, 'allow_null': False}}
 
     def validate(self, attrs):
         period = attrs.get('period') or getattr(self.instance, 'period', None)

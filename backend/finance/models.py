@@ -229,7 +229,10 @@ class JournalEntry(LoggedModel):
         BANQUE = 'BQ', 'Banque'
         OPERATIONS_DIVERSES = 'OD', 'Opérations diverses'
 
-    period = models.ForeignKey(AccountingPeriod, on_delete=models.PROTECT, related_name='entries')
+    # Nullable : supprimer une période conserve ses écritures (« sans
+    # période »), rattachées de nouveau à la prochaine période créée qui
+    # couvre leur date (AccountingPeriodViewSet.perform_create).
+    period = models.ForeignKey(AccountingPeriod, on_delete=models.SET_NULL, null=True, blank=True, related_name='entries')
     journal_code = models.CharField(max_length=2, choices=JournalCode.choices)
     date = models.DateField(default=timezone.now)
     label = models.CharField(max_length=255)
@@ -250,7 +253,7 @@ class JournalEntry(LoggedModel):
 
     @property
     def is_locked(self):
-        return self.period.status == AccountingPeriod.Status.CLOTUREE
+        return bool(self.period_id) and self.period.status == AccountingPeriod.Status.CLOTUREE
 
 
 class TransactionLine(LoggedModel):

@@ -71,7 +71,7 @@ Il n'y a pas d'auto-inscription. Pour créer un nouveau compte :
 
 Le rôle (`role`) détermine ce que la personne peut faire, aussi bien côté Firestore (règles) que côté Django (`core.permissions.has_role()`, qui lit ce même champ). Valeurs possibles (référentiel 2026, 13 rôles — détail dans [docs/ROLES_ET_PERMISSIONS.md](docs/ROLES_ET_PERMISSIONS.md)) : `SUPER_ADMIN`, `RESPONSABLE_OPERATIONS`, `RESPONSABLE_TECHNIQUE`, `RESPONSABLE_MARKETING_COM`, `RESPONSABLE_ADMINISTRATIF`, `CHEF_DE_PROJET`, `DEVELOPPEUR`, `COMMERCIAL`, `COMPTABLE`, `CAISSIER`, `SOUS_TRAITANT_DEV`, `SOUS_TRAITANT_COMMERCIAL`, `SOUS_TRAITANT_DESIGNER`. Au plus 2 rôles fonctionnels par personne (le Super-Admin en plus), attribués par le seul Super-Admin.
 
-Actuellement le frontend (`/admin`) affiche tous les modules à n'importe quel compte connecté — la restriction par rôle se fait uniquement côté API pour l'instant (un compte non-RH qui appelle `/api/v1/hr/employees/` ne voit que sa propre fiche, par exemple). Le filtrage de la sidebar par rôle reste à faire une fois plusieurs rôles réels en usage.
+Le menu de l'administration est filtré par modules de droits (permissions par défaut de chaque rôle, surchargeables par personne dans Utilisateurs & Rôles) ; l'API applique de son côté les mêmes restrictions par rôle.
 
 ## État d'avancement (voir aussi `docs/backend-specifications.md`)
 
@@ -91,7 +91,9 @@ Actuellement le frontend (`/admin`) affiche tous les modules à n'importe quel c
 | Finance — TVA (génération, signature CFO) | ✅ | ✅ `/admin/finance/tva` |
 | Finance — Export FEC | ✅ (simplifié, non certifié DGFiP — voir §6.6) | ✅ (bouton dans l'écran TVA) |
 | Finance — Dashboard (Analytique & Reporting) | ✅ (indicateurs simplifiés, mis en cache 5 min — voir §6.6) | ✅ `/admin/finance/dashboard` |
-| Finance — Versements partiels (Payment/PaymentReceipt) | ✅ (`invoices/{id}/payments/`, reçu PDF auto) | ❌ backend seul, aucune UI |
+| Finance — Versements partiels (Payment/PaymentReceipt) | ✅ (`invoices/{id}/payments/`, reçu PDF auto ; facture validée obligatoire) | ✅ fiche facture |
+| Finance — Suppression propre des factures / périodes comptables | ✅ (voir `docs/PARCOURS_ET_FONCTIONNALITES.md` §4 et §10) | ✅ |
+| Abonnements de services (communication, maintenance & hébergement) | ✅ Django (`services` app) | ✅ `/admin/marketing/abonnements`, `/admin/technique/abonnements` |
 | Opérations d'achats (fiches besoins → devis → décaissement auto → facture) | ✅ Django (`procurement` app) | ✅ `/admin/finance/achats` |
 | Trésorerie (caisse, banque, apports capital) | ✅ Django (`treasury` app) | ✅ `/admin/finance/tresorerie` |
 | Support Client (Tickets, Base de connaissances, FAQ) | ✅ Django (`support` app) | ✅ `/admin/support/tickets`, `/admin/support/base-connaissances` |
@@ -101,9 +103,18 @@ Actuellement le frontend (`/admin`) affiche tous les modules à n'importe quel c
 | Marketing/Commercial — Dashboard | ✅ (pipeline pondéré, version simplifiée) | ✅ `/admin/marketing/dashboard` |
 | Marketing/Commercial — Devis (Pipeline & Devis) | ✅ (PDF/email ⏳ — voir §7.2) | ✅ `/admin/marketing/devis` |
 | Marketing/Commercial — Portfolio/Témoignages/Hero (CMS) | ⏳ | ⏳ |
-| Dashboard Global | ⏳ bloqué sur Tâches — voir `docs/backend-specifications.md §8` | ⏳ |
-| Messagerie (salons Entreprise/Département/Projet, temps réel) | ✅ Firestore (Django pousse salons + membres via l'Admin SDK) | ✅ `/admin/messagerie` |
-| Notifications | ⏳ (Firestore prévu) | ⏳ |
+| Dashboard Global | ✅ (`/api/v1/dashboard/`, cache invalidé à chaque changement financier) | ✅ `/admin` |
+| Messagerie (salons Entreprise/Département/Projet/Direct, temps réel, aperçus, accusés de lecture) | ✅ Firestore + Django (salons, lectures, notifications) | ✅ `/admin/messagerie` |
+| Notifications (in-app, push navigateur, e-mail) | ✅ (`core.notifications.notify`, nouveaux messages compris) | ✅ cloche + push |
+| Actualisation automatique des écrans (30 s, sans gêne) | — | ✅ `lib/admin/auto-refresh.tsx` |
+
+## Documentation fonctionnelle
+
+- [docs/PARCOURS_ET_FONCTIONNALITES.md](docs/PARCOURS_ET_FONCTIONNALITES.md) — fonctionnalités récentes et parcours par profil
+- [docs/ROLES_ET_PERMISSIONS.md](docs/ROLES_ET_PERMISSIONS.md) — référentiel des rôles et actions sensibles
+- [docs/ABONNEMENTS_SERVICES.md](docs/ABONNEMENTS_SERVICES.md) et [docs/COMMUNICATION_DIGITALE_PARCOURS.md](docs/COMMUNICATION_DIGITALE_PARCOURS.md) — abonnements de services
+- [docs/NOTIFICATIONS_ET_EMAILS.md](docs/NOTIFICATIONS_ET_EMAILS.md) — e-mails, push, notifications de messages
+- [docs/TREASURY_WORKFLOW_IMPLEMENTATION.md](docs/TREASURY_WORKFLOW_IMPLEMENTATION.md) — trésorerie (dont conversion d'apport capital)
 
 ## Documentation API
 

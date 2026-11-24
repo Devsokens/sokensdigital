@@ -1001,9 +1001,28 @@ class AccountingPeriodDeletionTests(APITestCase):
         self.assertEqual(sa.delete(self.url, {'confirm': '2030-01'}, format='json').status_code, 204)
         self.assertFalse(AccountingPeriod.objects.filter(pk=self.period.pk).exists())
 
-    def test_period_with_entries_is_protected(self):
-        JournalEntry.objects.create(period=self.period, journal_code=JournalEntry.JournalCode.VENTES,
-                                    date=datetime.date(2030, 1, 5), label='x')
+    def test_entries_are_kept_and_reattached_to_next_period(self):
+        entry = JournalEntry.objects.create(period=self.period, journal_code=JournalEntry.JournalCode.VENTES,
+                                            date=datetime.date(2030, 1, 5), label='x')
+        sa = self._client(ROLE_SUPER_ADMIN)
+        with patch('finance.views.notify_roles') as roles_mock, patch('finance.views.notify') as notify_mock:
+            rcf = User.objects.create(email='rcf-per@sokens.test', is_rcf=True)
+            res = sa.delete(self.url, {'confirm': '2030-01'}, format='json')
+        self.assertEqual(res.status_code, 204, res.content)
+        entry.refresh_from_db()
+        self.assertIsNone(entry.period_id)
+        # Notifications distinctes : Responsable des Opérations et RCF.
+        self.assertIn('Aucune action', roles_mock.call_args.kwargs['message'])
+        self.assertEqual(notify_mock.call_args.args[0], rcf)
+        self.assertIn('rattacher', notify_mock.call_args.kwargs['message'])
+        # Nouvelle période couvrant la date : l'écriture y est rattachée.
+        res = sa.post('/api/v1/finance/accounting-periods/', {'label': '2030-01b', 'start_date': '2030-01-01', 'end_date': '2030-01-31'}, format='json')
+        self.assertEqual(res.status_code, 201, res.content)
+        entry.refresh_from_db()
+        self.assertEqual(str(entry.period_id), res.json()['id'])
+
+    def test_closed_period_must_be_reopened_first(self):
+        AccountingPeriod.objects.filter(pk=self.period.pk).update(status=AccountingPeriod.Status.CLOTUREE)
         res = self._client(ROLE_SUPER_ADMIN).delete(self.url, {'confirm': '2030-01'}, format='json')
         self.assertEqual(res.status_code, 409)
         self.assertTrue(AccountingPeriod.objects.filter(pk=self.period.pk).exists())
